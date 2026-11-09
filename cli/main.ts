@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { doctor, type Host, install, realHost, treeRoot, uninstall, VERSION } from "../core/index.ts";
+import { itemNew } from "./commands/item-new.ts";
 import { pluginApprove } from "./commands/plugin-approve.ts";
+import { recover } from "./commands/recover.ts";
 
 const USAGE = [
   "usage: sangsoe <command>",
@@ -10,6 +12,10 @@ const USAGE = [
   "  doctor [--offline]   check the install; --offline checks only the installed tree",
   "  plugin approve [--dry-run] [--dir <path>] [--commit <sha>]",
   "                       check review and build, then enable the Orca plugin",
+  "  recover [--run <id>] [--limit <n>]",
+  "                       read-only table of supervised workers after a restart",
+  "  item new --run <id> --spec <text> --who <w> --done-when <text> [--title <t>] [--deps <a,b>]",
+  "                       create an item's Orca Task; starting it is the core start function's",
 ].join("\n");
 
 export function run(argv: readonly string[], host: Host = realHost): { code: number; out: string } {
@@ -36,7 +42,11 @@ if (import.meta.main) {
   const { code, out } =
     argv[0] === "plugin" && argv[1] === "approve"
       ? await pluginApprove(argv.slice(2), (line) => process.stdout.write(`${line}\n`))
-      : run(argv);
+      : argv[0] === "recover"
+        ? await recover(argv.slice(1))
+        : argv[0] === "item" && argv[1] === "new"
+          ? await itemNew(argv.slice(2))
+          : run(argv);
   (code === 0 ? process.stdout : process.stderr).write(`${out}\n`);
   process.exitCode = code;
 }
