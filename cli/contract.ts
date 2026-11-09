@@ -1,5 +1,5 @@
 import type { ParseArgsOptionsConfig } from "node:util";
-import type { Host } from "../core/index.ts";
+import type { CheckContext, Host } from "../core/index.ts";
 
 // Refusal and Outcome mirror claude-plugin/mcp/contract.ts (the two slots do not import each
 // other); test/boundaries/contract.test.ts fails if they drift apart.
@@ -16,6 +16,8 @@ export type CommandArgs = {
   positionals: string[];
   /** The machine the command may touch; tests pass a fake (R-11). */
   host: Host;
+  /** Orca and gh for the start checks of the tree at `root`; tests pass the fake Orca. Built only when called. */
+  checkContext: (root: string) => CheckContext;
 };
 
 export type CommandDef = {

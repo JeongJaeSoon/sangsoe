@@ -1,22 +1,30 @@
+import { execFile } from "node:child_process";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { FULL_SHA, SANGSOE_REPO } from "../approve/approve.ts";
+import { resolveCommit } from "../approve/ports.ts";
+import { type CheckContext, type CheckResult, DOCTOR_CHECKS, type PluginBuild, runChecks } from "../checks/index.ts";
+import type { Exec } from "../contract/orca.ts";
+import { createOrcaAdapter } from "../orca/adapter.ts";
+import { nodeExec } from "../orca/exec.ts";
+import { VERSION } from "../version.ts";
 import {
   type Host,
   lastLine,
   listMarketplaces,
   listOrcaPlugins,
-  listPlugins,
   MARKETPLACE,
   orcaManifest,
-  PLUGIN_ID,
+  orcaPluginDir,
   sangsoeOrca,
   UNREADABLE,
-  userPlugin,
 } from "./host.ts";
 
+// `warn` and `notice` print their fix but leave the exit code alone, as at the start.
 export type Check =
-  | { state: "ok"; name: string; detail: string }
-  | { state: "fail"; name: string; detail: string; fix: string }
-  | { state: "not yet"; name: string; detail: string };
+  | { state: "ok" | "not yet"; name: string; detail: string }
+  | { state: "fail" | "warn" | "notice"; name: string; detail: string; fix: string };
 
 type Manifest = { version?: string; engines?: { node?: string } };
 const REINSTALL = "brew reinstall sangsoe";
@@ -75,7 +83,8 @@ function treeChecks(host: Host, root: string): Check[] {
   return out;
 }
 
-function claudeChecks(host: Host, root: string, want: string | undefined): Check[] {
+// The plugin row itself is the start check `claude-plugin-version`.
+function claudeChecks(host: Host, root: string): Check[] {
   const where = host.env.CLAUDE_CONFIG_DIR ? ` (CLAUDE_CONFIG_DIR=${host.env.CLAUDE_CONFIG_DIR})` : "";
   const v = host.run("claude", ["--version"]);
   if (v.code !== 0) {
@@ -93,20 +102,6 @@ function claudeChecks(host: Host, root: string, want: string | undefined): Check
         : m.path !== root
           ? { state: "fail", name: "claude marketplace", detail: `${MARKETPLACE} points at ${m.path ?? m.source}`, fix: "sangsoe install" }
           : { state: "ok", name: "claude marketplace", detail: `${MARKETPLACE} → ${m.path}` },
-  );
-
-  const plugins = listPlugins(host);
-  const p = userPlugin(plugins);
-  out.push(
-    !plugins
-      ? { state: "fail", name: "claude plugin", detail: UNREADABLE("claude plugin list --json"), fix: "claude plugin list" }
-      : !p
-        ? { state: "fail", name: "claude plugin", detail: `${PLUGIN_ID} not installed (user scope)`, fix: "sangsoe install" }
-        : p.version !== want
-          ? { state: "fail", name: "claude plugin", detail: `${PLUGIN_ID} is ${p.version}, tree is ${want}`, fix: "sangsoe install" }
-          : p.enabled === false
-            ? { state: "fail", name: "claude plugin", detail: `${PLUGIN_ID} is disabled`, fix: `claude plugin enable ${PLUGIN_ID}` }
-            : { state: "ok", name: "claude plugin", detail: `${PLUGIN_ID} ${p.version}, enabled` },
   );
   return out;
 }
@@ -132,26 +127,110 @@ function orcaChecks(host: Host, root: string): Check {
   return { state: "ok", name, detail: `${p.pluginKey} ${p.version}, ${p.status}` };
 }
 
-// Placeholders until the start checks (Orca capabilities, status hooks, host filter, SQLite floor) land.
-const NOT_YET: Check[] = [
-  { state: "not yet", name: "start checks", detail: "Orca capabilities, status hooks and host filter arrive with a later build" },
-  { state: "not yet", name: "sqlite", detail: "the SQLite version floor check arrives with a later build" },
-];
+const SQLITE_NOT_YET: Check = { state: "not yet", name: "sqlite", detail: "the SQLite version floor check arrives with a later build" };
 
-export function doctorChecks(host: Host, root: string, opts: { offline?: boolean } = {}): Check[] {
+const fromStart = (r: CheckResult): Check =>
+  r.status === "ok"
+    ? { state: "ok", name: r.id, detail: r.summary }
+    : { state: r.status, name: r.id, detail: r.summary, fix: r.fix ?? "sangsoe doctor" };
+
+const FETCH_TIMEOUT_MS = 120_000;
+
+function download(cmd: string, args: readonly string[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, [...args], { encoding: "buffer", maxBuffer: 256 * 1024 * 1024, timeout: FETCH_TIMEOUT_MS }, (err, out) =>
+      err ? reject(err) : resolve(out),
+    );
+  });
+}
+
+// The same tarball and trust root as approve's fetch, but bounded: a stalled gh must not hang doctor.
+async function fetchPluginTree(exec: Exec, commit: string): Promise<{ dir: string; dispose(): Promise<void> }> {
+  const root = await mkdtemp(join(tmpdir(), "sangsoe-doctor-"));
+  const dispose = () => rm(root, { recursive: true, force: true });
+  try {
+    await writeFile(join(root, "tree.tgz"), await download("gh", ["api", `repos/${SANGSOE_REPO}/tarball/${commit}`]));
+    const tar = await exec("tar", ["-xzf", join(root, "tree.tgz"), "-C", root]);
+    if (tar.code !== 0) throw new Error(`tar: ${tar.stderr.trim()}`);
+    const tops = (await readdir(root, { withFileTypes: true })).filter((d) => d.isDirectory());
+    if (tops.length !== 1 || !tops[0]) throw new Error("unexpected tarball layout");
+    return { dir: join(root, tops[0].name, "orca-plugin"), dispose };
+  } catch (e) {
+    await dispose();
+    throw e;
+  }
+}
+
+function parseJson(stdout: string): unknown {
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+}
+
+export function realPluginBuild(root: string, exec: Exec): PluginBuild {
+  const dir = orcaPluginDir(root);
+  return {
+    dir,
+    async buildCommit() {
+      // HEAD's tree, not the index or the folder, so a removal (staged or not) still names its
+      // commit. Unlike approve, a dirty checkout still names HEAD: its edits are the drift to report.
+      const tracked = await exec("git", ["-C", root, "cat-file", "-e", "HEAD:./orca-plugin/orca-plugin.json"]);
+      const head = tracked.code === 0 ? await exec("git", ["-C", root, "rev-parse", "HEAD"]) : undefined;
+      if (head?.code === 0) return head.stdout.trim();
+      return (
+        (await resolveCommit(dir)) ?? {
+          error: `${dir} 의 빌드 커밋을 모른다 (git checkout 도, build-info.json 도 아니다)`,
+          fix: REINSTALL,
+        }
+      );
+    },
+    async reviewedHead(commit) {
+      const cmp = await exec("gh", ["api", `repos/${SANGSOE_REPO}/compare/${commit}...main`, "--jq", ".status"]);
+      const status = cmp.stdout.trim();
+      if (cmp.code !== 0 || (status !== "ahead" && status !== "identical")) {
+        return { error: `빌드 커밋 ${commit} 이 main 위에 없어 리뷰된 빌드가 아니다 (${status || cmp.code})`, fix: REINSTALL };
+      }
+      const jq = '[.[] | select(.merged_at != null and .base.ref == "main") | .head.sha]';
+      const r = await exec("gh", ["api", `repos/${SANGSOE_REPO}/commits/${commit}/pulls`, "--jq", jq]);
+      const heads = r.code === 0 ? parseJson(r.stdout) : undefined;
+      if (Array.isArray(heads) && heads.length === 1 && FULL_SHA.test(String(heads[0]))) return String(heads[0]);
+      return { error: `빌드 커밋 ${commit} 을 main 으로 머지한 PR 하나를 찾지 못해 리뷰된 head 를 모른다`, fix: `gh api repos/${SANGSOE_REPO}/commits/${commit}/pulls` };
+    },
+    async fetchTree(commit) {
+      try {
+        return await fetchPluginTree(exec, commit);
+      } catch (e) {
+        return { error: `${commit} 트리를 받지 못했다: ${e instanceof Error ? e.message : String(e)}`, fix: "gh auth status" };
+      }
+    },
+  };
+}
+
+// The release always carries orca-plugin/, so the check runs even when the folder is gone.
+export function realCheckContext(root: string, exec: Exec = nodeExec()): CheckContext {
+  return { orca: createOrcaAdapter(exec), exec, coreVersion: VERSION, pluginBuild: realPluginBuild(root, exec) };
+}
+
+export type DoctorOptions = { offline: true } | { ctx: CheckContext };
+
+export async function doctorChecks(host: Host, root: string, opts: DoctorOptions): Promise<Check[]> {
   const tree = treeChecks(host, root);
-  if (opts.offline) return tree;
-  const want = readManifest(host, join(root, "package.json"))?.version;
-  return [...tree, ...claudeChecks(host, root, want), orcaChecks(host, root), ...NOT_YET];
+  if ("offline" in opts) return tree;
+  const start = await runChecks(DOCTOR_CHECKS, opts.ctx);
+  return [...tree, ...claudeChecks(host, root), orcaChecks(host, root), ...start.map(fromStart), SQLITE_NOT_YET];
 }
 
 export function formatChecks(checks: readonly Check[]): string[] {
   return checks.map((c) =>
-    c.state === "fail" ? `FAIL     ${c.name}: ${c.detail} — fix: ${c.fix}` : `${c.state.padEnd(8)} ${c.name}: ${c.detail}`,
+    "fix" in c
+      ? `${(c.state === "fail" ? "FAIL" : c.state).padEnd(8)} ${c.name}: ${c.detail} — fix: ${c.fix}`
+      : `${c.state.padEnd(8)} ${c.name}: ${c.detail}`,
   );
 }
 
-export function doctor(host: Host, root: string, opts: { offline?: boolean } = {}): { code: number; lines: string[] } {
-  const checks = doctorChecks(host, root, opts);
+export async function doctor(host: Host, root: string, opts: DoctorOptions): Promise<{ code: number; lines: string[] }> {
+  const checks = await doctorChecks(host, root, opts);
   return { code: checks.some((c) => c.state === "fail") ? 1 : 0, lines: formatChecks(checks) };
 }
