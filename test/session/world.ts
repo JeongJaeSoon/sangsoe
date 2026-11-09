@@ -29,6 +29,8 @@ export interface SessionWorld extends CoreDeps {
   readonly runTasks: Map<string, { id: string; status: string; title: string }[]>;
   /** task-list answers an error while set. */
   failTaskList: boolean;
+  /** run-current answers an error while set. */
+  failRunCurrent: boolean;
   calls(): string[][];
 }
 
@@ -53,6 +55,7 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
     heldRun: o.heldRun ?? null,
     dispatched: o.dispatched ?? true,
     failTaskList: false,
+    failRunCurrent: false,
   };
   const replies: Record<string, FakeReply> = {
     "worktree-list": () =>
@@ -72,7 +75,8 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
       return ok({ tasks: [...own, ...(runTasks.get(run) ?? [])] });
     },
     "orchestration-gate-list": () => ok({ gates: [] }),
-    "orchestration-run-current": () => ok({ runId: w.heldRun }),
+    "orchestration-run-current": () =>
+      w.failRunCurrent ? { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "runtime_unavailable", message: "down" } }), stderr: "" } : ok({ runId: w.heldRun }),
     "orchestration-inbox": () => ok({ messages: mail.map((m) => ({ ...m, from: "x", to: "y", subject: m.type, handled: false })) }),
     "orchestration-send": (args: readonly string[]) => {
       sends.push({ to: flag(args, "to") ?? "", type: flag(args, "type") ?? "", subject: flag(args, "subject") ?? "", body: flag(args, "body") ?? "" });

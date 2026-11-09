@@ -237,8 +237,24 @@ test("Orca unreadable: the hook writes nothing for a new `!` line and reads it a
   await hook(w, "stop", { session_id: "o1", prompt_id: "p1", transcript_path: t });
   assert.equal(w.store.events({ type: "owner_action" }).filter((e) => e.payload.origin === "shell").length, 0);
   w.failTaskList = false;
+  w.failRunCurrent = true;
   await hook(w, "stop", { session_id: "o1", prompt_id: "p2", transcript_path: t });
+  assert.equal(w.store.events({ type: "owner_action" }).filter((e) => e.payload.origin === "shell").length, 0, "run-current unanswered: the Run is unknown, so nothing yet");
+  w.failRunCurrent = false;
+  await hook(w, "stop", { session_id: "o1", prompt_id: "p3", transcript_path: t });
   assert.deepEqual(w.store.events({ type: "evidence" }).map((e) => e.payload.kind), ["owner_act:seen"]);
+});
+
+test("observed is masked before it is cut, so a token across the cut leaves no fragment", async () => {
+  const w = await ownerItemWorld(`${HINT} -R acme/api`);
+  const secret = ["ghp", "Qq7".repeat(12)].join("_");
+  // observed is "<run URL> <command>"; this pad starts the token at character 490 of it.
+  const pad = `--note ${"x".repeat(384)}`;
+  const t = transcript(w.dir, bang("u1", `${HINT} -R acme/api ${pad} ${secret}`, "https://github.com/acme/api/actions/runs/42"));
+  await hook(w, "stop", { session_id: "o1", prompt_id: "p1", transcript_path: t });
+  const ev = w.store.events({ type: "evidence" });
+  assert.equal(ev.length, 1);
+  assert.ok(!String(ev[0]?.payload.observed).includes("ghp_"), "no token fragment survives the cut");
 });
 
 test("PostCompact writes compacted with the transcript's preTokens, and restart_due reads the four rules", async () => {
