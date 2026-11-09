@@ -39,15 +39,15 @@ export default {
 | `item_create` | 항목 만들기(Orca `task-create --deps` + `item_created`). CLI `sangsoe item new` 와 같은 Outcome | `{runId, spec, who, doneWhen, title?, deps?}` | U10 |
 | `item_transition` | 상태 전환(Orca `task-update` + `item_transition`) | `{item, to, reason?}` | 미정 |
 | `priority_set` | 우선순위 바꾸기 | `{item, priority}` | 미정 |
-| `edge_add` | 부가 간선 더하기(순환·없는 항목 거부) | `{kind, pred, succ}` | U7 |
-| `edge_remove` | 부가 간선 빼기 | `{kind, pred, succ}` | U7 |
-| `flow_expand` | 흐름 틀 펼치기 | `{template, vars, request_id}` | U7 |
+| `edge_add` | 간선 더하기(순환·없는 항목·후속이 항목 아닌 간선 거부, 같은 간선 합침). CLI `sangsoe graph add` 와 같은 Outcome | `{kind, pred, succ, runs}` | U7 |
+| `edge_remove` | 부가 간선 빼기(이유 필수, Orca deps 간선은 거부). CLI `sangsoe graph remove` | `{kind, pred, succ, reason, runs}` | U7 |
+| `flow_expand` | 흐름 틀 펼치기(`dry_run` 은 쓰지 않음, 같은 `request_id` 는 이어서). CLI `sangsoe graph expand` | `{template, vars?, run?, who?, request_id?, dry_run?}` | U7 |
 | `decision_open` | 결정 열기(닫힌 같은 결정 키는 기존 dNNN 과 답 반환, 열린 것은 대기자 합류) | `{subject, question, options?, waiters?: [{task, run}], carrier_run?}` | U8 |
 | `decision_answer` | 결정 답·게이트 풀기·대기자마다 notify 한 번(다시 불러도 같다) | `{decision, answer, owner_action, linked_by?, run?}` | U8 |
 | `notify` | 판단이 필요한 신호로 세션 한 번 깨우기. 코어 함수 `notify` 는 U8 에 있고 tool 은 아직 없다(받는 사슬 id 를 항목에서 읽는 쪽이 필요) | `{item, kind, body}` | 미정 |
 | `land` | land 판정 함수 호출(머지 예약 또는 "승인되면 머지"). 이름·입력 확정, CLI `sangsoe land` 와 같은 결과 | `{pr, repo?, head_sha?, dry_run?, main_fix?}` | U11 |
-| `handoff_save` | 판단 상태 넷을 Orca `handoff` 메시지로 남기기 | `{next, waiting, open_questions, reply_to}` | U13 |
-| `review_ask_record` | 리뷰 의뢰를 `review_ask_sent` 로 남기기 | `{pr, reviewer, channel}` | U13 |
+| `handoff_save` | 판단 상태 넷의 모양을 검사해 자기 Run 우편함에 Orca `handoff` 메시지로 남기기(sqlite 에 쓰지 않음) | `{next, waiting, open_questions, reply_to}` | U13 |
+| `review_ask_record` | 리뷰 의뢰·리마인드 한 건을 `review_ask_sent` 로, 설정에 없는 리뷰어는 `unmapped_reviewer` 도 | `{pr, reviewer, reminder?}` | U13 |
 
 표 밖의 tool 하나: `start_unit`(U10)은 세션을 여는 유일한 길인 코어 시작 함수(결정 94)를 부른다. 입력은 `{role, worktreeId, runId, childRole, taskId?, task 또는 spec, title?, deps?, lateAnswers?, references?, agent?}` 이다.
 

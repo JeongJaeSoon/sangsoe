@@ -52,6 +52,8 @@ export {
   parseDecisionOpen,
 } from "./decision/input.ts";
 
+export * from "./session/index.ts";
+
 export type * from "./contract/orca.ts";
 export { createOrcaAdapter, recoverWrite } from "./orca/adapter.ts";
 export { type CommandName, type CommandSpec, ORCA_COMMANDS } from "./orca/commands.ts";
@@ -87,7 +89,10 @@ export {
   sampleLoad,
 } from "./capacity/capacity.ts";
 export { type RecoverPlan, type RecoverRow, recoverPlan, renderRecover } from "./recover/recover.ts";
+export * from "./graph/index.ts";
 export * from "./brief/index.ts";
+// Both declare the same four-kind union; GRAPH's is the source.
+export type { EdgeKind } from "./graph/index.ts";
 
 export {
   type LandAction,

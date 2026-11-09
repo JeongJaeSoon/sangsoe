@@ -13,6 +13,8 @@ export default defineEvent("item_extra_set", {
   waits_on: opt(oneOf("owner", "reviewer", "infra", "lead", "worker")),
   flow: opt(str),
   step: opt(str),
+  /** The release stage a flow step stands for; a deploys_after edge from it needs stage_recorded at this stage. */
+  stage: opt(oneOf("merge", "dev", "prod")),
   done_when: opt(str),
   verify: opt(verifySpec),
   cmd_hint: opt(str),

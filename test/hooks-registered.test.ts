@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 // R-01 (#459, #467): every path the plugin registers exists, and a script run directly has its exec bit.
 // The build maps a source file to dist/ by its extension, so dist/<x>.js stands for <x>.ts here.
@@ -37,6 +41,45 @@ test("the PreToolUse hook is one blocking command hook over every tool", () => {
     pre[0]?.hooks.map((h) => [h.type, h.onFailure]),
     [["command", "block"]],
   );
+});
+
+test("the seven recording hooks run record.sh with their event and never block", () => {
+  const expected: Record<string, string> = {
+    SessionStart: "session-start",
+    UserPromptSubmit: "user-prompt-submit",
+    Stop: "stop",
+    Notification: "notification",
+    PostToolUse: "post-tool-use",
+    PostCompact: "post-compact",
+    SessionEnd: "session-end",
+  };
+  for (const [event, arg] of Object.entries(expected)) {
+    const group = hooks.hooks[event] ?? [];
+    assert.equal(group.length, 1, event);
+    assert.deepEqual(
+      group[0]?.hooks.map((h) => [h.type, h.command, h.onFailure]),
+      [["command", `sh "\${CLAUDE_PLUGIN_ROOT}/hooks/record.sh" ${arg}`, undefined]],
+      event,
+    );
+  }
+  assert.match(readFileSync(at("hooks/record.sh"), "utf8"), /\/\.\.\/dist\/cli\/main\.js/);
+});
+
+test("record.sh exits 0 even when the CLI it finds exits 2, and keeps its stdout", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "sangsoe-record-"));
+  mkdirSync(join(tmp, "plugin"));
+  mkdirSync(join(tmp, "bin"));
+  // An older CLI on PATH that does not know the event: prints, then exits 2.
+  writeFileSync(join(tmp, "bin", "sangsoe"), "#!/bin/sh\necho injected\nexit 2\n");
+  chmodSync(join(tmp, "bin", "sangsoe"), 0o755);
+  const run = (path: string) =>
+    spawnSync("sh", [fileURLToPath(at("hooks/record.sh")), "stop"], {
+      encoding: "utf8",
+      env: { PATH: path, CLAUDE_PLUGIN_ROOT: join(tmp, "plugin") },
+    });
+  const r = run(`${join(tmp, "bin")}:/usr/bin:/bin`);
+  assert.deepEqual([r.status, r.stdout], [0, "injected\n"]);
+  assert.equal(run("/usr/bin:/bin").status, 0, "no CLI at all");
 });
 
 test("the entry script and the MCP registration point at files the build produces", () => {

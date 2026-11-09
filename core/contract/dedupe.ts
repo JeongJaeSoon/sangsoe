@@ -11,7 +11,8 @@ import { ContractError, type DedupeRow, type EventDef } from "./define.ts";
 //   Re-asking a decision appends `:r<n>`.
 // - Where the type binds leading segments to the row (dedupeBound: the task, the decision key, the
 //   recipient, an edge's ends), the key must start with exactly those segments, encoded; a closed
-//   type (edge_added) has nothing after them. So one condition has one spelling and one row.
+//   type has nothing after them. So one condition has one spelling and one row. edge_added is not
+//   closed: GRAPH, its only writer, appends the edge's removal count so a removed edge can return.
 const KEY = /^([a-z][a-z_]*):([^\s:]+)(:[^\s:]+)*$/;
 
 export const dedupeSegment = (value: string): string => encodeURIComponent(value);

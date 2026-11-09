@@ -8,6 +8,8 @@ export type NewItem = {
   spec: string;
   title?: string;
   deps?: string[];
+  /** The parent Task (`task-create --parent`): a flow template's root, for its steps. */
+  parent?: string;
   who: string;
   doneWhen: string;
   /** The role of the session that will work it; its role line goes first in the spec. Default worker. */
@@ -27,7 +29,7 @@ const REQUIRED = ["run", "spec", "who", "doneWhen"] as const;
 export async function createItem(orca: OrcaAdapter, store: Pick<Store, "append" | "allocate">, a: NewItem): Promise<ItemCreated> {
   const empty = REQUIRED.filter((k) => a[k].trim() === "");
   if (empty.length > 0) return { ok: false, code: "invalid_input", error: `empty: ${empty.join(", ")}` };
-  const args = { spec: `${roleLine(a.role ?? "worker")}\n${a.spec}`, run: a.run, ...(a.title ? { title: a.title } : {}), ...(a.deps?.length ? { deps: a.deps } : {}) };
+  const args = { spec: `${roleLine(a.role ?? "worker")}\n${a.spec}`, run: a.run, ...(a.title ? { title: a.title } : {}), ...(a.deps?.length ? { deps: a.deps } : {}), ...(a.parent ? { parent: a.parent } : {}) };
   const r = await orca.taskCreate(args);
   if (!r.ok) return { ok: false, code: "task_create_failed", error: `task-create 실패 (${r.error.code}: ${r.error.message})` };
   const task = findKey(r.value, ["taskId", "task_id"]) ?? findKey((r.value as { task?: unknown }).task, ["id"]);

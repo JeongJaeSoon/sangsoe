@@ -12,6 +12,27 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" session-start", "timeout": 30 }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" user-prompt-submit", "timeout": 30 }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" stop", "timeout": 15 }] }
+    ],
+    "Notification": [
+      { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" notification", "timeout": 15 }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" post-tool-use", "timeout": 15 }] }
+    ],
+    "PostCompact": [
+      { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" post-compact", "timeout": 15 }] }
+    ],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" session-end", "timeout": 15 }] }
     ]
   }
 }
