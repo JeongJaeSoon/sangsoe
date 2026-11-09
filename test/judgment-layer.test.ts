@@ -1,7 +1,7 @@
 // Owner requirement d125 (4) and split U20: the role, completion and depth rules live in the judgment
 // prompts and in the core start checks, as the same sentences.
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
@@ -48,13 +48,8 @@ test("the rules block states each rule the core start checks enforce", () => {
   for (const s of CORE_SENTENCES) assert.ok(text.includes(s), `rules block lacks: ${s}`);
 });
 
-test("the core start checks say the same sentences", (t) => {
-  const present = CORE_SOURCES.filter((f) => existsSync(join(ROOT, f)));
-  if (present.length < CORE_SOURCES.length) {
-    t.skip(`U10's start function is not on this branch yet (${CORE_SOURCES.join(", ")})`);
-    return;
-  }
-  const core = present.map(read).join("\n");
+test("the core start checks say the same sentences", () => {
+  const core = CORE_SOURCES.map(read).join("\n");
   for (const s of CORE_SENTENCES) assert.ok(core.includes(s), `core start code no longer says: ${s}`);
 });
 

@@ -12,7 +12,7 @@
 
 ## 가정한 tool·resource 이름
 
-`claude-plugin/mcp/tools/README.md` 의 표와 열린 PR(시작 #13, 결정 #14)에 없는 것은 아래 이름으로 썼다. 그 tool 을 만드는 단위가 이름을 바꾸면 이 skill 들을 같이 고친다.
+`claude-plugin/mcp/tools/README.md` 의 표(시작 #13, 결정 #14 가 들어간 뒤)에 없는 것은 아래 이름으로 썼다. 그 tool 을 만드는 단위가 이름을 바꾸면 이 skill 들을 같이 고친다.
 
 | 이름 | 쓰는 곳 | 하는 일 | 근거 |
 |---|---|---|---|
