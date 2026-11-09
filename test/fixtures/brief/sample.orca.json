@@ -1,0 +1,25 @@
+{
+  "tasks": [
+    { "id": "task_20", "runId": "run_acme", "status": "completed", "deps": [], "title": "토큰 갱신 경로" },
+    { "id": "task_21", "runId": "run_acme", "status": "completed", "deps": [], "title": "오래된 엔드포인트 제거" },
+    { "id": "task_22", "runId": "run_acme", "status": "completed", "deps": [], "title": "로그인 실패 문구" },
+    { "id": "task_23", "runId": "run_acme", "status": "failed", "result": "cancelled", "deps": [], "title": "SSO 실험" },
+    { "id": "task_26", "runId": "run_acme", "status": "dispatched", "deps": [], "activeDispatchId": "ctx_26", "assignee": "w-api-1", "title": "N+1 쿼리 제거" },
+    { "id": "task_27", "runId": "run_acme", "status": "ready", "deps": [], "title": "결제 | 환불 모듈을 새 API 로 옮기고 오래된 경로 정리" },
+    { "id": "task_28", "runId": "run_acme", "status": "blocked", "deps": [], "title": "소셜 로그인" },
+    { "id": "task_29", "runId": "run_acme", "status": "pending", "deps": ["task_33"], "title": "로그 정리" },
+    { "id": "task_31", "runId": "run_acme", "status": "blocked", "deps": [], "title": "웹훅 재시도 정책 적용" },
+    { "id": "task_32", "runId": "run_acme", "status": "dispatched", "deps": [], "activeDispatchId": "ctx_32", "assignee": "w-login-2", "title": "OAuth 콜백 연결" },
+    { "id": "task_33", "runId": "run_acme", "status": "blocked", "deps": [], "title": "스테이징 키 발급" },
+    { "id": "task_34", "runId": "run_acme", "status": "blocked", "deps": [], "title": "로그인 화면" },
+    { "id": "task_35", "runId": "run_acme", "status": "ready", "deps": [], "title": "prod 동기화 확인" },
+    { "id": "task_40", "runId": "run_acme", "status": "dispatched", "deps": [], "activeDispatchId": "ctx_40", "assignee": "w-misc-1", "title": "세션 만료 처리" },
+    { "id": "task_41", "runId": "run_acme", "status": "blocked", "deps": [], "title": "문서 색인" },
+    { "id": "task_50", "runId": "run_acme", "status": "ready", "deps": [], "title": "청구서 PDF 생성" }
+  ],
+  "gates": [
+    { "id": "g11", "taskId": "task_40", "open": true, "question": "d011: 세션 만료 시간", "options": ["A 30분", "B 로"] },
+    { "id": "g12", "taskId": "task_31", "open": true, "question": "d012: 웹훅 재시도 정책", "options": ["3회 지수 백오프", "재시도 없음"] },
+    { "id": "g13", "taskId": "task_34", "open": true, "question": "d013: feature 머지 방식", "options": ["merge commit", "squash"] }
+  ]
+}
