@@ -1,0 +1,40 @@
+import type { ReadyRow, ViewInput } from "../contract/views.ts";
+import { itemGraph, longestPath, weightOf } from "./critical.ts";
+import { type EdgeKind, foldFacts } from "./facts.ts";
+import { ready, why } from "./ready.ts";
+
+// The read port brief (U9) and other readers take: plain task ids, one shape for edges from both homes.
+
+export interface GraphEdge {
+  /** A task id, or `pr:owner/repo#N` / `decision:dNNN` for a non-item predecessor. */
+  readonly pred: string;
+  readonly succ: string;
+  readonly kind: EdgeKind;
+}
+
+const bare = (ref: string) => (ref.startsWith("item:") ? ref.slice(5) : ref);
+
+export const graphRead = {
+  ready: (input: ViewInput): ReadyRow[] => ready(input),
+  /** Every live edge: Orca deps (as blocks) and extra edges. */
+  edges(input: ViewInput): GraphEdge[] {
+    const facts = foldFacts(input.events);
+    const orca = input.orca.tasks.flatMap((t) => t.deps.map((d) => ({ pred: d, succ: t.id, kind: "blocks" as const })));
+    return [...orca, ...facts.edges.map((e) => ({ pred: bare(e.pred), succ: bare(e.succ), kind: e.kind }))];
+  },
+  /** Longest chain among `tasks` (unfinished ones only); first = what slows things now, [] if none. */
+  criticalPath(input: ViewInput, tasks: readonly string[]): string[] {
+    const facts = foldFacts(input.events);
+    const g = itemGraph(input, facts);
+    const keep = new Set(g.nodes.filter((n) => tasks.includes(n)));
+    const preds = new Map([...keep].map((n) => [n, (g.preds.get(n) ?? []).filter((p) => keep.has(p))]));
+    const order = (t: string) => facts.items.get(t)?.createdSeq ?? 1e9 + tasks.indexOf(t);
+    return longestPath([...keep], preds, (t) => weightOf(facts.items.get(t)?.est) ?? 1, order).path;
+  },
+  /** The unmet edges into `task` (trigger and hold rows left out). */
+  why(input: ViewInput, task: string): GraphEdge[] {
+    return why(input, task)
+      .rows.filter((r) => r.kind !== "trigger" && r.kind !== "hold" && r.kind !== "orca")
+      .map((r) => ({ pred: bare(r.pred), succ: task, kind: r.kind as EdgeKind }));
+  },
+};

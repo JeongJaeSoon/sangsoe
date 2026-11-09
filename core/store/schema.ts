@@ -2,7 +2,33 @@
 // owner text apart so it can be emptied; counter/migration are bookkeeping; pr_ref/gh_budget/gh_seen
 // are the three caches the appendix's exception table allows. Nothing here copies an Orca fact.
 
-export const SCHEMA_V = 1;
+export const SCHEMA_V = 2;
+
+// Schema 2 (decision 0126): GRAPH's two guards as triggers, so no writer can bypass them. The current
+// extra edges are computed inline (the schema holds no SQL view); an edge_removed cancels the
+// edge_added rows of the same (pred, succ, kind) written before it.
+export const EDGE_TRIGGERS = `
+CREATE TRIGGER edge_source_graph BEFORE INSERT ON event
+WHEN NEW.type IN ('edge_added', 'edge_removed') AND NEW.source <> 'GRAPH'
+BEGIN SELECT RAISE(ABORT, 'edges are written only by GRAPH'); END;
+CREATE TRIGGER edge_no_cycle BEFORE INSERT ON event WHEN NEW.type = 'edge_added'
+BEGIN
+  SELECT RAISE(ABORT, 'edge would create a cycle') WHERE
+    json_extract(NEW.after, '$.pred') = json_extract(NEW.after, '$.succ') OR EXISTS (
+      WITH RECURSIVE
+        edge(pred, succ) AS (
+          SELECT json_extract(a.after, '$.pred'), json_extract(a.after, '$.succ') FROM event a
+          WHERE a.type = 'edge_added' AND NOT EXISTS (
+            SELECT 1 FROM event r WHERE r.type = 'edge_removed' AND r.seq > a.seq
+              AND json_extract(r.after, '$.pred') = json_extract(a.after, '$.pred')
+              AND json_extract(r.after, '$.succ') = json_extract(a.after, '$.succ')
+              AND json_extract(r.after, '$.kind') = json_extract(a.after, '$.kind'))),
+        reach(n) AS (
+          SELECT json_extract(NEW.after, '$.succ')
+          UNION SELECT e.succ FROM edge e JOIN reach ON e.pred = reach.n)
+      SELECT 1 FROM reach WHERE n = json_extract(NEW.after, '$.pred'));
+END;
+`;
 
 export const DDL = `
 CREATE TABLE event (
