@@ -1,4 +1,5 @@
 import type { ParseArgsOptionsConfig } from "node:util";
+import type { Host } from "../core/index.ts";
 
 // Refusal and Outcome mirror claude-plugin/mcp/contract.ts (the two slots do not import each
 // other); test/boundaries/contract.test.ts fails if they drift apart.
@@ -7,9 +8,14 @@ export type Refusal = { code: string; reason: string; fix: string };
 
 export type Outcome<T = unknown> = { ok: true; value: T } | { ok: false; refusal: Refusal };
 
+/** What a command that reports to a person (install, doctor) returns: exit code and lines. */
+export type Report = { code: number; lines: string[] };
+
 export type CommandArgs = {
   values: Record<string, string | boolean | (string | boolean)[] | undefined>;
   positionals: string[];
+  /** The machine the command may touch; tests pass a fake (R-11). */
+  host: Host;
 };
 
 export type CommandDef = {
@@ -23,5 +29,5 @@ export type CommandDef = {
   options?: ParseArgsOptionsConfig;
   /** Upper bound on positionals; default 0. */
   maxPositionals?: number;
-  run(args: CommandArgs): Outcome | Promise<Outcome>;
+  run(args: CommandArgs): Outcome | Report | Promise<Outcome | Report>;
 };

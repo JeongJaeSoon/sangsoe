@@ -3,11 +3,12 @@ import { readdirSync } from "node:fs";
 import { basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import type { CommandDef, Outcome, Refusal } from "./contract.ts";
+import { type Host, realHost } from "../core/index.ts";
+import type { CommandDef, Outcome, Refusal, Report } from "./contract.ts";
 
 export type Result = { code: number; out: string };
 
-// Exit codes: 0 done, 1 refused by the core (a Refusal), 2 usage error (nothing ran).
+// Exit codes: 0 done, 1 refused by the core (a Refusal) or a failing Report, 2 usage error (nothing ran).
 const USAGE = "usage: sangsoe <command> [args] [--json]";
 
 // Same rule as claude-plugin/mcp/collect.ts: one file per command, found by listing the
@@ -29,7 +30,7 @@ export async function collectCommands(dir: URL): Promise<Map<string, CommandDef>
 
 export async function run(
   argv: readonly string[],
-  opts: { commands?: URL } = {},
+  opts: { commands?: URL; host?: Host } = {},
 ): Promise<Result> {
   const commands = await collectCommands(opts.commands ?? new URL("./commands/", import.meta.url));
   const json = argv.includes("--json");
@@ -58,10 +59,12 @@ export async function run(
     return { code: 2, out: json ? JSON.stringify(refusal) : `${form}\n${refusal.reason}` };
   }
 
-  return render(cmd, await cmd.run({ values: parsed.values, positionals: parsed.positionals }), json);
+  const host = opts.host ?? realHost;
+  return render(cmd, await cmd.run({ values: parsed.values, positionals: parsed.positionals, host }), json);
 }
 
-function render(cmd: CommandDef, o: Outcome, json: boolean): Result {
+function render(cmd: CommandDef, o: Outcome | Report, json: boolean): Result {
+  if ("lines" in o) return { code: o.code, out: json ? JSON.stringify(o.lines) : o.lines.join("\n") };
   if (o.ok) {
     const text = json || typeof o.value !== "string" ? JSON.stringify(o.value) : o.value;
     return { code: 0, out: text };

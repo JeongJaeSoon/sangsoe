@@ -51,10 +51,10 @@ export default {
 
 ## plugin 이 서버를 싣는 줄(제안)
 
-`.mcp.json`(plugin 루트, U4·U5 의 매니페스트 작업 때 만든다):
+`claude-plugin/.mcp.json`(plugin 루트는 마켓플레이스가 가리키는 `claude-plugin/` 소스 폴더이고, 빌드된 서버는 릴리스 트리의 `dist/claude-plugin/mcp/server.js` 다):
 
 ```json
-{ "mcpServers": { "sangsoe": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/server.js"] } } }
+{ "mcpServers": { "sangsoe": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/../dist/claude-plugin/mcp/server.js"] } } }
 ```
 
 빌드 결과는 `tools/` 의 파일을 따로 둬야 한다: 서버가 시작할 때 폴더를 읽어 모으므로 진입점 하나로 묶는 번들은 tool 을 찾지 못한다.
