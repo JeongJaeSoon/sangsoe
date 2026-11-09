@@ -4,4 +4,4 @@
 
 그래서 조건 (2) 는 "승인할 폴더의 `contentHash` 가 리뷰된 커밋 트리의 `orca-plugin/` 의 `contentHash` 와 같다"로 읽는다. 리뷰된 트리는 `gh api repos/<repo>/tarball/<commit>` 로 받아 같은 `orca plugin inspect` 로 잰다(내용만 같으면 해시가 같다: `git archive` 사본과 작업 트리가 같은 값을 냈다). 커밋은 깨끗한 git checkout 의 HEAD, 아니면 릴리스 빌드가 plugin 폴더 **옆**에 쓰는 `build-info.json` 의 `commit` 이다(폴더 안에 두면 내용 해시가 리뷰된 트리와 달라진다). 지문 자체는 Orca 가 준 값을 그대로 `--approve` 에 넘긴다.
 
-남는 틈: 승인이 경로에 묶이므로 승인 뒤 같은 경로의 내용이 바뀌어도(`brew upgrade` 가 `opt/sangsoe` 아래를 바꿔도) Orca 는 다시 묻지 않는다. 승인 시점의 검사만으로는 그 뒤의 내용을 지키지 못하므로, 시작 점검·`doctor`·queue-monitor 의 `job_drift` 가 같은 내용 해시 비교를 되풀이해야 한다(T4 행과 worker_done 의 발견 항목).
+남는 틈: 승인이 경로에 묶이므로 승인 뒤 같은 경로의 내용이 바뀌어도(`brew upgrade` 가 `opt/sangsoe` 아래를 바꿔도) Orca 는 다시 묻지 않는다. T4 가 확인했다: 코드 수정과 `version` 올림은 `needsReconsent=false` 로 계속 돌고, 능력을 더할 때만 `pending`·`needsReconsent=true` 가 된다. 승인 시점의 검사만으로는 그 뒤의 내용을 지키지 못하므로, 시작 점검·`doctor`·queue-monitor 의 `job_drift` 가 같은 내용 해시 비교를 되풀이해야 한다(T4 행과 worker_done 의 발견 항목).
