@@ -77,7 +77,10 @@ readMergeConditions(gh, { repo, base, pr, protectedPaths }): MergeConditions;
 type Check = { id: string; run(ctx: CheckContext): Promise<CheckResult> };
 type CheckResult = { id: string; status: "ok" | "notice" | "warn" | "fail"; summary: string; fix?: string };
 runChecks(START_CHECKS, ctx) → startReport(results) | doctorReport(results)
+DOCTOR_CHECKS = [...START_CHECKS, orcaPluginContent]   // sangsoe doctor·install 이 돌린다
 ```
+
+- **내용 해시 점검(`orca-plugin-content`).** 설치된 `orca-plugin/` 의 `contentHash` 를 그 폴더의 빌드 커밋 트리(리뷰된 빌드, `sangsoe plugin approve` 가 비교하는 바이트)와 다시 비교한다. 다르면 `fail` + `sangsoe plugin approve`, 잴 수 없으면 `warn`. 빌드 트리는 내려받아야 하므로 `CheckContext.pluginBuild` 포트로 들어오고, 시작 점검은 그 포트를 비워 `DOCTOR_CHECKS` 에만 든다(결정 112).
 
 - **명령 표 하나.** `core/orca/commands.ts` 의 `ORCA_COMMANDS` 가 래퍼의 argv 와 시작 점검 `orca-commands` 의 대조 대상을 같이 정한다. 설계 2절 첫째 칸 표의 명령마다 한 행이 있고, 표에 없는 옵션은 래퍼가 넘기지 못한다.
 - **호스트.** 호스트를 가진 행(`worktree list`·`worktree ps`·`worker-list`)은 로컬 행만 어댑터 밖으로 나가고 나머지는 수만 남는다(결정 88).
@@ -107,6 +110,6 @@ U15(monitor)·U18(REAPER)·U19(패널)가 대고 짜는 계약이다. 시험 결
 - **formula.** 탭 저장소의 `Formula/sangsoe.rb`: `url`(릴리스 자산)·`sha256`·`depends_on "node"`·`libexec.install Dir["*"], ".claude-plugin"`(`Dir["*"]` 는 점 폴더를 뺀다)·`bin/sangsoe` sh 래퍼(`SANGSOE_ROOT=<opt_libexec>` 를 두고 브루의 `node` 로 `dist/cli/main.js` 실행)·`test do`(`--version` 과 `doctor --offline`). `post_install` 은 없다.
 - **`sangsoe install`(멱등).** 상태를 읽고 고른다: 마켓플레이스 `sangsoe` 가 없으면 `claude plugin marketplace add <트리> --scope user`, 있으면 `update`, 다른 경로를 가리키면 `remove` 뒤 `add` → plugin `sangsoe@sangsoe` 가 없으면 `claude plugin install … --scope user`, 있으면 `update` → `orca-plugin/orca-plugin.json` 이 트리에 있으면 `orca plugin dev load <트리>/orca-plugin --json`(종료 코드 3 은 승인 대기, 지문을 보여 주고 `sangsoe plugin approve` 를 안내), 없으면 한 줄로 건너뛴다 → `doctor`. `<트리>` 는 `$(brew --prefix)/opt/sangsoe/libexec` 이라 `brew upgrade` 뒤에도 같다.
 - **`sangsoe uninstall`.** 있는 것만 지운다: `claude plugin uninstall sangsoe@sangsoe --scope user --keep-data` · `claude plugin marketplace remove sangsoe --scope user` · `orca plugin list --json` 에 sangsoe 개발 plugin 이 있으면 `orca plugin dev unload <키>`. 목록을 읽지 못하면 없는 것으로 치지 않고 종료 코드 1 이다. sqlite·설정은 남긴다.
-- **`sangsoe doctor [--offline]`.** 항목마다 `ok` · `FAIL … — fix: <명령>` · `not yet`(아직 없는 부분). `FAIL` 이 하나라도 있으면 종료 코드 1. `--offline` 은 트리(매니페스트 버전 일치·Node 하한)만 본다.
+- **`sangsoe doctor [--offline]`.** 트리 · Claude Code 실행과 마켓플레이스 · Orca plugin 로드 상태 다음에 `DOCTOR_CHECKS`(시작 점검 + 내용 해시)를 같은 줄 모양으로 잇는다. 항목마다 `ok` · `FAIL … — fix: <명령>` · `warn`/`notice … — fix: <명령>` · `not yet`(아직 없는 부분). `FAIL` 이 하나라도 있으면 종료 코드 1, `warn`·`notice` 는 0. Claude Code plugin 행은 시작 점검 `claude-plugin-version` 하나뿐이다. `--offline` 은 트리(매니페스트 버전 일치·Node 하한)만 본다. `sangsoe install` 은 끝에 같은 doctor 를 돌려 그 종료 코드를 낸다.
 
 고른 꼴과 버린 꼴: (A, 고름) `tsc` 출력 + `npm pack` + 래퍼가 트리 경로를 환경 변수로 건넴. 선언 하나(`files`)가 자산을 정하고 시험이 그것을 읽는다. (B) 진입점별 esbuild 번들 + `packaging/` 의 묶음 스크립트 + 실행 경로의 Cellar→opt 변환. 번들은 런타임 의존이 없는 지금 얻는 것이 없고, 파일을 실행 중에 찾는 라우터·MCP 수집기를 깨며, 경로 변환은 브루 내부 배치에 기대므로 버렸다.

@@ -11,8 +11,17 @@ export type CheckResult = {
   fix?: string;
 };
 
+/**
+ * The installed Orca plugin folder and the reviewed build it should equal (decision 105). A port,
+ * because the build is a download; the start leaves it unset so it never fetches.
+ */
+export type PluginBuild = {
+  dir: string;
+  fetchBuild(): Promise<{ commit: string; dir: string; dispose(): Promise<void> } | { error: string; fix: string }>;
+};
+
 /** Host state comes in here, so tests run every check against the fake Orca. */
-export type CheckContext = { orca: OrcaAdapter; exec: Exec; coreVersion: string };
+export type CheckContext = { orca: OrcaAdapter; exec: Exec; coreVersion: string; pluginBuild?: PluginBuild };
 
 /**
  * The doctor check function shape. One file per check under core/checks/; a unit adding a

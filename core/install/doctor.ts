@@ -1,22 +1,26 @@
 import { join } from "node:path";
+import { SANGSOE_REPO } from "../approve/approve.ts";
+import { nodePorts, resolveCommit } from "../approve/ports.ts";
+import { type CheckContext, type CheckResult, DOCTOR_CHECKS, type PluginBuild, runChecks } from "../checks/index.ts";
+import { createOrcaAdapter } from "../orca/adapter.ts";
+import { nodeExec } from "../orca/exec.ts";
+import { VERSION } from "../version.ts";
 import {
   type Host,
   lastLine,
   listMarketplaces,
   listOrcaPlugins,
-  listPlugins,
   MARKETPLACE,
   orcaManifest,
-  PLUGIN_ID,
+  orcaPluginDir,
   sangsoeOrca,
   UNREADABLE,
-  userPlugin,
 } from "./host.ts";
 
+// `warn` and `notice` print their fix but leave the exit code alone, as at the start.
 export type Check =
-  | { state: "ok"; name: string; detail: string }
-  | { state: "fail"; name: string; detail: string; fix: string }
-  | { state: "not yet"; name: string; detail: string };
+  | { state: "ok" | "not yet"; name: string; detail: string }
+  | { state: "fail" | "warn" | "notice"; name: string; detail: string; fix: string };
 
 type Manifest = { version?: string; engines?: { node?: string } };
 const REINSTALL = "brew reinstall sangsoe";
@@ -75,7 +79,8 @@ function treeChecks(host: Host, root: string): Check[] {
   return out;
 }
 
-function claudeChecks(host: Host, root: string, want: string | undefined): Check[] {
+// The plugin row itself is the start check `claude-plugin-version`.
+function claudeChecks(host: Host, root: string): Check[] {
   const where = host.env.CLAUDE_CONFIG_DIR ? ` (CLAUDE_CONFIG_DIR=${host.env.CLAUDE_CONFIG_DIR})` : "";
   const v = host.run("claude", ["--version"]);
   if (v.code !== 0) {
@@ -93,20 +98,6 @@ function claudeChecks(host: Host, root: string, want: string | undefined): Check
         : m.path !== root
           ? { state: "fail", name: "claude marketplace", detail: `${MARKETPLACE} points at ${m.path ?? m.source}`, fix: "sangsoe install" }
           : { state: "ok", name: "claude marketplace", detail: `${MARKETPLACE} → ${m.path}` },
-  );
-
-  const plugins = listPlugins(host);
-  const p = userPlugin(plugins);
-  out.push(
-    !plugins
-      ? { state: "fail", name: "claude plugin", detail: UNREADABLE("claude plugin list --json"), fix: "claude plugin list" }
-      : !p
-        ? { state: "fail", name: "claude plugin", detail: `${PLUGIN_ID} not installed (user scope)`, fix: "sangsoe install" }
-        : p.version !== want
-          ? { state: "fail", name: "claude plugin", detail: `${PLUGIN_ID} is ${p.version}, tree is ${want}`, fix: "sangsoe install" }
-          : p.enabled === false
-            ? { state: "fail", name: "claude plugin", detail: `${PLUGIN_ID} is disabled`, fix: `claude plugin enable ${PLUGIN_ID}` }
-            : { state: "ok", name: "claude plugin", detail: `${PLUGIN_ID} ${p.version}, enabled` },
   );
   return out;
 }
@@ -132,26 +123,60 @@ function orcaChecks(host: Host, root: string): Check {
   return { state: "ok", name, detail: `${p.pluginKey} ${p.version}, ${p.status}` };
 }
 
-// Placeholders until the start checks (Orca capabilities, status hooks, host filter, SQLite floor) land.
-const NOT_YET: Check[] = [
-  { state: "not yet", name: "start checks", detail: "Orca capabilities, status hooks and host filter arrive with a later build" },
-  { state: "not yet", name: "sqlite", detail: "the SQLite version floor check arrives with a later build" },
-];
+const SQLITE_NOT_YET: Check = { state: "not yet", name: "sqlite", detail: "the SQLite version floor check arrives with a later build" };
 
-export function doctorChecks(host: Host, root: string, opts: { offline?: boolean } = {}): Check[] {
+const fromStart = (r: CheckResult): Check =>
+  r.status === "ok"
+    ? { state: "ok", name: r.id, detail: r.summary }
+    : { state: r.status, name: r.id, detail: r.summary, fix: r.fix ?? "sangsoe doctor" };
+
+// The reviewed build is the commit the folder was built from, fetched as `sangsoe plugin approve` does.
+function realPluginBuild(root: string): PluginBuild {
+  const dir = orcaPluginDir(root);
+  return {
+    dir,
+    async fetchBuild() {
+      const commit = await resolveCommit(dir);
+      if (!commit) {
+        return { error: `${dir} 의 빌드 커밋을 모른다 (깨끗한 git checkout 도, build-info.json 도 아니다)`, fix: "brew reinstall sangsoe" };
+      }
+      try {
+        return { commit, ...(await nodePorts(() => {}).fetchPluginTree(SANGSOE_REPO, commit)) };
+      } catch (e) {
+        return { error: `빌드 커밋 ${commit} 을 받지 못했다: ${e instanceof Error ? e.message : String(e)}`, fix: "gh auth status" };
+      }
+    },
+  };
+}
+
+export function realCheckContext(host: Host, root: string): CheckContext {
+  const exec = nodeExec();
+  return {
+    orca: createOrcaAdapter(exec),
+    exec,
+    coreVersion: VERSION,
+    ...(host.exists(orcaManifest(root)) ? { pluginBuild: realPluginBuild(root) } : {}),
+  };
+}
+
+export type DoctorOptions = { offline: true } | { ctx: CheckContext };
+
+export async function doctorChecks(host: Host, root: string, opts: DoctorOptions): Promise<Check[]> {
   const tree = treeChecks(host, root);
-  if (opts.offline) return tree;
-  const want = readManifest(host, join(root, "package.json"))?.version;
-  return [...tree, ...claudeChecks(host, root, want), orcaChecks(host, root), ...NOT_YET];
+  if ("offline" in opts) return tree;
+  const start = await runChecks(DOCTOR_CHECKS, opts.ctx);
+  return [...tree, ...claudeChecks(host, root), orcaChecks(host, root), ...start.map(fromStart), SQLITE_NOT_YET];
 }
 
 export function formatChecks(checks: readonly Check[]): string[] {
   return checks.map((c) =>
-    c.state === "fail" ? `FAIL     ${c.name}: ${c.detail} — fix: ${c.fix}` : `${c.state.padEnd(8)} ${c.name}: ${c.detail}`,
+    "fix" in c
+      ? `${(c.state === "fail" ? "FAIL" : c.state).padEnd(8)} ${c.name}: ${c.detail} — fix: ${c.fix}`
+      : `${c.state.padEnd(8)} ${c.name}: ${c.detail}`,
   );
 }
 
-export function doctor(host: Host, root: string, opts: { offline?: boolean } = {}): { code: number; lines: string[] } {
-  const checks = doctorChecks(host, root, opts);
+export async function doctor(host: Host, root: string, opts: DoctorOptions): Promise<{ code: number; lines: string[] }> {
+  const checks = await doctorChecks(host, root, opts);
   return { code: checks.some((c) => c.state === "fail") ? 1 : 0, lines: formatChecks(checks) };
 }

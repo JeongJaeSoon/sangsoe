@@ -3,6 +3,7 @@ import { claudePluginVersion } from "./claude-plugin-version.ts";
 import { orcaCapabilities } from "./orca-capabilities.ts";
 import { orcaCommands } from "./orca-commands.ts";
 import { orcaHooks } from "./orca-hooks.ts";
+import { orcaPluginContent } from "./orca-plugin-content.ts";
 import { orcaPluginVersion } from "./orca-plugin-version.ts";
 import { orcaReachable } from "./orca-reachable.ts";
 import { remoteHosts } from "./remote-hosts.ts";
@@ -20,3 +21,6 @@ export const START_CHECKS: readonly Check[] = [
   claudePluginVersion,
   orcaPluginVersion,
 ];
+
+/** `doctor` adds what is too slow for every start: the content check downloads the reviewed build. */
+export const DOCTOR_CHECKS: readonly Check[] = [...START_CHECKS, orcaPluginContent];
