@@ -237,6 +237,11 @@ test("a folder reached through a symlink matches Orca's real-path identity and i
   const { r, reloads } = await run(world({ reload: needsApproval({ contentIdentity: `dev:${real}` }) }), { realDir: real });
   assert.equal(r.ok, true, JSON.stringify(r.checks));
   assert.deepEqual(reloads(), [["orca", "plugin", "dev", "reload", DIR, "--json"]]);
-  const other = await run(world({ reload: needsApproval({ contentIdentity: "dev:/opt/Cellar/sangsoe/0.9.0/orca-plugin" }) }), { realDir: real });
-  assert.equal(other.r.checks.find((c) => c.name === "target_is_sangsoe")?.ok, false);
+  for (const identity of ["dev:/opt/Cellar/sangsoe/0.9.0/orca-plugin", `dev:${DIR}`]) {
+    // An identity on the symlink itself would follow the link to whatever a later upgrade puts there.
+    const other = await run(world({ reload: needsApproval({ contentIdentity: identity }) }), { realDir: real });
+    assert.equal(other.r.ok, false, identity);
+    assert.equal(other.r.checks.find((c) => c.name === "target_is_sangsoe")?.ok, false, identity);
+    assert.deepEqual(other.enables(), [], identity);
+  }
 });

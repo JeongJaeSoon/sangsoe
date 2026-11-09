@@ -29,8 +29,9 @@ export type ApprovePorts = {
 export type Ledger = { record(event: PluginApproved): Promise<void>; close(): void };
 
 /**
- * `dir` is the path Orca loaded (Homebrew's opt/ symlink); `realDir` is where it resolves, which
- * Orca names as the approval's `contentIdentity` (decision 122). Without it the two are the same.
+ * `dir` is the path Orca loaded (Homebrew's opt/ symlink); `realDir` is where it resolves, the only
+ * `contentIdentity` accepted: an approval on the symlink would follow it to a later upgrade's bytes
+ * (decision 122). Without it the two are the same.
  */
 export type ApproveInput = { dir: string; realDir?: string; commit: string; dryRun: boolean };
 
@@ -166,12 +167,12 @@ export async function approvePlugin(input: ApproveInput, ports: ApprovePorts): P
   const fingerprint = typeof data.approvalFingerprint === "string" ? data.approvalFingerprint : null;
   result.key = key;
   result.fingerprint = fingerprint;
-  const identities = new Set([`dev:${input.dir}`, `dev:${input.realDir ?? input.dir}`]);
-  const target = key === SANGSOE_KEY && fingerprint !== null && identities.has(String(data.contentIdentity));
+  const identity = `dev:${input.realDir ?? input.dir}`;
+  const target = key === SANGSOE_KEY && fingerprint !== null && data.contentIdentity === identity;
   result.checks.unshift({
     name: "target_is_sangsoe",
     ok: target,
-    detail: target ? `${key} is the sangsoe folder ${input.dir}` : `key ${key} / ${String(data.contentIdentity)} is not ${SANGSOE_KEY} at ${input.dir}`,
+    detail: target ? `${key} is the sangsoe folder ${input.dir}` : `key ${key} / ${String(data.contentIdentity)} is not ${SANGSOE_KEY} at ${identity}`,
   });
   if (!target || !key || !fingerprint) {
     result.note = "not enabled: a condition failed";
