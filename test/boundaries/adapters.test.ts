@@ -99,6 +99,12 @@ test("(4) unknown commands, arguments and tools write nothing and show the right
   assert.match(!extra.ok ? extra.refusal.fix : "", /"who","refuse"/);
   const wrongType = await viaMcp("greet", { who: 3 }, dirs);
   assert.equal(!wrongType.ok && wrongType.refusal.reason, 'argument "who" must be string');
+  const arrayArgs = await server.handle({ ...call("greet", {}), params: { name: "greet", arguments: [] } });
+  assert.equal((arrayArgs as { result: { isError: boolean } }).result.isError, true);
+  for (const bad of [null, [], { jsonrpc: "1.0", id: 1, method: "ping" }, { jsonrpc: "2.0", id: 1 }, { jsonrpc: "2.0", id: {}, method: "ping" }]) {
+    assert.deepEqual(await server.handle(bad), { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } });
+  }
+  assert.equal((await server.handle({ jsonrpc: "2.0", id: 1, method: "toString" }) as { error: { code: number } }).error.code, -32601);
 
   assert.equal(writes.length, before, "an entrance reached the core on a bad call");
 });
@@ -121,6 +127,17 @@ test("(5) tools/README.md lists the twelve tools of design #mcp and the MCP-only
     "review_ask_record",
   ]);
   assert.match(readme, /에이전트는 sangsoe 를 MCP 로만 부른다/);
+});
+
+test("initialize keeps a served protocol version and answers any other with the newest served", async () => {
+  const server = await createServer({ tools: dirs.tools });
+  const init = async (protocolVersion: string) =>
+    ((await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion } })) as {
+      result: { protocolVersion: string };
+    }).result.protocolVersion;
+  assert.equal(await init("2025-06-18"), "2025-06-18");
+  assert.equal(await init("2026-07-28"), "2025-11-25");
+  assert.equal(await init("1999-01-01"), "2025-11-25");
 });
 
 test("the server answers initialize and tools/list over stdio", async () => {

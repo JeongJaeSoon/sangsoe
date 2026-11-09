@@ -4,19 +4,33 @@ import { VERSION } from "../../core/index.ts";
 import { collect } from "./collect.ts";
 import type { JsonSchema, Outcome, Refusal, ResourceDef, ToolDef } from "./contract.ts";
 
-// Every revision here carries the five methods below unchanged; a client asking for another
-// gets the newest, as the initialize handshake allows.
-const PROTOCOL_VERSIONS = ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26"];
+// Revisions with the initialize handshake, which carry the methods below unchanged. A client
+// asking for another gets the newest of these. 2026-07-28 (server/discover, no initialize) is
+// not served until Claude Code asks for it.
+const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"];
 
 type Id = string | number;
 type Request = { jsonrpc: "2.0"; id?: Id; method: string; params?: Record<string, unknown> };
-type Response = { jsonrpc: "2.0"; id: Id } & ({ result: unknown } | { error: { code: number; message: string } });
+type Response = { jsonrpc: "2.0"; id: Id | null } & (
+  | { result: unknown }
+  | { error: { code: number; message: string } }
+);
 
 export type Server = {
   tools: ReadonlyMap<string, ToolDef>;
-  /** One JSON-RPC message in; the response, or undefined for a notification. */
-  handle(msg: Request): Promise<Response | undefined>;
+  /** One parsed JSON-RPC message in; the response, or undefined for a notification. */
+  handle(msg: unknown): Promise<Response | undefined>;
 };
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+function asRequest(m: unknown): Request | undefined {
+  if (!isObject(m) || m.jsonrpc !== "2.0" || typeof m.method !== "string") return undefined;
+  if ("id" in m && typeof m.id !== "string" && typeof m.id !== "number") return undefined;
+  if ("params" in m && !isObject(m.params)) return undefined;
+  return m as Request;
+}
 
 export async function createServer(
   dirs: { tools?: URL; resources?: URL } = {},
@@ -39,7 +53,11 @@ export async function createServer(
     "tools/call": async (p) => {
       const tool = tools.get(p.name as string);
       if (!tool) throw new RpcError(-32602, `Unknown tool: ${String(p.name)}`);
-      const input = (p.arguments ?? {}) as Record<string, unknown>;
+      const input = p.arguments ?? {};
+      if (!isObject(input)) {
+        const fix = `call ${tool.name} with an object of arguments`;
+        return toCallResult({ ok: false, refusal: { code: "invalid_input", reason: "arguments must be an object", fix } });
+      }
       const bad = checkInput(tool, input);
       return toCallResult(bad ? { ok: false, refusal: bad } : await tool.handler(input));
     },
@@ -60,8 +78,10 @@ export async function createServer(
 
   return {
     tools,
-    async handle(msg) {
-      const method = methods[msg.method];
+    async handle(raw) {
+      const msg = asRequest(raw);
+      if (!msg) return { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } };
+      const method = Object.hasOwn(methods, msg.method) ? methods[msg.method] : undefined;
       if (msg.id === undefined) return undefined;
       if (!method) return { jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: `Method not found: ${msg.method}` } };
       try {
@@ -121,7 +141,7 @@ function checkInput(tool: ToolDef, input: Record<string, unknown>): Refusal | un
 export async function serveStdio(server: Server): Promise<void> {
   for await (const line of createInterface({ input: process.stdin })) {
     if (!line.trim()) continue;
-    let msg: Request;
+    let msg: unknown;
     try {
       msg = JSON.parse(line);
     } catch {
