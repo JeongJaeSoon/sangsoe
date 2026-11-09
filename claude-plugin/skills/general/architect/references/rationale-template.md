@@ -1,0 +1,35 @@
+# Rationale template
+
+The prose that ships alongside the type sketch. One page. Sentence-case headings, no boilerplate. Replace the italic notes with actual content.
+
+## Problem
+
+*One paragraph. What we're trying to do, and what about the existing system or constraints makes the shape non-obvious. If [Phase A](../SKILL.md#phase-a-ground-the-problem) surfaced constraints the design must honor (existing types to interop with, callers we can't break, invariants that crossed our boundary), name them here so the reader sees the same constraints you saw.*
+
+## Usage (caller's view)
+
+*Write this first, before the type sketch. Show the README or quickstart the consumer reads, plus two or three realistic call sites in their own code: what they import, what they call, what comes back. The type sketch in [Shape](#shape) is derived from this, and the two must agree. When they diverge, reconcile the sketch to the usage, not the reverse.*
+
+## Shape
+
+*The recommended architecture. Data structures first, then how data flows through the signatures. Name the load-bearing decisions. State which invariants are encoded in types, where validation lives, and what the system deliberately does not do. Judge interface depth explicitly: what complexity the public surface hides, what remains exposed to callers, and why the interface is no larger than needed. Cite the principle behind each decision (for example `per boundary-discipline`). Don't restate it.*
+
+## Synthesis decision
+
+*Filled in by [fan-out compete](../../fan-out/references/compete.md). Records which candidate became the base and why, what was adapted from each of the others, and what was rejected and why.*
+
+## Tradeoffs accepted
+
+*One bullet per tradeoff the chosen shape makes, in the form "we accept X in exchange for Y". Name anything a future reader might mistake for an oversight, including things that look like premature optimization or premature simplification.*
+
+## Alternatives considered
+
+*Required. Name at least one concrete alternative shape, with one line on why it lost. Judge each alternative on interface depth, not implementation simplicity alone: name the complexity it exposes to callers and the complexity it hides. Two or three alternatives belong here when the design space had real contenders. One is fine when the constraints forced the answer, phrased as "this was the only viable shape because...". Don't list flavors of the same shape. This section covers design alternatives the chosen shape rejected, not other runner candidates.*
+
+## Decisions and risks
+
+*Numbered decisions, each a fork that changes what gets built, at most five, none when the constraints forced the shape. For each: the question, which claim or part of the Shape it changes, 2 to 4 options with the recommended default marked (the sketch already assumes it), what disappears from the design if another option wins, and whether it is hard to reverse. Rules for placing and answering them are in [`plan-page.md`](plan-page.md). Then the risks worth flagging before implementation starts.*
+
+## Next implementation step
+
+*The first thing to build against the sketch, in one sentence.*

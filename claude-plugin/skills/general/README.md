@@ -21,3 +21,10 @@ claude plugin eval claude-plugin/skills/general/<name> --ablation none --no-publ
 | `prune-comments` | diff 의 주석을 코드가 말하지 못하는 것만 남길 때 |
 | `verification-skill` | 앱을 사용자처럼 돌리는 `verify-*` 스킬을 만들거나 손볼 때 |
 | `ui-review` | 화면·시안·UI PR 을 사람에게 보이기 전에 |
+| `architect` | 코드 전에 타입·시그니처·모듈 구조를 스케치하고 설계안을 둘 이상 비교할 때 |
+| `challenge` | 변경이 diff 밖에서 깨뜨릴 것을 실행으로 증명할 때, 설계·계획을 독립 리뷰어에게 따져 물을 때 |
+| `explain-code` | 읽지 않은 코드를 바꾸기 전에: 어떻게 동작하나·왜 이렇게 됐나·배우기·기능 지도 |
+| `fan-out` | 병렬 작업자로 한 질문을 나눠 훑거나(sweep) 같은 일을 경쟁시켜 하나로 합칠 때(compete) |
+| `figure-it-out` | 큰 이주·여러 부분 변경을 코드 전에 감사 가능한 단계로 설계할 때 |
+| `show-me-your-work` | 길거나 자리 비운 동안 도는 일의 결정 기록(무엇·왜·증거·결과)을 남길 때 |
+| `recall` | 지난 세션·sangsoe 기록·저장소 이력에서 어디까지 했는지 되살릴 때 |
