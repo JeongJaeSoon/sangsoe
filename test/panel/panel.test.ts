@@ -6,6 +6,7 @@ import {
   type BriefInput,
   type BriefSnapshot,
   decisionOpen,
+  type OrcaAdapter,
   type Overview,
   panelCore,
   panelView,
@@ -23,6 +24,7 @@ import { panelHandlers, parseAct, STATUS_UNKNOWN } from "../../orca-plugin/panel
 import { STYLE } from "../../orca-plugin/panel/style.ts";
 import { back, current, down, drawnRowIds, type PanelView, renderStage, trail } from "../../orca-plugin/panel/view.ts";
 import { createWorld } from "../decision/world.ts";
+import { ownerWorld } from "../owner/world.ts";
 
 const FIX = new URL("../fixtures/brief/", import.meta.url);
 const NOW = "2026-11-10T12:00:00.000Z";
@@ -194,15 +196,29 @@ test("PN4: 추천대로 답 → owner_action{button} → decisionAnswer, the sam
   assert.equal(w.sends[0]?.to, `run:${RUN}`);
 });
 
-test("PN4 live: 다른 답 sends the typed words; 완료 refuses until ownerDone is in the build", async () => {
+test("PN4 live: 다른 답 sends the typed words to the Run holding the gate", async () => {
   const { w, core } = await world("live");
   const r = await core.act({ kind: "answer", decision: "d001", text: "linear x5" });
   assert.ok(r.ok, JSON.stringify(r));
   assert.equal(w.store.events({ type: "decision_answered" })[0]?.payload.answer, "linear x5");
   assert.equal(w.sends[0]?.to, `run:${RUN}`);
-  const d = await core.act({ kind: "done", item: "i035" });
-  assert.deepEqual(d.ok ? null : d.refusal.code, "not_available");
-  assert.equal(w.store.events({ type: "owner_action" }).length, 1, "a refused 완료 records nothing");
+});
+
+test("PN4: 완료 → U14 ownerDone closes a 🟢 owner item in Orca and the store; anything else is refused", async () => {
+  const o = ownerWorld();
+  const mine = o.item("task_000000000010", { who: "owner" });
+  const theirs = o.item("task_000000000011", { who: "acme-bot" });
+  const core = panelCore({ orca: o.orca as unknown as OrcaAdapter, withStore: (fn) => fn(o.store), now: () => o.now, load: async () => ({ ok: true, value: o.input() }) });
+
+  const no = await core.act({ kind: "done", item: theirs });
+  assert.equal(no.ok ? null : no.refusal.code, "not_owner_item");
+  assert.equal(o.store.events({ type: "owner_action" }).length, 0, "a refused 완료 records nothing");
+
+  const r = await core.act({ kind: "done", item: mine });
+  assert.deepEqual(r.ok ? r.value : r, { status: "done", item: mine, evidenceShort: false });
+  assert.equal(o.state("task_000000000010"), "done");
+  assert.deepEqual(o.store.events({ type: "owner_action" }).map((e) => [e.source, e.payload.origin]), [["plugin:panel", "button"]]);
+  assert.equal(o.store.events({ type: "item_transition" })[0]?.payload.reason, "owner_done");
 });
 
 test("다른 답 is masked before it is stored or handed to the Run", async () => {

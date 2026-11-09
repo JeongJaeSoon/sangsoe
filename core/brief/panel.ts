@@ -1,13 +1,14 @@
-import type { OwnerTodoRow, ViewInput } from "../contract/index.ts";
+import type { OwnerTodoRow } from "../contract/index.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
 import { type DecisionAnswered, decisionAnswer } from "../decision/answer.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
+import { ownerDone } from "../owner/done.ts";
 import { hashOf, mask, summarize } from "../session/mask.ts";
 import { Store } from "../store/store.ts";
 import { type BuildOptions, buildBrief, buildGroup, buildItem } from "./build.ts";
-import { type ItemFacts, itemFacts } from "./item_status.ts";
+import { itemFacts } from "./item_status.ts";
 import { loadBriefInput } from "./load.ts";
 import { ownerTodoFrom } from "./owner_todo.ts";
 import type { BriefInput, BriefModel, Overview } from "./types.ts";
@@ -64,17 +65,6 @@ export function panelView(input: BriefInput, target: PanelTarget, opts: BuildOpt
   return done({ model, todo });
 }
 
-/** U14's ownerDone, taken as a port until core/owner lands on this base. */
-export type OwnerDoneFn = (
-  ports: { readonly orca: OrcaAdapter; readonly store: Store },
-  input: ViewInput,
-  facts: readonly ItemFacts[],
-  a: { readonly task: string; readonly session?: string },
-) => Promise<Result<{ readonly task: string; readonly alias: string; readonly evidenceShort: boolean }>>;
-
-const ownerDoneMissing: OwnerDoneFn = async () =>
-  refuse("not_available", "the 완료 button's core function (ownerDone) is not in this build", "close the item with its lead until the next release");
-
 export interface PanelPorts {
   readonly orca: OrcaAdapter;
   /** Runs one act against the store; the worker's opens the file and closes it after. */
@@ -82,7 +72,6 @@ export interface PanelPorts {
   readonly now: () => string;
   /** Reads the brief input; loadBriefInput (the store file and Orca) unless a test gives its own. */
   readonly load?: (now: string) => Promise<Result<BriefInput>>;
-  readonly ownerDone?: OwnerDoneFn;
 }
 
 /**
@@ -126,9 +115,9 @@ export function panelCore(ports: PanelPorts): PanelCore {
     });
   }
 
-  function ownerDone(input: BriefInput, item: string): Promise<Result<PanelActed>> {
+  function closeItem(input: BriefInput, item: string): Promise<Result<PanelActed>> {
     return ports.withStore(async (store) => {
-      const r = await (ports.ownerDone ?? ownerDoneMissing)({ store, orca: ports.orca }, input, itemFacts(input), { task: item });
+      const r = await ownerDone({ store, orca: ports.orca }, input, itemFacts(input), { task: item });
       return r.ok ? done({ status: "done", item: r.value.alias, evidenceShort: r.value.evidenceShort }) : r;
     });
   }
@@ -145,7 +134,7 @@ export function panelCore(ports: PanelPorts): PanelCore {
     async act(a) {
       const input = await load(ports.now());
       if (!input.ok) return input;
-      if (a.kind === "done") return ownerDone(input.value, a.item);
+      if (a.kind === "done") return closeItem(input.value, a.item);
       return answer(input.value, a.decision, "text" in a ? a.text : null);
     },
   };
