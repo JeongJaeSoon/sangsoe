@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | 감지 | `orca-plugin/monitors/` | X | ② Orca plugin | monitor 다섯 · 타이머 멈춤 감지 |
 | 감지 | `claude-plugin/hooks/` | X | ③ Claude Code plugin | SessionStart · 막는 hook(게이트) · 기록 hook |
-| 감지 | `core/detect/` | X | ④ 공유 코어 | monitor 판정(orca · resource · chat): worker 타이머와 `sangsoe monitor run` 이 같이 부른다 |
+| 감지 | `core/detect/` | X | ④ 공유 코어 | monitor 판정 다섯(orca · resource · chat · pr · queue, 앞 셋은 이 폴더, 뒤 둘은 아래 두 줄)과 알림 길 하나(`notice.ts`): worker 타이머와 `sangsoe monitor run` 이 같이 부른다 |
 | 감지 | `core/detect/pr/` | X | ④ 공유 코어 | pr-monitor 판정: PR 사실 → event, 머지 확인 뒤 PR 항목 Task `completed`(감지기가 항목을 닫는 유일한 예외) · main CI · 등급 라벨 · 참조 |
 | 감지 | `core/detect/queue/` | X | ④ 공유 코어 | queue-monitor 라운드(판정 + 규칙을 가진 코어 함수 호출)와 타이머 멈춤 판정. 항목을 닫지 않는다 |
 | 실행 | `core/` | X | ④ 공유 코어 | 판단 함수(GRAPH · ready · capacity · land · verify_tier · decision_* · notify · restart_due · recover_plan · 시작 점검) |
