@@ -6,7 +6,8 @@ import { type Host, type Marketplace, type RunResult, sangsoeOrca, treeRoot } fr
 import { install, uninstall } from "./install.ts";
 
 const ROOT = "/opt/homebrew/opt/sangsoe/libexec";
-const V = "0.1.0-rc.1";
+// A fixture tree's version, deliberately not the release's: these tests must not need a bump per release.
+const V = "9.9.9-fixture";
 
 type State = { markets: Marketplace[]; plugins: { id: string; version: string; scope: string; enabled: boolean }[]; orca: boolean };
 
