@@ -1,5 +1,7 @@
 # Notes verification map
 
+A shape example only: Notes, `control-notes` and the `notes` CLI are made up and exist nowhere. Copy the structure into a generated skill's `features/` and replace every command, URL and variable with the real ones from the repository; never run these.
+
 This directory is the maintained source for verifying the user-facing behavior of Notes. Read the index before driving the app, then use the matching feature file as the recipe.
 
 ## Baseline preconditions

@@ -1,12 +1,12 @@
 # 95. 일반 작업 스킬은 sangsoe 의 Claude Code plugin 안 `claude-plugin/skills/general/` 에 둔다
 
-sangsoe 의 역할·상태에 기대지 않는 일반 작업 스킬 14개(`principles`·`write-plainly`·`tdd`·`write-skill`·`prune-comments`·`verification-skill`·`ui-review`·`architect`·`challenge`·`explain-code`·`fan-out`·`figure-it-out`·`show-me-your-work`·`recall`)를 별도 저장소가 아니라 ③ Claude Code plugin 의 `claude-plugin/skills/general/<name>/` 에 둔다. 한 스킬이 한 폴더이고, 폴더마다 `SKILL.md`·`references/`·`evals/` 가 있다.
+sangsoe 의 역할·상태에 기대지 않는 일반 작업 스킬 14개(`principles`·`write-plainly`·`tdd`·`write-skill`·`prune-comments`·`verification-skill`·`ui-review`·`architect`·`challenge`·`explain-code`·`fan-out`·`figure-it-out`·`show-me-your-work`·`recall`)를 별도 저장소가 아니라 ③ Claude Code plugin 의 `claude-plugin/skills/general/<name>/` 에 둔다. 한 스킬이 한 폴더이고, 폴더마다 `SKILL.md` 와 `evals/` 가 있고 필요하면 `references/` 가 있다.
 
 ## 대체하는 것
 
 - 결정 18 의 "일반 스킬은 별도 작은 플러그인으로" 추천.
 - 결정 74 O-6 을 D-1 에 적용한 부분, 곧 port-plan 1절 D-1 과 2.3 의 "general-skills 별도 저장소". 다시 만든다는 O-6 의 뜻은 그대로다: 옛 본문은 참고만 하고 sangsoe 에 맞게 새로 썼다.
-- `design.html` 1·2절, `glossary.md`, build-order 도식의 "일반 스킬 저장소" 표기. 이 문서들은 이 단위가 고치지 않고 설계 대 코드 대조(U25)가 이 결정을 접는다.
+- `design.html` 1·2절, `glossary.md`, build-order 도식의 "일반 스킬 저장소" 표기. 이 문서들은 이 결정과 함께 고치지 않았다. 구현 막바지의 설계 대 코드 대조에서 이 결정을 설계 문서에 접는다.
 
 ## 이유
 

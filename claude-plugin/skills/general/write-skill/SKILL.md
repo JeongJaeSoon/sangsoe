@@ -10,7 +10,7 @@ A skill change is not done when the text reads well. It is done when it has been
 ## 0. Which target
 
 - **A plugin in a public repository** (sangsoe's own `claude-plugin/` included): edit on a branch in its own worktree, never in the checkout sessions load. No company-internal or personal names in any file, commit message or PR body (§4).
-- **The user's own skills, agents and instructions** (`~/.claude/skills/`, `~/.claude/agents/`, `~/.claude/CLAUDE.md`): edit in place, after copying each file to a dated backup outside `~/.claude`, since these are usually not under git. Workplace names are allowed there.
+- **The user's own skills, agents and instructions** (`skills/`, `agents/` and `CLAUDE.md` in the user's Claude config directory, `~/.claude` unless `CLAUDE_CONFIG_DIR` names another): edit in place, after copying each file to a dated backup outside that directory, since these are usually not under git. Workplace names are allowed there.
 - **Another plugin you do not own**: not edited here. Record the change it needs for its owner.
 
 Content moving from a personal file into a public repository is rewritten in generic terms first.
@@ -19,7 +19,7 @@ Content moving from a personal file into a public repository is rewritten in gen
 
 Before a new skill, or a new section longer than about ten lines, look for its home:
 
-1. List what exists: the target plugin's `skills/` tree (in sangsoe, `claude-plugin/skills/` and `claude-plugin/skills/general/`), `ls ~/.claude/skills ~/.claude/agents`, and the skills this session lists as available.
+1. List what exists: the target plugin's `skills/` tree (in sangsoe, `claude-plugin/skills/` and `claude-plugin/skills/general/`), the `skills/` and `agents/` folders of the user's Claude config directory, and the skills this session lists as available.
 2. Grep the topic's key terms across those directories' `SKILL.md` and agent files.
 3. A skill that already owns the moment (its description names the trigger) gets the change. A new skill only when no existing one is a real home and the need recurs.
 
@@ -72,11 +72,11 @@ The list only finds names already on it, so read the diff for the rest: a home-d
 
 ## 6. Merge
 
-A public repository's change goes in by pull request, through that repository's own merge path: in a sangsoe program, the program's land step, never a hand merge. Commit signed, in the log's message form, with what was ruled out when a design choice was made. A change under `~/.claude` has no merge; say in the report that it applies on this machine only.
+A public repository's change goes in by pull request, through that repository's own merge path: in a sangsoe program, the program's land step, never a hand merge. Commit signed, in the log's message form, with what was ruled out when a design choice was made. A change in the user's Claude config directory has no merge; say in the report that it applies on this machine only.
 
 ## 7. Reload
 
-A running session keeps the old text until it reloads. Once the change is where sessions load it, ask the user to run `/reload-skills` (a `SKILL.md` or reference file changed) or `/reload-plugins` (a hook or the plugin manifest changed) in the sessions that need it. Changes to `~/.claude/agents/` or `CLAUDE.md` apply to sessions started after the change; say so.
+A running session keeps the old text until it reloads. Once the change is where sessions load it, ask the user to run `/reload-skills` (a `SKILL.md` or reference file changed) or `/reload-plugins` (a hook or the plugin manifest changed) in the sessions that need it. Changes to the user's own agent definitions or `CLAUDE.md` apply to sessions started after the change; say so.
 
 ## Report
 

@@ -1,6 +1,6 @@
 ---
 name: verification-skill
-description: "A verify-* skill drives the app like a user. Create: /create-verification-skill, \"verify 스킬 만들어줘\", a reusable verification harness in scope. Maintain: \"verify 스킬 점검해줘\", a periodic check, a verify-* skill that failed to drive a feature. Checking one change is not this."
+description: "A verify-* skill drives the app like a user. Create: \"verify 스킬 만들어줘\", \"create a verification skill\", a reusable verification harness in scope. Maintain: \"verify 스킬 점검해줘\", a periodic check, a verify-* skill that failed to drive a feature. Checking one change is not this."
 ---
 
 # Verification skill
