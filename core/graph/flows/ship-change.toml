@@ -1,0 +1,50 @@
+# 구현 → 리뷰 → 머지 → dev 배포 → 확인 → prod (appendix "흐름 틀 형식").
+# A stacked predecessor PR is not a need here: graph sync or graph add puts a stacked_on edge on impl.
+name = "ship-change"
+version = 1
+title = "변경 하나를 prod 까지: {repo}"
+
+[vars.repo]
+required = true
+
+[[steps]]
+id = "impl"
+title = "구현 {repo}"
+done_when = "PR 이 열리고 CI 가 통과한다"
+
+[[steps]]
+id = "review"
+title = "리뷰 {repo}"
+needs = [{ step = "impl", kind = "blocks" }]
+done_when = "독립 리뷰 판정 pass 가 head sha 와 함께 기록된다"
+
+[[steps]]
+id = "merge"
+title = "머지 {repo}"
+needs = [{ step = "review", kind = "blocks" }]
+stage = "merge"
+done_when = "pr_merged"
+
+[[steps]]
+id = "deploy_dev"
+title = "dev 배포 {repo}"
+needs = [{ step = "merge", kind = "deploys_after" }]
+stage = "dev"
+done_when = "dev 배포가 stage_recorded 에 기록된다"
+
+[[steps]]
+id = "verify_dev"
+title = "dev 확인 {repo}"
+needs = [{ step = "deploy_dev", kind = "blocks" }]
+done_when = "dev 확인 증거가 evidence 에 있다"
+
+# prod waits on the dev check (blocks) and on the dev stage record (deploys_after): decision 0126.
+[[steps]]
+id = "deploy_prod"
+title = "prod 배포 {repo}"
+needs = [{ step = "verify_dev", kind = "blocks" }, { step = "deploy_dev", kind = "deploys_after" }]
+stage = "prod"
+gate = "owner"
+who = "owner"
+why_owner = "prod 반영은 오너만 한다"
+done_when = "prod 배포가 stage_recorded 에 기록된다"

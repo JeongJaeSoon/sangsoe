@@ -17,7 +17,7 @@ import {
   systemClock,
 } from "../contract/index.ts";
 import { checkLocalFs, checkSqliteVersion, type FsProbe, type StartCheck } from "./checks.ts";
-import { DDL, SCHEMA_V } from "./schema.ts";
+import { DDL, EDGE_TRIGGERS, SCHEMA_V } from "./schema.ts";
 
 export type NewEvent<T extends EventType = EventType> = {
   [K in T]: {
@@ -148,15 +148,21 @@ export class Store {
   #migrate(): void {
     this.#tx(() => {
       const has = this.#db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'migration'").get();
+      let at: string | undefined;
+      const mark = (version: number, note: string) => {
+        at ??= this.#now();
+        this.#db.prepare("INSERT INTO migration (version, applied_at, note) VALUES (?, ?, ?)").run(version, at, note);
+      };
       if (!has) {
         this.#db.exec(DDL);
-        this.#db
-          .prepare("INSERT INTO migration (version, applied_at, note) VALUES (?, ?, ?)")
-          .run(SCHEMA_V, this.#now(), "initial schema");
-        return;
+        mark(1, "initial schema");
       }
       const v = this.schemaVersion();
       if (v > SCHEMA_V) throw new ContractError(`database schema ${v} is newer than this build (${SCHEMA_V})`);
+      if (v < 2) {
+        this.#db.exec(EDGE_TRIGGERS);
+        mark(2, "edge triggers: edge_source_graph, edge_no_cycle");
+      }
     });
   }
 
