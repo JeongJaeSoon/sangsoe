@@ -6,7 +6,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 - **옛 시험 파일**(`test_*.py`·`*.test.tsx`)은 그 대상의 행에 함께 적는다. 옛 코드는 옮기지 않았고 시험은 다시 쓸 명세로만 읽었다(port-plan 1절).
 - `test/migrate/port-map.test.ts` 가 `test/fixtures/migrate/agent-skills-entries.txt` 의 모든 항목이 이 표에 있는지, 경로가 있는지, DROP·GAP 에 이유가 있는지 센다.
 
-집계: 행 87 · 경로 50 · PR 0 · 단위 9 · DROP 25 · GAP 9 (한 행이 경로와 PR 을 함께 가지면 둘 다 센다).
+집계: 행 87 · 경로 51 · PR 0 · 단위 6 · DROP 25 · GAP 9 (한 행이 경로와 PR 을 함께 가지면 둘 다 센다).
 
 ## skills
 
@@ -61,7 +61,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 | `hooks/decision_relay.py`, `hooks/test_decision_relay.py` | GAP | 오너 말을 중계했는데 결정 기록이 없을 때의 경고. 닫기 자체는 `core/decision/` 의 `decision_answer` 가 한다 |
 | `hooks/decision.py`, `hooks/test_decision.py` | `core/decision/`, `cli/commands/decision.ts`, `core/session/record.ts` | 답은 UserPromptSubmit 이 `owner_action` 으로 쌓고 `dNNN` 하나면 `decision_answer` 가 닫는다. 회귀 시나리오는 `test/decision/decision-loop.test.ts`·`test/session/hooks.test.ts` |
 | `hooks/reorient.py`, `hooks/test_reorient.py`, `hooks/roles.py`, `hooks/test_roles.py` | `core/session/session-start.ts`, `claude-plugin/hooks/record.sh` | SessionStart 가 역할·Run·인계·늦은 답을 다시 싣고 `session_started` 를 쓴다. 버림: `roles/*.json` 파일 |
-| `hooks/permission.py`, `hooks/test_permission.py` | `core/session/record.ts`, U19 | 권한 대기 `waiting_human`·`waiting_released`(U13)와 패널 버튼(U19) |
+| `hooks/permission.py`, `hooks/test_permission.py` | `core/session/record.ts`, `orca-plugin/panel/` | 권한 대기 `waiting_human`·`waiting_released`(U13). 패널은 그 행을 보이기만 하고 버튼은 달지 않는다(plugin 에 `terminal:send` 능력이 없다, 구현 결정 136) |
 | `hooks/subagent_log.py`, `hooks/test_subagent_log.py`, `hooks/lifecycle.py`, `hooks/test_lifecycle.py`, `hooks/record_check.py`, `hooks/test_record_check.py`, `hooks/onboard.py`, `hooks/test_onboard.py`, `hooks/test_skillload.py` | GAP | 기록 hook 단위(U13)가 넣지 않았다: 서브에이전트 시작·끝 기록, 종료 순서·서브에이전트에 거부 문단 주입, 기록 줄 없는 PR·`worker_done` 경고, 설치 점검 권유, 배포 skill 로드 전 수정 경고 |
 | `hooks/prose_check.py`, `hooks/test_prose_check.py` | `claude-plugin/skills/general/write-plainly`, GAP | 규칙과 패턴은 write-plainly 의 references 에 있다. hook 은 결정 95 가 CLI 라우터 뒤로 미뤘고 아직 없다 |
 | `hooks/tracker_gate.py`, `hooks/test_tracker_gate.py` | DROP | 결정 93: 티켓 도구는 sangsoe 밖 |
@@ -69,7 +69,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 | `hooks/install_hint.py` | DROP | 은퇴한 no-op. `sangsoe doctor` 가 대신한다 |
 | `hooks/orchestrator_guard.py` | DROP | 은퇴한 no-op. 깊이 검사는 `core/start/` 에 있다 |
 | `hooks/refusals.py`, `hooks/request_log.py`, `hooks/test_request_log.py`, `hooks/test_retired.py` | DROP | 은퇴한 no-op 과 그 시험. 거부는 `gate_denied` event 로 쌓인다 |
-| `hooks/brief_pane.tsx`, `hooks/brief_pane.test.tsx`, `hooks/clear_band.tsx`, `hooks/clear_band.test.tsx`, `hooks/mods.tsx` | U19 | 코드는 버리고 기능은 Orca plugin 패널·상태 표시줄 B 가 한다(D-11) |
+| `hooks/brief_pane.tsx`, `hooks/brief_pane.test.tsx`, `hooks/clear_band.tsx`, `hooks/clear_band.test.tsx`, `hooks/mods.tsx` | `orca-plugin/panel/`, `core/brief/panel.ts` | 코드는 버리고 기능은 Orca plugin 패널·상태 표시줄 B 가 한다(D-11) |
 
 ## scripts
 
@@ -105,7 +105,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 | model_drift | GAP | 역할 모델과 실제 모델의 어긋남 알림. `session_started` 에 모델은 남지만 비교하는 감지기가 없다 |
 | pr_watch | U16 | pr-monitor |
 | jobs | U17 | queue-monitor |
-| stages, stage_auto, fleet, dash, units | `core/brief/`, U19 | 뷰와 패널 |
+| stages, stage_auto, fleet, dash, units | `core/brief/`, `orca-plugin/panel/` | 뷰와 패널 |
 | board, holds, order, order_close, tidy, autowake, autoqueue, patrol, selfcheck, acks, sent, ask, rowstate, cutover, orca_migrate, dash_demo, agent_signal, compactions, turn_cost, token_usage, flow, overlap_table, pr_stats, mailbox_guard, skill_usage | DROP | port-plan 2.2 가 하나씩 이유를 적었다 |
 
 ## bin

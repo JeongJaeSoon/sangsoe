@@ -47,7 +47,7 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 | D-7 | 워커·PR·멘션 감시 자동화 | `orca-plugin/monitors/orca.ts`, `orca-plugin/monitors/chat.ts`, `core/detect/` | 🟡 orca·chat monitor 는 있고 pr-monitor 는 U16 |
 | D-8 | 순회 자동화 | `orca-plugin/monitors/` | U17 |
 | D-9 | 정리·압박 자동화, `reap-resources`, 압박 게이트 | `orca-plugin/reaper/`, `core/capacity/`, `core/gates/pressure.ts`, `claude-plugin/skills/reap-resources/SKILL.md` | 🟡 판정·게이트·skill 은 있고 REAPER 라운드는 U18 |
-| D-10 | 대시보드 서버와 12페이지 | `orca-plugin/panel/` | U19 |
-| D-11 | 브리프 패널·밴드 UI mod | `orca-plugin/panel/` | U19 |
+| D-10 | 대시보드 서버와 12페이지 | `orca-plugin/panel/`, `core/brief/panel.ts` | 🟢 서버·포트·12페이지 없이 패널 하나의 세 단계(결정 11·75, 구현 결정 136) |
+| D-11 | 브리프 패널·밴드 UI mod | `orca-plugin/panel/`, `core/brief/panel.ts` | 🟢 패널과 상태 표시줄 B(구현 결정 136) |
 | D-12 | `brief` 스킬 | `core/brief/`, `cli/commands/brief.ts`, `claude-plugin/skills/brief/SKILL.md` | 🟢 |
 | D-13 | 과거 기록과 설치·점검·reflect | `core/migrate/`, `cli/commands/migrate.ts`, `core/install/`, `claude-plugin/skills/reflect/SKILL.md` | 🟢 열린 항목·결정만 가져온다(구현 결정 140) |
