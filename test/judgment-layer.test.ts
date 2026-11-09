@@ -51,7 +51,7 @@ test("the rules block states each rule the core start checks enforce", () => {
 test("the core start checks say the same sentences", (t) => {
   const present = CORE_SOURCES.filter((f) => existsSync(join(ROOT, f)));
   if (present.length < CORE_SOURCES.length) {
-    t.skip(`U10's start function is not on this branch yet (${CORE_SOURCES.join(", ")}); compared against its PR text`);
+    t.skip(`U10's start function is not on this branch yet (${CORE_SOURCES.join(", ")})`);
     return;
   }
   const core = present.map(read).join("\n");

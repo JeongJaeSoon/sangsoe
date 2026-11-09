@@ -51,10 +51,10 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
 ## 6. land 와 머지 대기 보고
 
 1. `land` 를 부른다: `{pr, head_sha}`. head 는 리뷰하고 증거를 만든 그 sha 다.
-2. 결과를 읽는다.
-   - 머지 예약됨: GitHub 이 필수 리뷰와 CI 가 찰 때 머지한다.
+2. 결과를 읽는다. 성공이면 `action`, 거부면 `refusal.code` 다. 먼저 `dry_run: true` 로 불러 조건만 볼 수 있다.
+   - `merge_scheduled`: GitHub 이 필수 리뷰와 CI 가 찰 때 머지한다.
    - `merge_on_approval`: 승인이 찰 때 pr-monitor 가 리드를 깨우고, 리드가 같은 `land` 로 머지한다.
-   - `land_failed`: 사유(`evidence_missing:<kind>`, `main_red` 등)를 고치고 다시 부른다. `main_red` 동안에는 `main_fix` 로 요청한 PR 만 들어간다.
+   - 거부 code(`evidence_missing`, `review_missing`, `review_stale`, `head_moved`, `stack_order`, `main_red` 등): `refusal.fix` 대로 원인을 고치고 다시 부른다. `review_stale`·`head_moved` 는 리뷰한 head 가 지금 head 가 아니라는 뜻이니, 새 head 를 다시 리뷰받는다. `main_red` 동안에는 `main_fix: true` 로 요청한 PR 만 들어간다.
    - 거부(hook·권한): 다른 길로 머지하지 않는다. 일을 맡긴 쪽에 거부 보고로 알린다.
 3. 예약이든 "승인되면 머지"든, `merge_ready` 를 담은 worker_done 을 보낸다: PR, head sha, 리뷰 판정과 리뷰어, 등급과 증거, 확인 못 한 것. 항목은 머지 확인 뒤 pr-monitor 가 닫는다. 네가 닫지 않는다.
 

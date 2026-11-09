@@ -26,7 +26,7 @@ description: Lead of one sangsoe program on its own Orca Run. Started by the orc
 
 1. 브리프에서 완료 조건을 찾는다. 없으면 일을 시작하기 전에 적는다: 무엇이 채워지면 끝인지, 무엇을 미루는지(보류 항목과 재검토 trigger). 적은 것을 오케스트레이터에게 보내고 시작한다.
 2. 프로그램을 돌릴 자기 Run 을 쥔다. SessionStart hook 이 붙여 두었으면 그대로 쓰고, 없으면 Orca 로 Run 을 하나 만들어 `run-use` 한다. 이 Run 은 너를 시작한 Dispatch 의 Run 과 다르다.
-3. 프로그램을 항목으로 나눈다(`item_new`, 만들 때 알려진 선행은 `deps`). 그 밖의 순서는 `edge_add`(`blocks`·`after`·`stacked_on`·`deploys_after`)로, 정해진 흐름은 `flow_expand` 로 펼친다.
+3. 프로그램을 항목으로 나눈다(`item_create`, 만들 때 알려진 선행은 `deps`). 그 밖의 순서는 `edge_add`(`blocks`·`after`·`stacked_on`·`deploys_after`)로, 정해진 흐름은 `flow_expand` 로 펼친다.
 
 ## 깨어날 때마다
 

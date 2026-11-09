@@ -40,21 +40,24 @@ description: "Use when a sangsoe lead or the orchestrator starts a session on an
 | `runId` | 네가 쥔 Run |
 | `childRole` | `worker` 또는 `lead` |
 | `task` 또는 `spec` | 있는 Task id, 또는 새 Task 의 브리프(`title`·`deps` 함께) |
-| `lateAnswers` | 앞 워커가 끝난 뒤 도착한 답. 첫 프롬프트에 한 번 붙는다 |
+| `lateAnswers` | 앞 워커가 끝난 뒤 도착한 답. 새 Task 의 첫 프롬프트에 한 번 붙는다. `spec` 과만 쓴다(`task` 와 함께면 `invalid_input`) |
 | `references` | 티켓·이슈 URL. 새 worktree 에 붙는다 |
 
 역할 줄(`sangsoe-role: …`)은 코어가 spec 첫 줄에 붙인다. 네가 쓰지 않는다.
 
 ## 결과 읽기
 
-| `kind` | 뜻 | 할 일 |
+`ok: true` 면 `value.kind`(와 `waiting`·`stopped` 의 `why`)를, `ok: false` 면 `refusal.code` 를 읽는다.
+
+| 결과 | 뜻 | 할 일 |
 |---|---|---|
 | `started` | Dispatch 가 생겼다 | 끝. 워커의 보고는 Orca 메시지로 온다. 기다리며 폴링하지 않는다 |
 | `waiting` · `not_ready` | Task 가 준비되지 않았다 | 선행을 본다. 다시 부르는 것은 준비된 뒤다 |
 | `waiting` · `already_dispatched` | 이미 누가 일하고 있다 | 다시 시작하지 않는다 |
 | `waiting` · `no_capacity` | 자리·부하 여유가 없다 | 자리가 나면(`capacity_free` 알림) 다시 부른다 |
 | `stopped` · `start_failed_3x` | 같은 Task 의 시작이 세 번 실패했다 | 다시 부르지 않는다. 위에 올린다 |
-| 거부 `start_refused:<reason>` | 시작하지 않았고, 이미 위에 보고됐다 | 같은 일을 다른 길로 시작하지 않는다. 원인이 Orca 설정이면 오너 몫이다 |
+| `ok: false`, `refusal.code` 가 거부 사유 | 시작하지 않았고, `start_refused` 신호로 이미 위에 보고됐다 | 같은 일을 다른 길로 시작하지 않는다. 원인이 Orca 설정이면 오너 몫이다 |
+| `ok: false`, `refusal.code` 가 `invalid_input` | 입력이 틀렸다 | `refusal.fix` 대로 고쳐 한 번 다시 부른다 |
 
 거부 사유 다섯은 `capability_missing` · `lineage_invalid` · `depth_exceeded` · `orca_error` · `no_dispatch` 다. 어느 것도 "다시 해 보면 되는" 사유가 아니다. 부모는 같은 일을 자기 Run 에 새 Task 로 만들지도 않는다(같은 일의 원본이 둘이 된다).
 

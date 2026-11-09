@@ -1,6 +1,6 @@
 ---
 name: write-brief
-description: "Use when a sangsoe lead or the orchestrator writes the spec a new worker or lead starts from — the Task brief passed to item_new or start_unit: goal, exit condition, scope, verification, approval line, report path — \"브리프 써줘\", \"워커 지시문 만들어줘\", \"이 항목 spec 정리해줘\"."
+description: "Use when a sangsoe lead or the orchestrator writes the spec a new worker or lead starts from — the Task brief passed to item_create or start_unit: goal, exit condition, scope, verification, approval line, report path — \"브리프 써줘\", \"워커 지시문 만들어줘\", \"이 항목 spec 정리해줘\"."
 ---
 
 # 브리프 쓰기

@@ -21,8 +21,10 @@
 | `resource_record`(tool) | `end-session`·`reap-resources` | 당사자가 띄운 자원의 기록 | 부록 `#role-cards` REAPER: 치우는 근거는 만든 쪽의 기록뿐 |
 | `ready`·`brief`·`item_timeline`(resource) | `start`·`orchestrate`·`reflect`·`orchestrator` | U1 의 뷰를 resource 로 | 부록 `#mcp`: 뷰가 곧 resource |
 | `notify`(tool) | `intake` | 진행 중인 일의 세션 깨우기 | 표에 있으나 단위가 `미정` |
+| `item_trigger`(tool) | `intake` | 날짜·글 조건 항목에 trigger 달기 | #13 의 `item_create` 에 trigger 칸이 없다 |
+| `owner_action` seq(맥락) | `intake` | 오너 발언 hook 이 맥락에 붙이는 seq | `owner_class`·`decision_answer` 가 seq 를 받는데 아직 내주는 곳이 없다 |
 
-`item_create` 는 표의 자리표시이고 #13 은 `item_new` 로 냈다. 판단 층은 `item_new` 를 쓴다.
+항목을 만드는 tool 은 #13 의 `item_create` 다(`runId`·`spec`·`who`·`doneWhen` 필수). CLI 의 `sangsoe item new` 와 이름이 다르다.
 
 ## 버린 것
 

@@ -4,7 +4,7 @@ design `#roles` 와 부록 `#role-cards` 는 리드·워커의 완료를 "/goal 
 
 ## 이유
 
-- `worker-start` 로 연 세션의 첫 프롬프트는 Orca 가 자기 문구("Please carry out this task from my Orca coordinator…")로 감싸고 브리프를 붙여 넣는다. 그래서 브리프 안의 `/goal` 줄은 명령으로 걸리지 않는다(이 프로그램에서 관찰). 리드도 오케스트레이터 Run 의 Dispatch 를 가진 워커로 시작하므로 같다. #13 의 검증도 리드 첫 프롬프트의 `/goal` 을 NOT VERIFIED 로 남겼다.
+- `worker-start` 로 연 세션의 첫 프롬프트는 Orca 가 자기 문구("Please carry out this task from my Orca coordinator…")로 감싸고 브리프를 붙여 넣는다. 그래서 브리프 안의 `/goal` 줄은 명령으로 걸리지 않는다(이 프로그램에서 관찰). 리드도 오케스트레이터 Run 의 Dispatch 를 가진 워커로 시작하므로 같다. #13 의 `docs/test-outcomes.md` 도 실제 Orca 로 시작한 워커가 "No /goal was set for this session" 이라고 보고한 것을 근거로 "`/goal` 은 걸리지 않음"을 판정 확정으로 적었다.
 - 감독되는 세션의 끝을 Orca 가 아는 길은 worker_done 하나다. 자동 해제·`worker-list`·보고 주소가 모두 Dispatch 에 묶여 있다(결정 94).
 
 ## 바뀌는 것

@@ -43,7 +43,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 ## 리드: 프로그램을 끝까지
 
 1. **완료 조건 먼저.** 시작 전에 "끝"과 미루는 것을 적는다. 진행률은 "N/M 완료 조건"이다.
-2. **나누기.** 항목 하나가 리뷰 가능한 PR 하나다. 만들 때 알려진 선행은 `item_new` 의 `deps`, 그 밖의 순서는 `edge_add`. 같은 파일을 건드리는 두 항목은 `after` 로 순서를 적는다.
+2. **나누기.** 항목 하나가 리뷰 가능한 PR 하나다. 만들 때 알려진 선행은 `item_create` 의 `deps`, 그 밖의 순서는 `edge_add`. 같은 파일을 건드리는 두 항목은 `after` 로 순서를 적는다.
 3. **고르기.** resource `ready` 에서 크리티컬 패스 위 항목부터 시작한다. 자리가 없으면 기다린다.
 4. **기다리기.** 워커를 띄운 뒤 결과를 폴링하지 않는다. Orca 메시지가 깨운다.
 5. **후속 일.** 완료 조건에 비춰 NOW(조건 항목이거나 이 프로그램이 머지한 것의 재현된 결함) · LATER(재검토 trigger) · DROP(이유)로 가른다. NOW 만 항목이 된다.
@@ -58,7 +58,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 ## 결정과 오너
 
-- 오너에게 묻는 것은 `decision_open` 하나로 한다: 질문·선택지·추천, 기다리는 Task. 같은 결정 키가 닫혀 있으면 기존 답이 돌아오니 다시 묻지 않는다.
+- 오너에게 묻는 것은 `decision_open` 하나로 한다: `question`(추천과 이유도 이 글에), `options`, 기다리는 Task 는 `waiters`. 같은 결정 키가 닫혀 있으면 기존 답이 돌아오니 다시 묻지 않는다.
 - 답을 기다리는 동안 할 수 있는 일은 계속한다. 답이 없다고 기본값을 적용하지 않는다.
 - 오너의 답은 `decision_answer` 가 결정을 닫고, 게이트를 풀고, 기다리던 워커를 한 번 깨운다. 다시 불러도 같다.
 
