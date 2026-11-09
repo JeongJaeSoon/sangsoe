@@ -4,7 +4,7 @@ import { renderMarkdown, renderTodo } from "./render.ts";
 import type { BriefInput } from "./types.ts";
 
 export { type BuildOptions, buildBrief, buildGroup, buildItem } from "./build.ts";
-export { depsGraph, type Edge, type EdgeKind, type GraphRead } from "./graph.ts";
+export type { Edge, EdgeKind, GraphRead } from "./graph.ts";
 export { group_brief, group_items } from "./group.ts";
 export { type ItemFacts, itemFacts, item_status } from "./item_status.ts";
 export { briefRuns, type LoadOptions, loadBriefInput, readSnapshot } from "./load.ts";
