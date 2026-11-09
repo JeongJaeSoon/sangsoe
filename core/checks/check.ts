@@ -32,6 +32,8 @@ export type CheckContext = {
   exec: Exec;
   coreVersion: string;
   pluginBuild?: PluginBuild;
+  /** Where `~/.config/sangsoe/config.json` is read from; defaults to the user's home. */
+  home?: string;
   /** Defaults to this Node's `process.versions.sqlite`. */
   sqliteVersion?: string;
 };
