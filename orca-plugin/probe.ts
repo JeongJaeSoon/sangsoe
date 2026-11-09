@@ -38,34 +38,23 @@ export async function probeSqlite(path: string): Promise<SqliteProbe> {
   }
 }
 
-export type ExecProbe = { cmd: string; ok: boolean; code: string | number | null; out: string; ms: number };
+export type ExecProbe = { cmd: string; ok: boolean; code: string | number | null; out: string; err: string; ms: number };
 
-// `maxOut` caps what a report carries; callers that parse the output pass Infinity.
+// `out` is stdout alone so callers can parse it; `maxOut` caps what a report carries.
 export function probeExec(cmd: string, args: readonly string[], timeoutMs = 8000, maxOut = 2000): Promise<ExecProbe> {
   const t0 = Date.now();
   return new Promise((resolve) => {
-    execFile(cmd, [...args], { timeout: timeoutMs }, (err, stdout, stderr) => {
-      const text = `${stdout}${stderr}`.trim();
+    execFile(cmd, [...args], { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }, (e, stdout, stderr) => {
       resolve({
         cmd: [cmd, ...args].join(" "),
-        ok: !err,
-        code: err ? ((err as NodeJS.ErrnoException).code ?? null) : 0,
-        out: text.slice(0, maxOut),
+        ok: !e,
+        code: e ? ((e as NodeJS.ErrnoException).code ?? null) : 0,
+        out: String(stdout).trim().slice(0, maxOut),
+        err: String(stderr).trim().slice(0, 2000),
         ms: Date.now() - t0,
       });
     });
   });
-}
-
-// T1's "core runs in the worker": a dev-loaded folder may reach outside itself; an installed copy
-// may not, which is what tells U4 whether the worker must be bundled with the core.
-export async function probeCore(): Promise<{ ok: boolean; version?: string; error?: string }> {
-  try {
-    const core = (await import("../core/index.ts")) as { VERSION: string };
-    return { ok: true, version: core.VERSION };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
 }
 
 export function ownKey(listJson: string): string | null {

@@ -25,7 +25,7 @@ export function parseArgs(args: readonly string[]): Parsed {
     const a = args[i];
     if (a === "--help" || a === "-h") return { help: true };
     if (a === "--dry-run") out.dryRun = true;
-    else if ((a === "--dir" || a === "--commit") && args[i + 1] && !args[i + 1]?.startsWith("--")) {
+    else if ((a === "--dir" || a === "--commit") && args[i + 1] && !args[i + 1]?.startsWith("-")) {
       out[a === "--dir" ? "dir" : "commit"] = args[++i] ?? null;
     } else return { error: `unknown or incomplete argument: ${a}` };
   }

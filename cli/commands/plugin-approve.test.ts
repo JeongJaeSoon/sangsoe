@@ -25,7 +25,7 @@ test("--help prints usage and touches nothing", async () => {
 
 test("an unknown argument exits 2 and touches nothing", async () => {
   const { ports, touched } = untouchable();
-  for (const args of [["--yes"], ["--dir"], ["--commit", "--dry-run"]]) {
+  for (const args of [["--yes"], ["--dir"], ["--commit", "--dry-run"], ["--commit", "-h"]]) {
     const r = await pluginApprove(args, () => {}, ports);
     assert.equal(r.code, 2, args.join(" "));
     assert.equal(touched(), 0);

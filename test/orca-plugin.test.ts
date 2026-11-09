@@ -1,12 +1,12 @@
 // Plugin tests live outside orca-plugin/ so they are not part of the folder Orca fingerprints.
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { EVENTS } from "../orca-plugin/main.ts";
+import activate, { deactivate, EVENTS, type OrcaWorker } from "../orca-plugin/main.ts";
 import { dagSvg } from "../orca-plugin/panel/probe.ts";
-import { meetsSqliteFloor, ownKey, probeExec, probeSqlite } from "../orca-plugin/probe.ts";
+import { type ExecProbe, meetsSqliteFloor, ownKey, probeExec, probeSqlite } from "../orca-plugin/probe.ts";
 import { type Clock, startRounds } from "../orca-plugin/timer.ts";
 
 const root = new URL("..", import.meta.url);
@@ -129,6 +129,81 @@ test("a round still running skips the next tick instead of overlapping", async (
   assert.equal(started, 2);
   assert.equal(rounds.stats().slow?.runs, 2);
   rounds.stop();
+});
+
+function fakeWorker() {
+  const handlers = new Map<string, (input: unknown) => unknown>();
+  const commands = new Map<string, () => unknown>();
+  const subscribed: string[] = [];
+  const hostCalls: [string, unknown][] = [];
+  const orca: OrcaWorker = {
+    log: () => {},
+    host: { call: async (m, p) => void hostCalls.push([m, p]) },
+    events: { on: (e) => void subscribed.push(e) },
+    commands: { register: (id, fn) => void commands.set(id, fn) },
+    panels: { handle: (n, fn) => void handlers.set(n, fn) },
+  };
+  return { orca, handlers, commands, subscribed, hostCalls };
+}
+
+const ok = (cmd: string, out: string, err = ""): ExecProbe => ({ cmd, ok: true, code: 0, out, err, ms: 1 });
+
+test("activate subscribes, registers and starts the round without running a probe", async () => {
+  const w = fakeWorker();
+  const { clock, advance } = fakeClock();
+  const execs: string[] = [];
+  activate(w.orca, {
+    clock,
+    exec: async (cmd, args) => {
+      execs.push([cmd, ...args].join(" "));
+      return ok(cmd, "");
+    },
+  });
+  try {
+    assert.deepEqual(w.subscribed.sort(), [...EVENTS].sort());
+    assert.deepEqual([...w.commands.keys()], ["sangsoe.open"]);
+    assert.deepEqual([...w.handlers.keys()].sort(), ["probe.exec", "probe.open", "probe.report", "probe.t1"]);
+    assert.deepEqual(execs, [], "starting the worker runs no command");
+    await advance(30_000);
+    const texts = w.hostCalls.map(([, p]) => (p as { text: string }).text);
+    assert.deepEqual(texts, ["sangsoe", "sangsoe · 1", "sangsoe · 2"]);
+    assert.deepEqual(execs, []);
+  } finally {
+    deactivate();
+  }
+});
+
+test("the open command parses stdout only, so stderr noise does not break it", async () => {
+  const w = fakeWorker();
+  const { clock } = fakeClock();
+  const list = JSON.stringify({ ok: true, result: { plugins: [{ pluginKey: "local.sangsoe" }] } });
+  const opened: string[] = [];
+  activate(w.orca, {
+    clock,
+    exec: async (cmd, args) => {
+      if (args[1] === "list") return ok(cmd, list, "Electron diagnostic line");
+      opened.push(args.join(" "));
+      return ok(cmd, "{}");
+    },
+  });
+  try {
+    assert.equal(await w.commands.get("sangsoe.open")?.(), "sangsoe: panel opened");
+    assert.deepEqual(opened, ["plugin open local.sangsoe --panel probe --json"]);
+  } finally {
+    deactivate();
+  }
+});
+
+test("plugin code imports nothing outside orca-plugin/", () => {
+  const dir = new URL("orca-plugin/", root);
+  const files = readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(m?ts|m?js|tsx)$/.test(f));
+  for (const f of files) {
+    const depth = f.split("/").length - 1;
+    for (const m of readFileSync(new URL(f, dir), "utf8").matchAll(/(?:from|import)\s*\(?\s*["'](\.[^"']*)["']/g)) {
+      const ups = (m[1] ?? "").split("/").filter((s) => s === "..").length;
+      assert.ok(ups <= depth, `${f} reaches outside the plugin folder: ${m[1]}`);
+    }
+  }
 });
 
 test("the probe panel draws an inline SVG with one path per edge", () => {

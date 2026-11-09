@@ -1,4 +1,4 @@
-// Periodic work in the plugin worker (decision 75 라): one Round per monitor, all on the worker's
+// Periodic work in the plugin worker (decision 75): one Round per monitor, all on the worker's
 // own Node timers. No OS job scheduler, cron or Orca automation runs these.
 
 export type Clock = {
@@ -25,7 +25,7 @@ export type RoundStats = {
   runs: number;
   errors: number;
   lastError: string | null;
-  // Measured gaps between consecutive starts, newest last; T2 reads drift from these.
+  // Measured gaps between consecutive timer ticks (run or skipped), newest last; T2 reads drift here.
   gapsMs: number[];
 };
 

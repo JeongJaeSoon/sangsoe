@@ -1,4 +1,4 @@
-// Decision 77 다: `orca plugin enable` is called from `sangsoe plugin approve` and nowhere else.
+// Decision 77: `orca plugin enable` is called from `sangsoe plugin approve` and nowhere else.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
