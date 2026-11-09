@@ -26,8 +26,13 @@ test("each kind reads through its port and reports what it observed", async () =
   w.plugins.push({ pluginKey: "local.sangsoe", name: "sangsoe", version: "0.1.0", consentFingerprint: "fp1", status: "enabled", isDev: true, needsReconsent: false });
   assert.equal((await readProbe({ kind: "plugin_approved", key: "local.sangsoe" }, ports)).kind, "true");
 
-  w.gh.set(`search/issues?q=${encodeURIComponent("repo:acme/api is:pr promote")}&per_page=1`, { total_count: 1, items: [{ html_url: "https://github.com/acme/api/pull/77" }] });
-  assert.deepEqual(await readProbe({ kind: "pr_found", repo: "acme/api", search: "promote" }, ports), { kind: "true", observed: "https://github.com/acme/api/pull/77" });
+  w.gh.set(`search/issues?q=${encodeURIComponent("repo:acme/api is:pr created:>=2026-11-10T09:00:00Z promote")}&per_page=1`, {
+    total_count: 1,
+    items: [{ html_url: "https://github.com/acme/api/pull/77" }],
+  });
+  const found = { kind: "pr_found", repo: "acme/api", search: "promote" } as const;
+  assert.deepEqual(await readProbe(found, ports, { since: "2026-11-10T09:00:00.000Z" }), { kind: "true", observed: "https://github.com/acme/api/pull/77" });
+  assert.equal((await readProbe(found, ports)).kind, "unreadable", "an unbounded search could count yesterday's PR");
   assert.equal((await readProbe({ kind: "run_ok", repo: "acme/api" }, ports)).kind, "unreadable", "no run id before the owner's line");
   assert.equal((await readProbe({ kind: "pr_merged", pr: "acme/api#1" }, ports)).kind, "unreadable", "a gh error is not false");
 });

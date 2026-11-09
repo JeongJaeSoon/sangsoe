@@ -38,7 +38,7 @@ async function gh<T>(ports: ProbePorts, path: string): Promise<{ ok: true; data:
  * Reads one verify. `run` is the Orca Run holding an orca_field target (the snapshot knows it).
  * Unreadable is not false: the caller writes nothing for it.
  */
-export async function readProbe(spec: VerifySpec, ports: ProbePorts, ctx: { run?: string } = {}): Promise<ProbeRead> {
+export async function readProbe(spec: VerifySpec, ports: ProbePorts, ctx: { run?: string; since?: string } = {}): Promise<ProbeRead> {
   switch (spec.kind) {
     case "pr_merged": {
       const [repo, n] = spec.pr.split("#");
@@ -54,7 +54,10 @@ export async function readProbe(spec: VerifySpec, ports: ProbePorts, ctx: { run?
       return c === "success" ? { kind: "true", observed: `run ${spec.run} success` } : { kind: "false", observed: `run ${spec.run} ${c}` };
     }
     case "pr_found": {
-      const q = encodeURIComponent(`repo:${spec.repo} is:pr ${spec.search}`);
+      // Only a PR opened since the owner's line counts: an older match is not this run's effect (guard (마)).
+      if (!ctx.since) return { kind: "unreadable", why: "no mark time to bound the search" };
+      const since = new Date(Date.parse(ctx.since)).toISOString().replace(/\.\d{3}Z$/, "Z");
+      const q = encodeURIComponent(`repo:${spec.repo} is:pr created:>=${since} ${spec.search}`);
       const r = await gh<{ total_count?: number; items?: { html_url?: string }[] }>(ports, `search/issues?q=${q}&per_page=1`);
       if (!r.ok) return { kind: "unreadable", why: r.why };
       const url = r.data.items?.[0]?.html_url;
@@ -83,7 +86,10 @@ export async function readProbe(spec: VerifySpec, ports: ProbePorts, ctx: { run?
 export interface ProbeTarget {
   readonly task: string;
   readonly spec: VerifySpec;
+  /** 🟢 and the owner's: a true probe also suggests closing it. */
   readonly open: boolean;
+  /** When the current mark went on; bounds pr_found. */
+  readonly since?: string;
 }
 
 /**
@@ -100,7 +106,7 @@ export function probeTargets(input: ViewInput, facts: readonly OwnerItemFacts[],
     if (!m || !spec || m.verified || !isOwnerItem(f) || f.state === "cancelled") continue;
     if (f.state === "done" && (!f.closedAt || Date.parse(f.closedAt) < graceStart)) continue;
     if (MARKED_ONLY.has(spec.kind) && m.mark !== "verifying" && m.mark !== "unverified") continue;
-    out.push({ task: f.task, spec, open: isOpenState(f.state) });
+    out.push({ task: f.task, spec, open: f.state === "ready", ...(m.markedAt ? { since: m.markedAt } : {}) });
   }
   return out;
 }
@@ -139,7 +145,7 @@ export async function probeRound(
     read++;
     const target = t.spec.kind === "orca_field" ? t.spec.target : t.task;
     const run = runOf.get(target);
-    const r = await readProbe(t.spec, ports, run ? { run } : {});
+    const r = await readProbe(t.spec, ports, { ...(run ? { run } : {}), ...(t.since ? { since: t.since } : {}) });
     if (r.kind !== "true") continue;
     store.append({
       type: "evidence",

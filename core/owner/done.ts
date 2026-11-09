@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ViewInput } from "../contract/index.ts";
+import { dedupeKey, EVENTS, type ViewInput } from "../contract/index.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
 import type { Store } from "../store/store.ts";
@@ -44,7 +44,14 @@ export async function ownerDone(
   );
   const r = await orca.taskUpdate({ id: f.task, status: "completed", result: "owner_done" });
   if (!r.ok) return refuse("orca_error", `task-update ${f.task}: ${r.error.code} ${r.error.message}`, "press 완료 again once Orca answers");
-  store.append({ type: "item_transition", source: "plugin:panel", payload: { task: f.task, from: "ready", to: "done", reason: "owner_done" }, entity: "task", entity_id: f.task });
+  store.append({
+    type: "item_transition",
+    source: "plugin:panel",
+    payload: { task: f.task, from: "ready", to: "done", reason: "owner_done" },
+    entity: "task",
+    entity_id: f.task,
+    dedupe_key: dedupeKey(EVENTS.item_transition, f.task, "owner_done"),
+  });
   const m = ownerMarks(input, cfg).get(f.task);
   if (!m?.verify) {
     store.append({

@@ -51,7 +51,8 @@ export function hintMatches(hint: string, command: string): boolean {
 function prMatches(v: VerifySpec | null, command: string): boolean {
   if (v?.kind !== "pr_merged") return false;
   const [repo, n] = v.pr.split("#");
-  return command.toLowerCase().includes(`github.com/${repo}/pull/${n}`);
+  const esc = (s: string) => s.replace(/[.]/g, "\\.");
+  return new RegExp(`github\\.com/${esc(repo ?? "")}/pull/${n}(?![0-9])`).test(command.toLowerCase());
 }
 
 /** Owner items a line may answer: open, the owner's, created before the line (guard (가)). */
@@ -60,9 +61,10 @@ function candidates(input: ViewInput, facts: readonly OwnerItemFacts[], line: Sh
   const repo = lineRepo(line);
   return facts.flatMap((f) => {
     const m = marks.get(f.task);
-    if (f.state !== "ready" || !isOwnerItem(f) || !m || (m.createdAt !== null && m.createdAt > line.ts)) return [];
+    if (f.state !== "ready" || !isOwnerItem(f) || !m || (m.createdAt !== null && Date.parse(m.createdAt) > Date.parse(line.ts))) return [];
+    // An item that names a repo links only a line whose repo is known and the same.
     const want = verifyRepo(m.verify);
-    if (want && repo && want !== repo) return [];
+    if (want && want !== repo) return [];
     const hit = (m.cmdHint !== null && hintMatches(m.cmdHint, line.command)) || prMatches(m.verify, line.command);
     return hit ? [{ task: f.task, verify: m.verify }] : [];
   });
@@ -84,16 +86,17 @@ export function linkShell(input: ViewInput, facts: readonly OwnerItemFacts[], li
   const one = hits.length === 1 ? hits[0] : undefined;
   if (!one) return watched(line.command, cfg) ? { kind: "unlinked" } : { kind: "ignored", why: hits.length > 1 ? "ambiguous_unwatched" : "not_watched" };
   const urls = line.stdout.match(URLS) ?? [];
-  const observed = [line.command, ...urls].join(" ").slice(0, 500);
-  if (line.exitCode === null) {
+  const observed = [...urls, line.command].join(" ").slice(0, 500);
+  const stderr = line.stderr.trim();
+  if (line.exitCode === null && stderr === "") {
     // Guard (나): with no exit code, only stdout naming what the verify expects links.
     const repo = verifyRepo(one.verify);
     const expected = one.verify?.kind === "run_ok" ? urls.some((u) => repo !== null && u.toLowerCase().includes(`github.com/${repo}/actions/runs/`)) : false;
     return expected ? { kind: "seen", task: one.task, observed } : { kind: "ignored", why: "no_exit_code" };
   }
-  if (line.exitCode !== 0 || line.stderr.trim() !== "") {
-    const first = line.stderr.trim().split("\n")[0] ?? "";
-    return { kind: "failed", task: one.task, observed: `exit ${line.exitCode}${first ? `: ${first}` : ""}`.slice(0, 500) };
+  if (line.exitCode !== 0 || stderr !== "") {
+    const first = stderr.split("\n")[0] ?? "";
+    return { kind: "failed", task: one.task, observed: `exit ${line.exitCode ?? "?"}${first ? `: ${first}` : ""}`.slice(0, 500) };
   }
   return { kind: "seen", task: one.task, observed };
 }

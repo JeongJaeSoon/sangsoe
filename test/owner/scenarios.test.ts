@@ -183,6 +183,27 @@ test("owner_ran_command_marks_verifying: the real case, end to end", async () =>
   assert.equal(d.store.events().filter((e) => e.type === "evidence").length, 1);
 });
 
+test("link guards: whole PR number, stderr without an exit code, times not strings, a known repo", () => {
+  const p = ownerWorld();
+  p.item(T, { verify: { kind: "pr_merged", pr: "acme/api#4" } });
+  assert.equal(bang(p, { command: "gh pr merge https://github.com/acme/api/pull/40" }).kind, "unlinked", "#40 is not #4");
+  assert.equal(bang(p, { command: "gh pr merge https://github.com/acme/api/pull/4 --squash" }).kind, "seen");
+
+  const s = ownerWorld();
+  s.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });
+  assert.equal(bang(s, { exitCode: null, stderr: "HTTP 422: Unprocessable" }).kind, "failed");
+  assert.equal(bang(s, { exitCode: null }).kind, "seen", "no exit code: the expected run URL links");
+
+  const t = ownerWorld();
+  t.at(later(T0, 5));
+  t.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });
+  assert.equal(bang(t, { ts: "2026-11-10T18:03:00+09:00" }).kind, "unlinked", "09:03Z is before the item");
+
+  const r = ownerWorld();
+  r.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });
+  assert.equal(bang(r, { command: HINT, repo: null }).kind, "unlinked", "the item names a repo; the line's is unknown");
+});
+
 test("owner_input_probe_fails_no_change: input plus a failing probe leaves state and counts as they were", async () => {
   const w = ownerWorld();
   w.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });

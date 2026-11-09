@@ -1,0 +1,7 @@
+{
+  "tasks": [
+    { "id": "task_000000000001", "runId": "run_000000000001", "status": "ready", "deps": [], "title": "Merge the release PR" },
+    { "id": "task_000000000002", "runId": "run_000000000001", "status": "ready", "deps": [], "title": "Approve the Orca plugin" }
+  ],
+  "gates": []
+}

@@ -41,13 +41,12 @@ export const runFrom = (observed: string | undefined): string | null => (observe
 const taskOf = (e: StoredEvent): string | null => (e.entity === "task" && e.entity_id ? e.entity_id : null);
 
 /**
- * The evidence that lifts 🔍 on a closed item: a probe that observed the effect, or the panel
- * button on an item with no verify. An owner's `!` line (owner_act:*) is input, never evidence.
+ * The evidence that lifts 🔍 on a closed item: a probe that observed the effect, the panel button on
+ * an item with no verify, a land/verify-tier run. An owner's `!` line or a proposal (owner_act:*) is
+ * input, never evidence.
  */
 export function countsAsEvidence(e: StoredEvent): boolean {
-  if (e.type !== "evidence") return false;
-  const kind = String(e.payload.kind);
-  return kind.startsWith("probe:") || kind === DONE_EVIDENCE;
+  return e.type === "evidence" && !String(e.payload.kind).startsWith("owner_act:");
 }
 export const DONE_EVIDENCE = "owner_done";
 
@@ -82,7 +81,7 @@ export function ownerMarks(input: ViewInput, cfg: Pick<OwnerConfig, "waitMinutes
         m.markedSeq = e.seq;
         m.run = runFrom(observed) ?? m.run;
       } else if (kind === "owner_act:failed" && m.mark === null) m.mark = "failed";
-      else if (m.verify && kind === `probe:${m.verify.kind}` && m.verified === null && (m.createdAt === null || e.ts >= m.createdAt)) {
+      else if (m.verify && kind === `probe:${m.verify.kind}` && m.verified === null && (m.createdAt === null || Date.parse(e.ts) >= Date.parse(m.createdAt))) {
         m.verified = { seq: e.seq, ts: e.ts, observed: observed ?? "" };
       }
     } else if (e.type === "owner_class" && UNMARK_CLASSES.includes(String(p.class))) {
