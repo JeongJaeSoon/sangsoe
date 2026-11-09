@@ -2,7 +2,9 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { Store } from "../store/store.ts";
 import type { ApprovePorts, Exec } from "./approve.ts";
+import { reviewEvidenceFrom } from "./review-verdict.ts";
 
 export const nodeExec: Exec = (cmd, args) =>
   new Promise((resolve) => {
@@ -20,7 +22,7 @@ function execBytes(cmd: string, args: readonly string[]): Promise<Buffer> {
   });
 }
 
-export function nodePorts(write: (line: string) => void): ApprovePorts {
+export function nodePorts(write: (line: string) => void, openStore: () => Store = () => Store.open()): ApprovePorts {
   return {
     exec: nodeExec,
     async fetchPluginTree(repo, commit) {
@@ -38,11 +40,30 @@ export function nodePorts(write: (line: string) => void): ApprovePorts {
         throw e;
       }
     },
-    // TODO(U1): read the review evidence event; until the store lands condition 1 fails closed.
-    reviewEvidence: async () => null,
-    // TODO(U1): append to the event table; until then the event is printed for the caller's record.
-    async record(event) {
-      write(JSON.stringify(event));
+    // A store that cannot be opened gives no evidence: condition (1) fails closed.
+    async reviewEvidence(repo, pr, headSha) {
+      let store: Store;
+      try {
+        store = openStore();
+      } catch (e) {
+        write(`store: ${e instanceof Error ? e.message : String(e)}`);
+        return null;
+      }
+      try {
+        return reviewEvidenceFrom(store.events({ type: "review_verdict" }), repo, pr, headSha);
+      } finally {
+        store.close();
+      }
+    },
+    async openLedger() {
+      const store = openStore();
+      return {
+        async record({ type, ...payload }) {
+          const out = store.append({ type, source: "plugin approve", payload });
+          write(`recorded ${type} (seq ${out.seq})`);
+        },
+        close: () => store.close(),
+      };
     },
     async readManifest(dir) {
       return JSON.parse(await readFile(join(dir, "orca-plugin.json"), "utf8"));

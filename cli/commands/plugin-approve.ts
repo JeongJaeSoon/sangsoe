@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type ApprovePorts, type ApproveResult, approvePlugin, nodePorts, resolveCommit } from "../../core/index.ts";
 import type { CommandDef } from "../contract.ts";
@@ -29,7 +29,13 @@ Enables the sangsoe Orca plugin only when (1) its commit is on main through a PR
 fingerprint are for this sangsoe folder. --dry-run checks and prints, and never enables.`;
 
 // The plugin folder beside this install: <root>/orca-plugin, whether run from source or dist/.
-export function defaultPluginDir(from: string = fileURLToPath(import.meta.url)): string | null {
+// Under the Homebrew wrapper that is SANGSOE_ROOT's, the opt/ path `sangsoe install` dev-loaded:
+// Node runs the CLI from its resolved Cellar path, which Orca does not know the folder by.
+export function defaultPluginDir(
+  from: string = fileURLToPath(import.meta.url),
+  root: string | undefined = process.env.SANGSOE_ROOT,
+): string | null {
+  if (root && existsSync(join(root, "orca-plugin", "orca-plugin.json"))) return join(root, "orca-plugin");
   for (let d = dirname(from); d !== dirname(d); d = dirname(d)) {
     if (existsSync(join(d, "orca-plugin", "orca-plugin.json"))) return join(d, "orca-plugin");
   }
@@ -72,9 +78,10 @@ export async function pluginApprove(
   if ("error" in p) return { code: 2, out: `${p.error}\n${USAGE}` };
   const found = p.dir ?? defaultPluginDir();
   if (!found || !existsSync(join(found, "orca-plugin.json"))) return { code: 2, out: "no sangsoe Orca plugin folder found; pass --dir" };
-  const dir = realpathSync(found);
-  const commit = p.commit ?? (await resolveCommit(dir));
+  const dir = resolve(found);
+  const realDir = realpathSync(dir);
+  const commit = p.commit ?? (await resolveCommit(realDir));
   if (!commit) return { code: 1, out: `cannot tell which commit ${dir} was built from (dirty checkout, no build-info.json); pass --commit` };
-  const r = await approvePlugin({ dir, commit, dryRun: p.dryRun }, ports);
+  const r = await approvePlugin({ dir, realDir, commit, dryRun: p.dryRun }, ports);
   return { code: r.ok ? 0 : 1, out: render(r) };
 }

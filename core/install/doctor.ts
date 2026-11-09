@@ -127,8 +127,6 @@ function orcaChecks(host: Host, root: string): Check {
   return { state: "ok", name, detail: `${p.pluginKey} ${p.version}, ${p.status}` };
 }
 
-const SQLITE_NOT_YET: Check = { state: "not yet", name: "sqlite", detail: "the SQLite version floor check arrives with a later build" };
-
 const fromStart = (r: CheckResult): Check =>
   r.status === "ok"
     ? { state: "ok", name: r.id, detail: r.summary }
@@ -219,7 +217,7 @@ export async function doctorChecks(host: Host, root: string, opts: DoctorOptions
   const tree = treeChecks(host, root);
   if ("offline" in opts) return tree;
   const start = await runChecks(DOCTOR_CHECKS, opts.ctx);
-  return [...tree, ...claudeChecks(host, root), orcaChecks(host, root), ...start.map(fromStart), SQLITE_NOT_YET];
+  return [...tree, ...claudeChecks(host, root), orcaChecks(host, root), ...start.map(fromStart)];
 }
 
 export function formatChecks(checks: readonly Check[]): string[] {

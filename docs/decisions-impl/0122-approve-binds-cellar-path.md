@@ -1,0 +1,9 @@
+# 122. Orca 는 opt/ 로 dev load 한 폴더의 승인을 버전별 Cellar 경로에 묶는다: 사본을 만들지 않는다
+
+결정 105 가 남긴 물음("`opt`·`Cellar` 경로를 승인하는 것이 내용 주소 사본이 필요한 그림을 바꾸는가")에 답한다.
+
+- **확인한 것.** `sangsoe install` 은 `orca plugin dev load /opt/homebrew/opt/sangsoe/libexec/orca-plugin` 으로 opt/ 심볼릭 링크 경로를 넘긴다. 그 폴더에 `orca plugin dev reload <opt 경로> --json` 을 부르면(켜지 않는다) Orca 1.4.250 이 `approval_required` 와 함께 `contentIdentity: "dev:/opt/homebrew/Cellar/sangsoe/0.1.0-rc.2/libexec/orca-plugin"` 을 내고, 다음 명령으로는 opt 경로를 그대로 적는다. Orca 는 받은 경로를 기억하고 승인은 그 실제 경로, 곧 버전마다 다른 Cellar 폴더에 묶는다.
+- **그래서 사본을 만들지 않는다.** 결정 105 가 바란 "리뷰된 바이트의, 바뀌지 않는 경로"를 Homebrew 의 Cellar 가 이미 준다. 한 버전의 Cellar 폴더는 그 버전을 까는 동안만 쓰이고, 같은 버전의 `brew reinstall` 도 formula 의 `sha256` 에 묶인 같은 tarball 을 다시 깐다. `<data>/plugin/<contentHash>/` 사본은 Homebrew 가 이미 가진 바이트를 한 번 더 두는 이중 저장이고, 같은 사용자 권한의 변조는 사본도 막지 못한다.
+- **opt/ 를 계속 dev load 한다.** Cellar 경로를 직접 넘기면 `brew upgrade` 뒤 정리가 옛 Cellar 를 지울 때 Orca 의 개발 폴더가 없는 경로를 가리킨다. opt/ 를 넘기면 업그레이드 뒤 Orca 가 새 Cellar 로 다시 풀어 새 `contentIdentity`·새 지문이 되고, 승인 전까지 아무것도 돌지 않는다(닫힌 쪽으로 실패한다). 업그레이드마다 `sangsoe plugin approve` 가 다시 필요한지는 T6 행이 기록한다.
+- **approve 가 고친 것.** 전에는 폴더를 `realpath` 한 Cellar 경로로 `dev reload` 를 부르고 `contentIdentity === dev:<그 경로>` 를 요구했다. Orca 가 opt 로 받은 폴더를 다른 이름으로 reload 하는 일은 확인한 적이 없다. 이제 `dev reload` 는 install 이 넘긴 경로(opt)로 부르고, 대상 확인은 `dev:<그 실제 경로>` 만 받는다. `dev:<opt 경로>` 는 받지 않는다: 승인이 심볼릭 링크에 묶이면 다음 `brew upgrade` 의 바이트가 다시 묻지 않고 돈다(이 Orca 는 그렇게 묶지 않지만, 그렇게 묶는 Orca 라면 approve 가 거부해야 한다). 기본 폴더는 브루 래퍼의 `SANGSOE_ROOT` 아래 `orca-plugin/` 이다: Node 는 CLI 를 실제(Cellar) 경로에서 돌리므로 실행 파일에서 올라가면 Cellar 가 나온다. 빌드 커밋(`build-info.json`)은 실제 경로 옆에서 읽는다.
+- **남는 틈.** 결정 105 그대로다: 같은 사용자 권한으로 승인 뒤 Cellar 폴더를 고치면 Orca 는 다시 묻지 않는다(개발 폴더의 코드 수정). doctor 의 `orca-plugin-content`(결정 112)가 그 차이를 드러낸다. `approve` 는 그 상대에 대한 경계가 아니다.

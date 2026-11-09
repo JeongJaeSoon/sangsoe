@@ -24,8 +24,9 @@ export interface StoredEvent<P = Record<string, unknown>> {
   readonly payload: P;
 }
 
-// The fields views read from Orca. U2's row types in contract/orca.ts are wider; they only need to
-// be assignable to these. The adapter has already dropped rows whose hostId is not "local" (decision 88).
+// The fields views read from Orca. U2's TaskRow/GateRow (contract/orca.ts) carry no runId or deps
+// and a gate status string, so a snapshot builder maps adapter results into these. The adapter has
+// already dropped rows whose hostId is not "local" (decision 88).
 export type ViewTaskStatus = "pending" | "ready" | "dispatched" | "blocked" | "completed" | "failed";
 
 export interface ViewTask {

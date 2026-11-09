@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type ApprovePorts, approvePlugin, type ExecResult, type ReviewEvidence } from "./approve.ts";
-import type { PluginApproved } from "./plugin-approved.ts";
+import { type ApprovePorts, approvePlugin, type ExecResult, type PluginApproved, type ReviewEvidence } from "./approve.ts";
 
 // TODO(U2): swap this hand fake for the shared fake Orca once it lands.
 const DIR = "/opt/sangsoe/orca-plugin";
@@ -18,6 +17,7 @@ type World = {
   evidence: ReviewEvidence | null;
   hashes: Record<string, string[]>;
   enable: ExecResult;
+  ledgerOpens: boolean;
 };
 
 const json = (v: unknown, code = 0): ExecResult => ({ code, stdout: JSON.stringify(v), stderr: "" });
@@ -42,6 +42,7 @@ function world(over: Partial<World> = {}): World {
     evidence: { headSha: HEAD, actOn: 0, reviewer: "review:codex", author: "worker:u3" },
     hashes: { [DIR]: ["h1"], [tree(SHA)]: ["h1"], [tree(HEAD)]: ["h1"] },
     enable: json({ ok: true }),
+    ledgerOpens: true,
     ...over,
   };
 }
@@ -73,7 +74,11 @@ function fake(w: World) {
       return { dir: tree(commit), dispose: async () => void disposed++ };
     },
     reviewEvidence: async () => w.evidence,
-    record: async (e) => void recorded.push(e),
+    async openLedger() {
+      calls.push(["ledger", "open"]);
+      if (!w.ledgerOpens) throw new Error("database is locked");
+      return { record: async (e) => void recorded.push(e), close: () => void calls.push(["ledger", "close"]) };
+    },
     readManifest: async () => ({ id: w.manifestId, version: "0.1.0" }),
     now: () => 1_000,
   };
@@ -82,9 +87,10 @@ function fake(w: World) {
   return { ports, calls, recorded, enables, reloads, disposed: () => disposed };
 }
 
-const run = (w: World, opts: { dryRun?: boolean; commit?: string } = {}) => {
+const run = (w: World, opts: { dryRun?: boolean; commit?: string; realDir?: string } = {}) => {
   const f = fake(w);
-  return approvePlugin({ dir: DIR, commit: opts.commit ?? SHA, dryRun: opts.dryRun ?? false }, f.ports).then((r) => ({
+  const input = { dir: DIR, commit: opts.commit ?? SHA, dryRun: opts.dryRun ?? false, ...(opts.realDir ? { realDir: opts.realDir } : {}) };
+  return approvePlugin(input, f.ports).then((r) => ({
     r,
     ...f,
   }));
@@ -198,8 +204,44 @@ test("an Orca error other than an approval request does not enable", async () =>
 });
 
 test("a failed enable records nothing", async () => {
-  const { r, recorded } = await run(world({ enable: json({ ok: false, error: { code: "approval_stale" } }, 3) }));
+  const { r, recorded, calls } = await run(world({ enable: json({ ok: false, error: { code: "approval_stale" } }, 3) }));
   assert.equal(r.ok, false);
   assert.match(r.note, /approval_stale/);
   assert.deepEqual(recorded, []);
+  assert.deepEqual(calls.at(-1), ["ledger", "close"]);
+});
+
+test("the store opens before the enable, so the plugin is never on without plugin_approved", async () => {
+  const { calls } = await run(world());
+  const at = (c: string) => calls.findIndex((x) => x.join(" ").startsWith(c));
+  assert.ok(at("ledger open") >= 0 && at("ledger open") < at("orca plugin enable"), JSON.stringify(calls));
+  assert.deepEqual(calls.at(-1), ["ledger", "close"]);
+});
+
+test("a store that does not open refuses before the enable", async () => {
+  const { r, enables, recorded } = await run(world({ ledgerOpens: false }));
+  assert.equal(r.ok, false);
+  assert.match(r.note, /store.*database is locked/);
+  assert.deepEqual(enables(), []);
+  assert.deepEqual(recorded, []);
+});
+
+test("dry run does not open the store for writing", async () => {
+  const { calls } = await run(world({ ledgerOpens: false }), { dryRun: true });
+  assert.ok(!calls.some((c) => c[0] === "ledger"));
+});
+
+// Homebrew's opt/ path is a symlink; Orca keeps the path it was given and binds approval to the real one.
+test("a folder reached through a symlink matches Orca's real-path identity and is reloaded by the given path", async () => {
+  const real = "/opt/Cellar/sangsoe/1.0.0/orca-plugin";
+  const { r, reloads } = await run(world({ reload: needsApproval({ contentIdentity: `dev:${real}` }) }), { realDir: real });
+  assert.equal(r.ok, true, JSON.stringify(r.checks));
+  assert.deepEqual(reloads(), [["orca", "plugin", "dev", "reload", DIR, "--json"]]);
+  for (const identity of ["dev:/opt/Cellar/sangsoe/0.9.0/orca-plugin", `dev:${DIR}`]) {
+    // An identity on the symlink itself would follow the link to whatever a later upgrade puts there.
+    const other = await run(world({ reload: needsApproval({ contentIdentity: identity }) }), { realDir: real });
+    assert.equal(other.r.ok, false, identity);
+    assert.equal(other.r.checks.find((c) => c.name === "target_is_sangsoe")?.ok, false, identity);
+    assert.deepEqual(other.enables(), [], identity);
+  }
 });

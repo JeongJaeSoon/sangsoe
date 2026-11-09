@@ -1,0 +1,44 @@
+# Compete
+
+Fan out N parallel attempts at the same task. Read every candidate end to end. Pick the strongest as the base. Graft the best ideas from the others into it. Verify the result.
+
+A **<name>** principle below is `references/principle-<name>.md` in the **principles** skill.
+
+## Phase A: Frame
+
+Every candidate gets the same prompt, so the prompt is the contract.
+
+1. State the artifact each candidate produces.
+2. Derive the rubric: 3 to 6 concrete, gradeable criteria for success on this task. It is the picker's tool in Phase D. Candidates see only the task.
+3. Pick runners suited to the task within the authorized environment. Independent attempts may use the same model. Use the host's delegation tool and configured defaults. Do not require a particular vendor, model family, plugin, or install path.
+4. Assign output paths. Each candidate writes to its own location: a git worktree through `isolation: "worktree"` when the artifact lives in the repo, otherwise its own scratch folder (the **separate-before-serializing-shared-state** principle).
+
+## Phase B: Fan out
+
+Launch every candidate in one message as subagents, each with the task, the path to the shared grounding, its own output path, and instructions to produce the artifact and a short rationale naming the alternatives it considered and what it rejected. A candidate that must outlive this session goes through sangsoe's start procedure, as the skill's "Where workers run" says, never a raw start.
+
+If a candidate produces no output, proceed with N-1 and note the dropout.
+
+## Phase C: Cross-judge
+
+After every candidate completes, start one read-only judge who did not produce any candidate. It sees the rubric and the candidates by path label, scores each criterion, and recommends a base with its reasons, while you do your own reading in Phase D.
+
+## Phase D: Pick a base
+
+Read every candidate end to end before picking. Score each against the rubric criterion by criterion, not on overall feel, and compare with the judge. Agreement on the base confirms the pick. Disagreement means one of you is biased or the rubric was ambiguous. Read both rationales before deciding.
+
+Pick the base a future maintainer can extend most easily without breaking invariants. When two feel tied, prefer the cleaner boundary or smaller API (the **minimize-reader-load** principle).
+
+## Phase E: Graft
+
+Walk each losing candidate once more for what is worth porting into the base, usually one or two things per candidate. Fold each graft in by hand (the **redesign-from-first-principles** principle), so the result follows one mental model. Don't paste mechanically.
+
+If the candidates converge on one shape, that is strong agreement. Note it and ship the consensus shape with no graft. If they diverge wildly, Phase A was under-specified. Reframe and re-run rather than averaging the divergence.
+
+## Phase F: Verify
+
+Verify the result like any other output (the **prove-it-works** principle). If verification finds a problem the compete round missed, either Phase A was wrong (reframe and re-run) or a candidate caught it and you missed the graft (go back to Phase E).
+
+## Outputs
+
+One artifact, with a short synthesis note naming the base and why, the judge's verdict, each graft with its source candidate, what was rejected and why, any convergence or dropouts, and the verification result.

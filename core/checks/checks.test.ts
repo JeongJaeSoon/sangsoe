@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { type FakeReply, createFakeOrca } from "../../test/fake-orca/index.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { type CheckResult, doctorReport, runChecks, startReport } from "./check.ts";
-import { START_CHECKS } from "./index.ts";
+import { DOCTOR_CHECKS, START_CHECKS } from "./index.ts";
 
 // The fixtures' sangsoe plugins are 0.1.0; the core version is injected, never read from package.json here.
 const CORE_VERSION = "0.1.0";
@@ -121,6 +121,18 @@ test("a check that throws becomes a failed item instead of breaking the run", as
     coreVersion: CORE_VERSION,
   });
   assert.equal(rs[0]?.status, "fail");
+});
+
+test("doctor checks the bundled SQLite against the WAL-reset floor; the start leaves it to the store", async () => {
+  const fake = createFakeOrca({ scenario: "local" });
+  const ctx = (sqliteVersion: string) => ({ orca: createOrcaAdapter(fake.exec), exec: fake.exec, coreVersion: CORE_VERSION, sqliteVersion });
+  assert.ok(!START_CHECKS.some((c) => c.id === "sqlite-version"), "Store.open already refuses the start");
+  const sqlite = DOCTOR_CHECKS.find((c) => c.id === "sqlite-version");
+  assert.ok(sqlite, "DOCTOR_CHECKS carries sqlite-version");
+  const low = await sqlite.run(ctx("3.51.2"));
+  assert.equal(low.status, "fail");
+  assert.match(low.fix ?? "", /Node/);
+  assert.deepEqual(await sqlite.run(ctx("3.51.3")), { id: "sqlite-version", status: "ok", summary: "SQLite 3.51.3" });
 });
 
 test("start and doctor print the same results differently", async () => {

@@ -178,6 +178,8 @@ test("on the recorded local Orca, doctor runs the start checks and passes", asyn
   assert.ok(r.lines.some((l) => /^ok +orca-capabilities: /.test(l)), r.lines.join("\n"));
   assert.ok(!r.lines.some((l) => l.startsWith("FAIL")));
   assert.ok(!r.lines.some((l) => /start checks/.test(l)), "no placeholder once the start checks run");
+  assert.ok(r.lines.some((l) => /^ok +sqlite-version: SQLite \d/.test(l)), r.lines.join("\n"));
+  assert.ok(!r.lines.some((l) => /^not yet +sqlite/.test(l)), "no sqlite placeholder once the floor check runs");
 });
 
 test("a missing Orca capability fails doctor with the capabilities row and its fix", async (t) => {

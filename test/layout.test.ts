@@ -28,15 +28,33 @@ const isCode = (f: string) =>
 type Label = { slot: string; layer: string; tokens: string };
 const fmt = (l: Label) => `slot=${l.slot} layer=${l.layer} tokens=${l.tokens}`;
 
+// Claude Code loads every .md in claude-plugin/agents/ as an agent, so that folder carries its label in a
+// `.layout` file holding the same line instead of a README.
+const AGENTS = "claude-plugin/agents";
+const MARKER = /\/(README\.md|\.layout)$/;
 const labelled = new Map<string, Label | null>(
   files
-    .filter((f) => f.endsWith("/README.md") && SLOT_ROOTS.some((s) => rel(f).startsWith(`${s}/`)))
+    .filter((f) => MARKER.test(f) && SLOT_ROOTS.some((s) => rel(f).startsWith(`${s}/`)))
     .map((f) => {
       const m = LABEL.exec(read(f).split("\n", 1)[0] ?? "");
-      const dir = rel(f).replace(/\/README\.md$/, "");
+      const dir = rel(f).replace(MARKER, "");
       return [dir, m ? { slot: m[1] ?? "", layer: m[2] ?? "", tokens: m[3] ?? "" } : null];
     }),
 );
+
+test("only claude-plugin/agents/ uses a .layout marker, and it holds agent definitions only", () => {
+  const markers = files.filter((f) => f.endsWith("/.layout")).map(rel);
+  assert.deepEqual(markers, [`${AGENTS}/.layout`]);
+  for (const f of under(AGENTS).filter((x) => x.endsWith(".md"))) {
+    const m = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(read(f));
+    assert.ok(m, `${rel(f)} has no closed frontmatter, so it is not an agent definition`);
+    const [, head = "", body = ""] = m;
+    for (const key of ["name", "description"]) {
+      assert.match(head, new RegExp(`^${key}:[ \\t]*\\S`, "m"), `${rel(f)} frontmatter has no ${key}`);
+    }
+    assert.ok(body.trim(), `${rel(f)} has no prompt body`);
+  }
+});
 
 // docs/architecture.md's table is the one list of homes; READMEs must agree with it both ways.
 const TOKENS: Record<string, string> = { X: "free", O: "using", 섞임: "mixed" };
@@ -73,9 +91,9 @@ test("the table covers all three layers, and only 판단 spends tokens", () => {
 
 test("every mapped home has a README whose label matches the table", () => {
   for (const [dir, want] of mapped) {
-    assert.ok(labelled.has(dir), `${dir}/README.md missing`);
+    assert.ok(labelled.has(dir), `${dir}/ has no README.md (or .layout) label file`);
     const got = labelled.get(dir);
-    assert.ok(got, `${dir}/README.md: first line is not a layout label`);
+    assert.ok(got, `${dir}/ label file: first line is not a layout label`);
     assert.equal(fmt(got), fmt(want), `${dir}/ label disagrees with docs/architecture.md`);
   }
 });
