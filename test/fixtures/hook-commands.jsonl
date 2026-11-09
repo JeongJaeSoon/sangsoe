@@ -44,6 +44,23 @@
 {"expect":"pass","note":"screen list","tool_name":"Bash","tool_input":{"command":"screen -ls"}}
 {"expect":"pass","note":"at job without claude","tool_name":"Bash","tool_input":{"command":"echo 'make backup' | at now + 1 hour"}}
 {"expect":"pass","note":"launchctl list","tool_name":"Bash","tool_input":{"command":"launchctl list | grep acme"}}
+{"expect":"deny","gate":"start","note":"backgrounded for loop","tool_name":"Bash","tool_input":{"command":"for t in a b; do claude -p $t; done &"}}
+{"expect":"deny","gate":"start","note":"backgrounded while loop with input","tool_name":"Bash","tool_input":{"command":"while read l; do claude -p \"$l\"; done < tasks.txt &"}}
+{"expect":"deny","gate":"start","note":"backgrounded if","tool_name":"Bash","tool_input":{"command":"if true; then claude -p x; fi &"}}
+{"expect":"deny","gate":"start","note":"backgrounded subshell holding a case","tool_name":"Bash","tool_input":{"command":"(claude -p y; case $x in a) echo;; esac) &"}}
+{"expect":"deny","gate":"start","note":"claude in a substitution of a backgrounded command","tool_name":"Bash","tool_input":{"command":"echo \"$(claude -p x)\" > out.md &"}}
+{"expect":"deny","gate":"start","note":"tmux global socket flag before the subcommand","tool_name":"Bash","tool_input":{"command":"tmux -L w new -d 'claude -p x'"}}
+{"expect":"deny","gate":"start","note":"nohup around a script that runs claude","tool_name":"Bash","tool_input":{"command":"nohup ./w.sh"},"facts":{"scripts":{"/work/acme/w.sh":"claude -p x\n"}}}
+{"expect":"deny","gate":"start","note":"at job file running claude","tool_name":"Bash","tool_input":{"command":"at -f /work/acme/job.sh now"},"facts":{"scripts":{"/work/acme/job.sh":"claude -p x\n"}}}
+{"expect":"deny","gate":"self-land","note":"gh api merge with a query string","agent_type":"sangsoe:worker","tool_name":"Bash","tool_input":{"command":"gh api -X PUT 'repos/acme/api/pulls/4/merge?merge_method=squash'"}}
+{"expect":"pass","note":"worker_done heredoc body naming the wait","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject ready --body \"$(cat <<'EOF'\nPR open.\nREADY-WAIT: land-after\nEOF\n)\" --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
+{"expect":"pass","note":"worker_done body on stdin is not judged","tool_name":"Bash","tool_input":{"command":"printf 'READY-WAIT: land-after\\n' | orca orchestration send --type worker_done --subject ready --body-file - --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
+{"expect":"pass","note":"tmux session named claude","tool_name":"Bash","tool_input":{"command":"tmux new-session -d -s claude 'npm run dev'"}}
+{"expect":"pass","note":"tmux keys to a target named claude","tool_name":"Bash","tool_input":{"command":"tmux send-keys -t claude 'npm test' Enter"}}
+{"expect":"pass","note":"tmux keys mentioning claude as an argument","tool_name":"Bash","tool_input":{"command":"tmux send-keys -t dev 'git log --grep claude' Enter"}}
+{"expect":"pass","note":"tmux command in a directory named claude","tool_name":"Bash","tool_input":{"command":"tmux new -d -s t 'cd ~/src/claude && npm test'"}}
+{"expect":"pass","note":"screen reattach to a session named claude","tool_name":"Bash","tool_input":{"command":"screen -r claude"}}
+{"expect":"pass","note":"at job then a foreground claude","tool_name":"Bash","tool_input":{"command":"echo 'make backup' | at now + 1 hour; claude -p 'summarize'"}}
 {"expect":"pass","note":"pipeline with claude in the foreground","tool_name":"Bash","tool_input":{"command":"git diff | claude -p 'review this diff' | tee review.md"}}
 {"expect":"pass","note":"background job after a foreground claude","tool_name":"Bash","tool_input":{"command":"claude -p 'summarize' < a.md > b.md; npm run build &"}}
 {"expect":"deny","gate":"report-address","note":"send to a terminal handle","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to term_ab12cd --type escalation --subject x --body y"}}
