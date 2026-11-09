@@ -145,6 +145,12 @@ test("malformed params are -32602 and a non-Error throw is -32603 with a message
   const error = async (method: string, params: Record<string, unknown>) =>
     ((await server.handle({ jsonrpc: "2.0", id: 1, method, params })) as { error: { code: number; message: string } }).error;
   assert.equal((await error("initialize", {})).code, -32602);
+  const empty = { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: {} };
+  assert.equal((await error("initialize", empty)).code, -32602);
+  assert.deepEqual(await error("tools/call", { name: "throws", arguments: { bare: true } }), {
+    code: -32603,
+    message: "internal error",
+  });
   assert.equal((await error("resources/read", { uri: 123 })).code, -32602);
   assert.equal((await error("tools/call", { name: 5 })).code, -32602);
   assert.deepEqual(await error("tools/call", { name: "throws", arguments: {} }), { code: -32603, message: "null" });

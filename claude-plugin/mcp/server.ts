@@ -40,7 +40,9 @@ export async function createServer(
 
   const methods: Record<string, (p: Record<string, unknown>) => unknown> = {
     initialize: (p) => {
-      if (typeof p.protocolVersion !== "string" || !isObject(p.capabilities) || !isObject(p.clientInfo)) {
+      const client = p.clientInfo;
+      const clientOk = isObject(client) && typeof client.name === "string" && typeof client.version === "string";
+      if (typeof p.protocolVersion !== "string" || !isObject(p.capabilities) || !clientOk) {
         throw new RpcError(-32602, "initialize needs protocolVersion, capabilities and clientInfo");
       }
       return {
@@ -93,11 +95,20 @@ export async function createServer(
         return { jsonrpc: "2.0", id: msg.id, result: await method(msg.params ?? {}) };
       } catch (e) {
         const code = e instanceof RpcError ? e.code : -32603;
-        const message = e instanceof Error ? e.message : String(e);
+        const message = e instanceof Error ? e.message : describe(e);
         return { jsonrpc: "2.0", id: msg.id, error: { code, message } };
       }
     },
   };
+}
+
+// String() itself throws on some values (Object.create(null)); the loop must still answer.
+function describe(thrown: unknown): string {
+  try {
+    return String(thrown);
+  } catch {
+    return "internal error";
+  }
 }
 
 class RpcError extends Error {
