@@ -23,7 +23,7 @@ description: "Use when a sangsoe worker takes one Task from first edit to merge-
 - 리뷰어는 작성자가 아니다. 변경 파일과 관련 시험만 주고, 너의 설명·결론은 주지 않는다.
 - 찾은 것을 Act-on · Consider · Noted · Dismissed 로 가르고, Act-on 이 0 인 회차가 나올 때까지 고치고 다시 받는다.
 - **판정은 리뷰한 head 에 묶인다.** 리뷰 뒤에 커밋하거나 main 을 합치면 그 판정은 낡는다. 충돌을 풀며 main 을 합쳤으면 그 합침의 차이만 다시 리뷰받는다(delta 리뷰).
-- **작성자는 자기 판정을 기록하지 않는다.** 리뷰한 head sha, 리뷰어, 리뷰 원문(남은 Act-on 수가 적힌 것)의 위치를 리드에게 보낸다. 기록은 리드가 한다(결정 111). 요약은 근거가 아니다.
+- **작성자는 자기 판정을 기록하지 않는다.** 리뷰한 head sha, 리뷰어, 리뷰 원문(남은 Act-on 수가 적힌 것)의 위치를 리드에게 보낸다. 기록은 리드가 `review_record` 로 한다(결정 111). 네 세션에서 부르면 거부된다(결정 162). 요약은 근거가 아니다.
 
 ## 4. 증거: 검증 등급
 
@@ -52,7 +52,7 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
 
 1. `land` 를 부른다: `{pr, head_sha}`. head 는 리뷰하고 증거를 만든 그 sha 다.
 2. 결과를 읽는다. 성공이면 `action`, 거부면 `refusal.code` 다. 먼저 `dry_run: true` 로 불러 조건만 볼 수 있다.
-   - `merge_scheduled`: GitHub 이 필수 리뷰와 CI 가 찰 때 머지한다.
+   - `auto_merge`: GitHub 이 필수 리뷰와 CI 가 찰 때 머지한다. `merge_approved`·`merge_verdict`: 승인이나 기록된 리뷰 판정으로 지금 머지했다(결정 158).
    - `merge_on_approval`: 승인이 찰 때 pr-monitor 가 리드를 깨우고, 리드가 같은 `land` 로 머지한다.
    - 거부 code(`evidence_missing`, `review_missing`, `review_stale`, `head_moved`, `stack_order`, `main_red` 등): `refusal.fix` 대로 원인을 고치고 다시 부른다. `review_stale`·`head_moved` 는 리뷰한 head 가 지금 head 가 아니라는 뜻이니, 새 head 를 다시 리뷰받는다. `main_red` 동안에는 `main_fix: true` 로 요청한 PR 만 들어간다.
    - 거부(hook·권한): 다른 길로 머지하지 않는다. 일을 맡긴 쪽에 거부 보고로 알린다.

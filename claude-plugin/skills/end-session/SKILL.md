@@ -34,6 +34,6 @@ description: "Use before a sangsoe worker or lead sends worker_done, or when the
 
 ## 5. 한 번 보고
 
-- 워커·리드는 Orca `worker_done` 을 자기 Dispatch 로 **한 번** 보낸다. 본문: 바꾼 것, 완료 조건별 증거(실제 출력), PR·head·리뷰 판정·리뷰어(PR 이 걸린 일), 확인하지 못한 것, 거부된 행위, 후속 제안.
+- 워커·리드는 Orca `send --type worker_done` 을 자기 Dispatch 로 **한 번** 보낸다. 본문: 바꾼 것, 완료 조건별 증거(실제 출력), PR·head·리뷰 판정·리뷰어(PR 이 걸린 일), 확인하지 못한 것, 거부된 행위, 후속 제안.
 - 완료 조건을 못 채웠으면 실패로 보낸다(Orca 의 실패 결과). 남은 것을 적는다.
 - 보낸 뒤 그 턴에 멈춘다. 다른 일을 시작하지 않고, 결과를 폴링하지 않는다. Orca 가 터미널을 해제한다.
