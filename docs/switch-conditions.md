@@ -47,8 +47,8 @@
 | I1 | 설치 | `brew install` → `install` → `plugin approve` → `doctor` 녹색 | U4·U24 | |
 | I2 | 설치 | `brew upgrade && sangsoe install` 뒤 네 칸 같은 버전, 어긋나면 한 줄 경고(R-23) | U4 | |
 | I3 | 설치 | `uninstall` → 재설치 녹색, sqlite 보존 | U4·U24 | |
-| M1 | 이관 | R-01–R-23 23/23 이 CI 시험에 대응 | U21 | |
-| M2 | 이관 | 다시 만드는 13가지 D-1–D-13 의 위치 13/13(D-1 은 결정 95 대로 plugin 안) | U21(+U6·U20) | |
-| M3 | 이관 | 열린 항목·결정 읽기 전용 가져오기 + smoke 종단 한 번 | U21·U23 | |
+| M1 | 이관 | R-01–R-23 23/23 이 CI 시험에 대응 | U21 | 미달 16/23: `docs/requirements-coverage.md`(🟢 9 · 🟡 7 · 🔴 3 R-06·R-20·R-21 · 단위 4 R-07·R-15·R-18 PR #22·#23, R-12 U18). `test/migrate/coverage.test.ts` 가 행과 시험 파일과 집계를 센다 |
+| M2 | 이관 | 다시 만드는 13가지 D-1–D-13 의 위치 13/13(D-1 은 결정 95 대로 plugin 안) | U21(+U6·U20) | 행 13/13: 자리가 main 에 있는 것 6(D-1 은 `claude-plugin/skills/general/`, D-9 는 REAPER 라운드만 U18), 단위가 가져올 것 4(D-7 PR #22·U16, D-8 U17, D-10·D-11 U19), sangsoe 밖 3(D-2–D-4). `docs/port-map.md` 가 옛 항목 166/166 을 한 행씩(`test/migrate/port-map.test.ts`) |
+| M3 | 이관 | 열린 항목·결정 읽기 전용 가져오기 + smoke 종단 한 번 | U21·U23 | 가져오기: `test/migrate/migrate.test.ts`(열린 것만 · 옛 DB 바이트 그대로 · 두 번째 실행 0건 · 제목은 event 에 없음). 이 Mac 의 실제 옛 저장소 dry run: 열린 항목 23(todo 9 · doing 1 · held 13) · 열린 결정 0 · 간선 0 · 닫힌 항목 120 · 닫힌 결정 76 · 가져오지 않는 리드·카드 행 14 · 리드 1. 쓰는 가져오기와 smoke 종단은 전환 때(U23·U24) |
 
 합계: 기반 4 · 코어 13 · 랜드 6 · 정리 8 · 감지기 5 · 패널 4 · 설치 3 · 이관 3 = 46.

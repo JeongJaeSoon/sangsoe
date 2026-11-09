@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { migrate } from "../../cli/commands/migrate.ts";
+import { run } from "../../cli/main.ts";
 import { applyImport, decisionKey, importedFrom, type OrcaAdapter, planImport, readOldState, Store } from "../../core/index.ts";
 import { createWorld } from "../decision/world.ts";
 import { createGraphWorld } from "../graph/world.ts";
@@ -190,6 +191,13 @@ test("sangsoe migrate: dry run by default, no Orca call, no store created, no ti
   const applied = await migrate({ from: oldDb({ items: SAMPLE.items }), apply: true, run: "run_a" }, { orca: w.orca, store: w.store });
   assert.ok(applied.ok);
   assert.deepEqual((applied.value as { created: unknown }).created, { items: 5, decisions: 0, edges: 1 });
+});
+
+test("sangsoe migrate --help and an unknown argument touch nothing (R-16)", async () => {
+  const help = await run(["migrate", "--help"]);
+  assert.equal(help.code, 0);
+  assert.match(help.out, /^usage:/);
+  assert.equal((await run(["migrate", "--bogus"])).code, 2);
 });
 
 test("applyImport: a refused task-create stops the run and writes nothing for that item", async () => {
