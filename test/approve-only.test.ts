@@ -18,7 +18,15 @@ function walk(dir: string): string[] {
 }
 
 // Either the words in one string or as separate array items: "plugin enable", "plugin", "enable".
-const ENABLE = /plugin\s+enable|["'`]plugin["'`]\s*,\s*["'`]enable["'`]/;
+// `claude plugin enable` (Claude Code's own plugin, e.g. a doctor fix hint) is a different gate.
+const ENABLE = /(?<!claude\s+)plugin\s+enable|["'`]plugin["'`]\s*,\s*["'`]enable["'`]/;
+
+test("the guard tells Orca's enable from Claude Code's", () => {
+  assert.ok(ENABLE.test("orca plugin enable local.sangsoe"));
+  assert.ok(ENABLE.test('["orca", "plugin", "enable"]'));
+  assert.ok(ENABLE.test("run(`plugin  enable local.sangsoe`)"));
+  assert.ok(!ENABLE.test("fix: `claude plugin enable sangsoe@sangsoe`"));
+});
 
 test("no code path calls orca plugin enable except sangsoe plugin approve", () => {
   const hits = walk(ROOT)
