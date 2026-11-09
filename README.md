@@ -28,11 +28,29 @@ Open a new Claude Code session to pick up the plugin.
 
 `sangsoe install` registers with the Claude Code configuration directory it runs under: `CLAUDE_CONFIG_DIR` when that is set, otherwise `~/.claude`. Registration is per directory. Run `sangsoe install` from your own shell to register into `~/.claude`. A session started with another `CLAUDE_CONFIG_DIR` (an Orca profile, for example) needs its own `sangsoe install`. Homebrew itself writes nothing to your home directory.
 
-**Update.** Run `brew upgrade sangsoe`, then `sangsoe install`, then steps 3 and 4 again: the new build comes from a new pull request, so its review is recorded with `sangsoe review record` before `sangsoe plugin approve` passes. Each version installs to its own Homebrew Cellar folder, and Orca ties the approval to that folder. So after an upgrade, doctor shows the plugin waiting for approval again until approve runs.
+## Update
 
-**Remove.** Run `sangsoe uninstall` first. It prints `claude: uninstalled sangsoe@sangsoe`, `claude: removed marketplace sangsoe` and `orca: unloaded local.sangsoe`. Then run `brew uninstall sangsoe`. Neither deletes `~/.local/share/sangsoe` (data) or `~/.config/sangsoe` (settings). `brew uninstall` also removes `node` if `node` was only installed for sangsoe.
+Every `brew upgrade sangsoe` needs a new review record and a new approval. Each version installs to its own Homebrew Cellar folder, and Orca ties an approval to that folder, so nothing in the new version runs in Orca until `sangsoe plugin approve` passes for it.
 
-**Reinstall.** Reinstalling the same version (`brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe install`) needs no new approval. `sangsoe install` prints `orca: loaded /opt/homebrew/opt/sangsoe/libexec/orca-plugin`, and doctor is all `ok`.
+1. `brew upgrade sangsoe`, then `sangsoe --version` prints the new version.
+2. `sangsoe install`. It prints `orca: loaded, approval waits — fingerprint ap1-…; next: sangsoe plugin approve`. Its doctor rows now include:
+
+   ```
+   FAIL     orca plugin: local.sangsoe waits for approval — fix: sangsoe plugin approve
+   ```
+
+   and `warn orca-plugin-version` may appear with the same fix. Every other row should be `ok`, `orca-plugin-content` included: the new folder equals its build commit and reviewed head before anything is enabled.
+3. Whoever reviewed the new build's pull request records it on this machine: `sangsoe review record --pr <n> --head <full sha> --act-on 0 --reviewer <name>`. The previous version's record does not carry over: it names another pull request and head.
+4. `sangsoe plugin approve --dry-run`, then `sangsoe plugin approve`. It prints `recorded plugin_approved (seq N)` and `enabled`.
+5. `sangsoe doctor` prints `ok` on every row and exits 0, with `orca plugin: local.sangsoe <new version>, running`.
+
+The approval covers the core the Orca plugin runs. A release packs a copy of `core/` into `orca-plugin/vendor/`, the plugin loads only that copy, and approve and doctor compare the whole folder, the copy included, with the reviewed source. A changed file anywhere in the installed folder turns `orca-plugin-content` into `FAIL`, with `sangsoe plugin approve` as the fix.
+
+Reinstalling the same version (`brew reinstall sangsoe`, then `sangsoe install`) needs no new approval. `sangsoe install` prints `orca: loaded /opt/homebrew/opt/sangsoe/libexec/orca-plugin`, and doctor is all `ok`.
+
+## Uninstall
+
+Run `sangsoe uninstall` first. It prints `claude: uninstalled sangsoe@sangsoe`, `claude: removed marketplace sangsoe`, `orca: unloaded local.sangsoe` and ``kept: ~/.local/share/sangsoe (data) and ~/.config/sangsoe (settings); `brew uninstall sangsoe` removes the tree``. A registration that is already gone prints `was not installed`, `was not added` or `no sangsoe development plugin loaded` instead, and is not an error. Then run `brew uninstall sangsoe`. Neither deletes `~/.local/share/sangsoe` (data) or `~/.config/sangsoe` (settings). `brew uninstall` also removes `node` if `node` was only installed for sangsoe.
 
 ## Layout
 
