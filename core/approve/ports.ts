@@ -55,14 +55,15 @@ export function nodePorts(write: (line: string) => void, openStore: () => Store 
         store.close();
       }
     },
-    async record({ type, ...payload }) {
+    async openLedger() {
       const store = openStore();
-      try {
-        const out = store.append({ type, source: "plugin approve", payload });
-        write(`recorded ${type} (seq ${out.seq})`);
-      } finally {
-        store.close();
-      }
+      return {
+        async record({ type, ...payload }) {
+          const out = store.append({ type, source: "plugin approve", payload });
+          write(`recorded ${type} (seq ${out.seq})`);
+        },
+        close: () => store.close(),
+      };
     },
     async readManifest(dir) {
       return JSON.parse(await readFile(join(dir, "orca-plugin.json"), "utf8"));
