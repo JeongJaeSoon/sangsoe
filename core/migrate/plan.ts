@@ -74,7 +74,11 @@ export function importedFrom(store: Store): Imported {
   return {
     items,
     edges: new Set(facts.edges.map((e) => edgeId(e.pred, e.succ, e.kind))),
-    hasDecision: (key) => readDecisionByKey(store, key) !== undefined,
+    // decisionOpen writes decision_opened before the carrier and its gate, so the row alone is not done.
+    hasDecision: (key) => {
+      const s = readDecisionByKey(store, key);
+      return s !== undefined && (s.row.state !== "open" || s.waiters.some((w) => w.gate !== null));
+    },
   };
 }
 

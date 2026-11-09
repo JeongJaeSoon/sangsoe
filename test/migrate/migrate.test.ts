@@ -160,6 +160,32 @@ test("applyImport: an open decision through decisionOpen, once", async () => {
   assert.equal(w.gates.size, 1);
 });
 
+test("applyImport: a decision whose gate-create failed is opened on the re-run, not counted as already", async () => {
+  const w = createWorld([], { currentRun: "run_o" });
+  let failGate = true;
+  const orca = new Proxy(w.orca, {
+    get: (t, k) =>
+      k === "gateCreate" && failGate ? async () => ({ ok: false, error: { code: "timeout", message: "x" } }) : Reflect.get(t, k),
+  });
+  const deps = { ...w, orca };
+  const r = readOldState(oldDb({ decisions: SAMPLE.decisions }));
+  assert.ok(r.ok);
+  const first = await applyImport(deps, r.value, { run: "run_o" });
+  assert.equal(first.ok ? "" : first.refusal.code, "orca_error");
+  assert.equal(w.gates.size, 0);
+
+  assert.deepEqual(
+    planImport(r.value, importedFrom(w.store)).decisions.map((d) => d.action),
+    ["create"],
+  );
+  failGate = false;
+  const again = await applyImport(deps, r.value, { run: "run_o" });
+  assert.ok(again.ok, JSON.stringify(again));
+  assert.deepEqual(again.value.created, { items: 0, decisions: 1, edges: 0 });
+  assert.equal(w.gates.size, 1);
+  assert.equal(w.store.events({ type: "decision_opened" }).length, 1);
+});
+
 test("sangsoe migrate: dry run by default, no Orca call, no store created, no titles; --apply needs --run", async () => {
   const from = oldDb(SAMPLE);
   const storePath = join(dirs.at(-1) as string, "sangsoe.db");

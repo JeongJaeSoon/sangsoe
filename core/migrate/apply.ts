@@ -63,8 +63,8 @@ export async function applyImport(deps: CoreDeps, old: OldState, o: { run: strin
     }
     const r = await decisionOpen(deps, { subject: d.subject, options: d.options, question: d.question, waiters: [], carrierRun: o.run, callerRun: o.run });
     if (!r.ok) return refuse(r.refusal.code, `decision ${d.id}: ${r.refusal.reason}`, RESUME);
-    if (r.value.status === "opened") created.decisions++;
-    else already.decisions++;
+    if (r.value.status === "closed") already.decisions++;
+    else created.decisions++;
   }
   return done({ created, already, tasks });
 }
