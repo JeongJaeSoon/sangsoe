@@ -4,7 +4,7 @@
 
 **판정이 읽는 실제 꼴.** 끝나지 않은 워커는 `recover` 의 `settled` 가 아닌 것(`settled` · `released` 등의 state, `terminalState: released` 는 끝남). 터미널을 잃은 워커의 `liveness` 는 `gone` 이고, `unverifiable` 이나 없는 값은 "못 봄"이다. `worker_dead` 의 사유는 `terminal_gone` 이고, 이번 라운드에 처음 본 죽음이 `hostRestartMin` 이상이면 `host_restart` 다(이미 기록된 죽음은 세지 않는다). 게이트가 sangsoe 의 결정인지는 `decision_joined{gate, decision}` 으로 정하고, 그 줄이 쓰이기 전의 게이트는 질문 머리의 `dNNN:` 이 기록된 결정이면 sangsoe 의 것으로 본다.
 
-**`run_stalled` 는 구성원을 다 볼 때만.** worker-list 는 다음 쪽(`nextCursor`)을 따라 끝까지 읽는다(최대 10 쪽, 같은 커서가 다시 오면 멈춘다). 그래도 남은 쪽이 있거나, `worker-show` 를 못 읽은 워커가 있거나, 한 구성원이라도 못 본 Run 은 판정하지 않는다(행동 0, `unseen` 에 남긴다).
+**`run_stalled` 는 그 Run 의 구성원을 다 볼 때만.** `--run` 없는 worker-list 는 모든 Run 의 Dispatch 를 최신순으로, 끝난 것까지 담으므로 이력이 쌓이면 끝까지 읽을 수 없다. 그래서 전체 목록은 진행 중인 Run 을 찾는 데만 쓰고(최대 3 쪽), 구성원은 Run 마다 `worker-list --run <id>` 를 다음 쪽(`nextCursor`)까지 읽어 정한다(최대 10 쪽, 같은 커서가 다시 오면 멈춘다). 그 목록을 못 읽었거나 남은 쪽이 있거나, 구성원 하나라도 못 본 Run 만 판정하지 않는다(행동 0, `unseen` 에 남긴다). 다른 Run 은 그대로 판정한다.
 
 **세션 = 워크스페이스.** `worktree ps --json` 의 에이전트 행에는 세션 id 가 없다. Dispatch 하나는 워크스페이스 하나이므로 워크스페이스를 세션으로 보고, 그 워크스페이스의 모든 터미널(에이전트 행)을 한꺼번에 판정한다(`sessionActivity`): 하나라도 `agentWait` 이면 대기, 일하는 행이 없으면 쉼, 시각은 전부의 최댓값. 그래서 조용한 옛 탭이 세션을 멈춤으로 만들지 않는다(`one_session_two_terminals`).
 

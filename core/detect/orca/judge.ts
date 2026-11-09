@@ -12,6 +12,8 @@ export type OrcaReads = {
   workers: LocalRows<WorkerRow> | null;
   /** worker-show per unfinished worker, by Dispatch id; it carries the Run id worker-list leaves out. */
   shows: Record<string, WorkerShow | null>;
+  /** `worker-list --run` per Run the unfinished workers belong to, every page: the Run's membership. */
+  runs: Record<string, LocalRows<WorkerRow> | null>;
   /** gate-list per Run the unfinished workers belong to. */
   gates: Record<string, GateRow[] | null>;
   inbox: InboxMessage[] | null;
@@ -59,7 +61,7 @@ export function sessionActivity(row: WorktreePsRow, now: number): SessionActivit
   return { kind: "active", lastAt: Math.max(...seen) };
 }
 
-type RunTally = { members: number; quiet: number; lastAt: number; dead: string[]; blind: boolean };
+type Seen = { quiet: boolean; lastAt: number; dead: boolean; blind: boolean };
 
 function judgeWorkers(r: OrcaReads, now: number, c: MonitorConfig, planned: Planned[], unseen: string[]) {
   if (!r.workers) {
@@ -67,52 +69,40 @@ function judgeWorkers(r: OrcaReads, now: number, c: MonitorConfig, planned: Plan
     return;
   }
   if (!r.ps) unseen.push("worktree ps");
-  const live = r.workers.rows.filter(isUnfinished);
+  if (r.workers.truncated) unseen.push("worker-list truncated");
+  // Workers of the global list plus the members of every Run read, each judged once.
+  const all = new Map<string, WorkerRow>();
+  for (const rows of [r.workers, ...Object.values(r.runs)]) {
+    for (const w of rows?.rows.filter(isUnfinished) ?? []) if (!all.has(w.dispatchId)) all.set(w.dispatchId, w);
+  }
   const recordedDead = new Set(r.events.filter((e) => e.type === "worker_dead").map((e) => e.entity_id));
-  const dead = live.filter((w) => w.liveness !== undefined && DEAD.has(w.liveness));
+  const isDead = (w: WorkerRow) => w.liveness !== undefined && DEAD.has(w.liveness);
   // "Many at once" counts only deaths first seen in this round.
-  const fresh = dead.filter((w) => !recordedDead.has(w.dispatchId));
+  const fresh = [...all.values()].filter((w) => isDead(w) && !recordedDead.has(w.dispatchId));
   const reason = fresh.length >= c.hostRestartMin ? "host_restart" : "terminal_gone";
 
-  const runs = new Map<string, RunTally>();
-  let membersUnknown = r.workers.truncated;
-  const tally = (w: WorkerRow, t: { quiet: boolean; lastAt?: number; dead?: boolean; blind?: boolean }) => {
-    const run = r.shows[w.dispatchId]?.runId;
-    if (!run) {
-      membersUnknown = true;
-      unseen.push(`worker-show ${w.dispatchId}`);
-      return;
-    }
-    const x = runs.get(run) ?? { members: 0, quiet: 0, lastAt: 0, dead: [], blind: false };
-    x.members += 1;
-    if (t.quiet) x.quiet += 1;
-    if (t.dead) x.dead.push(w.dispatchId);
-    if (t.blind) x.blind = true;
-    x.lastAt = Math.max(x.lastAt, t.lastAt ?? 0);
-    runs.set(run, x);
-  };
-
-  for (const w of dead) {
-    if (!recordedDead.has(w.dispatchId)) {
-      planned.push({
-        type: "worker_dead",
-        source: SOURCE,
-        payload: { reason },
-        entity: "dispatch",
-        entity_id: w.dispatchId,
-        target: w.taskId,
-        dedupe_key: key("worker_dead", w.dispatchId),
-      });
-    }
-    tally(w, { quiet: true, dead: true });
-  }
-
   const psByWorkspace = new Map((r.ps?.rows ?? []).map((row) => [row.worktreeId, row]));
-  for (const w of live.filter((x) => !dead.includes(x))) {
+  const seen = new Map<string, Seen>();
+  for (const w of all.values()) {
+    if (isDead(w)) {
+      if (!recordedDead.has(w.dispatchId)) {
+        planned.push({
+          type: "worker_dead",
+          source: SOURCE,
+          payload: { reason },
+          entity: "dispatch",
+          entity_id: w.dispatchId,
+          target: w.taskId,
+          dedupe_key: key("worker_dead", w.dispatchId),
+        });
+      }
+      seen.set(w.dispatchId, { quiet: true, lastAt: 0, dead: true, blind: false });
+      continue;
+    }
     const row = w.liveness === "live" && w.workspace ? psByWorkspace.get(w.workspace) : undefined;
     if (!row) {
       if (r.ps || w.liveness !== "live") unseen.push(`${w.dispatchId}: liveness ${w.liveness ?? "missing"}, no ps row`);
-      tally(w, { quiet: false, blind: true });
+      seen.set(w.dispatchId, { quiet: false, lastAt: 0, dead: false, blind: true });
       continue;
     }
     const a = sessionActivity(row, now);
@@ -129,18 +119,22 @@ function judgeWorkers(r: OrcaReads, now: number, c: MonitorConfig, planned: Plan
         dedupe_key: key("worker_stuck", w.dispatchId, String(a.lastAt)),
       });
     }
-    tally(w, { quiet, lastAt: a.kind === "active" ? a.lastAt : 0, blind: a.kind === "unseen" });
+    seen.set(w.dispatchId, { quiet, lastAt: a.kind === "active" ? a.lastAt : 0, dead: false, blind: a.kind === "unseen" });
   }
+  for (const [id, s] of Object.entries(r.shows)) if (!s) unseen.push(`worker-show ${id}`);
 
-  // A Run all of whose unfinished workers are dead or stuck. Any member not seen (no show, a blind
-  // session, a truncated list) means the Run's membership is unknown: zero action.
-  if (membersUnknown) {
-    if (r.workers.truncated) unseen.push("worker-list truncated");
-    return;
-  }
-  for (const [run, t] of runs) {
-    if (t.blind || t.members === 0 || t.quiet !== t.members) continue;
-    const episode = t.lastAt > 0 ? String(t.lastAt) : `dead-${[...t.dead].sort().join(",")}`;
+  // A Run all of whose unfinished workers are dead or stuck, judged from that Run's own member
+  // list. A list that failed or stopped short, or a member not seen, leaves only that Run unjudged.
+  for (const [run, members] of Object.entries(r.runs)) {
+    if (!members || members.truncated) {
+      unseen.push(`worker-list --run ${run}${members ? " truncated" : ""}`);
+      continue;
+    }
+    const ts = members.rows.filter(isUnfinished).map((w) => seen.get(w.dispatchId));
+    if (ts.length === 0 || ts.some((t) => !t || t.blind || !t.quiet)) continue;
+    const lastAt = Math.max(...ts.map((t) => t?.lastAt ?? 0));
+    const dead = members.rows.filter((w) => seen.get(w.dispatchId)?.dead).map((w) => w.dispatchId);
+    const episode = lastAt > 0 ? String(lastAt) : `dead-${dead.sort().join(",")}`;
     planned.push({ type: "run_stalled", source: SOURCE, payload: { run }, dedupe_key: key("run_stalled", run, episode) });
   }
 }

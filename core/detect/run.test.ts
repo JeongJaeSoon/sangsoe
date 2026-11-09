@@ -131,13 +131,47 @@ test("orca-monitor round over the recorded fake Orca reads without consuming mai
   };
   try {
     const r = await runMonitor("orca", deps(store, { orca: createOrcaAdapter(exec) }));
-    // The recording shows 2 of 9 Dispatches and answers every cursor with the same page: paging
-    // stops on the repeated cursor and the list stays truncated, so no Run is judged stalled.
-    assert.deepEqual(r.unseen, ["worker-list truncated"]);
-    assert.equal(calls.filter((c) => c === "orchestration worker-list").length, 2);
+    // The recording shows 2 of 9 Dispatches and answers every cursor, --run included, with the
+    // same page: paging stops on the repeated cursor, so the Run's membership stays unknown.
+    assert.deepEqual(r.unseen, ["worker-list truncated", "worker-list --run run_000000000001 truncated"]);
+    assert.equal(calls.filter((c) => c === "orchestration worker-list").length, 4);
     assert.ok(!r.planned.some((e) => e.type === "run_stalled"));
     const reads = ["worktree ps", "orchestration worker-list", "orchestration worker-show", "orchestration gate-list", "orchestration inbox"];
     assert.deepEqual([...new Set(calls)].sort(), [...reads].sort(), "only the read verbs, mail read through inbox");
+  } finally {
+    store.close();
+  }
+});
+
+test("orca-monitor pages a Run's own list to the end and judges it, whatever the global list's length", async () => {
+  const store = Store.open({ path: ":memory:" });
+  const base = createOrcaAdapter(createFakeOrca().exec);
+  const now = Date.parse("2026-11-10T12:00:00Z");
+  const w = (n: string, liveness = "gone") => ({ dispatchId: `ctx_${n}`, taskId: `task_${n}`, state: "ready", liveness, host: "local" });
+  const page = (rs: ReturnType<typeof w>[], nextCursor?: string) => ({
+    ok: true as const,
+    value: { rows: rs, nonLocal: { rows: 0, hostIds: [] }, omittedHostIds: [], truncated: nextCursor !== undefined, ...(nextCursor ? { nextCursor } : {}) },
+  });
+  const asked: string[] = [];
+  const orca = {
+    ...base,
+    workerList: async (a: { run?: string; cursor?: string }) => {
+      asked.push(`${a.run ?? "all"}:${a.cursor ?? "-"}`);
+      // The global list never ends (long history); run_a's members are split over two pages.
+      if (!a.run) return page([w("1")], `g${asked.length}`);
+      return a.cursor ? page([w("2")]) : page([w("1")], "r2");
+    },
+    workerShow: async (a: { dispatch: string }) => ({ ok: true as const, value: { dispatchId: a.dispatch, taskId: "t", runId: "run_a", state: "ready" } }),
+    gateList: async () => ({ ok: true as const, value: [] }),
+  } as typeof base;
+  try {
+    const r = await runMonitor("orca", deps(store, { orca, now: () => now }));
+    assert.deepEqual(asked, ["all:-", "all:g1", "all:g2", "run_a:-", "run_a:r2"], "three global pages, then run_a to its end");
+    assert.deepEqual(
+      r.planned.map((e) => e.dedupe_key),
+      ["worker_dead:ctx_1", "worker_dead:ctx_2", "run_stalled:run_a:dead-ctx_1%2Cctx_2"],
+    );
+    assert.ok(r.unseen.includes("worker-list truncated"));
   } finally {
     store.close();
   }

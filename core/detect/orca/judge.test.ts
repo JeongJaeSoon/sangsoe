@@ -37,8 +37,16 @@ const show = (n: string, run = "run_a"): WorkerShow => ({ dispatchId: `ctx_${n}`
 const ev = (type: string, payload: unknown, ts: number, target?: string): StoredEvent =>
   ({ seq: 1, ts: new Date(ts).toISOString(), type, source: "t", target: target ?? null, payload }) as unknown as StoredEvent;
 
+// Unless a test gives `runs`, each Run's member list is the listed workers its shows place in it.
 function reads(p: Partial<OrcaReads>): OrcaReads {
-  return { ps: rows([]), workers: rows([]), shows: {}, gates: {}, inbox: [], events: [], ...p };
+  const shows = p.shows ?? {};
+  const runs: Record<string, WorkerRow[]> = {};
+  for (const w of p.workers?.rows ?? []) {
+    const run = shows[w.dispatchId]?.runId;
+    if (run) runs[run] = [...(runs[run] ?? []), w];
+  }
+  const derived = Object.fromEntries(Object.entries(runs).map(([k, v]) => [k, rows(v)]));
+  return { ps: rows([]), workers: rows([]), shows, runs: derived, gates: {}, inbox: [], events: [], ...p };
 }
 const types = (r: { planned: { type: string }[] }) => r.planned.map((e) => e.type);
 
@@ -123,11 +131,41 @@ test("run_stalled only when every unfinished worker of the Run is dead or stuck,
   assert.deepEqual(types(judgeOrca(reads({ ps: rows([quiet, busy]), workers: w, shows }), NOW, C)), ["worker_stuck"]);
   const blindSibling = rows([worker("1"), worker("2", { liveness: "unverifiable" })]);
   assert.deepEqual(types(judgeOrca(reads({ ps: rows([quiet]), workers: blindSibling, shows }), NOW, C)), ["worker_stuck"]);
-  const noShow = judgeOrca(reads({ ps: rows([quiet, busy]), workers: w, shows: { ctx_1: show("1"), ctx_2: null } }), NOW, C);
+  // The Run's own list holds the busy member even though its show failed.
+  const noShow = judgeOrca(reads({ ps: rows([quiet, busy]), workers: w, shows: { ctx_1: show("1"), ctx_2: null }, runs: { run_a: w } }), NOW, C);
   assert.deepEqual(types(noShow), ["worker_stuck"]);
   assert.ok(noShow.unseen.includes("worker-show ctx_2"));
-  const cut = judgeOrca(reads({ ps: rows([quiet]), workers: { ...rows([worker("1")]), truncated: true }, shows: { ctx_1: show("1") } }), NOW, C);
+  const cut = judgeOrca(reads({ ps: rows([quiet]), workers: rows([worker("1")]), shows: { ctx_1: show("1") }, runs: { run_a: { ...rows([worker("1")]), truncated: true } } }), NOW, C);
   assert.deepEqual(types(cut), ["worker_stuck"]);
+  assert.ok(cut.unseen.includes("worker-list --run run_a truncated"));
+  const failed = judgeOrca(reads({ ps: rows([quiet]), workers: rows([worker("1")]), shows: { ctx_1: show("1") }, runs: { run_a: null } }), NOW, C);
+  assert.deepEqual(types(failed), ["worker_stuck"]);
+});
+
+test("a member found only through its Run's list is judged, and a long global list does not blind other Runs", () => {
+  const quiet = (id: string) => ps(id, { lastOutputAt: ago(45), agents: [agent({})] });
+  // ctx_1 is on the global page; its sibling ctx_9 is far back in history, seen only via --run.
+  const global = { ...rows([worker("1"), worker("2")]), truncated: true };
+  const shows = { ctx_1: show("1"), ctx_2: show("2", "run_b") };
+  const r = judgeOrca(
+    reads({
+      ps: rows([quiet("ws_1"), quiet("ws_2"), ps("ws_9", { lastOutputAt: ago(1), agents: [agent({})] })]),
+      workers: global,
+      shows,
+      runs: { run_a: rows([worker("1"), worker("9")]), run_b: rows([worker("2")]) },
+    }),
+    NOW,
+    C,
+  );
+  assert.deepEqual(
+    r.planned.map((e) => [e.type, e.entity_id ?? (e.payload as { run: string }).run]),
+    [
+      ["worker_stuck", "ctx_1"],
+      ["worker_stuck", "ctx_2"],
+      ["run_stalled", "run_b"],
+    ],
+    "run_a has a busy member only its own list shows; run_b is judged despite the truncated global list",
+  );
 });
 
 test("run_stalled of a Run whose workers all died re-arms when a new set dies", () => {
