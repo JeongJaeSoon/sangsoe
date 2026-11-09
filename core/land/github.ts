@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Exec } from "../contract/orca.ts";
 import type { GhClient, GhResponse } from "../gh/client.ts";
 import type { DiffFile, TierLabel } from "../verify/verify-tier.ts";
 
@@ -110,6 +111,96 @@ export async function approvedAndGreen(
     all.length === runs.data.total_count &&
     all.every((c) => c.status === "completed" && ["success", "neutral", "skipped"].includes(c.conclusion ?? ""));
   return { kind: "ok", data: green };
+}
+
+export type CheckState = "pass" | "pending" | "fail";
+export type PrGate = {
+  headSha: string;
+  unresolvedThreads: number;
+  checks: { name: string; required: boolean; state: CheckState }[];
+};
+
+// One page each; a second page is unreadable rather than half-read.
+const GATE_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      headRefOid
+      reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
+      commits(last: 1) { nodes { commit { oid statusCheckRollup { contexts(first: 100) {
+        pageInfo { hasNextPage }
+        nodes {
+          __typename
+          ... on CheckRun { name status conclusion isRequired(pullRequestNumber: $number) }
+          ... on StatusContext { context state isRequired(pullRequestNumber: $number) }
+        }
+      } } } } }
+    }
+  }
+}`;
+
+const PASS = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
+
+/**
+ * Decision 158's GraphQL read: `isRequired` answers which checks are required without the
+ * Administration permission branch protection needs (it reads 403 with a plain token).
+ */
+export function parsePrGate(stdout: string): Read<PrGate> {
+  const no = (why: string): Read<PrGate> => ({ kind: "unreadable", why: `PR gate: ${why}` });
+  let doc: unknown;
+  try {
+    doc = JSON.parse(stdout);
+  } catch {
+    return no("not JSON");
+  }
+  // biome-ignore lint/suspicious/noExplicitAny: walked field by field below, each one checked
+  const pull = (doc as any)?.data?.repository?.pullRequest;
+  if (typeof pull?.headRefOid !== "string") return no("no head");
+  const threads = pull.reviewThreads;
+  if (!Array.isArray(threads?.nodes) || threads.pageInfo?.hasNextPage !== false) return no("review threads unreadable or paged");
+  if (!threads.nodes.every((t: { isResolved?: unknown }) => typeof t?.isResolved === "boolean")) return no("a thread without isResolved");
+  const commit = pull.commits?.nodes?.[0]?.commit;
+  if (commit?.oid !== pull.headRefOid) return no("last commit is not the head");
+  const checks: PrGate["checks"] = [];
+  const contexts = commit.statusCheckRollup?.contexts;
+  if (commit.statusCheckRollup != null) {
+    if (!Array.isArray(contexts?.nodes) || contexts.pageInfo?.hasNextPage !== false) return no("checks unreadable or paged");
+    for (const c of contexts.nodes) {
+      if (typeof c?.isRequired !== "boolean") return no("a check without isRequired");
+      if (c.__typename === "CheckRun" && typeof c.name === "string" && typeof c.status === "string") {
+        const state: CheckState = c.status !== "COMPLETED" ? "pending" : PASS.has(String(c.conclusion)) ? "pass" : "fail";
+        checks.push({ name: c.name, required: c.isRequired, state });
+      } else if (c?.__typename === "StatusContext" && typeof c.context === "string" && typeof c.state === "string") {
+        const state: CheckState = c.state === "SUCCESS" ? "pass" : c.state === "PENDING" || c.state === "EXPECTED" ? "pending" : "fail";
+        checks.push({ name: c.context, required: c.isRequired, state });
+      } else {
+        return no(`unknown check ${String(c?.__typename)}`);
+      }
+    }
+  }
+  const unresolvedThreads = threads.nodes.filter((t: { isResolved: boolean }) => !t.isResolved).length;
+  return { kind: "ok", data: { headSha: pull.headRefOid, unresolvedThreads, checks } };
+}
+
+export function readPrGate(exec: Exec): (a: { repo: string; pr: number }) => Promise<Read<PrGate>> {
+  return async ({ repo, pr }) => {
+    const [owner = "", name = ""] = repo.split("/");
+    const r = await exec("gh", ["api", "graphql", "-F", `owner=${owner}`, "-F", `name=${name}`, "-F", `number=${pr}`, "-f", `query=${GATE_QUERY}`]);
+    if (r.code !== 0) return { kind: "unreadable", why: `PR gate: gh exited ${r.code ?? r.failure}: ${r.stderr.trim().slice(0, 200)}` };
+    return parsePrGate(r.stdout);
+  };
+}
+
+export type MergeMethod = "squash" | "merge" | "rebase";
+type RepoMeta = { allow_squash_merge?: boolean; allow_merge_commit?: boolean; allow_rebase_merge?: boolean };
+
+/** The repo's first allowed method of squash, merge, rebase; unreadable when none is. */
+export async function mergeMethod(gh: GhClient, repo: string): Promise<Read<MergeMethod>> {
+  const r = lift<RepoMeta>(await gh.get(`repos/${repo}`), repo);
+  if (r.kind !== "ok") return r;
+  if (r.data.allow_squash_merge === true) return { kind: "ok", data: "squash" };
+  if (r.data.allow_merge_commit === true) return { kind: "ok", data: "merge" };
+  if (r.data.allow_rebase_merge === true) return { kind: "ok", data: "rebase" };
+  return { kind: "unreadable", why: `${repo}: no merge method allowed` };
 }
 
 type Compare = { status?: string; files?: PrFile[] };
