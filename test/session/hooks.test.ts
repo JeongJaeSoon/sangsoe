@@ -219,4 +219,6 @@ test("mask hides credentials and keeps a pasted git sha", () => {
   const out = mask(`password=hunter2 Authorization: Bearer abc.def sk-ABCDEFGHIJKLMNOPQRSTUVWX ${sha}`);
   assert.ok(!/hunter2|abc\.def|sk-ABC/.test(out), out);
   assert.ok(out.includes(sha));
+  const env = mask(["DB", "PASSWORD=hunter3 APP", "SECRET: s3cr"].join("_"));
+  assert.ok(!/hunter3|s3cr/.test(env), env);
 });

@@ -10,7 +10,8 @@ const PATTERNS: readonly RegExp[] = [
 ];
 // A long opaque run is masked unless it is plain hex (a git sha the owner pasted).
 const OPAQUE = /\b[A-Za-z0-9+_-]{40,}={0,2}/g;
-const ASSIGNED = /\b(password|passwd|secret|token|api[_-]?key|authorization)(\s*[:=]\s*|\s+)(bearer\s+)?("[^"]*"|'[^']*'|\S+)/gi;
+// Not \b: an env name such as DB_PASSWORD has no word boundary before the keyword.
+const ASSIGNED = /(?<![A-Za-z0-9])(password|passwd|secret|token|api[_-]?key|authorization)(\s*[:=]\s*|\s+)(bearer\s+)?("[^"]*"|'[^']*'|\S+)/gi;
 
 export const MASK = "[masked]";
 

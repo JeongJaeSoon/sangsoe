@@ -54,13 +54,19 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   const run = held ?? before;
   if (held) lines.push(`Run ${held} 을 쥐고 있다(run-current).`);
   else if (before && role !== "worker") lines.push(`run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use ${before}`);
-  if (run) lines.push(...(await lastHandoff(deps, run, input.session_id)));
+  // Every read comes before the first `notified` row, so a failure while reading marks nothing delivered.
+  const handoff = run ? await lastHandoff(deps, run, input.session_id) : undefined;
+  const late = loc ? lateAnswers(deps, loc.task, input.session_id) : [];
+  if (handoff) lines.push(...handoff());
   if (opts.pluginVersion && opts.pluginVersion !== VERSION) {
     lines.push(`sangsoe 버전 어긋남: Claude Code plugin ${opts.pluginVersion} ≠ 코어 ${VERSION}. 오너에게 sangsoe install 을 알린다.`);
   }
-  if (loc) lines.push(...lateAnswers(deps, loc.task, input.session_id));
+  for (const deliver of late) lines.push(...deliver());
   return lines;
 }
+
+/** A line to inject, written as `notified` only when it is taken; empty when it already rode once. */
+type Delivery = () => string[];
 
 /** The Run an earlier session of the same Task (or, without a Task, the same role) held. */
 function previous(deps: CoreDeps, role: Role, loc: Located | undefined): string | undefined {
@@ -69,37 +75,39 @@ function previous(deps: CoreDeps, role: Role, loc: Located | undefined): string 
   return same.reverse().find((r) => r.heldRun)?.heldRun;
 }
 
-async function lastHandoff(deps: CoreDeps, run: string, session: string): Promise<string[]> {
+async function lastHandoff(deps: CoreDeps, run: string, session: string): Promise<Delivery | undefined> {
   const box = await deps.orca.inbox({ terminal: `run:${run}`, limit: 50 });
-  if (!box.ok) return [];
+  if (!box.ok) return undefined;
   const last = box.value.filter((m) => m.type === "handoff").at(-1);
-  if (!last?.body) return [];
-  const r = deps.store.append({
-    type: "notified",
-    source: SOURCE,
-    target: run,
-    dedupe_key: `notify:${dedupeSegment(run)}:handoff:${dedupeSegment(last.id)}`,
-    payload: { msg_id: last.id, to: `session:${session}`, msg_type: "handoff" },
-  });
-  return r.inserted ? [`인계(handoff ${last.id}, 한 번만 싣는다):`, last.body] : [];
-}
-
-/** Decision 91④(i): an answer this Task waited on and was never told, under U8's key, so it rides once. */
-function lateAnswers(deps: CoreDeps, task: string, session: string): string[] {
-  const events = deps.store.events();
-  const rows = decisionView({ orca: { tasks: [], gates: [] }, events, now: "1970-01-01T00:00:00Z" });
-  const out: string[] = [];
-  for (const d of rows) {
-    if (d.closedReason !== "answered" || d.answer === null || !d.waiters.some((w) => w.task === task)) continue;
-    const key = answerNotifiedKey(d.decision, task);
+  const body = last?.body;
+  if (!last || !body) return undefined;
+  return () => {
     const r = deps.store.append({
       type: "notified",
       source: SOURCE,
-      target: key.target,
-      dedupe_key: key.dedupe_key,
-      payload: { msg_id: `inject:${session}`, to: `session:${session}`, msg_type: "decision_gate" },
+      target: run,
+      dedupe_key: `notify:${dedupeSegment(run)}:handoff:${dedupeSegment(last.id)}`,
+      payload: { msg_id: last.id, to: `session:${session}`, msg_type: "handoff" },
     });
-    if (r.inserted) out.push(`늦게 도착한 답(결정 91 ④): ${d.decision}: ${d.answer}`);
-  }
-  return out;
+    return r.inserted ? [`인계(handoff ${last.id}, 한 번만 싣는다):`, body] : [];
+  };
+}
+
+/** Decision 91④(i): an answer this Task waited on and was never told, under U8's key, so it rides once. */
+function lateAnswers(deps: CoreDeps, task: string, session: string): Delivery[] {
+  const events = deps.store.events();
+  const rows = decisionView({ orca: { tasks: [], gates: [] }, events, now: "1970-01-01T00:00:00Z" });
+  return rows
+    .filter((d) => d.closedReason === "answered" && d.answer !== null && d.waiters.some((w) => w.task === task))
+    .map((d) => () => {
+      const key = answerNotifiedKey(d.decision, task);
+      const r = deps.store.append({
+        type: "notified",
+        source: SOURCE,
+        target: key.target,
+        dedupe_key: key.dedupe_key,
+        payload: { msg_id: `inject:${session}`, to: `session:${session}`, msg_type: "decision_gate" },
+      });
+      return r.inserted ? [`늦게 도착한 답(결정 91 ④): ${d.decision}: ${d.answer}`] : [];
+    });
 }
