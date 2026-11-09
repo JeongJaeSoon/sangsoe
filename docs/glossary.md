@@ -41,6 +41,7 @@
 | verify_tier_set | 등급이 정해지거나 바뀐 때 pr-monitor 가 쓰는 event({pr, head_sha, computed, requested, effective, actor, accepted, reason, owner_action_ref?}). 라벨 이벤트와 새 push 로 계산값이 바뀔 때 쓴다. 오너가 말로 바꾼 경우 `owner_action_ref` 가 그 `owner_action` 을 가리킨다. 현재 등급은 이 event 에서 읽는 뷰이고 사본 표는 없다 | `verify_tier_set` | — |
 | evidence_missing | 등급이 요구하는 증거가 그 head 에 없거나, 종료 코드가 0 이 아니거나, `not_verified` 칸이 비어 있어 land 판정 함수의 증거 점검이 실패한 사유. `land_failed` 의 사유로 `evidence_missing:<kind>` 로 쓰고 머지 예약도 `merge_on_approval` 도 만들지 않는다 | `evidence_missing` | — |
 | 승인되면 머지 | 조건 넷 중 하나가 거짓이라 머지를 예약하지 않고 남기는 표시. `land_requested` 의 사유 `merge_on_approval` 이고 머지 대기 보고에도 같은 말을 적어 Orca Task 에 남긴다. 승인과 필수 검사가 차면 pr-monitor 가 소유 리드를 깨우고 리드가 land 요청으로 머지한다 | `merge_on_approval` | 오너 머지 대기 |
+| 판정으로 머지 | 설정 `verdict_merge_repos` 에 든 저장소에서 GitHub 승인 대신 그 head 에 기록된 독립 리뷰 판정을 세어 바로 머지한 것. `land_requested` 의 사유 `verdict_approved` 다. V3·보호 경로는 여기서도 승인되면 머지다(결정 158) | `verdict_approved` · `verdict_merge_repos` | 셀프 승인 |
 | 머지 예약 | 조건 넷이 참인 PR 에 건 자동 머지. 사람 승인과 CI 가 차면 GitHub 이 머지한다. 머지됐다는 사실은 pr-monitor 가 머지 확인 뒤 `pr_merged` 로 쓴다 | `gh pr merge --auto` | — |
 | 머지 대기 보고 | land 요청을 마친 PR 작성자가 `worker_done` 대신 보내는 Orca 메시지(`send --type merge_ready`). 작성자는 이것으로 끝나지만 Task 는 닫히지 않고 🚧 막힘(리뷰어)로 머지 확인까지 열려 있다. 보고에는 PR 과 "예약함"·"승인되면 머지" 중 하나를 적는다 | `merge_ready` | 완료 보고(PR 항목에는) |
 | 머지 확인 | pr-monitor 가 (가) GitHub 이 그 PR 을 머지로 표시하고 (나) 그 머지 커밋이 main 에 들어 있음을 읽은 것. 둘이 모두 참일 때만 `pr_merged` 를 쓰고, 같은 라운드에서 그 항목의 Task 를 `completed` 로 닫는다. PR 이 걸린 항목을 sangsoe 가 닫는 유일한 경우다 | `pr_merged` | 머지됨 알림(머지 확인 없이) |
@@ -63,7 +64,7 @@
 | 🔄 진행 중 | 살아 있는 워커나 리드가 goal 을 걸고 쥐고 있다. 결정이 풀려 Orca 상태가 `ready` 가 됐어도 활성 Dispatch 가 있으면(워커가 아직 쥐고 있으면) 🟢 가 아니라 🔄 다 | `in_progress` | 작업 중, 실행 중 |
 | 🚧 막힘 | 시작했으나 누군가 없이는 못 간다. 기다리는 쪽을 괄호에 적는다. 리뷰 대기도 막힘이다 | `blocked` | 대기, 리뷰 중, 정지 |
 | ⏸️ 보류 | 일부러 지금 안 한다. 재검토 trigger 가 있다 | `parked` | 연기, 나중에 |
-| ✅ 완료 | Orca Task 가 `completed` 다. PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로 `completed` 가 된다. 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
+| ✅ 완료 | Orca Task 가 `completed` 다. PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로, 오너 항목은 오너의 완료 버튼으로 `completed` 가 된다. `close_suggested` 는 닫기 제안이지 완료가 아니고, REAPER 의 끝남 판정은 카드를 치워도 되는지이지 항목 상태가 아니다(결정 161). 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
 | 🗑️ 취소 | 하지 않기로 했다. 이유가 필수다 | `canceled` | 폐기, 삭제 |
 
 ## 3. 플래그 (상태 위에 0개 이상)
@@ -288,6 +289,8 @@
 | | 오너 말과 분류 | `owner_action` · `owner_class` | — |
 | | 원문 지우기 | `owner_text_redacted` | — |
 | 저장소 단위 기록 | 머지·main 상태를 저장소마다 하나로 쌓는 event 묶음 | `land_*` · `main_*` | — |
+| plugin 승인 기록 | `sangsoe plugin approve` 가 `orca plugin enable` 에 성공한 뒤에만 쓰는 줄. Orca 의 승인 상태를 복사하지 않고 sangsoe 가 승인했다는 사실만 남긴다(결정 104) | `plugin_approved` | — |
+| 리뷰 판정 | 독립 리뷰 하나가 PR head 하나에 낸 판정(Act-on 수 · 리뷰어 · 작성자). 쓰는 곳은 `sangsoe review record` 하나다(결정 111) | `review_verdict` | 리뷰 통과 표시 |
 | event 칸 | 한 줄의 칸 | `seq` · `ts` · `type` · `source` · `target` · `subject` · `entity` · `entity_id` · `actor` · `needs` · `severity` · `dedupe_key` · `before` · `after` · `schema_v` | by |
 | `needs` 값 | 누구를 깨우나: 기록만·스크립트나 지정 수행자·에이전트 | `none` · `action` · `judgment` | — |
 
@@ -401,6 +404,13 @@
 | item new | 항목 하나를 만든다 | `sangsoe item new` | — |
 | priority | 우선순위를 정한다 | `sangsoe priority set` | — |
 | owner-text redact | 원문을 지운다(오너 승인 필요) | `sangsoe owner-text redact` | — |
+| hook | Claude Code hook 의 입구. PreToolUse 한 번의 게이트 판정이나 기록 hook 하나를 표준 입력으로 받는다. `--replay` 는 실제 명령 모음으로 게이트를 잰다 | `sangsoe hook` | — |
+| monitor run | monitor 라운드 한 번. Orca plugin worker 의 타이머와 같은 함수다. `--dry-run` 은 쓸 event 와 Orca 쓰기를 보이기만 한다 | `sangsoe monitor run` | — |
+| reap run | REAPER 라운드 한 번(표시 → 정리). `--dry-run`·`--mark-only` 는 아무것도 지우지 않는다 | `sangsoe reap run` | — |
+| resource record | 막 만든 Docker id(또는 compose 프로젝트의 id 전부)를 소유자와 함께 `resource` 로 남긴다. MCP `resource_record` 와 같은 함수다 | `sangsoe resource record` | — |
+| review record | 독립 리뷰 판정 하나를 `review_verdict` 로 남긴다(결정 111). 리뷰어가 작성자이면 거부한다 | `sangsoe review record` | — |
+| migrate | 옛 저장소의 열린 항목·결정을 한 번 가져온다. 옛 DB 는 읽기만 하고 `--apply` 없이는 쓰지 않는다(결정 140) | `sangsoe migrate` | — |
+| version | 버전을 출력한다(`--version` 과 같다) | `sangsoe version` | — |
 | `--help` | 도움말. 아무것도 바꾸지 않는다 | `--help` | — |
 | `--done` | 접힌 완료 목록을 펼친다 | `--done` | — |
 | `--dry-run` | 펼치기·적용 전 미리보기 | `--dry-run` | — |

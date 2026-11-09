@@ -1,7 +1,7 @@
 <!-- layout: slot=③ layer=판단 tokens=using -->
 # claude-plugin/skills/general — 일반 작업 스킬 · 판단 · 토큰 O
 
-sangsoe 의 역할·상태에 기대지 않는 일반 작업 스킬을 둔다(결정 95, `docs/decisions-impl/0095-general-skills-in-plugin.md`). 한 스킬이 한 폴더이고, 폴더마다 `SKILL.md`, 필요하면 `references/`, 발동 평가 `evals/` 가 있다. 코드 파일은 두지 않는다: 원본의 스크립트가 하던 확인은 본문의 점검 목록이나 명령 한 줄로 옮겼다.
+sangsoe 의 역할·상태에 기대지 않는 일반 작업 스킬을 둔다(`docs/decisions.md` 결정 95). 한 스킬이 한 폴더이고, 폴더마다 `SKILL.md`, 필요하면 `references/`, 발동 평가 `evals/` 가 있다. 코드 파일은 두지 않는다: 원본의 스크립트가 하던 확인은 본문의 점검 목록이나 명령 한 줄로 옮겼다.
 
 평가는 스킬 폴더를 plugin 대상으로 삼아 돌린다(`claude plugin eval --eval-dir` 는 `skills/` 아래를 거부한다):
 
