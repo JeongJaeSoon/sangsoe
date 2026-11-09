@@ -96,7 +96,7 @@ export function install(host: Host, root: string): Outcome {
   return { code: d.code, lines: [...lines, "", "sangsoe doctor:", ...d.lines] };
 }
 
-export function uninstall(host: Host, root: string): Outcome {
+export function uninstall(host: Host): Outcome {
   const lines: string[] = [];
   let code = 0;
   const step = (cmd: string, label: string, args: string[]) => {
@@ -125,10 +125,8 @@ export function uninstall(host: Host, root: string): Outcome {
   // Decided from Orca's own list, not the tree: an older tree may have loaded a plugin this one lacks.
   const orca = listOrcaPlugins(host);
   const loaded = orca && sangsoeOrca(orca);
-  if (!orca) {
-    if (host.exists(orcaManifest(root))) unreadable("orca", "plugin list --json");
-    else lines.push("orca: skipped — Orca's plugin list is unreadable and this build carries no Orca plugin");
-  } else if (loaded?.isDev) {
+  if (!orca) unreadable("orca", "plugin list --json");
+  else if (loaded?.isDev) {
     step("orca", `unloaded ${loaded.pluginKey}`, ["plugin", "dev", "unload", loaded.pluginKey, "--json"]);
   } else lines.push("orca: no sangsoe development plugin loaded");
   lines.push("kept: ~/.local/share/sangsoe (data) and ~/.config/sangsoe (settings); `brew uninstall sangsoe` removes the tree");

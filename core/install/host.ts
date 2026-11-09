@@ -68,8 +68,11 @@ export const userPlugin = (plugins: readonly ClaudePlugin[] | undefined) =>
 export type OrcaPlugin = { pluginKey: string; version?: string; status?: string; isDev?: boolean; needsReconsent?: boolean };
 export const listOrcaPlugins = (host: Host) =>
   json<{ result?: { plugins?: OrcaPlugin[] } }>(host.run("orca", ["plugin", "list", "--json"]))?.result?.plugins;
-export const sangsoeOrca = (plugins: readonly OrcaPlugin[]) =>
-  plugins.find((x) => x.pluginKey === "sangsoe" || x.pluginKey.endsWith(".sangsoe"));
+// A dev load overrides an installed plugin with the same key, so a dev entry wins whatever the order.
+export function sangsoeOrca(plugins: readonly OrcaPlugin[]): OrcaPlugin | undefined {
+  const ours = plugins.filter((x) => x.pluginKey === "sangsoe" || x.pluginKey.endsWith(".sangsoe"));
+  return ours.find((x) => x.isDev) ?? ours[0];
+}
 
 // A list we could not read is not an empty list: acting on it would add twice or report a false removal.
 export const UNREADABLE = (what: string) => `cannot read \`${what}\`, so this step was not done`;

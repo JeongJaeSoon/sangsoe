@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { test } from "node:test";
 import { doctor } from "./doctor.ts";
-import { type Host, type Marketplace, type RunResult, treeRoot } from "./host.ts";
+import { type Host, type Marketplace, type RunResult, sangsoeOrca, treeRoot } from "./host.ts";
 import { install, uninstall } from "./install.ts";
 
 const ROOT = "/opt/homebrew/opt/sangsoe/libexec";
@@ -119,7 +119,7 @@ test("uninstall removes the three registrations and keeps data", () => {
   const { host, calls, state } = fakeHost({ orcaManifest: true });
   install(host, ROOT);
   calls.length = 0;
-  const r = uninstall(host, ROOT);
+  const r = uninstall(host);
   assert.equal(r.code, 0, r.lines.join("\n"));
   assert.deepEqual(writes(calls), [
     "claude plugin uninstall sangsoe@sangsoe --scope user --keep-data",
@@ -132,7 +132,7 @@ test("uninstall removes the three registrations and keeps data", () => {
 
 test("uninstall with nothing registered changes nothing", () => {
   const { host, calls } = fakeHost();
-  const r = uninstall(host, ROOT);
+  const r = uninstall(host);
   assert.equal(r.code, 0);
   assert.deepEqual(writes(calls), []);
 });
@@ -176,15 +176,30 @@ test("an unreadable plugin list stops install before installing anything", () =>
 
 test("uninstall fails, not succeeds, when it cannot read what is registered", () => {
   const { host } = fakeHost({ fail: "claude plugin list" });
-  const r = uninstall(host, ROOT);
+  const r = uninstall(host);
   assert.equal(r.code, 1);
   assert.match(r.lines.join("\n"), /cannot read `plugin list --json`/);
 });
 
 test("uninstall unloads a sangsoe dev plugin even when this tree has no Orca manifest", () => {
   const { host, calls } = fakeHost({ state: { orca: true } });
-  uninstall(host, ROOT);
+  uninstall(host);
   assert.ok(calls.includes("orca plugin dev unload local.sangsoe --json"));
+});
+
+test("uninstall fails when Orca's plugin list is unreadable, manifest or not", () => {
+  const { host } = fakeHost({ fail: "orca plugin list" });
+  const r = uninstall(host);
+  assert.equal(r.code, 1);
+  assert.match(r.lines.join("\n"), /^orca: cannot read/m);
+});
+
+test("the sangsoe dev load is picked even when an installed sangsoe is listed first", () => {
+  const installed = { pluginKey: "acme.sangsoe", isDev: false };
+  const dev = { pluginKey: "local.sangsoe", isDev: true };
+  assert.equal(sangsoeOrca([installed, dev]), dev);
+  assert.equal(sangsoeOrca([installed]), installed);
+  assert.equal(sangsoeOrca([{ pluginKey: "acme.other", isDev: true }]), undefined);
 });
 
 test("doctor reports a malformed manifest as FAIL instead of throwing", () => {

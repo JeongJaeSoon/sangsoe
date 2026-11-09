@@ -20,7 +20,7 @@ export function run(argv: readonly string[], host: Host = realHost): { code: num
   const only = (...allowed: string[]) => [...flags].every((f) => allowed.includes(f));
   const done = (o: { code: number; lines: string[] }) => ({ code: o.code, out: o.lines.join("\n") });
   if (cmd === "install" && only()) return done(install(host, treeRoot(host)));
-  if (cmd === "uninstall" && only()) return done(uninstall(host, treeRoot(host)));
+  if (cmd === "uninstall" && only()) return done(uninstall(host));
   if (cmd === "doctor" && only("--offline")) {
     return done(doctor(host, treeRoot(host), { offline: flags.has("--offline") }));
   }
