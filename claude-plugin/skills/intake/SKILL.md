@@ -29,7 +29,7 @@ description: "Use when the sangsoe orchestrator receives an owner's message and 
 1. `owner_class` 를 쓴다: 그 `owner_action` 의 seq 와 갈래. seq 는 오너 발언 hook 이 맥락에 붙인 값이다. 없으면 지어내지 않고 분류 없이 갈래만 진행한다. 분류가 틀렸으면 새 `owner_class` 를 쓴다. 뷰는 마지막 줄을 따른다.
 2. 갈래의 tool 을 부른다.
    - 새 일: `item_create`(네 `runId`, `spec` 은 `write-brief` skill 로, `who`, `doneWhen` 한 줄, 알려진 `deps`). 준비되면 `start` skill.
-   - 시각·조건 대기: PR 조건은 `item_create` 의 `deps`, 또는 뒤에 `edge_add`(`blocks`·`after`). 선행 없이 만든 항목은 바로 준비되므로, 날짜·글 조건은 `item_trigger` 로 trigger 를 단 뒤에만 시작 대상이 된다.
+   - 시각·조건 대기: PR 조건은 같은 Run 의 Task 면 `item_create` 의 `deps`, 아니면 뒤에 `edge_add`(`blocks`·`after`). 날짜 조건은 📅 예정으로 `item_trigger` 에 시작 trigger 를 단다. 글로만 된 조건은 ⏸️ 보류로 `item_trigger` 에 재검토 trigger 를 단다. 선행 없는 항목은 만들자마자 준비 상태로 보이니, 그 trigger 가 오기 전에는 누구도 시작하지 않는다.
    - 진행 중인 일의 범위: `notify` 에 그 항목과 오너의 말 요지. 범위가 브리프의 승인 줄 밖으로 커지면 결정을 연다.
 3. 오너에게 한두 문장으로 답한다: 무엇으로 갈랐고 어디로 갔는지.
 

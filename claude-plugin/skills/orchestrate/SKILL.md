@@ -58,7 +58,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 ## 결정과 오너
 
-- 오너에게 묻는 것은 `decision_open` 하나로 한다: `question`(추천과 이유도 이 글에), `options`, 기다리는 Task 는 `waiters`. 같은 결정 키가 닫혀 있으면 기존 답이 돌아오니 다시 묻지 않는다.
+- 오너에게 묻는 것은 `decision_open` 하나로 한다: `subject`(`item:iNNN` 또는 `scope:<group>`), `question`(추천과 이유도 이 글에), `options`, 기다리는 Task 는 `waiters`(`{task, run}`). 결정 키는 `subject` 와 `options` 다. 같은 결정 키가 닫혀 있으면 기존 답이 돌아오니 다시 묻지 않는다.
 - 답을 기다리는 동안 할 수 있는 일은 계속한다. 답이 없다고 기본값을 적용하지 않는다.
 - 오너의 답은 `decision_answer` 가 결정을 닫고, 게이트를 풀고, 기다리던 워커를 한 번 깨운다. 다시 불러도 같다.
 
