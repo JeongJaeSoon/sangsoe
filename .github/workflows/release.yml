@@ -78,6 +78,10 @@ jobs:
           SANGSOE_ROOT="$PWD/smoke/package" node smoke/package/dist/cli/main.js doctor --offline
           commit="$(node --input-type=module -e "import { resolveCommit } from '$PWD/smoke/package/dist/core/index.js'; console.log(await resolveCommit('$PWD/smoke/package/orca-plugin'))")"
           test "$commit" = "$GITHUB_SHA"
+          # Decision 152: the worker's core rides inside the approved folder, byte-equal to the tagged tree.
+          test -f smoke/package/orca-plugin/vendor/core/index.ts
+          cmp smoke/package/orca-plugin/vendor/package.json package.json
+          test ! -e orca-plugin/vendor
 
       - name: Publish the GitHub release
         env:

@@ -20,6 +20,7 @@ import {
   sangsoeOrca,
   UNREADABLE,
 } from "./host.ts";
+import { stageCore } from "./stage.ts";
 
 // `warn` and `notice` print their fix but leave the exit code alone, as at the start.
 export type Check =
@@ -143,7 +144,7 @@ function download(cmd: string, args: readonly string[]): Promise<Buffer> {
 }
 
 // The same tarball and trust root as approve's fetch, but bounded: a stalled gh must not hang doctor.
-async function fetchPluginTree(exec: Exec, commit: string): Promise<{ dir: string; dispose(): Promise<void> }> {
+async function fetchPluginTree(exec: Exec, commit: string, staged: boolean): Promise<{ dir: string; dispose(): Promise<void> }> {
   const root = await mkdtemp(join(tmpdir(), "sangsoe-doctor-"));
   const dispose = () => rm(root, { recursive: true, force: true });
   try {
@@ -152,6 +153,7 @@ async function fetchPluginTree(exec: Exec, commit: string): Promise<{ dir: strin
     if (tar.code !== 0) throw new Error(`tar: ${tar.stderr.trim()}`);
     const tops = (await readdir(root, { withFileTypes: true })).filter((d) => d.isDirectory());
     if (tops.length !== 1 || !tops[0]) throw new Error("unexpected tarball layout");
+    if (staged) await stageCore(join(root, tops[0].name));
     return { dir: join(root, tops[0].name, "orca-plugin"), dispose };
   } catch (e) {
     await dispose();
@@ -169,13 +171,18 @@ function parseJson(stdout: string): unknown {
 
 export function realPluginBuild(root: string, exec: Exec): PluginBuild {
   const dir = orcaPluginDir(root);
+  // HEAD's tree, not the index or the folder, so a removal (staged or not) still names its commit.
+  // A tree that is not such a checkout is a release, whose folder carries the core (decision 152).
+  let checkout: Promise<boolean> | undefined;
+  const isCheckout = () => {
+    checkout ??= exec("git", ["-C", root, "cat-file", "-e", "HEAD:./orca-plugin/orca-plugin.json"]).then((r) => r.code === 0);
+    return checkout;
+  };
   return {
     dir,
     async buildCommit() {
-      // HEAD's tree, not the index or the folder, so a removal (staged or not) still names its
-      // commit. Unlike approve, a dirty checkout still names HEAD: its edits are the drift to report.
-      const tracked = await exec("git", ["-C", root, "cat-file", "-e", "HEAD:./orca-plugin/orca-plugin.json"]);
-      const head = tracked.code === 0 ? await exec("git", ["-C", root, "rev-parse", "HEAD"]) : undefined;
+      // Unlike approve, a dirty checkout still names HEAD: its edits are the drift to report.
+      const head = (await isCheckout()) ? await exec("git", ["-C", root, "rev-parse", "HEAD"]) : undefined;
       if (head?.code === 0) return head.stdout.trim();
       return (
         (await resolveCommit(dir)) ?? {
@@ -198,7 +205,7 @@ export function realPluginBuild(root: string, exec: Exec): PluginBuild {
     },
     async fetchTree(commit) {
       try {
-        return await fetchPluginTree(exec, commit);
+        return await fetchPluginTree(exec, commit, !(await isCheckout()));
       } catch (e) {
         return { error: `${commit} 트리를 받지 못했다: ${e instanceof Error ? e.message : String(e)}`, fix: "gh auth status" };
       }

@@ -22,6 +22,7 @@ export { item_timeline } from "./store/views/item_timeline.ts";
 export { doctor, realCheckContext } from "./install/doctor.ts";
 export { type Host, realHost, treeRoot } from "./install/host.ts";
 export { install, type Outcome, uninstall } from "./install/install.ts";
+export { stageCore, unstageCore } from "./install/stage.ts";
 export { VERSION } from "./version.ts";
 export {
   type Exec as ApproveExec,
@@ -31,7 +32,7 @@ export {
   type PluginApproved,
   SANGSOE_REPO,
 } from "./approve/approve.ts";
-export { nodeExec as approveExec, nodePorts, resolveCommit } from "./approve/ports.ts";
+export { nodeExec as approveExec, isCheckout, nodePorts, resolveCommit } from "./approve/ports.ts";
 export { recordReviewVerdict, reviewEvidenceFrom } from "./approve/review-verdict.ts";
 
 export type { CoreDeps, Refusal, Result } from "./notify/result.ts";

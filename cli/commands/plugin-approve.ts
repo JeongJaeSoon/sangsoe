@@ -1,7 +1,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type ApprovePorts, type ApproveResult, approvePlugin, nodePorts, resolveCommit } from "../../core/index.ts";
+import { type ApprovePorts, type ApproveResult, approvePlugin, isCheckout, nodePorts, resolveCommit } from "../../core/index.ts";
 import type { CommandDef } from "../contract.ts";
 
 // The router has already rejected unknown options and handled --help; pluginApprove re-reads
@@ -82,6 +82,7 @@ export async function pluginApprove(
   const realDir = realpathSync(dir);
   const commit = p.commit ?? (await resolveCommit(realDir));
   if (!commit) return { code: 1, out: `cannot tell which commit ${dir} was built from (dirty checkout, no build-info.json); pass --commit` };
-  const r = await approvePlugin({ dir, realDir, commit, dryRun: p.dryRun }, ports);
+  const staged = !(await isCheckout(realDir));
+  const r = await approvePlugin({ dir, realDir, commit, staged, dryRun: p.dryRun }, ports);
   return { code: r.ok ? 0 : 1, out: render(r) };
 }
