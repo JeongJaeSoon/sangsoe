@@ -1,5 +1,5 @@
 // Periodic work in the plugin worker (decision 75 라): one Round per monitor, all on the worker's
-// own Node timers. No launchd, cron or Orca automation runs these.
+// own Node timers. No OS job scheduler, cron or Orca automation runs these.
 
 export type Clock = {
   now(): number;
