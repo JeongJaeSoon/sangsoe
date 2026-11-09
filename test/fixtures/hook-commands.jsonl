@@ -1,0 +1,76 @@
+{"expect":"deny","gate":"start","note":"fallback start","tool_name":"Bash","tool_input":{"command":"orca agent launch --agent claude --prompt \"fix the login bug\""}}
+{"expect":"deny","gate":"start","note":"worktree with a prompt","tool_name":"Bash","tool_input":{"command":"orca worktree create --repo acme/api --name feat-x --prompt \"build the export\""}}
+{"expect":"deny","gate":"start","note":"worktree with a prompt, = form","tool_name":"Bash","tool_input":{"command":"orca worktree create --repo acme/api --name feat-x --prompt=hello"}}
+{"expect":"deny","gate":"start","note":"worktree with an agent","tool_name":"Bash","tool_input":{"command":"orca worktree create --repo acme/api --name feat-x --agent claude"}}
+{"expect":"deny","gate":"start","note":"nohup claude in the background","tool_name":"Bash","tool_input":{"command":"nohup claude -p \"fix the bug\" > out.log 2>&1 &"}}
+{"expect":"deny","gate":"start","note":"claude -p backgrounded","tool_name":"Bash","tool_input":{"command":"claude -p \"fix the bug\" &"}}
+{"expect":"deny","gate":"start","note":"backgrounded and disowned","tool_name":"Bash","tool_input":{"command":"claude --dangerously-skip-permissions -p \"x\" & disown"}}
+{"expect":"deny","gate":"start","note":"nohup without &","tool_name":"Bash","tool_input":{"command":"nohup claude --resume abc"}}
+{"expect":"deny","gate":"start","note":"setsid","tool_name":"Bash","tool_input":{"command":"setsid claude -p \"x\""}}
+{"expect":"deny","gate":"start","note":"subshell background","tool_name":"Bash","tool_input":{"command":"(claude -p \"x\" &)"}}
+{"expect":"deny","gate":"start","note":"timeout wrapper, backgrounded","tool_name":"Bash","tool_input":{"command":"timeout 600 claude -p \"x\" &"}}
+{"expect":"deny","gate":"start","note":"Bash tool's own background run","tool_name":"Bash","tool_input":{"command":"claude -p \"review the diff\"","run_in_background":true}}
+{"expect":"deny","gate":"start","note":"unsupervised dispatch","tool_name":"Bash","tool_input":{"command":"orca orchestration dispatch --task task_1 --to run:run_1"}}
+{"expect":"deny","gate":"start","note":"direct worker-start","tool_name":"Bash","tool_input":{"command":"orca orchestration worker-start --task task_1 --worktree new-child --agent claude"}}
+{"expect":"deny","gate":"start","note":"after cd","tool_name":"Bash","tool_input":{"command":"cd /work/acme && orca agent launch --agent codex"}}
+{"expect":"deny","gate":"start","note":"bash -c wrapper","tool_name":"Bash","tool_input":{"command":"bash -c 'orca orchestration worker-start --task t --worktree new-child'"}}
+{"expect":"deny","gate":"start","note":"env and absolute path","tool_name":"Bash","tool_input":{"command":"env FOO=1 /opt/homebrew/bin/orca agent launch --agent claude"}}
+{"expect":"deny","gate":"start","note":"command substitution","tool_name":"Bash","tool_input":{"command":"echo started $(orca orchestration dispatch --task t)"}}
+{"expect":"deny","gate":"start","note":"interpreter one-liner","tool_name":"Bash","tool_input":{"command":"python3 -c \"import subprocess; subprocess.run(['orca','agent','launch','--agent','claude'])\""}}
+{"expect":"deny","gate":"start","note":"wrapped in a script file","tool_name":"Bash","tool_input":{"command":"sh ./start.sh"},"facts":{"scripts":{"/work/acme/start.sh":"#!/bin/sh\norca agent launch --agent claude\n"}}}
+{"expect":"deny","gate":"start","note":"script run by path","tool_name":"Bash","tool_input":{"command":"./bin/go.sh feat-x"},"facts":{"scripts":{"/work/acme/bin/go.sh":"nohup claude -p \"$1\" &\n"}}}
+{"expect":"deny","gate":"report-address","note":"send to a terminal handle","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to term_ab12cd --type escalation --subject x --body y"}}
+{"expect":"deny","gate":"report-address","note":"send to a handle, = form","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to=term_ab12cd --type status --subject x --body y"}}
+{"expect":"deny","gate":"report-address","note":"a brief reporting to a handle","tool_name":"mcp__plugin_sangsoe_sangsoe__start_unit","tool_input":{"role":"lead","worktreeId":"wt1","runId":"run_1","childRole":"worker","spec":"/goal fix it\nREPORT  orca orchestration send --to term_ab12cd --type worker_done"}}
+{"expect":"deny","gate":"sleep-loop","note":"foreground while loop","tool_name":"Bash","tool_input":{"command":"while true; do gh pr checks 5; sleep 30; done"}}
+{"expect":"deny","gate":"sleep-loop","note":"foreground until loop","tool_name":"Bash","tool_input":{"command":"until gh run view 1 --json status | grep -q completed; do sleep 20; done"}}
+{"expect":"deny","gate":"sleep-loop","note":"foreground for loop","tool_name":"Bash","tool_input":{"command":"for i in 1 2 3; do sleep 5; curl -s localhost:3000; done"}}
+{"expect":"deny","gate":"pressure","note":"compose up under warn","tool_name":"Bash","tool_input":{"command":"docker compose -p acme up -d"},"facts":{"load":"warn"}}
+{"expect":"deny","gate":"pressure","note":"plain worktree create under danger","tool_name":"Bash","tool_input":{"command":"orca worktree create --repo acme/api --name feat-x"},"facts":{"load":"danger"}}
+{"expect":"deny","gate":"pressure","note":"start_unit under danger","tool_name":"mcp__plugin_sangsoe_sangsoe__start_unit","tool_input":{"role":"lead","worktreeId":"wt1","runId":"run_1","childRole":"worker","task":"task_1"},"facts":{"load":"danger"}}
+{"expect":"deny","gate":"delegate","note":"orchestrator edits code","agent_type":"sangsoe:orchestrator","tool_name":"Edit","tool_input":{"file_path":"/work/acme/src/app.ts","old_string":"a","new_string":"b"}}
+{"expect":"deny","gate":"delegate","note":"orchestrator runs tests","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"npm test"}}
+{"expect":"deny","gate":"delegate","note":"orchestrator chains coordination with work","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca worktree list && docker compose up -d"}}
+{"expect":"deny","gate":"self-land","note":"worker merges directly","agent_type":"sangsoe:worker","tool_name":"Bash","tool_input":{"command":"gh pr merge 12 --squash"}}
+{"expect":"deny","gate":"self-land","note":"worker_done over an open PR","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject done --body 'merged nothing' --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
+{"expect":"pass","note":"worker's own done message","tool_name":"Bash","tool_input":{"command":"orca orchestration send --from term_03526424 --type worker_done --subject ok --body 'all landed' --task-id task_1 --dispatch-id ctx_1 --outcome succeeded"}}
+{"expect":"pass","note":"ask the coordinator","tool_name":"Bash","tool_input":{"command":"orca orchestration ask --from term_03526424 --question \"which base?\""}}
+{"expect":"pass","note":"send to a Run","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to run:run_e14c --type question --subject q --body b"}}
+{"expect":"pass","note":"send to a Dispatch","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to dispatch:ctx_1 --type status --subject s --body b"}}
+{"expect":"pass","note":"plain worktree create, load ok","tool_name":"Bash","tool_input":{"command":"orca worktree create --repo acme/api --name feat-x"}}
+{"expect":"pass","note":"worktree list","tool_name":"Bash","tool_input":{"command":"orca worktree list --json"}}
+{"expect":"pass","note":"worker-start help","tool_name":"Bash","tool_input":{"command":"orca orchestration worker-start --help"}}
+{"expect":"pass","note":"claude version","tool_name":"Bash","tool_input":{"command":"claude --version"}}
+{"expect":"pass","note":"foreground plugin session check","tool_name":"Bash","tool_input":{"command":"claude --plugin-dir claude-plugin mcp list"}}
+{"expect":"pass","note":"plugin list","tool_name":"Bash","tool_input":{"command":"claude plugin list --json"}}
+{"expect":"pass","note":"foreground print mode from a file","tool_name":"Bash","tool_input":{"command":"claude -p --model sonnet < prompt.md"}}
+{"expect":"pass","note":"hook replay","tool_name":"Bash","tool_input":{"command":"node dist/cli/main.js hook pre-tool-use --replay test/fixtures/hook-commands.jsonl"}}
+{"expect":"pass","note":"hook with stdin","tool_name":"Bash","tool_input":{"command":"node dist/cli/main.js hook pre-tool-use < /tmp/acme/input.json"}}
+{"expect":"pass","note":"commit message names the command","tool_name":"Bash","tool_input":{"command":"git commit -m \"docs: why orca agent launch is gone\""}}
+{"expect":"pass","note":"echo names the command","tool_name":"Bash","tool_input":{"command":"echo 'never run nohup claude -p x &'"}}
+{"expect":"pass","note":"grep for the command","tool_name":"Bash","tool_input":{"command":"grep -rn \"orchestration worker-start\" core cli"}}
+{"expect":"pass","note":"log search","tool_name":"Bash","tool_input":{"command":"git log --oneline --grep 'agent launch'"}}
+{"expect":"pass","note":"heredoc body is text","tool_name":"Bash","tool_input":{"command":"cat <<'EOF' > /tmp/acme/notes.md\nclaude -p x &\norca agent launch\nEOF"}}
+{"expect":"pass","note":"gh read","tool_name":"Bash","tool_input":{"command":"gh pr checks 13"}}
+{"expect":"pass","note":"gh json read with jq","tool_name":"Bash","tool_input":{"command":"gh pr view 13 --json body --jq .body | head -60"}}
+{"expect":"pass","note":"test suite","tool_name":"Bash","tool_input":{"command":"npm test"}}
+{"expect":"pass","note":"compose down under danger","tool_name":"Bash","tool_input":{"command":"docker compose -p acme down"},"facts":{"load":"danger"}}
+{"expect":"pass","note":"compose up, load ok","tool_name":"Bash","tool_input":{"command":"docker compose -p acme up -d"}}
+{"expect":"pass","note":"one sleep","tool_name":"Bash","tool_input":{"command":"sleep 5"}}
+{"expect":"pass","note":"loop in the background","tool_name":"Bash","tool_input":{"command":"while true; do gh pr checks 5; sleep 30; done","run_in_background":true}}
+{"expect":"pass","note":"loop without sleep","tool_name":"Bash","tool_input":{"command":"for f in a b c; do echo $f; done"}}
+{"expect":"pass","note":"Monitor waits","tool_name":"Monitor","tool_input":{"command":"until gh pr checks 5; do sleep 30; done"}}
+{"expect":"pass","note":"pipeline","tool_name":"Bash","tool_input":{"command":"sed -n '1,20p' core/index.ts | head -5"}}
+{"expect":"pass","note":"orchestrator checks its inbox","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca orchestration check --wait --timeout-ms 600000"}}
+{"expect":"pass","note":"orchestrator writes a message body","agent_type":"sangsoe:orchestrator","tool_name":"Write","tool_input":{"file_path":"/work/state/body.md","content":"hello"}}
+{"expect":"pass","note":"orchestrator sends the body file","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to run:run_1 --type status --subject s --body-file /work/state/body.md"}}
+{"expect":"pass","note":"orchestrator starts a lead","agent_type":"sangsoe:orchestrator","tool_name":"mcp__plugin_sangsoe_sangsoe__start_unit","tool_input":{"role":"orchestrator","worktreeId":"wt0","runId":"run_0","childRole":"lead","spec":"/goal run the program"}}
+{"expect":"pass","note":"orchestrator delegates","agent_type":"sangsoe:orchestrator","tool_name":"Agent","tool_input":{"prompt":"look into it"}}
+{"expect":"pass","note":"orchestrator's subagent edits","agent_type":"sangsoe:orchestrator","agent_id":"sub1","tool_name":"Edit","tool_input":{"file_path":"/work/acme/src/app.ts","old_string":"a","new_string":"b"}}
+{"expect":"pass","note":"a person's own session merges","tool_name":"Bash","tool_input":{"command":"gh pr merge 12 --squash"}}
+{"expect":"pass","note":"worker_done naming the wait","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject ready --body 'READY-WAIT: land-after' --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
+{"expect":"pass","note":"worker_done after a land request","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject done --body 'landed' --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":true}]}}
+{"expect":"pass","note":"failed worker_done","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject failed --body 'blocked' --outcome failed"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
+{"expect":"pass","note":"open PRs unreadable","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject done --body 'x' --outcome succeeded"},"facts":{"role":"worker"}}
+{"expect":"pass","note":"script that starts nothing","tool_name":"Bash","tool_input":{"command":"bash scripts/check.sh"},"facts":{"scripts":{"/work/acme/scripts/check.sh":"npm test\n"}}}
+{"expect":"pass","note":"Read tool","tool_name":"Read","tool_input":{"file_path":"/work/acme/README.md"}}
