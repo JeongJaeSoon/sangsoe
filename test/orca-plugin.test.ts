@@ -1,12 +1,12 @@
 // Plugin tests live outside orca-plugin/ so they are not part of the folder Orca fingerprints.
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { coreUrl } from "../orca-plugin/core-link.ts";
+import { pathToFileURL } from "node:url";
+import { coreUrl, type PanelCore } from "../orca-plugin/core-link.ts";
 import activate, { deactivate, EVENTS, type OrcaWorker } from "../orca-plugin/main.ts";
-import { dagSvg } from "../orca-plugin/panel/probe.ts";
 import { type ExecProbe, meetsSqliteFloor, ownKey, probeExec, probeSqlite } from "../orca-plugin/probe.ts";
 import { type Clock, startRounds } from "../orca-plugin/timer.ts";
 
@@ -305,7 +305,25 @@ function fakeWorker() {
 
 const ok = (cmd: string, out: string, err = ""): ExecProbe => ({ cmd, ok: true, code: 0, out, err, ms: 1 });
 
-test("activate subscribes, registers and starts the round without running a probe", async () => {
+/** A PanelCore whose status line counts up, so each redraw is visible. */
+function fakePanel(): { load: () => Promise<PanelCore>; acts: unknown[] } {
+  let n = 0;
+  const acts: unknown[] = [];
+  const core: PanelCore = {
+    brief: async (t) => ({ ok: true, value: { target: t } }),
+    statusBar: async () => {
+      n += 1;
+      return { ok: true, value: { text: `🚧${n} · 결정0 · 🔄0`, tone: "neutral", tooltip: "t" } };
+    },
+    act: async (a) => {
+      acts.push(a);
+      return { ok: true, value: { status: "answered" } };
+    },
+  };
+  return { load: async () => core, acts };
+}
+
+test("activate subscribes, registers and redraws status bar B from the core each round", async () => {
   const w = fakeWorker();
   const { clock, advance } = fakeClock();
   const execs: string[] = [];
@@ -315,16 +333,43 @@ test("activate subscribes, registers and starts the round without running a prob
       execs.push([cmd, ...args].join(" "));
       return ok(cmd, "");
     },
+    panel: fakePanel().load,
   });
   try {
     assert.deepEqual(w.subscribed.sort(), [...EVENTS].sort());
     assert.deepEqual([...w.commands.keys()], ["sangsoe.open"]);
-    assert.deepEqual([...w.handlers.keys()].sort(), ["probe.exec", "probe.open", "probe.report", "probe.t1"]);
+    assert.deepEqual([...w.handlers.keys()].sort(), ["panel.act", "panel.brief", "probe.exec", "probe.open", "probe.report", "probe.t1"]);
     assert.deepEqual(execs, [], "starting the worker runs no command");
-    await advance(30_000);
+    await advance(60_000);
     const texts = w.hostCalls.map(([, p]) => (p as { text: string }).text);
-    assert.deepEqual(texts, ["sangsoe", "sangsoe · 1", "sangsoe · 2"]);
+    assert.deepEqual(texts, ["🚧1 · 결정0 · 🔄0", "🚧2 · 결정0 · 🔄0", "🚧3 · 결정0 · 🔄0"]);
     assert.deepEqual(execs, []);
+  } finally {
+    deactivate();
+  }
+});
+
+test("panel requests reach the core unchanged; a malformed act and a missing core are refused", async () => {
+  const w = fakeWorker();
+  const { clock } = fakeClock();
+  const p = fakePanel();
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: p.load });
+  try {
+    assert.deepEqual(await w.handlers.get("panel.brief")?.({ group: "api-migration" }), { ok: true, value: { target: { group: "api-migration" } } });
+    await w.handlers.get("panel.act")?.({ kind: "answer", decision: "d012", choice: "recommended" });
+    const bad = (await w.handlers.get("panel.act")?.({ kind: "close", item: "i035" })) as { ok: boolean };
+    assert.equal(bad.ok, false);
+    assert.deepEqual(p.acts, [{ kind: "answer", decision: "d012", choice: "recommended" }]);
+  } finally {
+    deactivate();
+  }
+  const w2 = fakeWorker();
+  activate(w2.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: async () => "core not found" });
+  try {
+    const r = (await w2.handlers.get("panel.brief")?.({})) as { ok: boolean; refusal: { code: string } };
+    assert.deepEqual([r.ok, r.refusal.code], [false, "core_unavailable"]);
+    await new Promise((r) => setImmediate(r));
+    assert.equal((w2.hostCalls[0]?.[1] as { text?: string } | undefined)?.text, "sangsoe ?", "no number is guessed");
   } finally {
     deactivate();
   }
@@ -342,10 +387,11 @@ test("the open command parses stdout only, so stderr noise does not break it", a
       opened.push(args.join(" "));
       return ok(cmd, "{}");
     },
+    panel: fakePanel().load,
   });
   try {
     assert.equal(await w.commands.get("sangsoe.open")?.(), "sangsoe: panel opened");
-    assert.deepEqual(opened, ["plugin open local.sangsoe --panel probe --json"]);
+    assert.deepEqual(opened, [`plugin open local.sangsoe --panel ${manifest.contributes.panels[0].id} --json`]);
   } finally {
     deactivate();
   }
@@ -368,11 +414,22 @@ test("plugin code imports nothing outside orca-plugin/, and only core-link.ts na
   }
 });
 
-test("core-link finds the source core in a checkout and nothing in an empty tree", () => {
-  assert.equal(coreUrl()?.href, new URL("core/index.ts", root).href);
+test("core-link prefers the built core, falls back to the source core, and finds nothing in an empty tree", () => {
+  // Trees of its own, so a dist/ left in the checkout does not change the answer.
   const dir = mkdtempSync(join(tmpdir(), "sangsoe-link-"));
+  const tree = (name: string, files: readonly string[]) => {
+    for (const f of files) {
+      mkdirSync(join(dir, name, f, ".."), { recursive: true });
+      writeFileSync(join(dir, name, f), "");
+    }
+    return pathToFileURL(join(dir, name, "orca-plugin/core-link.ts")).href;
+  };
   try {
-    assert.equal(coreUrl(new URL(`file://${dir}/orca-plugin/core-link.ts`).href), null);
+    const checkout = tree("checkout", ["core/index.ts"]);
+    const built = tree("built", ["core/index.ts", "dist/core/index.js"]);
+    assert.equal(coreUrl(checkout)?.href, pathToFileURL(join(dir, "checkout/core/index.ts")).href);
+    assert.equal(coreUrl(built)?.href, pathToFileURL(join(dir, "built/dist/core/index.js")).href);
+    assert.equal(coreUrl(tree("empty", [])), null);
   } finally {
     rmSync(dir, { recursive: true });
   }
@@ -392,6 +449,7 @@ test("REAPER runs on the same rounds: every 10 minutes, early on a monitor's pr_
   activate(w.orca, {
     clock,
     exec: async (cmd) => ok(cmd, ""),
+    panel: fakePanel().load,
     runners: async () => ({
       monitors: {
         run: async (name) => ({
@@ -427,7 +485,7 @@ test("REAPER runs on the same rounds: every 10 minutes, early on a monitor's pr_
   assert.equal(closed, 1);
 });
 
-test("activate starts the three monitors once the core opens, hints orca on agent status, and closes it", async () => {
+test("activate starts the four monitors once the core opens, hints orca on agent status, and closes it", async () => {
   const w = fakeWorker();
   const { clock, advance } = fakeClock();
   const handlers = new Map<string, (p: unknown) => void>();
@@ -437,6 +495,7 @@ test("activate starts the three monitors once the core opens, hints orca on agen
   activate(w.orca, {
     clock,
     exec: async (cmd) => ok(cmd, ""),
+    panel: fakePanel().load,
     runners: async () => ({
       monitors: {
         run: async (name) => {
@@ -457,10 +516,10 @@ test("activate starts the three monitors once the core opens, hints orca on agen
     await advance(55_000);
     assert.deepEqual(ran, ["orca", "orca"]);
     await advance(240_000);
-    assert.deepEqual(ran.filter((n) => n !== "orca").sort(), ["chat", "resource"]);
+    assert.deepEqual(ran.filter((n) => n !== "orca").sort(), ["chat", "pr", "pr", "resource"], "pr every two minutes");
     const report = (await w.handlers.get("probe.report")?.(null)) as { monitors: { state: string; last: Record<string, unknown> } };
     assert.equal(report.monitors.state, "running");
-    assert.deepEqual(Object.keys(report.monitors.last).sort(), ["chat", "orca", "resource"]);
+    assert.deepEqual(Object.keys(report.monitors.last).sort(), ["chat", "orca", "pr", "resource"]);
   } finally {
     deactivate();
   }
@@ -477,6 +536,7 @@ test("deactivate aborts an in-flight monitor round and closes the core only afte
   activate(w.orca, {
     clock,
     exec: async (cmd) => ok(cmd, ""),
+    panel: fakePanel().load,
     runners: async () => ({
       monitors: {
         run: (_name, s) =>
@@ -504,7 +564,7 @@ test("deactivate aborts an in-flight monitor round and closes the core only afte
 test("a core that does not open leaves the worker running without monitors", async () => {
   const w = fakeWorker();
   const { clock } = fakeClock();
-  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), runners: async () => "core not found" });
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: fakePanel().load, runners: async () => "core not found" });
   try {
     await settle();
     const report = (await w.handlers.get("probe.report")?.(null)) as { monitors: { state: string } };
@@ -514,15 +574,8 @@ test("a core that does not open leaves the worker running without monitors", asy
   }
 });
 
-test("the probe panel draws an inline SVG with one path per edge", () => {
-  const svg = dagSvg(
-    [
-      { id: "A", col: 0, row: 0 },
-      { id: "B", col: 1, row: 0 },
-    ],
-    [{ from: "A", to: "B" }],
-  );
-  assert.match(svg, /^<svg /);
-  assert.equal(svg.match(/<path /g)?.length, 1);
-  assert.equal(svg.match(/<rect /g)?.length, 2);
+test("the manifest's panel entry exists and the open command names that panel", () => {
+  const [panel] = manifest.contributes.panels;
+  assert.equal(panel.ui, "html");
+  assert.ok(existsSync(new URL(`orca-plugin/${panel.entry}`, root)), panel.entry);
 });

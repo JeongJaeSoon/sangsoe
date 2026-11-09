@@ -1,6 +1,7 @@
 import type {
   Exec,
   ExecResult,
+  GateRow,
   HostRow,
   LocalRows,
   OrcaAdapter,
@@ -91,6 +92,19 @@ export async function recoverWrite<T>(
   if (state === "completed" || state === "pending") return replay({ retryRequest: requestId });
   const message = shown.value?.interpretation ?? `request-show answered state ${JSON.stringify(state)}`;
   return { ok: false, error: { code: state === "absent" ? "request_absent" : "unexpected_shape", message }, requestId };
+}
+
+/** gate-list sends `options` as the JSON text gate-create was given; a value that is not a string array is dropped. */
+function gateRow(row: Json): GateRow {
+  const { options, ...rest } = row;
+  let parsed: unknown;
+  try {
+    parsed = typeof options === "string" ? JSON.parse(options) : options;
+  } catch {
+    parsed = undefined;
+  }
+  const valid = Array.isArray(parsed) && parsed.every((x) => typeof x === "string");
+  return { ...(rest as GateRow), ...(valid ? { options: parsed as string[] } : {}) };
 }
 
 function placement(p: WorkerPlacement): string {
@@ -189,7 +203,10 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     gateCreate: (a, o) =>
       run("gateCreate", { flags: { task: a.task, question: a.question, options: jsonArray(a.options) } }, o),
     gateResolve: (a, o) => run("gateResolve", { flags: { id: a.id, resolution: a.resolution } }, o),
-    gateList: (a) => field("gateList", "gates", rowsWith({ id: "string", status: "string" }), { flags: { run: a.run, task: a.task, status: a.status } }),
+    gateList: async (a) => {
+      const r = await field<Json[]>("gateList", "gates", rowsWith({ id: "string", status: "string" }), { flags: { run: a.run, task: a.task, status: a.status } });
+      return r.ok ? { ok: true, value: r.value.map(gateRow) } : r;
+    },
 
     send: (a, o) =>
       run(

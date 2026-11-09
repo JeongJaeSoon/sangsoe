@@ -1,21 +1,9 @@
-import type { DecisionRow, OwnerTodoRow, ViewGate, ViewInput } from "../contract/index.ts";
+import type { OwnerTodoRow, ViewInput } from "../contract/index.ts";
 import { decision } from "../store/views/decision.ts";
 import { ownerMarks } from "./marks.ts";
 import { isOwnerItem, OWNER_DEFAULTS, type OwnerConfig, type OwnerItemFacts } from "./types.ts";
 
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
-
-/**
- * "Answered but a waiter's gate is still open". The decision view sets `undelivered` only while the
- * row is `answered`, but decisionAnswer writes decision_closed{answered} right after the answer, so a
- * closed-by-answer row with an open waiter gate is undelivered too.
- */
-export function isUndelivered(d: DecisionRow, gates: readonly ViewGate[]): boolean {
-  if (d.undelivered) return true;
-  if (d.closedReason !== "answered") return false;
-  const open = new Set(gates.filter((g) => g.open).map((g) => g.id));
-  return d.waiters.some((w) => w.gate !== null && open.has(w.gate));
-}
 
 /** A refused start leaves its Task open; it stops being the owner's once Orca shows the Task moved on. */
 const STILL_REFUSED = new Set(["pending", "ready"]);
@@ -46,7 +34,7 @@ export function ownerTodoFrom(input: ViewInput, facts: readonly OwnerItemFacts[]
   const rows: OwnerTodoRow[] = [];
   for (const d of decision(input)) {
     if (d.state === "open") rows.push({ kind: "decision", ref: d.decision, whyOwner: null, since: opened.get(d.decision) ?? input.now });
-    else if (isUndelivered(d, input.orca.gates)) rows.push({ kind: "undelivered_answer", ref: d.decision, whyOwner: null, since: answered.get(d.decision) ?? input.now });
+    else if (d.undelivered) rows.push({ kind: "undelivered_answer", ref: d.decision, whyOwner: null, since: answered.get(d.decision) ?? input.now });
   }
   for (const f of facts) {
     if (f.state !== "ready" || !isOwnerItem(f)) continue;

@@ -1,9 +1,9 @@
 import type { ItemState, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, WaitsOn } from "../contract/index.ts";
 import { waiterReading } from "../decision/held.ts";
 import { countsAsEvidence } from "../owner/marks.ts";
-import { isUndelivered } from "../owner/todo.ts";
 import { decision } from "../store/views/decision.ts";
-import { depsGraph, type GraphRead } from "./graph.ts";
+import { graphRead } from "../graph/read.ts";
+import type { GraphRead } from "./graph.ts";
 import type { BriefTask } from "./types.ts";
 
 export type Priority = "P0" | "P1" | "P2" | "P3";
@@ -38,7 +38,6 @@ export interface ItemFacts {
 
 const ALARMS = new Set(["worker_stuck", "worker_dead", "ci_failed", "land_failed", "loop_detected", "decision_untracked"]);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
-export { isUndelivered };
 
 const RANK: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
 export const rank = (p: Priority): number => RANK[p];
@@ -56,12 +55,12 @@ function stateOf(t: BriefTask, hold: boolean, held: ReturnType<typeof waiterRead
   if (held) return held;
   if (t.status === "dispatched") return "in_progress";
   if (t.status === "blocked" || t.status === "failed") return hold ? "on_hold" : "blocked";
-  if (t.status === "ready") return "ready";
+  // Orca's own `ready` is not enough: GRAPH's extra edges, trigger and hold decide (decision 147).
   return ready ? "ready" : "planned";
 }
 
 /** Items are Orca Tasks with an item_created row; a row whose Task Orca no longer lists is left out. */
-export function itemFacts(input: ViewInput, graph: GraphRead = depsGraph): ItemFacts[] {
+export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemFacts[] {
   const extra = new Map<string, Record<string, unknown>>();
   const created = new Map<string, StoredEvent>();
   const transition = new Map<string, StoredEvent>();
@@ -111,7 +110,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = depsGraph): ItemF
     const last = moved.get(t.id) ?? 0;
     // An alarm stands until the item moves again.
     const standing = [...(alarms.get(t.id) ?? new Map<string, number>())].filter(([, seq]) => seq > last).map(([type]) => type);
-    const undelivered = own.filter((d) => isUndelivered(d, input.orca.gates)).map((d) => d.decision);
+    const undelivered = own.filter((d) => d.undelivered).map((d) => d.decision);
     const waitsOn = (openDecisions.length > 0 || undelivered.length > 0 ? "owner" : (str(x.waits_on) as WaitsOn | null)) ?? null;
     out.push({
       task: t.id,
