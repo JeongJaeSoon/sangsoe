@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addEdgeTo, criticalPath, graphRead, impact } from "../../core/index.ts";
+import { addEdgeTo, criticalPath, type GraphRead, graphRead, impact } from "../../core/index.ts";
+
+// U9's brief takes this port; the assignment fails typecheck if graphRead drifts from it.
+const asBriefPort: GraphRead = graphRead;
 import { bindItem, createGraphWorld } from "./world.ts";
 
 // An independent longest path for the cross-check (decision 29): enumerate every path by DFS. It
@@ -102,7 +105,7 @@ test("graphRead (brief's port): edges from both homes in task ids, a critical pa
   assert.deepEqual(graphRead.criticalPath(input, ["t_a", "t_b", "t_c"]), ["t_a", "t_b", "t_c"]);
   assert.deepEqual(graphRead.criticalPath(input, []), []);
   assert.deepEqual(graphRead.why(input, "t_c"), [{ pred: "t_b", succ: "t_c", kind: "after" }]);
-  assert.deepEqual(graphRead.ready(input).map((r) => r.task), ["t_a"]);
+  assert.deepEqual(asBriefPort.ready(input).map((r) => r.task), ["t_a"]);
 });
 
 test("impact lists unfinished successors nearest first, with group and priority", async () => {

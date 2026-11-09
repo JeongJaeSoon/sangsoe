@@ -7,6 +7,6 @@ export { type GraphNode, itemRef, parseNode } from "./nodes.ts";
 export { notifyReady, type ReadyNotice, readyNotifiedKey } from "./notify-ready.ts";
 export { edgeOk, type InEdge, type Readiness, ready, readiness, renderWhy, triggerOk, type WhyReport, type WhyRow, why } from "./ready.ts";
 export { type GraphEdge, graphRead } from "./read.ts";
-export { type FullTaskRow, type ReadSnapshot, readSnapshot, snapshotTasks } from "./snapshot.ts";
+export { type FullTaskRow, type ReadSnapshot, readSnapshot as readGraphSnapshot, snapshotTasks } from "./snapshot.ts";
 export { type SyncResult, syncGraph } from "./sync.ts";
 export { parseToml } from "./toml.ts";

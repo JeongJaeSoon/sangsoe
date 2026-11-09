@@ -1,4 +1,4 @@
-import { createOrcaAdapter, type ExecResult, type OrcaAdapter, type OrcaSnapshot, readSnapshot, Store, type ViewInput } from "../../core/index.ts";
+import { createOrcaAdapter, type ExecResult, type OrcaAdapter, type OrcaSnapshot, readGraphSnapshot, Store, type ViewInput } from "../../core/index.ts";
 import { createFakeOrca, type FakeReply } from "../fake-orca/index.ts";
 
 // A stateful fake Orca for GRAPH: Tasks carry deps the way `task-list --full` prints them (a JSON
@@ -102,7 +102,7 @@ export function createGraphWorld(): GraphWorld {
     dispatch: (id) => {
       (tasks.get(id) as GTask).status = "dispatched";
     },
-    snapshot: async (runs) => (await readSnapshot(orca, runs ?? runsOf())).snapshot,
+    snapshot: async (runs) => (await readGraphSnapshot(orca, runs ?? runsOf())).snapshot,
     input: async (now = NOW, runs) => ({ orca: await world.snapshot(runs), events: store.events(), now }),
     failRun: (run) => {
       failing = run;
