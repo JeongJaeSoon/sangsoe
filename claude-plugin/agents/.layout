@@ -1,0 +1,2 @@
+<!-- layout: slot=③ layer=판단 tokens=using -->
+claude-plugin/agents: orchestrator, lead and worker agent definitions only. Claude Code loads every .md here as an agent, so this folder's layout label lives in this file instead of a README (test/layout.test.ts).

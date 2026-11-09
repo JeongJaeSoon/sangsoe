@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type ApprovePorts, approvePlugin, type ExecResult, type ReviewEvidence } from "./approve.ts";
-import type { PluginApproved } from "./plugin-approved.ts";
+import { type ApprovePorts, approvePlugin, type ExecResult, type PluginApproved, type ReviewEvidence } from "./approve.ts";
 
 // TODO(U2): swap this hand fake for the shared fake Orca once it lands.
 const DIR = "/opt/sangsoe/orca-plugin";
