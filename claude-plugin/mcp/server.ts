@@ -39,19 +39,23 @@ export async function createServer(
   const resources = await collect<ResourceDef>(dirs.resources ?? new URL("./resources/", import.meta.url));
 
   const methods: Record<string, (p: Record<string, unknown>) => unknown> = {
-    initialize: (p) => ({
-      protocolVersion: PROTOCOL_VERSIONS.includes(p.protocolVersion as string)
-        ? p.protocolVersion
-        : PROTOCOL_VERSIONS[0],
-      capabilities: { tools: {}, resources: {} },
-      serverInfo: { name: "sangsoe", version: VERSION },
-    }),
+    initialize: (p) => {
+      if (typeof p.protocolVersion !== "string" || !isObject(p.capabilities) || !isObject(p.clientInfo)) {
+        throw new RpcError(-32602, "initialize needs protocolVersion, capabilities and clientInfo");
+      }
+      return {
+        protocolVersion: PROTOCOL_VERSIONS.includes(p.protocolVersion) ? p.protocolVersion : PROTOCOL_VERSIONS[0],
+        capabilities: { tools: {}, resources: {} },
+        serverInfo: { name: "sangsoe", version: VERSION },
+      };
+    },
     ping: () => ({}),
     "tools/list": () => ({
       tools: [...tools.values()].map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
     }),
     "tools/call": async (p) => {
-      const tool = tools.get(p.name as string);
+      if (typeof p.name !== "string") throw new RpcError(-32602, "tools/call needs a string name");
+      const tool = tools.get(p.name);
       if (!tool) throw new RpcError(-32602, `Unknown tool: ${String(p.name)}`);
       const input = p.arguments ?? {};
       if (!isObject(input)) {
@@ -70,6 +74,7 @@ export async function createServer(
       })),
     }),
     "resources/read": async (p) => {
+      if (typeof p.uri !== "string") throw new RpcError(-32602, "resources/read needs a string uri");
       const res = [...resources.values()].find((r) => r.uri === p.uri);
       if (!res) throw new RpcError(-32002, `Resource not found: ${String(p.uri)}`);
       return { contents: [{ uri: res.uri, mimeType: res.mimeType, text: await res.read() }] };
@@ -88,7 +93,8 @@ export async function createServer(
         return { jsonrpc: "2.0", id: msg.id, result: await method(msg.params ?? {}) };
       } catch (e) {
         const code = e instanceof RpcError ? e.code : -32603;
-        return { jsonrpc: "2.0", id: msg.id, error: { code, message: (e as Error).message } };
+        const message = e instanceof Error ? e.message : String(e);
+        return { jsonrpc: "2.0", id: msg.id, error: { code, message } };
       }
     },
   };

@@ -25,7 +25,7 @@ void _outcome;
 
 test("(1) an empty tool and an empty command are collected and run", async () => {
   const server = await createServer({ tools: dirs.tools });
-  assert.deepEqual([...server.tools.keys()], ["empty", "greet"]);
+  assert.deepEqual([...server.tools.keys()], ["empty", "greet", "throws"]);
   assert.deepEqual(await viaMcp("empty", {}, dirs), { ok: true, value: null });
   assert.deepEqual([...(await collectCommands(dirs.commands)).keys()], ["empty", "greet"]);
   assert.deepEqual(await run(["empty"], { commands: dirs.commands }), { code: 0, out: "null" });
@@ -132,12 +132,22 @@ test("(5) tools/README.md lists the twelve tools of design #mcp and the MCP-only
 test("initialize keeps a served protocol version and answers any other with the newest served", async () => {
   const server = await createServer({ tools: dirs.tools });
   const init = async (protocolVersion: string) =>
-    ((await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion } })) as {
+    ((await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion, capabilities: {}, clientInfo: { name: "t", version: "0" } } })) as {
       result: { protocolVersion: string };
     }).result.protocolVersion;
   assert.equal(await init("2025-06-18"), "2025-06-18");
   assert.equal(await init("2026-07-28"), "2025-11-25");
   assert.equal(await init("1999-01-01"), "2025-11-25");
+});
+
+test("malformed params are -32602 and a non-Error throw is -32603 with a message", async () => {
+  const server = await createServer({ tools: dirs.tools });
+  const error = async (method: string, params: Record<string, unknown>) =>
+    ((await server.handle({ jsonrpc: "2.0", id: 1, method, params })) as { error: { code: number; message: string } }).error;
+  assert.equal((await error("initialize", {})).code, -32602);
+  assert.equal((await error("resources/read", { uri: 123 })).code, -32602);
+  assert.equal((await error("tools/call", { name: 5 })).code, -32602);
+  assert.deepEqual(await error("tools/call", { name: "throws", arguments: {} }), { code: -32603, message: "null" });
 });
 
 test("the server answers initialize and tools/list over stdio", async () => {
