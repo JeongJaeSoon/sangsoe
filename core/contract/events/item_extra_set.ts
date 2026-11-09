@@ -1,4 +1,4 @@
-import { arr, bool, defineEvent, oneOf, opt, orcaId, priority, str, who } from "../define.ts";
+import { arr, bool, defineEvent, oneOf, opt, orcaId, priority, str, verifySpec, who } from "../define.ts";
 
 // Extra facts keyed by an Orca task id; the item_extra view folds the latest of each field.
 export default defineEvent("item_extra_set", {
@@ -14,7 +14,7 @@ export default defineEvent("item_extra_set", {
   flow: opt(str),
   step: opt(str),
   done_when: opt(str),
-  verify: opt(oneOf("pr_merged", "orca_field", "plugin_approved", "run_ok", "pr_found")),
+  verify: opt(verifySpec),
   cmd_hint: opt(str),
   why_owner: opt(str),
   links: opt(arr(str)),

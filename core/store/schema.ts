@@ -36,8 +36,8 @@ CREATE TABLE owner_text (
   text TEXT
 );
 CREATE TRIGGER owner_text_owner_action_only BEFORE INSERT ON owner_text
-WHEN NOT EXISTS (SELECT 1 FROM event WHERE seq = NEW.seq AND type = 'owner_action')
-BEGIN SELECT RAISE(ABORT, 'owner_text belongs to an owner_action row'); END;
+WHEN NEW.text IS NULL OR NOT EXISTS (SELECT 1 FROM event WHERE seq = NEW.seq AND type = 'owner_action')
+BEGIN SELECT RAISE(ABORT, 'owner_text holds the text of an owner_action row'); END;
 CREATE TRIGGER owner_text_redact_only BEFORE UPDATE ON owner_text
 WHEN NOT (
   NEW.seq = OLD.seq AND NEW.text IS NULL AND OLD.text IS NOT NULL

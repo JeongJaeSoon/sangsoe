@@ -117,14 +117,33 @@ test("append guards: writer, unknown or nested Orca fields, required and payload
     () => store.append({ type: "item_ready", source: "queue-monitor", dedupe_key: "ready:t2:h", payload: { task: "t1" } }),
     /start with "ready:t1"/,
   );
+  assert.throws(
+    () => store.append({ type: "item_ready", source: "queue-monitor", dedupe_key: "ready:t1:x:h", payload: { task: "t1:x" } }),
+    /Orca id without spaces or ':'/,
+  );
   store.append({ type: "item_ready", source: "queue-monitor", dedupe_key: "ready:t1:h", payload: { task: "t1" } });
+  assert.throws(
+    () => store.append({ type: "resource", source: "w", payload: { action: "created", kind: "worktree", owner: "w", ref: "/Users/a/wt" } }),
+    /Orca id, not a path/,
+  );
+  assert.throws(
+    () => store.append({ type: "item_extra_set", source: "lead:a", payload: { task: "t1", verify: { kind: "orca_field", target: "t1" } } }),
+    /verify orca_field needs field/,
+  );
+  store.append({
+    type: "item_extra_set",
+    source: "lead:a",
+    payload: { task: "t1", verify: { kind: "pr_found", repo: "acme/api", search: "head:fix" } },
+  });
   const owner = { origin: "chat", summary: "s", hash: "h" } as const;
+  // @ts-expect-error store-only types are not in append's parameter type
   assert.throws(() => store.append({ type: "owner_action", source: "x", payload: owner }), /only by its Store method/);
   assert.throws(
+    // @ts-expect-error store-only types are not in append's parameter type
     () => store.append({ type: "owner_text_redacted", source: "x", payload: { seq: 1, reason: "r" } }),
     /only by its Store method/,
   );
-  assert.equal(store.events().length, 1);
+  assert.equal(store.events().length, 2);
 });
 
 test("timestamps come from the injected clock (6)", () => {
@@ -155,10 +174,24 @@ test("owner text lives apart from the event and may only be emptied, after owner
   assert.throws(() => raw.exec(`UPDATE owner_text SET text = NULL WHERE seq = ${action.seq}`), /only be emptied/);
   assert.throws(() => raw.exec(`UPDATE owner_text SET text = 'other' WHERE seq = ${action.seq}`), /only be emptied/);
   assert.throws(() => raw.exec("DELETE FROM owner_text"), /never deleted/);
-  assert.throws(() => raw.exec("INSERT INTO owner_text (seq, text) VALUES (999, 'x')"), /belongs to an owner_action/);
+  assert.throws(() => raw.exec("INSERT INTO owner_text (seq, text) VALUES (999, 'x')"), /text of an owner_action/);
+  raw.exec(`INSERT INTO event (ts, type, source, after) VALUES ('${T0}', 'owner_action', 'raw', '{"origin":"chat","summary":"r","hash":"hr"}')`);
+  assert.throws(
+    () => raw.exec("INSERT INTO owner_text (seq, text) VALUES (last_insert_rowid(), NULL)"),
+    /text of an owner_action/,
+    "an owner_action row with no text is refused",
+  );
   raw.close();
 
   const again = Store.open({ path, clock: fixedClock(T0), fsProbe: local });
+  assert.throws(
+    () =>
+      again.appendOwnerAction(
+        { type: "owner_action", source: "x", payload: { origin: "chat", summary: "s", hash: "h2" } },
+        null as never,
+      ),
+    /expected a string/,
+  );
   const red = again.redactOwnerText(action.seq, { actor: "owner", reason: "secret leaked" });
   assert.ok(red.inserted);
   assert.equal(again.ownerText(action.seq), REDACTED_MARK);

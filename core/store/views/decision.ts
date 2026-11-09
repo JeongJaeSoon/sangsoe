@@ -41,11 +41,11 @@ export const decision: DecisionView = (input) => {
         row.linkedBy = s(p.linked_by);
       }
     } else if (e.type === "decision_closed" && row.state !== "closed") {
-      // decision_closed{answered} counts only after an answer; moot closes without one.
-      if (p.reason === "moot") {
+      // answered closes only an answered decision; moot only one still open (a late moot loses to the answer).
+      if (p.reason === "moot" && row.state === "open") {
         row.state = "closed";
         row.closedReason = "moot";
-      } else if (row.state === "answered") {
+      } else if (p.reason === "answered" && row.state === "answered") {
         row.state = "closed";
         row.closedReason = "answered";
       }

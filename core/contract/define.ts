@@ -59,7 +59,8 @@ export function rejectOrcaFacts(v: unknown, p: string): void {
   }
 }
 
-export function obj<S extends Shape>(shape: S): Validator<Infer<S>> {
+/** `refine` runs after the fields pass, for rules that tie one field to another. */
+export function obj<S extends Shape>(shape: S, refine?: (v: Infer<S>, path: string) => void): Validator<Infer<S>> {
   return (v, p) => {
     if (typeof v !== "object" || v === null || Array.isArray(v)) return fail(p, "object", v);
     const rec = v as Record<string, unknown>;
@@ -71,8 +72,45 @@ export function obj<S extends Shape>(shape: S): Validator<Infer<S>> {
       }
       check(rec[k], `${p}.${k}`);
     }
+    refine?.(rec as Infer<S>, p);
     return rec as Infer<S>;
   };
+}
+
+// An owner item's verify probe (decision 91): one of five kinds, each with its own operands.
+const VERIFY_OPERANDS: Readonly<Record<string, readonly string[]>> = {
+  pr_merged: ["pr"],
+  orca_field: ["target", "field", "value"],
+  plugin_approved: ["key"],
+  run_ok: ["repo"],
+  pr_found: ["repo", "search"],
+};
+export const verifySpec = obj(
+  {
+    kind: oneOf("pr_merged", "orca_field", "plugin_approved", "run_ok", "pr_found"),
+    pr: opt(match(/^[a-z0-9_.-]+\/[a-z0-9_.-]+#[1-9][0-9]*$/, "lowercase owner/repo#N")),
+    target: opt(str),
+    field: opt(str),
+    value: opt(str),
+    key: opt(str),
+    repo: opt(match(/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/, "lowercase owner/repo")),
+    /** run_ok's run id is filled from the owner's `!` output once the item is marked. */
+    run: opt(str),
+    search: opt(str),
+  },
+  (v, p) => {
+    const rec = v as Record<string, unknown>;
+    for (const k of VERIFY_OPERANDS[v.kind] ?? []) {
+      if (rec[k] === undefined) throw new ContractError(`${p}.${k}: verify ${v.kind} needs ${k}`);
+    }
+  },
+);
+
+// A worktree is Orca's: a resource row names it by its Orca id, never by its path.
+export function refOrcaIdForWorktree(v: Readonly<Record<string, unknown>>, p: string): void {
+  if (v.kind === "worktree" && /[/\\]/.test(String(v.ref))) {
+    throw new ContractError(`${p}.ref: a worktree is named by its Orca id, not a path`);
+  }
 }
 
 // Shared field formats (appendix #schema "참조는 키로 잇는다").
@@ -84,8 +122,9 @@ export const decisionNo = match(/^d[0-9]{3,}$/, "dNNN");
 export const isoUtc = match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/, "ISO UTC timestamp");
 export const priority = oneOf("P0", "P1", "P2", "P3");
 export const edgeKind = oneOf("blocks", "after", "stacked_on", "deploys_after");
-/** Orca ids (Task, Dispatch, Run, gate, message): opaque strings; the only Orca facts sqlite keeps. */
-export const orcaId = str;
+/** Orca ids (Task, Dispatch, Run, gate, message, worktree): the only Orca facts sqlite keeps. No ':' so a
+ * dedupe_key segment holding one is unambiguous. */
+export const orcaId = match(/^[^\s:]+$/, "Orca id without spaces or ':'");
 export const who = str;
 
 export type Needs = "none" | "action" | "judgment";
@@ -115,6 +154,7 @@ export function defineEvent<const T extends string, S extends Shape>(
   type: T,
   shape: S,
   opts: {
+    refine?: (v: Readonly<Record<string, unknown>>, path: string) => void;
     dedupe?: string;
     dedupeRequired?: boolean;
     dedupeTarget?: (payload: Infer<S>) => string;
@@ -128,7 +168,7 @@ export function defineEvent<const T extends string, S extends Shape>(
   return {
     type,
     version: opts.version ?? 1,
-    payload: obj(shape),
+    payload: obj(shape, opts.refine),
     fields: Object.keys(shape),
     dedupe: opts.dedupe ?? type,
     dedupeRequired: opts.dedupeRequired ?? opts.dedupeTarget !== undefined,

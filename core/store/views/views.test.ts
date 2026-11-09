@@ -58,8 +58,16 @@ test("decision folds open → joined → answered; a late answer does not replac
   assert.equal(row.undelivered, false, "g2 is not an open gate in the snapshot");
   const [still] = decision(input([{ id: "g2", taskId: "t2", open: true }]));
   assert.equal(still?.undelivered, true, "answered while a waiter's Orca gate is still open");
-  const closed = decision({ ...input([]), events: [...events, ev("decision_closed", { decision: "d001", reason: "moot" })] });
-  assert.equal(closed[0]?.closedReason, "moot");
+  const lateMoot = decision({ ...input([]), events: [...events, ev("decision_closed", { decision: "d001", reason: "moot" })] });
+  assert.equal(lateMoot[0]?.state, "answered", "a moot close after the answer does not override it");
+  const moot = decision({
+    ...input([]),
+    events: [
+      ev("decision_opened", { decision: "d003", decision_key: "k3" }),
+      ev("decision_closed", { decision: "d003", reason: "moot" }),
+    ],
+  });
+  assert.deepEqual([moot[0]?.state, moot[0]?.closedReason, moot[0]?.answer], ["closed", "moot", null]);
 });
 
 test("item_timeline keeps the item's own rows, its PR and decision signals, and drops noise (5)", () => {

@@ -7,7 +7,8 @@ import { ContractError, type EventDef } from "./define.ts";
 // - A prefix belongs to exactly one event type, so two types can never collide on a key, and two
 //   writers of the same condition (any source) land on one row through UNIQUE(dedupe_key).
 // - <target> is non-empty; segments carry no whitespace. Re-asking a decision appends `:r<n>`.
-// - Where the type derives <target> from its payload (dedupeTarget), the key must start with it.
+// - Where the type derives <target> from its payload (dedupeTarget), the key's second segment must
+//   equal it; targets never hold ':' (Orca ids and decision keys refuse it), so segments are unambiguous.
 const KEY = /^([a-z][a-z_]*):([^\s:]+)(:[^\s:]+)*$/;
 
 export function checkDedupeKey(def: EventDef, key: string, payload?: unknown): void {
@@ -17,9 +18,9 @@ export function checkDedupeKey(def: EventDef, key: string, payload?: unknown): v
     throw new ContractError(`dedupe_key ${JSON.stringify(key)}: ${def.type} keys start with "${def.dedupe}:"`);
   }
   if (def.dedupeTarget && payload !== undefined) {
-    const head = `${def.dedupe}:${def.dedupeTarget(payload)}`;
-    if (key !== head && !key.startsWith(`${head}:`)) {
-      throw new ContractError(`dedupe_key ${JSON.stringify(key)}: ${def.type} keys start with "${head}"`);
+    const want = def.dedupeTarget(payload);
+    if (key.split(":")[1] !== want) {
+      throw new ContractError(`dedupe_key ${JSON.stringify(key)}: ${def.type} keys start with "${def.dedupe}:${want}"`);
     }
   }
 }

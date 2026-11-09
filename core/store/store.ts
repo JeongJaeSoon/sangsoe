@@ -35,6 +35,9 @@ export type NewEvent<T extends EventType = EventType> = {
   };
 }[T];
 
+/** Types written only by their own Store method (EventDef.storeOnly); Store.append's type leaves them out. */
+export type StoreOnlyType = "owner_action" | "owner_text_redacted";
+
 export interface Appended {
   readonly seq: number;
   /** false when a row with the same dedupe_key already existed; seq is then that row's. */
@@ -222,12 +225,13 @@ export class Store {
     return { seq: Number(existing.seq), inserted: false };
   }
 
-  append(e: NewEvent): Appended {
+  append(e: NewEvent<Exclude<EventType, StoreOnlyType>>): Appended {
     return this.#tx(() => this.#insert(e));
   }
 
   /** Records an owner_action with its masked text (masking is the caller's, before this call). */
   appendOwnerAction(e: NewEvent<"owner_action">, maskedText: string): Appended {
+    if (typeof maskedText !== "string") throw new ContractError("owner text: expected a string");
     return this.#tx(() => {
       const out = this.#insert(e, true);
       if (out.inserted) this.#db.prepare("INSERT INTO owner_text (seq, text) VALUES (?, ?)").run(out.seq, maskedText);

@@ -62,10 +62,11 @@
 
 - 읽는 쪽은 모르는 칸을 무시하고, 줄의 `schema_v` 가 type 의 `version` 보다 낮으면 `upcast` 로 올려 읽는다(`decodeRow`).
 - 페이로드 어디에든(중첩 포함) Orca 가 원본인 사실(`title`·`status`·`spec`·`deps`·`question`·`options`·`message_body`)이 있으면 type 과 상관없이 거부한다. sqlite 에는 Orca id 만 남는다.
-- `owner_action` 과 `owner_text_redacted` 는 `storeOnly` 라 `append` 로 못 쓴다. `appendOwnerAction`(원문과 한 트랜잭션)과 `redactOwnerText`(비우기와 한 트랜잭션)만 쓴다.
+- `owner_action` 과 `owner_text_redacted` 는 `storeOnly` 라 `append` 의 인자 타입에서 빠지고 실행 중에도 거부된다. `appendOwnerAction`(원문과 한 트랜잭션, 원문은 비지 않은 문자열)과 `redactOwnerText`(비우기와 한 트랜잭션)만 쓴다.
+- Orca id 칸은 공백과 `:` 를 받지 않는다. 자원 줄(`resource`·`reap_*`·`resource_*`)의 `kind: worktree` 는 경로가 아니라 Orca id 로 적는다. `item_extra_set.verify` 는 kind 마다 필요한 칸이 있어야 한다(`orca_field` 는 target·field·value 등).
 - `plugin_approved`(U3)·`start_refused`(U22, 결정 94)는 그 유닛이 파일을 더한다.
 
-**`dedupe_key`(split Q13 을 여기서 정한다).** `<접두어>:<대상>[:<조건>…]`. 접두어는 type 이 선언한 것이고 기본은 type 이름이며, 설계가 이미 쓰는 넷만 짧다: `notified`→`notify`, `decision_opened`→`decision`, `item_ready`→`ready`, `edge_added`→`edge`. 접두어 하나는 type 하나의 것이라 다른 type 끼리 부딪히지 않고, 같은 조건을 쓰는 쪽이 둘이어도 `UNIQUE(dedupe_key)` 로 한 줄만 남는다. 키에 기대는 type(`notified`·`decision_opened`·`item_ready`·`edge_added`·`waiting_released`)은 키 없는 쓰기를 거부하고, 대상이 페이로드에서 나오는 type 은 키가 그 대상으로 시작해야 한다(`ready:<task>`·`decision:<decision_key>`·`waiting_released:<ref>`). 두 번째 쓰기는 `{ seq: 첫 줄, inserted: false }` 를 받는다.
+**`dedupe_key`(split Q13 을 여기서 정한다).** `<접두어>:<대상>[:<조건>…]`. 접두어는 type 이 선언한 것이고 기본은 type 이름이며, 설계가 이미 쓰는 넷만 짧다: `notified`→`notify`, `decision_opened`→`decision`, `item_ready`→`ready`, `edge_added`→`edge`. 접두어 하나는 type 하나의 것이라 다른 type 끼리 부딪히지 않고, 같은 조건을 쓰는 쪽이 둘이어도 `UNIQUE(dedupe_key)` 로 한 줄만 남는다. 키에 기대는 type(`notified`·`decision_opened`·`item_ready`·`edge_added`·`waiting_released`)은 키 없는 쓰기를 거부하고, 대상이 페이로드에서 나오는 type 은 키의 두 번째 마디가 그 대상과 같아야 한다(`ready:<task>`·`decision:<decision_key>`·`waiting_released:<ref>`). 두 번째 쓰기는 `{ seq: 첫 줄, inserted: false }` 를 받는다.
 
 **뷰.** 모든 뷰는 `ViewInput = { orca: { tasks, gates }, events, now }` 를 받는 순수 함수이고 결과를 저장하지 않는다(`<뷰>_cache` 표 없음). 뷰가 읽는 Orca 칸은 `ViewTask { id, runId, status, result?, deps, activeDispatchId? }`·`ViewGate { id, taskId, open }` 이다. U2 의 Orca 행 타입은 여기에 대입될 수 있으면 되고, 비로컬 행은 어댑터가 이미 걸렀다(결정 88).
 
