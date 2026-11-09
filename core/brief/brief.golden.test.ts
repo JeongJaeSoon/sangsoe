@@ -74,7 +74,7 @@ test("(4) every table has at most 5 columns and is at most 78 cells wide", () =>
     assert.ok(w.cols <= 5, `line ${w.line}: ${w.cols} columns`);
     assert.ok(w.width <= 78, `line ${w.line}: ${w.width} cells`);
   }
-  assert.equal(tableWidths("| 한글 | ⏸️ | [acme/api#1](https://github.com/acme/api/pull/1) |")[0]?.width, 4 + 2 + 11 + 10);
+  assert.equal(tableWidths("| 한글 | ⏸️ | [acme/api#1](https://github.com/acme/api/pull/1) |")[0]?.width, 4 + 2 + 10 + 10);
 });
 
 test("(5) long names, a long repo and a | are cut with …, URLs kept whole, no line breaks in a row", () => {

@@ -13,8 +13,12 @@ export interface BriefInput extends ViewInput {
 }
 
 export interface Cell {
+  /** Full text; the renderer cuts it to the column width, the panel may show it whole. */
   readonly text: string;
   readonly link?: string;
+  /** Kept whole after a cut `text` (a lead row's " P0"). */
+  readonly tail?: string;
+  readonly strong?: boolean;
 }
 
 /** One table row; `id` is the dNNN, iNNN, lead:<name> or act:<seq> the rendered row shows. */
