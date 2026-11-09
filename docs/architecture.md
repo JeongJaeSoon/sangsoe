@@ -9,6 +9,7 @@
 | 감지 | `orca-plugin/monitors/` | X | ② Orca plugin | monitor 다섯 · 타이머 멈춤 감지 |
 | 감지 | `claude-plugin/hooks/` | X | ③ Claude Code plugin | SessionStart · 막는 hook(게이트) · 기록 hook |
 | 감지 | `core/detect/` | X | ④ 공유 코어 | monitor 판정(orca · resource · chat): worker 타이머와 `sangsoe monitor run` 이 같이 부른다 |
+| 감지 | `core/detect/pr/` | X | ④ 공유 코어 | pr-monitor 판정: PR 사실 → event, 머지 확인 뒤 PR 항목 Task `completed`(감지기가 항목을 닫는 유일한 예외) · main CI · 등급 라벨 · 참조 |
 | 감지 | `core/detect/queue/` | X | ④ 공유 코어 | queue-monitor 라운드(판정 + 규칙을 가진 코어 함수 호출)와 타이머 멈춤 판정. 항목을 닫지 않는다 |
 | 실행 | `core/` | X | ④ 공유 코어 | 판단 함수(GRAPH · ready · capacity · land · verify_tier · decision_* · notify · restart_due · recover_plan · 시작 점검) |
 | 실행 | `core/store/` | X | ④ 공유 코어 | sqlite event 표와 뷰 |
@@ -30,6 +31,7 @@
 | 감지 | `core/session/` | X | ④ 공유 코어 | 기록 hook 일곱의 판정(`session_started` · `owner_action` · `waiting_human`/`waiting_released` · `turn_ended` · `compacted` · `!` 입력), SessionStart 주입, `restart_due`, `handoff_save` · `review_ask_record` |
 | 실행 | `core/graph/` | X | ④ 공유 코어 | GRAPH: 간선의 유일한 입구 · 순환 거부 · `ready` · `why` · 크리티컬 패스 · 영향 범위 · 흐름 틀 · `graph sync` |
 | 실행 | `core/brief/` | X | ④ 공유 코어 | 현황 세 단계: `buildBrief`·`renderMarkdown` 한 쌍과 `item_status`·`group_*` 뷰 몸체(`owner_todo` 는 `core/owner/` 에 넘긴다)(결정 89, 구현 결정 128·129) |
+| 실행 | `core/migrate/` | X | ④ 공유 코어 | `sangsoe migrate`: agent-skills 의 열린 항목·결정을 읽기 전용으로 한 번 가져오기(D-13, 구현 결정 140) |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
 | 실행 | `orca-plugin/reaper/` | X | ② Orca plugin | REAPER 라운드 타이머 |
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |

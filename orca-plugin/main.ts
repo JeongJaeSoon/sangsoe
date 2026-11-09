@@ -5,6 +5,7 @@
 import { loadMonitors, loadPanelCore, type MonitorRunner, type PanelCore } from "./core-link.ts";
 import { chatMonitor } from "./monitors/chat.ts";
 import { orcaMonitor } from "./monitors/orca.ts";
+import { prMonitor } from "./monitors/pr.ts";
 import { queueMonitor } from "./monitors/queue.ts";
 import { resourceMonitor } from "./monitors/resource.ts";
 import { type LastRound, monitorRound } from "./monitors/spec.ts";
@@ -33,7 +34,7 @@ export type WorkerDeps = {
 };
 
 export const EVENTS = ["workspace.created", "workspace.removed", "workspace.changed", "agent.status.changed"] as const;
-export const MONITORS = [orcaMonitor, resourceMonitor, chatMonitor, queueMonitor];
+export const MONITORS = [orcaMonitor, resourceMonitor, chatMonitor, prMonitor, queueMonitor];
 // Which Orca event asks which monitor for an early round (a hint; decision 83).
 const HINTS: Partial<Record<(typeof EVENTS)[number], string>> = { "agent.status.changed": orcaMonitor.name };
 const STATUS_ID = "summary";

@@ -38,8 +38,8 @@
 | D1 | 감지기 | orca-monitor 멈춤 판정 = 시각 필드, 못 보면 행동 0(R-07, P10) | U15 | |
 | D2 | 감지기 | `one_session_two_terminals` | U15 | |
 | D3 | 감지기 | 부하 판정 함수 하나(압박 게이트·resource-monitor·capacity, R-13) | U15(+U10) | |
-| D4 | 감지기 | 머지 확인 뒤에만 PR 항목 `completed`·`main_green/red` | U16 | |
-| D5 | 감지기 | queue-monitor 는 항목을 닫지 않음·`escalation_stale`·`job_drift` | U17 | `test/detect/queue.test.ts` 12건: 닫는 Orca 호출 0(`task-update`·`gate-resolve`·`worker-release`, probe 참·moot·재전달 라운드), `escalation_stale` 세 갈래(`waiting_unreleased` 1 · `verify_unconfirmed` 1 · 전달 안 된 답 1, 각 한 번), `job_drift`(어긋남 1 · 같은 어긋남 0 · 못 읽음 0) |
+| D4 | 감지기 | 머지 확인 뒤에만 PR 항목 `completed`·`main_green/red` | U16 | `core/detect/pr/round.test.ts`: `merge_suggests_close`(머지 확인 → `pr_merged` 다음 같은 라운드에 Task `completed`, 다른 열린 Task 는 `close_suggested`) · 머지 커밋이 main 에 없으면 `pr_merged`·Task 쓰기 0 · dry run 은 Orca 쓰기 0 · `repo_level_main`(main_* 쪽). `judge.test.ts`: 재실행 1회로 flake 구분 · 취소는 빨강 아님 · 0-job 은 모름(결정 142·143). 실제 Orca 의 `task-update` 는 미실행(VERIFY 가 Task 쓰기를 금함) |
+| D5 | 감지기 | queue-monitor 는 항목을 닫지 않음·`escalation_stale`·`job_drift` | U17 | `test/detect/queue.test.ts` 13건: 닫는 Orca 호출 0(`task-update`·`gate-resolve`·`worker-release`, probe 참·moot·재전달 라운드), `escalation_stale` 세 갈래(`waiting_unreleased` 1 · `verify_unconfirmed` 1 · 전달 안 된 답 1, 각 한 번), `job_drift`(어긋남 1 · 같은 어긋남 0 · 못 읽음 0) |
 | PN1 | 패널 | 승인된 plugin 의 worker 가 돈다(T1·T2·T4) | U3 | |
 | PN2 | 패널 | 패널 행 ID = `BriefModel` 행 ID | U19 | |
 | PN3 | 패널 | `sangsoe todo` = 패널 띠 = 상태 표시줄 숫자 | U19(+U9) | |
@@ -47,8 +47,8 @@
 | I1 | 설치 | `brew install` → `install` → `plugin approve` → `doctor` 녹색 | U4·U24 | |
 | I2 | 설치 | `brew upgrade && sangsoe install` 뒤 네 칸 같은 버전, 어긋나면 한 줄 경고(R-23) | U4 | |
 | I3 | 설치 | `uninstall` → 재설치 녹색, sqlite 보존 | U4·U24 | |
-| M1 | 이관 | R-01–R-23 23/23 이 CI 시험에 대응 | U21 | |
-| M2 | 이관 | 다시 만드는 13가지 D-1–D-13 의 위치 13/13(D-1 은 결정 95 대로 plugin 안) | U21(+U6·U20) | |
-| M3 | 이관 | 열린 항목·결정 읽기 전용 가져오기 + smoke 종단 한 번 | U21·U23 | |
+| M1 | 이관 | R-01–R-23 23/23 이 CI 시험에 대응 | U21 | 미달: 시험이 있는 요구 19/23, 그중 전부 지키는 것 8/23. `docs/requirements-coverage.md`(🟢 8 · 🟡 11 · 🔴 3 R-06·R-20·R-21 · 단위 1 R-12 U18). `test/migrate/coverage.test.ts` 가 행과 시험 파일과 집계를 센다 |
+| M2 | 이관 | 다시 만드는 13가지 D-1–D-13 의 위치 13/13(D-1 은 결정 95 대로 plugin 안) | U21(+U6·U20) | 행 13/13: 자리가 main 에 있는 것 9(D-1 은 `claude-plugin/skills/general/`, D-7 은 pr-monitor 만 U16, D-9 는 REAPER 라운드만 U18, D-10·D-11 은 `orca-plugin/panel/`), 단위가 가져올 것 1(D-8 U17), sangsoe 밖 3(D-2–D-4). `docs/port-map.md` 가 옛 항목 166/166 을 한 행씩(`test/migrate/port-map.test.ts`) |
+| M3 | 이관 | 열린 항목·결정 읽기 전용 가져오기 + smoke 종단 한 번 | U21·U23 | 가져오기: `test/migrate/migrate.test.ts`(열린 것만 · 옛 DB 바이트 그대로 · 두 번째 실행 0건 · 제목은 event 에 없음). 이 Mac 의 실제 옛 저장소 dry run: 열린 항목 23(todo 9 · doing 1 · held 13) · 열린 결정 0 · 간선 0 · 닫힌 항목 120 · 닫힌 결정 76 · 가져오지 않는 리드·카드 행 14 · 리드 1. 쓰는 가져오기와 smoke 종단은 전환 때(U23·U24) |
 
 합계: 기반 4 · 코어 13 · 랜드 6 · 정리 8 · 감지기 5 · 패널 4 · 설치 3 · 이관 3 = 46.

@@ -42,7 +42,16 @@ export async function readSnapshot(orca: OrcaAdapter, runs: readonly string[]): 
         ...(t.assignee ? { assignee: t.assignee } : {}),
       });
     }
-    for (const g of gl.value) gates.push({ id: g.id, taskId: g.taskId ?? "", open: isOpenGate(g), ...(g.question ? { question: g.question } : {}) });
+    for (const g of gl.value) {
+      gates.push({
+        id: g.id,
+        taskId: g.taskId ?? "",
+        open: isOpenGate(g),
+        ...(g.question ? { question: g.question } : {}),
+        // The first option is the recommendation (the 추천 column); a blank one is no recommendation.
+        ...(g.options?.[0]?.trim() ? { options: g.options } : {}),
+      });
+    }
   }
   return done({ tasks, gates });
 }

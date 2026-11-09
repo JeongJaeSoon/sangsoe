@@ -5,7 +5,8 @@ import { createFakeOrca, type FakeReply } from "../fake-orca/index.ts";
 // so a second call sees what the first one did (the static recordings cannot show that).
 
 export type WorldTask = { id: string; run: string; status: string; dispatchId?: string; title?: string; result?: string };
-export type WorldGate = { id: string; taskId: string; status: string; question: string; resolution?: string };
+/** `options` is the text Orca's gate-list returns: the JSON array gate-create was given, as a string. */
+export type WorldGate = { id: string; taskId: string; status: string; question: string; options?: string; resolution?: string };
 export type WorldSend = { to: string; subject: string; body: string; type: string };
 
 export interface World {
@@ -67,7 +68,8 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
       const task = flag(args, "task") ?? "";
       if (!taskMap.has(task)) return err("task_not_found");
       const id = `gate_${String(++n).padStart(12, "0")}`;
-      gates.set(id, { id, taskId: task, status: "pending", question: flag(args, "question") ?? "" });
+      const options = flag(args, "options");
+      gates.set(id, { id, taskId: task, status: "pending", question: flag(args, "question") ?? "", ...(options ? { options } : {}) });
       return ok({ gate: { id, taskId: task, status: "pending" } });
     },
     "orchestration-gate-resolve": (args: readonly string[]) => {
