@@ -1,3 +1,4 @@
+import type { CheckContext } from "../checks/index.ts";
 import { doctor } from "./doctor.ts";
 import {
   type Host,
@@ -48,7 +49,7 @@ function orcaStep(host: Host, root: string, lines: string[]): boolean {
 }
 
 // Idempotent: each step reads current state first and picks add/update or install/update.
-export function install(host: Host, root: string): Outcome {
+export async function install(host: Host, root: string, ctx: CheckContext): Promise<Outcome> {
   const lines: string[] = [];
   const step = (label: string, args: string[]) => {
     const r = host.run("claude", args);
@@ -92,7 +93,7 @@ export function install(host: Host, root: string): Outcome {
 
   if (!orcaStep(host, root, lines)) return { code: 1, lines };
 
-  const d = doctor(host, root);
+  const d = await doctor(host, root, { ctx });
   return { code: d.code, lines: [...lines, "", "sangsoe doctor:", ...d.lines] };
 }
 
