@@ -14,7 +14,20 @@ export type MonitorRunner = {
   close(): void;
 };
 
-type CoreModule = { openMonitors(o?: { dryRun?: boolean }): MonitorRunner };
+/** The slice of the core's ReaperRunner the worker calls. */
+export type ReaperRunner = {
+  run(o: { trigger: "timer" | "hint"; signal?: AbortSignal }): Promise<{
+    round: number;
+    roots_ok: boolean;
+    candidates: unknown[];
+    reaped: unknown[];
+  }>;
+  close(): void;
+};
+
+type CoreModule = { openMonitors(o?: { dryRun?: boolean }): MonitorRunner; openReaper(): ReaperRunner };
+
+export type Runners = { monitors: MonitorRunner; reaper: ReaperRunner };
 
 const CANDIDATES = ["../dist/core/index.js", "../core/index.ts"];
 
@@ -26,13 +39,19 @@ export function coreUrl(base: string = import.meta.url): URL | null {
   return null;
 }
 
-/** Opens the monitors over the store, or explains why not; the worker then runs without them. */
-export async function loadMonitors(): Promise<MonitorRunner | string> {
+/** Opens the monitors and REAPER over the store, or explains why not; the worker then runs without them. */
+export async function loadRunners(): Promise<Runners | string> {
   const url = coreUrl();
   if (!url) return `core not found beside the plugin folder (${CANDIDATES.join(", ")})`;
   try {
     const core = (await import(url.href)) as CoreModule;
-    return core.openMonitors();
+    const monitors = core.openMonitors();
+    try {
+      return { monitors, reaper: core.openReaper() };
+    } catch (e) {
+      monitors.close();
+      throw e;
+    }
   } catch (e) {
     return `core at ${url.pathname} did not open: ${e instanceof Error ? e.message : String(e)}`;
   }

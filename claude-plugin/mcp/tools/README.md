@@ -49,7 +49,7 @@ export default {
 | `handoff_save` | 판단 상태 넷의 모양을 검사해 자기 Run 우편함에 Orca `handoff` 메시지로 남기기(sqlite 에 쓰지 않음) | `{next, waiting, open_questions, reply_to}` | U13 |
 | `review_ask_record` | 리뷰 의뢰·리마인드 한 건을 `review_ask_sent` 로, 설정에 없는 리뷰어는 `unmapped_reviewer` 도 | `{pr, reviewer, reminder?}` | U13 |
 
-표 밖의 tool 하나: `start_unit`(U10)은 세션을 여는 유일한 길인 코어 시작 함수(결정 94)를 부른다. 입력은 `{role, worktreeId, runId, childRole, taskId?, task 또는 spec, title?, deps?, lateAnswers?, references?, agent?}` 이다.
+표 밖의 tool 둘. `resource_record`(U18)는 당사자가 막 만든 Docker id(또는 compose 프로젝트의 id 전부)를 소유자와 함께 `resource` 로 남긴다(REAPER 가 치우는 근거는 이 기록뿐, R-12). 입력은 `{owner, kind?, ref?, compose?, action?}`, CLI `sangsoe resource record` 와 같은 Outcome 이다. `start_unit`(U10)은 세션을 여는 유일한 길인 코어 시작 함수(결정 94)를 부른다. 입력은 `{role, worktreeId, runId, childRole, taskId?, task 또는 spec, title?, deps?, lateAnswers?, references?, agent?}` 이다.
 
 ## plugin 이 서버를 싣는 줄(제안)
 

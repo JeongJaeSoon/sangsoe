@@ -378,6 +378,55 @@ test("core-link finds the source core in a checkout and nothing in an empty tree
   }
 });
 
+const idleReaper = {
+  run: async () => ({ round: 1, roots_ok: false, candidates: [], reaped: [] }),
+  close: () => {},
+};
+
+test("REAPER runs on the same rounds: every 10 minutes, early on a monitor's pr_merged, with its trigger", async () => {
+  const w = fakeWorker();
+  const { clock, advance } = fakeClock();
+  const reaps: string[] = [];
+  let closed = 0;
+  let orcaRuns = 0;
+  activate(w.orca, {
+    clock,
+    exec: async (cmd) => ok(cmd, ""),
+    runners: async () => ({
+      monitors: {
+        run: async (name) => ({
+          planned: [],
+          written: name === "orca" && ++orcaRuns === 1 ? [{ type: "pr_merged" }] : [],
+          unseen: [],
+          aborted: false,
+        }),
+        close: () => {},
+      },
+      reaper: {
+        run: async (o) => {
+          reaps.push(o.trigger);
+          return { round: reaps.length, roots_ok: true, candidates: [], reaped: [] };
+        },
+        close: () => void closed++,
+      },
+    }),
+  });
+  try {
+    await settle();
+    await advance(60_000);
+    await advance(5_000);
+    assert.deepEqual(reaps, ["hint"], "the orca round's pr_merged hinted one REAPER round");
+    await advance(535_000);
+    assert.deepEqual(reaps, ["hint", "timer"]);
+    const report = (await w.handlers.get("probe.report")?.(null)) as { reaper: { round: number } | null };
+    assert.equal(report.reaper?.round, 2);
+  } finally {
+    deactivate();
+  }
+  await settle();
+  assert.equal(closed, 1);
+});
+
 test("activate starts the three monitors once the core opens, hints orca on agent status, and closes it", async () => {
   const w = fakeWorker();
   const { clock, advance } = fakeClock();
@@ -388,12 +437,15 @@ test("activate starts the three monitors once the core opens, hints orca on agen
   activate(w.orca, {
     clock,
     exec: async (cmd) => ok(cmd, ""),
-    monitors: async () => ({
-      run: async (name) => {
-        ran.push(name);
-        return { planned: [], written: [], unseen: [], aborted: false };
+    runners: async () => ({
+      monitors: {
+        run: async (name) => {
+          ran.push(name);
+          return { planned: [], written: [], unseen: [], aborted: false };
+        },
+        close: () => void closed++,
       },
-      close: () => void closed++,
+      reaper: idleReaper,
     }),
   });
   try {
@@ -425,13 +477,16 @@ test("deactivate aborts an in-flight monitor round and closes the core only afte
   activate(w.orca, {
     clock,
     exec: async (cmd) => ok(cmd, ""),
-    monitors: async () => ({
-      run: (_name, s) =>
-        new Promise((r) => {
-          signal = s;
-          finish = () => r({ planned: [], written: [], unseen: [], aborted: s?.aborted ?? false });
-        }),
-      close: () => void closed++,
+    runners: async () => ({
+      monitors: {
+        run: (_name, s) =>
+          new Promise((r) => {
+            signal = s;
+            finish = () => r({ planned: [], written: [], unseen: [], aborted: s?.aborted ?? false });
+          }),
+        close: () => void closed++,
+      },
+      reaper: idleReaper,
     }),
   });
   await settle();
@@ -449,7 +504,7 @@ test("deactivate aborts an in-flight monitor round and closes the core only afte
 test("a core that does not open leaves the worker running without monitors", async () => {
   const w = fakeWorker();
   const { clock } = fakeClock();
-  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), monitors: async () => "core not found" });
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), runners: async () => "core not found" });
   try {
     await settle();
     const report = (await w.handlers.get("probe.report")?.(null)) as { monitors: { state: string } };
