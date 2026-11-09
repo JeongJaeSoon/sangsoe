@@ -1,6 +1,6 @@
 import type { OwnerTodoRow, OwnerTodoView, ViewInput } from "../contract/index.ts";
 import { decision } from "../store/views/decision.ts";
-import { isUndelivered, type ItemFacts, itemFacts } from "./item_status.ts";
+import { type ItemFacts, itemFacts } from "./item_status.ts";
 
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
@@ -27,7 +27,7 @@ export function ownerTodoFrom(input: ViewInput, facts: readonly ItemFacts[]): Ow
   const rows: OwnerTodoRow[] = [];
   for (const d of decision(input)) {
     if (d.state === "open") rows.push({ kind: "decision", ref: d.decision, whyOwner: null, since: opened.get(d.decision) ?? input.now });
-    else if (isUndelivered(d, input.orca.gates)) rows.push({ kind: "undelivered_answer", ref: d.decision, whyOwner: null, since: answered.get(d.decision) ?? input.now });
+    else if (d.undelivered) rows.push({ kind: "undelivered_answer", ref: d.decision, whyOwner: null, since: answered.get(d.decision) ?? input.now });
   }
   for (const f of facts) {
     if (f.state === "ready" && (f.execBy === "owner" || f.who === "owner")) {
