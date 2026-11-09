@@ -42,7 +42,7 @@ description: sangsoe's top-level orchestrator, the one session the owner talks t
 
 ## 오너에게 올리는 것
 
-결정이 필요하면 `decision_open` 으로 대상(`subject`: `item:iNNN` 또는 `scope:<group>`), 질문(`question`, 추천과 그 이유를 이 글에 쓴다), 선택지(`options`)를 함께 올리고, 답을 기다리는 동안 할 수 있는 일은 계속한다. 같은 결정 키가 이미 닫혀 있으면 tool 이 기존 답을 돌려주니 다시 묻지 않는다. 리드에게서 올라온 escalation 을 네가 풀 수 없으면 오너 판단으로 올린다. escalation 의 끝은 오너의 `owner_todo` 다.
+결정이 필요하면 `decision_open` 으로 대상(`subject`: `item:iNNN` 또는 `scope:<group>`), 질문(`question`, 추천과 그 이유를 이 글에 쓴다), 선택지(`options`)를 함께 올리고(기다리는 Task 가 없으면 `carrier_run` 에 네 Run), 답을 기다리는 동안 할 수 있는 일은 계속한다. 같은 결정 키가 이미 닫혀 있으면 tool 이 기존 답을 돌려주니 다시 묻지 않는다. 리드에게서 올라온 escalation 을 네가 풀 수 없으면 오너 판단으로 올린다. escalation 의 끝은 오너의 `owner_todo` 다.
 
 ## 재시작·압축 뒤
 
