@@ -1,8 +1,9 @@
-import { dedupeKey, dedupeSegment, EVENTS, type StoredEvent } from "../contract/index.ts";
+import { dedupeKey, dedupeSegment, EVENTS } from "../contract/index.ts";
 import { decisionAnswer } from "../decision/answer.ts";
 import { readDecision } from "../decision/waiters.ts";
 import { notify } from "../notify/notify.ts";
 import type { CoreDeps } from "../notify/result.ts";
+import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
 import type { Store } from "../store/store.ts";
 import { hashOf, mask, summarize } from "./mask.ts";
 import { type SessionHookInput, type SessionRow, sessionOf } from "./session.ts";
@@ -32,29 +33,37 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
   if (!row) return [];
   switch (event) {
     case "user-prompt-submit":
-      recordShellInputs(deps.store, row, input.session_id, input.transcript_path);
+      await recordShellInputs(deps, row, input.session_id, input.transcript_path);
       await ownerSaid(deps, row, input);
       break;
     case "stop":
-      recordShellInputs(deps.store, row, input.session_id, input.transcript_path);
+      await recordShellInputs(deps, row, input.session_id, input.transcript_path);
       turnEnded(deps.store, row, input);
+      released(deps.store, { kind: "turn_ended", session: input.session_id }, "Stop");
       break;
     case "notification":
       await waitingHuman(deps, row, input);
       break;
     case "post-tool-use":
-      if (input.tool_name) release(deps.store, row, input.session_id, "answered", `post_tool_use:${input.tool_name}`, input.tool_name);
+      if (input.tool_name) released(deps.store, { kind: "tool", session: input.session_id, tool: input.tool_name }, "PostToolUse");
       break;
     case "post-compact":
       compacted(deps.store, row, input);
       break;
     case "session-end":
-      recordShellInputs(deps.store, row, input.session_id, input.transcript_path);
-      release(deps.store, row, input.session_id, "moot", "session_ended");
+      await recordShellInputs(deps, row, input.session_id, input.transcript_path);
+      released(deps.store, { kind: "session_ended", session: input.session_id, evidence: "session_ended" }, "SessionEnd");
       break;
   }
   return [];
 }
+
+/** Decision 91①: the session moving again, or ending, releases its waits; core/owner decides which. */
+const released = (store: Store, signal: ReleaseSignal, source: string) => {
+  // Every tool call lands here: read only the rows a release looks at, in log order.
+  const events = RELEASE_READS.flatMap((type) => store.events({ type })).sort((a, b) => a.seq - b.seq);
+  return recordReleases(store, { events }, signal, source);
+};
 
 // Orca's own prompts to a dispatched session (the brief, wrapped) are not the owner's words.
 const ORCA_PROMPT = /^(Please carry out this task from my Orca coordinator|You are working inside Orca, a multi-agent IDE\.)/;
@@ -105,7 +114,6 @@ function turnEnded(store: Store, row: SessionRow, input: SessionHookInput): void
     dedupe_key: dedupeKey(EVENTS.turn_ended, input.session_id, input.prompt_id ?? String(store.events({ type: "turn_ended" }).length)),
     payload: { session: input.session_id, ...(tokens ? { context_tokens: tokens } : {}) },
   });
-  release(store, row, input.session_id, "answered", "turn_ended");
 }
 
 function compacted(store: Store, row: SessionRow, input: SessionHookInput): void {
@@ -121,11 +129,6 @@ function compacted(store: Store, row: SessionRow, input: SessionHookInput): void
   });
 }
 
-function openWaits(store: Store, session: string): StoredEvent[] {
-  const released = new Set(store.events({ type: "waiting_released" }).map((e) => String(e.payload.ref)));
-  return store.events({ type: "waiting_human" }).filter((e) => e.payload.session === session && !released.has(String(e.seq)));
-}
-
 const PERMISSION = /permission to use ([A-Za-z_][\w:.-]*)/i;
 const WAITS = new Set(["permission_prompt", "idle_prompt", "elicitation_dialog"]);
 
@@ -139,7 +142,7 @@ async function waitingHuman(deps: CoreDeps, row: SessionRow, input: SessionHookI
   const kind = input.notification_type;
   if (kind ? !WAITS.has(kind) : !/permission|waiting for your input/i.test(message)) return;
   const tool = PERMISSION.exec(message)?.[1];
-  const open = openWaits(deps.store, input.session_id);
+  const open = openWaits(deps.store.events()).filter((e) => e.payload.session === input.session_id);
   if (open.some((e) => e.payload.tool === tool)) return;
   const n = deps.store.events({ type: "waiting_human" }).filter((e) => e.payload.session === input.session_id).length + 1;
   const w = deps.store.append({
@@ -159,24 +162,4 @@ async function waitingHuman(deps: CoreDeps, row: SessionRow, input: SessionHookI
     msgType: "escalation",
     source: "Notification",
   });
-}
-
-/**
- * Decision 91①: a wait is released by the session moving again (a turn ended, the awaited tool ran) or
- * by the session ending (moot); never by the owner's words. `by` is owner when the owner spoke in this
- * session after the wait began. A tool signal releases only a wait that named the same tool.
- */
-function release(store: Store, row: SessionRow, session: string, outcome: "answered" | "moot", evidence: string, tool?: string): void {
-  const actions = store.events({ type: "owner_action" }).filter((e) => e.payload.cc_session === session);
-  for (const w of openWaits(store, session)) {
-    if (tool !== undefined && w.payload.tool !== tool) continue;
-    const by = actions.some((a) => a.seq > w.seq) ? "owner" : "unknown";
-    store.append({
-      type: "waiting_released",
-      source: evidence.split(":")[0] ?? evidence,
-      ...(row.task ? { entity: "task", entity_id: row.task } : {}),
-      dedupe_key: `waiting_released:${w.seq}`,
-      payload: { ref: String(w.seq), outcome, by, evidence },
-    });
-  }
 }

@@ -188,6 +188,10 @@ test("link guards: whole PR number, stderr without an exit code, times not strin
   p.item(T, { verify: { kind: "pr_merged", pr: "acme/api#4" } });
   assert.equal(bang(p, { command: "gh pr merge https://github.com/acme/api/pull/40" }).kind, "unlinked", "#40 is not #4");
   assert.equal(bang(p, { command: "gh pr merge https://github.com/acme/api/pull/4 --squash" }).kind, "seen");
+  const u = ownerWorld();
+  u.item(T, { verify: { kind: "pr_merged", pr: "acme/api#4" } });
+  assert.equal(bang(u, { command: "gh pr merge https://github.com/acme/api/pull/4", repo: null }).kind, "seen", "the PR URL names the repo the hook does not know");
+  assert.equal(bang(u, { command: "gh pr merge https://github.com/acme/web/pull/4", repo: "acme/api" }).kind, "unlinked", "a URL to another repo is not this PR");
 
   const s = ownerWorld();
   s.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });

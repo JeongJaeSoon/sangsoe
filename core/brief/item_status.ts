@@ -2,7 +2,8 @@ import type { ItemState, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, 
 import { waiterReading } from "../decision/held.ts";
 import { countsAsEvidence } from "../owner/marks.ts";
 import { decision } from "../store/views/decision.ts";
-import { depsGraph, type GraphRead } from "./graph.ts";
+import { graphRead } from "../graph/read.ts";
+import type { GraphRead } from "./graph.ts";
 import type { BriefTask } from "./types.ts";
 
 export type Priority = "P0" | "P1" | "P2" | "P3";
@@ -54,12 +55,12 @@ function stateOf(t: BriefTask, hold: boolean, held: ReturnType<typeof waiterRead
   if (held) return held;
   if (t.status === "dispatched") return "in_progress";
   if (t.status === "blocked" || t.status === "failed") return hold ? "on_hold" : "blocked";
-  if (t.status === "ready") return "ready";
+  // Orca's own `ready` is not enough: GRAPH's extra edges, trigger and hold decide (decision 147).
   return ready ? "ready" : "planned";
 }
 
 /** Items are Orca Tasks with an item_created row; a row whose Task Orca no longer lists is left out. */
-export function itemFacts(input: ViewInput, graph: GraphRead = depsGraph): ItemFacts[] {
+export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemFacts[] {
   const extra = new Map<string, Record<string, unknown>>();
   const created = new Map<string, StoredEvent>();
   const transition = new Map<string, StoredEvent>();

@@ -1,9 +1,10 @@
 // Plugin tests live outside orca-plugin/ so they are not part of the folder Orca fingerprints.
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { coreUrl, type PanelCore } from "../orca-plugin/core-link.ts";
 import activate, { deactivate, EVENTS, type OrcaWorker } from "../orca-plugin/main.ts";
 import { type ExecProbe, meetsSqliteFloor, ownKey, probeExec, probeSqlite } from "../orca-plugin/probe.ts";
@@ -413,11 +414,22 @@ test("plugin code imports nothing outside orca-plugin/, and only core-link.ts na
   }
 });
 
-test("core-link finds the source core in a checkout and nothing in an empty tree", () => {
-  assert.equal(coreUrl()?.href, new URL("core/index.ts", root).href);
+test("core-link prefers the built core, falls back to the source core, and finds nothing in an empty tree", () => {
+  // Trees of its own, so a dist/ left in the checkout does not change the answer.
   const dir = mkdtempSync(join(tmpdir(), "sangsoe-link-"));
+  const tree = (name: string, files: readonly string[]) => {
+    for (const f of files) {
+      mkdirSync(join(dir, name, f, ".."), { recursive: true });
+      writeFileSync(join(dir, name, f), "");
+    }
+    return pathToFileURL(join(dir, name, "orca-plugin/core-link.ts")).href;
+  };
   try {
-    assert.equal(coreUrl(new URL(`file://${dir}/orca-plugin/core-link.ts`).href), null);
+    const checkout = tree("checkout", ["core/index.ts"]);
+    const built = tree("built", ["core/index.ts", "dist/core/index.js"]);
+    assert.equal(coreUrl(checkout)?.href, pathToFileURL(join(dir, "checkout/core/index.ts")).href);
+    assert.equal(coreUrl(built)?.href, pathToFileURL(join(dir, "built/dist/core/index.js")).href);
+    assert.equal(coreUrl(tree("empty", [])), null);
   } finally {
     rmSync(dir, { recursive: true });
   }

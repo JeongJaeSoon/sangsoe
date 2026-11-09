@@ -1,7 +1,7 @@
 import type { ReadyRow, ViewInput } from "../contract/views.ts";
 import { itemGraph, longestPath, weightOf } from "./critical.ts";
 import { type EdgeKind, foldFacts } from "./facts.ts";
-import { ready, why } from "./ready.ts";
+import { readiness, why } from "./ready.ts";
 
 // The read port brief (U9) and other readers take: plain task ids, one shape for edges from both homes.
 
@@ -15,7 +15,14 @@ export interface GraphEdge {
 const bare = (ref: string) => (ref.startsWith("item:") ? ref.slice(5) : ref);
 
 export const graphRead = {
-  ready: (input: ViewInput): ReadyRow[] => ready(input),
+  /**
+   * Every 🟢 item, the owner's included: item state reads this (decision 147). A lead's start list
+   * is ready(), which leaves owner_ready out.
+   */
+  ready: (input: ViewInput): ReadyRow[] =>
+    readiness(input)
+      .filter((r) => r.readiness === "ready" || r.readiness === "owner_ready")
+      .map((r) => ({ task: r.task, alias: r.item === r.task ? null : r.item })),
   /** Every live edge: Orca deps (as blocks) and extra edges. */
   edges(input: ViewInput): GraphEdge[] {
     const facts = foldFacts(input.events);
