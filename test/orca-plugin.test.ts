@@ -435,7 +435,7 @@ test("core-link prefers the built core, falls back to the source core, and finds
   }
 });
 
-test("activate starts the three monitors once the core opens, hints orca on agent status, and closes it", async () => {
+test("activate starts the four monitors once the core opens, hints orca on agent status, and closes it", async () => {
   const w = fakeWorker();
   const { clock, advance } = fakeClock();
   const handlers = new Map<string, (p: unknown) => void>();
@@ -463,10 +463,10 @@ test("activate starts the three monitors once the core opens, hints orca on agen
     await advance(55_000);
     assert.deepEqual(ran, ["orca", "orca"]);
     await advance(240_000);
-    assert.deepEqual(ran.filter((n) => n !== "orca").sort(), ["chat", "resource"]);
+    assert.deepEqual(ran.filter((n) => n !== "orca").sort(), ["chat", "pr", "pr", "resource"], "pr every two minutes");
     const report = (await w.handlers.get("probe.report")?.(null)) as { monitors: { state: string; last: Record<string, unknown> } };
     assert.equal(report.monitors.state, "running");
-    assert.deepEqual(Object.keys(report.monitors.last).sort(), ["chat", "orca", "resource"]);
+    assert.deepEqual(Object.keys(report.monitors.last).sort(), ["chat", "orca", "pr", "resource"]);
   } finally {
     deactivate();
   }
