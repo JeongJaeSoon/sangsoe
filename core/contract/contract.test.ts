@@ -35,7 +35,7 @@ const SPEC_TYPES = [
 ];
 
 const eventsDir = new URL("./events/", import.meta.url);
-const fixtures: { type: string; dedupe_key?: string; payload: Record<string, unknown> }[] = readFileSync(
+const fixtures: { type: string; target?: string; dedupe_key?: string; payload: Record<string, unknown> }[] = readFileSync(
   new URL("../../test/fixtures/events/events.jsonl", import.meta.url),
   "utf8",
 )
@@ -64,7 +64,7 @@ test("each type has one fixture line its validator accepts", () => {
     const def = eventDef(f.type);
     assert.ok(def, f.type);
     def.payload(f.payload, f.type);
-    if (f.dedupe_key) checkDedupeKey(def, f.dedupe_key);
+    if (f.dedupe_key) checkDedupeKey(def, f.dedupe_key, f.payload, { target: f.target });
   }
 });
 

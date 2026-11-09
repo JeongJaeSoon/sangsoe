@@ -193,7 +193,7 @@ export class Store {
     def.payload(e.payload, e.type);
     const extra = Object.keys(e.payload).filter((k) => !def.fields.includes(k));
     if (extra.length > 0) throw new ContractError(`${e.type}: unknown payload field(s) ${extra.join(", ")}`);
-    if (e.dedupe_key !== undefined) checkDedupeKey(def, e.dedupe_key, e.payload);
+    if (e.dedupe_key !== undefined) checkDedupeKey(def, e.dedupe_key, e.payload, { target: e.target });
     else if (def.dedupeRequired) throw new ContractError(`${e.type} needs a dedupe_key`);
     if (e.type === "item_transition" && !canTransition(e.payload.from, e.payload.to)) {
       throw new ContractError(`item_transition ${e.payload.from} → ${e.payload.to} is not in the transition table`);

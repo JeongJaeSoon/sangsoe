@@ -4,5 +4,5 @@ import { defineEvent, edgeKind, str } from "../define.ts";
 export default defineEvent(
   "edge_added",
   { pred: str, succ: str, kind: edgeKind },
-  { dedupe: "edge", dedupeRequired: true, sources: ["GRAPH"] },
+  { dedupe: "edge", dedupeBound: (p) => [p.pred, p.succ, p.kind], dedupeClosed: true, sources: ["GRAPH"] },
 );

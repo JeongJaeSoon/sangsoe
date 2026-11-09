@@ -27,7 +27,7 @@
 {"type":"main_red","source":"pr-monitor","payload":{"repo":"acme/api","sha":"d4e5f6a","run_id":"9003"}}
 {"type":"mention_new","source":"chat-monitor","payload":{"url":"https://chat.example/acme/1"}}
 {"type":"model_changed","source":"lead:api","payload":{"from":"standard","to":"deep","reason":"risky migration"}}
-{"type":"notified","source":"notify","target":"lead:api","dedupe_key":"notify:lead:api:item_ready:task_b2","payload":{"msg_id":"msg_2","to":"run:run_1","msg_type":"status"}}
+{"type":"notified","source":"notify","target":"lead:api","dedupe_key":"notify:lead%3Aapi:item_ready:task_b2","payload":{"msg_id":"msg_2","to":"run:run_1","msg_type":"status"}}
 {"type":"observed_change","source":"orca-monitor","payload":{"task":"task_a1","field":"lastOutputAt"}}
 {"type":"owner_act_unlinked","source":"pr-monitor","payload":{"act":"merged acme/api#13 on GitHub"}}
 {"type":"owner_action","source":"UserPromptSubmit","payload":{"origin":"chat","summary":"start the api version work","hash":"sha256:0f1e","cc_session":"sess-1","cc_message":"uuid-1"}}

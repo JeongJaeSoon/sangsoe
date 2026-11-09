@@ -9,5 +9,5 @@ export default defineEvent(
     task: opt(orcaId),
     gate: opt(orcaId),
   },
-  { dedupe: "decision", dedupeTarget: (p) => p.decision_key, needs: "judgment" },
+  { dedupe: "decision", dedupeBound: (p) => [p.decision_key], needs: "judgment" },
 );

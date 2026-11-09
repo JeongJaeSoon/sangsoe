@@ -130,10 +130,14 @@ export const decisionNo = match(/^d[0-9]{3,}$/, "dNNN");
 export const isoUtc = match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/, "ISO UTC timestamp");
 export const priority = oneOf("P0", "P1", "P2", "P3");
 export const edgeKind = oneOf("blocks", "after", "stacked_on", "deploys_after");
-/** Orca ids (Task, Dispatch, Run, gate, message, worktree): the only Orca facts sqlite keeps. No ':' so a
- * dedupe_key segment holding one is unambiguous. */
-/** Opaque: sangsoe never parses an Orca id. dedupe keys encode it (dedupeSegment). */
+/** Orca ids (Task, Dispatch, Run, gate, message, worktree): the only Orca facts sqlite keeps. Opaque:
+ * sangsoe never parses one, and a dedupe_key carries it encoded (dedupeSegment). */
 export const orcaId = str;
+
+/** The event-row columns a dedupe key may be bound to besides the payload. */
+export interface DedupeRow {
+  readonly target?: string | undefined;
+}
 export const who = str;
 
 export type Needs = "none" | "action" | "judgment";
@@ -149,8 +153,10 @@ export interface EventDef<T extends string = string, P = unknown> {
   readonly dedupe: string;
   /** Writes without a dedupe_key are refused: the type's invariant rests on the key. */
   readonly dedupeRequired: boolean;
-  /** The key's <target> derived from the payload, so a key cannot point at another row's subject. */
-  dedupeTarget?(payload: P): string;
+  /** The key's leading segments (before encoding) derived from the row, so one condition has one key. */
+  dedupeBound?(payload: P, row: DedupeRow): readonly string[];
+  /** The key is exactly <prefix> + the bound segments, with no condition after them. */
+  readonly dedupeClosed: boolean;
   /** When set, only these `source` values may write the type (e.g. edges only from GRAPH). */
   readonly sources: readonly string[] | null;
   /** Written only by a store method that keeps it atomic with other rows, never by Store.append. */
@@ -166,7 +172,8 @@ export function defineEvent<const T extends string, S extends Shape>(
     refine?: (v: Readonly<Record<string, unknown>>, path: string) => void;
     dedupe?: string;
     dedupeRequired?: boolean;
-    dedupeTarget?: (payload: Infer<S>) => string;
+    dedupeBound?: (payload: Infer<S>, row: DedupeRow) => readonly string[];
+    dedupeClosed?: boolean;
     sources?: readonly string[];
     storeOnly?: boolean;
     needs?: Needs;
@@ -180,8 +187,9 @@ export function defineEvent<const T extends string, S extends Shape>(
     payload: obj(shape, opts.refine),
     fields: Object.keys(shape),
     dedupe: opts.dedupe ?? type,
-    dedupeRequired: opts.dedupeRequired ?? opts.dedupeTarget !== undefined,
-    ...(opts.dedupeTarget ? { dedupeTarget: opts.dedupeTarget } : {}),
+    dedupeRequired: opts.dedupeRequired ?? opts.dedupeBound !== undefined,
+    ...(opts.dedupeBound ? { dedupeBound: opts.dedupeBound } : {}),
+    dedupeClosed: opts.dedupeClosed ?? false,
     sources: opts.sources ?? null,
     storeOnly: opts.storeOnly ?? false,
     needs: opts.needs ?? "none",

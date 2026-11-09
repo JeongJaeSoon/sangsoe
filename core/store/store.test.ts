@@ -65,13 +65,32 @@ test("event rows can be neither updated nor deleted (2, C2)", () => {
 
 test("UNIQUE(dedupe_key): a second writer of the same key gets the first row back (2, C2)", () => {
   const store = mem();
-  const key = "notify:lead:api:item_ready:task_b2";
+  const notified = eventDef("notified");
+  assert.ok(notified);
+  const key = dedupeKey(notified, "lead:api", "item_ready", "task_b2");
+  assert.equal(key, "notify:lead%3Aapi:item_ready:task_b2");
   const payload = { msg_id: "m1", to: "run:r1", msg_type: "status" };
-  const a = store.append({ type: "notified", source: "notify", dedupe_key: key, payload });
-  const b = store.append({ type: "notified", source: "queue-monitor", dedupe_key: key, payload });
+  const a = store.append({ type: "notified", source: "notify", target: "lead:api", dedupe_key: key, payload });
+  const b = store.append({ type: "notified", source: "queue-monitor", target: "lead:api", dedupe_key: key, payload });
   assert.deepEqual(a, { seq: 1, inserted: true });
   assert.deepEqual(b, { seq: 1, inserted: false }, "ON CONFLICT DO NOTHING RETURNING yields no row; the existing seq is read");
-  assert.equal(store.events().length, 1);
+  const raw = "notify:lead:api:item_ready:task_b2";
+  assert.throws(
+    () => store.append({ type: "notified", source: "notify", target: "lead:api", dedupe_key: raw, payload }),
+    /keys are "notify:lead%3Aapi\[/,
+    "the unencoded spelling of the same condition is refused, so it cannot become a second row",
+  );
+  assert.throws(() => store.append({ type: "notified", source: "notify", dedupe_key: key, payload }), /names who was told/);
+  const edge = { pred: "task:a", succ: "task:b", kind: "blocks" } as const;
+  const edgeKey = "edge:task%3Aa:task%3Ab:blocks";
+  assert.equal(store.append({ type: "edge_added", source: "GRAPH", dedupe_key: edgeKey, payload: edge }).inserted, true);
+  for (const k of ["edge:task:a:task:b:blocks", `${edgeKey}:again`]) {
+    assert.throws(
+      () => store.append({ type: "edge_added", source: "GRAPH", dedupe_key: k, payload: edge }),
+      /keys are "edge:task%3Aa:task%3Ab:blocks"/,
+    );
+  }
+  assert.equal(store.events().length, 2);
 });
 
 test("append validates type, payload, dedupe prefix and the transition table", () => {
@@ -115,11 +134,11 @@ test("append guards: writer, unknown or nested Orca fields, required and payload
   );
   assert.throws(
     () => store.append({ type: "item_ready", source: "queue-monitor", dedupe_key: "ready:t2:h", payload: { task: "t1" } }),
-    /start with "ready:t1"/,
+    /keys are "ready:t1\[/,
   );
   assert.throws(
     () => store.append({ type: "item_ready", source: "queue-monitor", dedupe_key: "ready:t1:x:h", payload: { task: "t1:x" } }),
-    /start with "ready:t1%3Ax"/,
+    /keys are "ready:t1%3Ax\[/,
   );
   const ready = eventDef("item_ready");
   assert.ok(ready);

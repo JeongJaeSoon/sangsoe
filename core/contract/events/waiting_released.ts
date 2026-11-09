@@ -9,5 +9,5 @@ export default defineEvent(
     by: oneOf("owner", "button", "unknown"),
     evidence: str,
   },
-  { dedupeTarget: (p) => p.ref },
+  { dedupeBound: (p) => [p.ref], dedupeClosed: true },
 );
