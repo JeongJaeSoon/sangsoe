@@ -1,6 +1,6 @@
 # 143. main CI 분류, 재실행 1회의 주인, gh 한도
 
-**읽는 것.** `pr_merged` 가 `mainWatchHours`(24) 안에 있고 그 저장소·sha 에 `main_green`·`main_red` 가 아직 없으면 `repos/<repo>/actions/runs?head_sha=<merge sha>&event=push` 를 읽는다. 실패한 run 만 `actions/runs/<id>/jobs?per_page=1` 의 `total_count` 를 더 읽는다.
+**읽는 것.** 저장소마다 가장 늦은 `pr_merged` 하나만 본다(land 는 저장소의 마지막 `main_*` 줄을 읽으므로, 옛 sha 를 새 sha 뒤에 판정하면 옛 빨강이 새 초록을 덮는다. 같은 라운드의 `pr_merged` 는 머지 시각 순으로 쓴다). 그 줄이 `mainWatchHours`(24) 안에 있고 그 저장소·sha 에 `main_green`·`main_red` 가 아직 없으면 `repos/<repo>/actions/runs?head_sha=<merge sha>&event=push` 를 읽는다. 실패한 run 만 `actions/runs/<id>/jobs?per_page=1` 의 `total_count` 를 더 읽는다.
 
 | run 의 모양 | 판정 | 쓰는 것 |
 |---|---|---|
