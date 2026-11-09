@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import type { Exec } from "../../core/contract/orca.ts";
 import { recordResource, resourceRecord } from "../../core/index.ts";
 import {
   assertNeverForbidden,
@@ -267,7 +266,7 @@ test("reap_docker_order: a compose project two owners record marks every shared 
   const w = world();
   finishedCard(w, "stack-a");
   let containers = "c1\n";
-  const compose: Exec = async (_file, args) => {
+  const compose: Parameters<typeof resourceRecord>[1] = async (_file, args) => {
     const out = args.includes("ps") ? containers : "data\n";
     return { code: 0, stdout: out, stderr: "" };
   };
