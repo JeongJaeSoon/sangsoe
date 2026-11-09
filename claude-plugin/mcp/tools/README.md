@@ -36,7 +36,7 @@ export default {
 
 | tool | 하는 일 | 입력 스키마(자리표시) | 단위 |
 |---|---|---|---|
-| `item_create` | 항목 만들기(Orca `task-create --deps` + 부가 정보) | `{title, spec, deps?, priority?, exit_condition?, verify?, cmd_hint?}` | 미정 |
+| `item_create` | 항목 만들기(Orca `task-create --deps` + `item_created`). CLI `sangsoe item new` 와 같은 Outcome | `{runId, spec, who, doneWhen, title?, deps?}` | U10 |
 | `item_transition` | 상태 전환(Orca `task-update` + `item_transition`) | `{item, to, reason?}` | 미정 |
 | `priority_set` | 우선순위 바꾸기 | `{item, priority}` | 미정 |
 | `edge_add` | 부가 간선 더하기(순환·없는 항목 거부) | `{kind, pred, succ}` | U7 |
@@ -48,6 +48,8 @@ export default {
 | `land` | land 판정 함수 호출(머지 예약 또는 "승인되면 머지") | `{pr, head_sha}` | U11 |
 | `handoff_save` | 판단 상태 넷을 Orca `handoff` 메시지로 남기기 | `{next, waiting, open_questions, reply_to}` | U13 |
 | `review_ask_record` | 리뷰 의뢰를 `review_ask_sent` 로 남기기 | `{pr, reviewer, channel}` | U13 |
+
+표 밖의 tool 하나: `start_unit`(U10)은 세션을 여는 유일한 길인 코어 시작 함수(결정 94)를 부른다. 입력은 `{role, worktreeId, runId, childRole, taskId?, task 또는 spec, title?, deps?, lateAnswers?, references?, agent?}` 이다.
 
 ## plugin 이 서버를 싣는 줄(제안)
 

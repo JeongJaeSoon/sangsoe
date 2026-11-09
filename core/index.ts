@@ -60,6 +60,19 @@ export {
   readMergeConditions,
 } from "./gh/merge-conditions.ts";
 
+export * from "./start/index.ts";
+export {
+  capacity,
+  DEFAULT_THRESHOLDS,
+  judgeLoad,
+  type LoadLevel,
+  type LoadSample,
+  type LoadThresholds,
+  type LoadVerdict,
+  sampleLoad,
+} from "./capacity/capacity.ts";
+export { type RecoverPlan, type RecoverRow, recoverPlan, renderRecover } from "./recover/recover.ts";
+
 export {
   type Check,
   type CheckContext,
