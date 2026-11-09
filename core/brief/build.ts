@@ -2,7 +2,8 @@ import type { ItemState, OwnerTodoRow, WaitsOn } from "../contract/index.ts";
 import { STATE_LABEL } from "../contract/index.ts";
 import { linkedActs } from "../owner/link.ts";
 import { item_timeline } from "../store/views/item_timeline.ts";
-import { depsGraph, type GraphRead } from "./graph.ts";
+import { graphRead } from "../graph/read.ts";
+import type { GraphRead } from "./graph.ts";
 import { groupBriefFrom } from "./group.ts";
 import { type ItemFacts, itemFacts, OTHERS, rank } from "./item_status.ts";
 import { ownerTodoFrom } from "./owner_todo.ts";
@@ -119,7 +120,7 @@ function unlinkedActs(input: BriefInput, showHours: number): UnlinkedAct[] {
 export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview {
   const doneDays = opts.doneDays ?? 7;
   const now = input.now;
-  const facts = itemFacts(input, opts.graph ?? depsGraph);
+  const facts = itemFacts(input, opts.graph ?? graphRead);
   const byAlias = new Map(facts.map((f) => [f.alias, f]));
   const todo = ownerTodoFrom(input, facts);
   const groups = groupBriefFrom(input, facts);
@@ -262,7 +263,7 @@ function todoRow(input: BriefInput, r: OwnerTodoRow, byAlias: ReadonlyMap<string
 
 /** Stage 2: one group's rows by state, its dependency edges, critical path and why-not-ready rows. */
 export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions = {}): GroupDetail | null {
-  const graph = opts.graph ?? depsGraph;
+  const graph = opts.graph ?? graphRead;
   const key = lead === "그 외" ? OTHERS : lead;
   const facts = itemFacts(input, graph);
   const meta = groupBriefFrom(input, facts).find((g) => g.lead === key);
@@ -338,7 +339,7 @@ function chainText(type: string, p: Record<string, unknown>): string {
 
 /** Stage 3: the owner's words → class → transitions → evidence → linked PRs and decisions. */
 export function buildItem(input: BriefInput, alias: string, opts: BuildOptions = {}): ItemDetail | null {
-  const f = itemFacts(input, opts.graph ?? depsGraph).find((x) => x.alias === alias);
+  const f = itemFacts(input, opts.graph ?? graphRead).find((x) => x.alias === alias);
   if (!f) return null;
   const rows: Row[] = item_timeline(input, f.task)
     .filter((e) => !SKIP.has(e.type))

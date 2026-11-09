@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildBrief, dedupeKey, EVENTS, graphRead, itemFacts, owner_todo, ownerDone, Store, type ViewInput, type ViewTask, why } from "../../core/index.ts";
+import { buildBrief, dedupeKey, type EdgeKind, EVENTS, graphRead, itemFacts, owner_todo, ownerDone, Store, type ViewInput, type ViewTask, why } from "../../core/index.ts";
 
 // An owner item's state comes from GRAPH readiness, not from Orca's status alone (decision 147).
 
@@ -11,7 +11,7 @@ const FREE = "task_000000000003";
 const LEAD = "task_000000000004";
 const GONE = "task_000000000009";
 
-function edge(store: Store, pred: string, succ: string, kind: string) {
+function edge(store: Store, pred: string, succ: string, kind: EdgeKind) {
   const p = `item:${pred}`;
   const s = `item:${succ}`;
   store.append({ type: "edge_added", source: "GRAPH", payload: { pred: p, succ: s, kind }, dedupe_key: dedupeKey(EVENTS.edge_added, p, s, kind) });
@@ -19,7 +19,7 @@ function edge(store: Store, pred: string, succ: string, kind: string) {
 
 function world(extra?: (store: Store) => void): ViewInput {
   const store = Store.open({ path: ":memory:", clock: () => "2026-11-10T09:00:00.000Z" });
-  const item = (task: string, alias: string, who: string, execBy?: string) => {
+  const item = (task: string, alias: string, who: string, execBy?: "owner") => {
     store.append({ type: "item_created", source: "test", payload: { task, alias, who, done_when: "done", owner_action: 0 }, entity: "task", entity_id: task });
     if (execBy) store.append({ type: "item_extra_set", source: "test", payload: { task, exec_by: execBy }, entity: "task", entity_id: task });
   };
@@ -61,7 +61,7 @@ test("owner_ready and plain ready items stay 🟢: the owner's on owner_todo, th
   assert.deepEqual(
     graphRead.ready(input).map((r) => r.task),
     [FREE, LEAD],
-    "ready() keeps owner_ready rows",
+    "the brief's port keeps owner_ready rows",
   );
   assert.equal(stateOf(input, FREE), "ready");
   assert.equal(stateOf(input, LEAD), "ready");
