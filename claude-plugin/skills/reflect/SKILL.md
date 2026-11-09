@@ -9,7 +9,7 @@ description: "Use to learn from finished sangsoe work: turn a session's or progr
 
 ## 교훈
 
-1. **재료.** 그 세션·프로그램의 기록을 resource `item_timeline`(항목별 원문 → 분류 → 전환 → 증거 → PR·결정)과 PR 리뷰 원문에서 모은다. 기억으로 쓰지 않는다.
+1. **재료.** 그 세션·프로그램의 기록을 resource `item_timeline`(항목마다 `sangsoe://item/<Task id 나 iNNN>/timeline`: 원문 → 분류 → 전환 → 증거 → PR·결정)과 PR 리뷰 원문에서 모은다. 기억으로 쓰지 않는다.
 2. **리뷰어 셋.** 서로 다른 관점의 읽기 전용 서브에이전트 셋에게 재료만 주고 따로 묻는다: 무엇이 틀렸고, 어느 규칙이 있었으면 막았나. 너의 결론은 주지 않는다. 거부 문단(`write-brief` skill)을 지시문에 통째로 붙인다.
 3. **거르기.** 한 번만 일어난 일은 교훈이 아니다. 서로 다른 두 번이 있어야 스킬을 고친다. 기계로 확인할 수 있는 규칙이면 스킬 문장이 아니라 hook·시험으로 제안한다.
 4. **보내기.** 고칠 거리마다 어느 skill·agent 의 어느 절인지, 무엇을 바꾸는지, 근거 두 개를 적어 리드(없으면 오케스트레이터)에게 보낸다. 스킬 수정은 `write-skill` 순서를 따르는 별도 작업이다.

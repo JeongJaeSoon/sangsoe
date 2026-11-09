@@ -206,6 +206,102 @@ test("the allow-list holds no entry that is no longer a difference", () => {
   assert.deepEqual([...ALLOWED.keys()].filter((k) => !live.has(k)), []);
 });
 
+// --- the judgment layer (decision 162): skill and agent bodies may name only what exists. A name
+// in a tool position is a tool, one after "resource" is a resource, one after "Orca" is an Orca
+// subcommand, and any other snake_case name in backticks is a word the code says.
+const walkMd = (dir: string): string[] =>
+  readdirSync(`${ROOT}${dir}`, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? (e.name === "evals" ? [] : walkMd(`${dir}/${e.name}`)) : e.name.endsWith(".md") ? [`${dir}/${e.name}`] : [],
+  );
+const judgment = [...walkMd("claude-plugin/agents"), ...walkMd("claude-plugin/skills")].filter((f) => !f.endsWith("README.md"));
+const resourceCode = new Set(stems("claude-plugin/mcp/resources"));
+const skillNames = new Set(
+  readdirSync(`${ROOT}claude-plugin/skills`, { withFileTypes: true }).flatMap((e) =>
+    !e.isDirectory() ? [] : e.name === "general" ? readdirSync(`${ROOT}claude-plugin/skills/general`) : [e.name],
+  ),
+);
+const orcaSubcommands = new Set([...read("core/orca/commands.ts").matchAll(/path: \[([^\]]+)\]/g)].map((m) => /"([a-z-]+)"\]?$/.exec(m[1]?.trim() ?? "")?.[1] ?? ""));
+const walkTs = (dir: string): string[] =>
+  readdirSync(`${ROOT}${dir}`, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walkTs(`${dir}/${e.name}`) : /\.ts$/.test(e.name) && !e.name.includes(".test.") ? [`${dir}/${e.name}`] : [],
+  );
+const codeWords = new Set(
+  [...walkTs("core"), ...walkTs("claude-plugin/mcp")].flatMap((f) => {
+    const src = read(f).replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+    return [...src.matchAll(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g)].map((m) => m[0]);
+  }),
+);
+// Decision 160's assumed names that were not built (162 says what each became). None may come back.
+const NOT_BUILT = ["owner_class", "notify", "item_trigger", "item_transition", "priority_set"];
+// Words the judgment layer says that are not sangsoe code, each with whose word it is.
+const OTHER_WORDS = new Map([
+  ["merge_ready", "the worker_done report a worker sends after land (decision 162)"],
+  ["worker_cannot_coordinate_own_run", "Orca's refusal of a Task created in the worker's own Run"],
+  ["input_match", "a Claude Code plugin eval grader field"],
+]);
+
+type Mention = { file: string; name: string; why: string };
+function judgmentMentions(): Mention[] {
+  const bad: Mention[] = [];
+  for (const file of judgment) {
+    const text = read(file);
+    const flag = (name: string, why: string) => bad.push({ file, name, why });
+    for (const m of text.matchAll(/resource `([^`]+)`/g)) if (!resourceCode.has(m[1] ?? "")) flag(m[1] ?? "", "not a resource");
+    for (const m of text.matchAll(/Orca `([a-z-]+)/g)) if (!orcaSubcommands.has(m[1] ?? "")) flag(m[1] ?? "", "not an Orca subcommand");
+    for (const m of text.matchAll(/`([a-z_]+)` tool\b|\btool `([a-z_]+)`/g)) {
+      const name = m[1] ?? m[2] ?? "";
+      if (!toolCode.has(name)) flag(name, "called a tool, not a tool");
+    }
+    for (const name of NOT_BUILT) if (!toolCode.has(name) && text.includes(`\`${name}\``)) flag(name, "assumed by decision 160, not built");
+    // A table column headed "tool": each name in it is a tool, an Orca subcommand or a skill.
+    const lines = text.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const col = cells(lines[i] ?? "").findIndex((c) => /\btool\b/.test(c));
+      if (col < 0 || !/^\|[-|: ]+\|$/.test(lines[i + 1] ?? "")) continue;
+      for (let j = i + 2; cells(lines[j] ?? "").length > 0; j++) {
+        const cell = cells(lines[j] ?? "")[col] ?? "";
+        for (const m of cell.matchAll(/(Orca )?`([^`]+)`( skill)?/g)) {
+          const name = m[2] ?? "";
+          if (m[1] || m[3]) continue; // checked by the Orca rule above, or a skill name below
+          if (!toolCode.has(name)) flag(name, "in a tool column, not a tool");
+        }
+        for (const m of cell.matchAll(/`([^`]+)` skill/g)) if (!skillNames.has(m[1] ?? "")) flag(m[1] ?? "", "not a skill");
+      }
+    }
+    for (const m of text.matchAll(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g)) {
+      const name = m[1] ?? "";
+      if (!toolCode.has(name) && !resourceCode.has(name) && !codeWords.has(name) && !OTHER_WORDS.has(name)) flag(name, "a word no code says");
+    }
+  }
+  return bad;
+}
+
+test("skill and agent bodies name only tools, resources and Orca commands that exist", () => {
+  assert.ok(judgment.length > 10 && orcaSubcommands.has("task-update") && orcaSubcommands.has("send"), "the readers found nothing");
+  assert.deepEqual(judgmentMentions(), []);
+});
+
+test("the judgment-layer check catches each way a name can be missing", () => {
+  const saved = judgment.splice(0, judgment.length, "test/fixtures/judgment-names.md");
+  try {
+    assert.deepEqual(
+      judgmentMentions().map((m) => `${m.name}: ${m.why}`),
+      [
+        "timeline: not a resource",
+        "task-close: not an Orca subcommand",
+        "item_ready: called a tool, not a tool",
+        "item_transition: assumed by decision 160, not built",
+        "ask_due: in a tool column, not a tool",
+        "item_transition: in a tool column, not a tool",
+        "nope: not a skill",
+        "item_snooze: a word no code says",
+      ],
+    );
+  } finally {
+    judgment.splice(0, judgment.length, ...saved);
+  }
+});
+
 test("every decision the allow-list cites is written in decisions.md", () => {
   const decisions = read("docs/decisions.md");
   for (const n of new Set(ALLOWED.values())) assert.match(decisions, new RegExp(`^${n}\\. \\*\\*`, "m"), `decision ${n}`);

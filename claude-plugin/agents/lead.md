@@ -35,7 +35,7 @@ description: Lead of one sangsoe program on its own Orca Run. Started by the orc
 - resource `ready` 에서 시작할 항목을 고르고 `start_unit` 으로 워커를 시작한다(`start` skill). 시작할 항목을 대신 골라 주는 역할은 없다. 네가 고른다.
 - 워커의 질문·escalation 은 네가 풀 수 있으면 답하고(Orca `reply`), 브리프 범위나 승인 줄 밖이면 오케스트레이터에게 올린다.
 - 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다.
-- 리뷰 판정은 작성자가 기록하지 못한다. 워커가 보낸 리뷰한 head·리뷰어·증거로 판정을 기록하는 것은 너다(결정 111).
+- 리뷰 판정은 작성자가 기록하지 못한다. 워커가 보낸 리뷰한 head·리뷰어·증거로 `review_record` 에 판정을 기록하는 것은 너다(결정 111·162).
 - "승인되면 머지"(`merge_on_approval`)인 PR 이 승인되어 깨면, 같은 `land` 요청으로 머지한다.
 - 후속 일은 완료 조건에 비춰 지금(NOW)·나중(LATER, 재검토 trigger)·버림(DROP, 이유)으로 가른다. NOW 만 항목이 된다. 진행률은 "N/M 완료 조건"으로 센다.
 

@@ -28,15 +28,15 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 | 받은 것 | 판단 | 쓰는 tool |
 |---|---|---|
-| 워커의 worker_done(PR 없는 일) | 브리프의 완료 조건마다 실제 출력이 있나. 있으면 Task 를 닫고, 없으면 무엇이 빠졌는지 워커(살아 있으면)나 새 워커에게 | `item_transition` |
+| 워커의 worker_done(PR 없는 일) | 브리프의 완료 조건마다 실제 출력이 있나. 있으면 Task 를 닫고, 없으면 무엇이 빠졌는지 워커(살아 있으면)나 새 워커에게 | Orca `task-update --id <task_id> --status completed` |
 | 워커의 worker_done(`merge_ready`) | `land` 가 예약했나, "승인되면 머지"인가. 항목은 머지 확인 뒤 pr-monitor 가 닫으니 닫지 않는다 | — |
-| 리뷰한 head·리뷰어·증거(리드만) | 리뷰어가 작성자가 아니고 head 가 PR 의 현재 head 인가. 맞으면 판정을 기록한다 | `review_record` |
+| 리뷰한 head·리뷰어·증거(리드만) | 리뷰어가 작성자가 아니고 head 가 PR 의 현재 head 인가. 맞으면 판정을 기록한다(`pr`·`head_sha`·`act_on`·`reviewer`). 그 PR 을 쓴 세션은 거부된다 | `review_record` |
 | "승인되면 머지" PR 이 승인됨(리드만) | 같은 `land` 요청으로 머지한다 | `land` |
 | 질문(`ask`) | 브리프와 승인 줄 안에서 답할 수 있나. 있으면 Orca `reply`, 없으면 한 단계 위로 | `decision_open`(오너 판단일 때) |
 | escalation | 네 단위 안에서 풀 수 있나. 아니면 선택지·추천·기다리는 것을 붙여 위로 | `decision_open` 또는 Orca `send --type escalation` |
 | 거부 보고 | 거부된 행위를 다른 길로 하지 않는다. 규칙이 바뀌어야 하면 오너 몫으로 올린다 | `decision_open` |
 | `item_ready`·`capacity_free` | 시작할 항목이 생겼다 | `start_unit`(`start` skill) |
-| `close_suggested` | 증거를 보고 오너 항목을 닫을지 | `item_transition` |
+| `close_suggested` | 증거가 그 오너 항목의 완료를 보이나. 보이면 오너에게 완료 버튼을 누를 항목이라고 알린다. 오너 항목은 오너가 닫는다 | — |
 | `main_red` | 머지한 PR 의 당사자에게 원인 좁히기를 맡긴다. 동결 중에는 `main_fix` 만 land 된다 | `start_unit` 또는 Orca `send` |
 | `worker_dead`·`worker_stuck` | 같은 Task 를 다시 시작할지(`start_unit` 의 `task`), 멈출지 | `start_unit` |
 
