@@ -10,7 +10,8 @@ test("sangsoe monitor run <name> runs one round of the named monitor, dry run pa
   const fake = (o: { dryRun: boolean; dbPath?: string }): MonitorRunner => {
     opened.push(o);
     return {
-      run: async (name) => ({ monitor: name, planned: [], written: [], unseen: [], aborted: false }),
+      run: async (name) => ({ monitor: name, planned: [], written: [], unseen: [], calls: [], aborted: false }),
+      stall: async () => ({ planned: [], written: [], calls: [] }),
       close: () => void closed++,
     };
   };

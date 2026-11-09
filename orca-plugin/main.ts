@@ -5,9 +5,11 @@
 import { loadMonitors, type MonitorRunner } from "./core-link.ts";
 import { chatMonitor } from "./monitors/chat.ts";
 import { orcaMonitor } from "./monitors/orca.ts";
+import { queueMonitor } from "./monitors/queue.ts";
 import { resourceMonitor } from "./monitors/resource.ts";
 import { type LastRound, monitorRound } from "./monitors/spec.ts";
 import { ownKey, probeExec, probeSqlite } from "./probe.ts";
+import { stallWatch } from "./stall.ts";
 import { type Clock, nodeClock, type Round, startRounds } from "./timer.ts";
 
 // The few host members this worker uses; `orca plugin types` cannot write the full typings on
@@ -25,7 +27,7 @@ export type OrcaWorker = {
 export type WorkerDeps = { clock: Clock; exec: typeof probeExec; monitors?: () => Promise<MonitorRunner | string> };
 
 export const EVENTS = ["workspace.created", "workspace.removed", "workspace.changed", "agent.status.changed"] as const;
-export const MONITORS = [orcaMonitor, resourceMonitor, chatMonitor];
+export const MONITORS = [orcaMonitor, resourceMonitor, chatMonitor, queueMonitor];
 // Which Orca event asks which monitor for an early round (a hint; decision 83).
 const HINTS: Partial<Record<(typeof EVENTS)[number], string>> = { "agent.status.changed": orcaMonitor.name };
 const STATUS_ID = "summary";
@@ -45,6 +47,7 @@ export default function activate(
   let stopped = false;
   const lastRounds = new Map<string, LastRound>();
   let monitorState = deps.monitors ? "loading" : "off";
+  let stall: ReturnType<typeof stallWatch> | null = null;
   for (const e of EVENTS) {
     events[e] = { count: 0, lastAt: null };
     orca.events.on(e, () => {
@@ -55,6 +58,7 @@ export default function activate(
       }
       const target = HINTS[e];
       if (target) monitorRounds?.hint(target);
+      stall?.poke();
     });
   }
 
@@ -79,6 +83,7 @@ export default function activate(
     const open = runner;
     monitorRounds = null;
     runner = null;
+    stall = null;
     // A round still in flight holds the store: close it only after that round has returned.
     void (m?.stop() ?? Promise.resolve()).then(() => open?.close());
   };
@@ -92,6 +97,8 @@ export default function activate(
     if (stopped) return r.close();
     runner = r;
     monitorState = "running";
+    const check = r.stall?.bind(r);
+    if (check) stall = stallWatch(check, clock);
     monitorRounds = startRounds(
       MONITORS.map((m) => monitorRound(m, r, lastRounds)),
       clock,
@@ -110,15 +117,19 @@ export default function activate(
   orca.commands.register("sangsoe.open", openPanel);
   orca.panels.handle("probe.open", openPanel);
 
-  orca.panels.handle("probe.report", () => ({
+  orca.panels.handle("probe.report", () => {
+    stall?.poke();
+    return report();
+  });
+  const report = () => ({
     startedAt,
     node: process.version,
     sqlite: process.versions.sqlite ?? null,
     path: process.env.PATH ?? null,
     rounds: rounds.stats(),
-    monitors: { state: monitorState, rounds: monitorRounds?.stats() ?? {}, last: Object.fromEntries(lastRounds) },
+    monitors: { state: monitorState, rounds: monitorRounds?.stats() ?? {}, last: Object.fromEntries(lastRounds), stall: stall?.state() ?? null },
     events,
-  }));
+  });
   orca.panels.handle("probe.t1", async (input) => {
     const path = (input as { dbPath?: unknown } | null)?.dbPath;
     if (typeof path !== "string" || path === "") return { ok: false, error: "dbPath required" };

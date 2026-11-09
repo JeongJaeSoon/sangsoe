@@ -109,6 +109,11 @@ export { MONITORS, type MonitorRunner, openMonitors, runMonitor } from "./detect
 export { judgeOrca, type OrcaReads, type SessionActivity, sessionActivity } from "./detect/orca/judge.ts";
 export { judgeResource, type ResourceReads, withDiagnostics } from "./detect/resource/judge.ts";
 export { type ChatProvider, nullChatProvider } from "./detect/chat/provider.ts";
+export { judgeQueue, type Moot, QUEUE_SOURCE, type QueueJudgment, type ReadyItem, type Reanswer, type StaleAnswer } from "./detect/queue/judge.ts";
+export { judgeDrift } from "./detect/queue/drift.ts";
+export { judgeStall, STALL_SOURCE } from "./detect/queue/stall.ts";
+export { QUEUE_CALLER, queueRound, type StallReport, stallCheck } from "./detect/queue/round.ts";
+export { orcaPluginDrift, type PluginDrift } from "./checks/orca-plugin-version.ts";
 
 export {
   type LandAction,
