@@ -41,6 +41,7 @@ test("a template is checked: unknown need, cycle, owner gate without why_owner",
   );
   assert.throws(() => parseFlow(`${head}[[steps]]\nid = "a"\ndone_when = "d"\ngate = "owner"`), /owner gate has who/);
   assert.throws(() => parseFlow(`${head}[[steps]]\nid = "a"\ndone_when = "d"\nneeds = [{ step = "a", kind = "sometimes" }]`), /kind: one of/);
+  assert.throws(() => parseFlow(`${head}[[steps]]\nid = "a"\ndone_when = "d"\nneed = []`), /unknown key\(s\) need/);
 });
 
 test("--dry-run plans items and edges without writing; vars are checked", async () => {
@@ -62,6 +63,8 @@ test("--dry-run plans items and edges without writing; vars are checked", async 
   assert.equal(w.tasks.size, 0);
   const missing = planFlow(loadFlow("ship-change"), {});
   assert.ok(!missing.ok && missing.refusal.reason === "var repo is required");
+  const blank = planFlow(loadFlow("ship-change"), { repo: " " });
+  assert.ok(!blank.ok && blank.refusal.reason === "var repo is required", "an empty value is not a value");
   const extra = planFlow(loadFlow("ship-change"), { repo: "acme/api", nope: "1" });
   assert.ok(!extra.ok && /unknown var/.test(extra.refusal.reason));
 });
@@ -97,13 +100,18 @@ test("prod_gate: prod waits for the dev check and the dev stage record, and only
   w.complete(s.merge as string);
   assert.ok((await readyIds(w)).includes(s.deploy_dev as string));
   w.complete(s.deploy_dev as string);
-  stage(w, "acme/api#7", "dev");
 
   const before = why(await w.input(), s.deploy_prod as string);
-  assert.equal(before.readiness, "waiting", "no dev check evidence: prod is 📅");
-  assert.deepEqual(before.rows.map((r) => [r.kind, r.predState]), [["blocks", "📅 예정"]]);
+  assert.equal(before.readiness, "waiting", "no dev check evidence and no dev record: prod is 📅");
+  assert.deepEqual(before.rows.map((r) => [r.kind, r.predState]), [
+    ["blocks", "📅 예정"],
+    ["deploys_after", "머지됨 · dev 기록 없음"],
+  ]);
 
   w.complete(s.verify_dev as string);
+  const noRecord = why(await w.input(), s.deploy_prod as string);
+  assert.deepEqual(noRecord.rows.map((r) => [r.kind, r.predState]), [["deploys_after", "머지됨 · dev 기록 없음"]], "the dev check alone does not open prod");
+  stage(w, "acme/api#7", "dev");
   const after = why(await w.input(), s.deploy_prod as string);
   assert.equal(after.readiness, "owner_ready", "🟢 for the owner");
   assert.ok(!(await readyIds(w)).includes(s.deploy_prod as string), "not on a lead's start list");
@@ -144,6 +152,14 @@ test("flow_gap: an expansion cut short refuses ✅ until resumed, or until the m
   const root = [...w.tasks.values()].find((t) => t.parent === null)?.id as string;
   for (const t of w.tasks.values()) if (t.parent === root) w.complete(t.id);
   assert.deepEqual(doneBlockers(await w.input(), root), ["flow_gap: deploy_prod"]);
+
+  const created = new Map([...w.tasks.values()].filter((t) => t.parent === root).map((t) => [t.title, t.id]));
+  const dev = created.get("dev 배포 acme/api") as string;
+  const merge = created.get("머지 acme/api") as string;
+  assert.ok(
+    w.store.events({ type: "edge_added" }).some((x) => x.payload.pred === `item:${merge}` && x.payload.succ === `item:${dev}`),
+    "a created step keeps its deploys_after gate even when a later step's create fails",
+  );
 
   w.store.append({ type: "flow_step_skipped", source: "lead:api", subject: `item:${root}`, payload: { step: "deploy_prod", reason: "internal tool, no prod" } });
   assert.deepEqual(doneBlockers(await w.input(), root), []);

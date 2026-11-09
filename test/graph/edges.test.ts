@@ -1,7 +1,40 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addEdge, addEdgeTo, removeEdgeFrom, snapshotTasks, syncGraph } from "../../core/index.ts";
+import { addEdge, addEdgeTo, removeEdgeFrom, snapshotTasks, syncGraph, why } from "../../core/index.ts";
 import { bindItem, createGraphWorld } from "./world.ts";
+
+test("stacked_on and deploys_after read the predecessor item first: cancelled dangles, unread is 모름; after ends on any 🗑️", async () => {
+  const w = createGraphWorld();
+  w.task("t_a", "run_a");
+  w.task("t_b", "run_a");
+  w.task("t_c", "run_a");
+  w.task("t_ext", "run_b");
+  w.task("t_d", "run_a");
+  w.task("t_e", "run_a");
+  w.task("t_f", "run_a");
+  w.task("t_g", "run_a");
+  for (const [t, i] of [["t_a", "i001"], ["t_b", "i002"], ["t_c", "i003"], ["t_ext", "i004"], ["t_d", "i005"], ["t_e", "i006"], ["t_f", "i007"], ["t_g", "i008"]] as const) bindItem(w, t, i);
+  w.store.append({ type: "item_extra_set", source: "GRAPH", payload: { task: "t_c", flow: "t_c" } });
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#1", task: "t_a" } });
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#2", task: "t_c" } });
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#3", task: "t_ext" } });
+  w.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#2", merge_sha: "abc1234" } });
+  w.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#3", merge_sha: "abc1234" } });
+  w.store.append({ type: "stage_recorded", source: "lead:api", payload: { pr: "acme/api#2", stage: "merge", sha: "abc1234" } });
+  const snap = await w.snapshot(["run_a", "run_b"]);
+  for (const [pred, succ, kind] of [["i001", "i002", "stacked_on"], ["i003", "i005", "deploys_after"], ["i004", "i006", "stacked_on"], ["i008", "i007", "after"]] as const) {
+    assert.ok(addEdgeTo(w, snap, { pred, succ, kind }).ok);
+  }
+  w.cancel("t_a");
+  w.cancel("t_c");
+  (w.tasks.get("t_g") as { status: string }).status = "failed";
+  const input = await w.input(undefined, ["run_a"]);
+  const row = (task: string) => why(input, task).rows[0];
+  assert.deepEqual([row("t_b")?.dangling, why(input, "t_b").readiness], [true, "waiting"], "stacked_on: a cancelled predecessor with an open PR dangles");
+  assert.deepEqual([row("t_d")?.dangling, why(input, "t_d").readiness], [true, "waiting"], "deploys_after: merged and recorded, but the step was cancelled");
+  assert.equal(row("t_e")?.predState.startsWith("모름"), true, "stacked_on from an unread Run is 모름 even with its PR merged");
+  assert.equal(why(input, "t_f").readiness, "ready", "after: a failed predecessor has ended");
+});
 
 test("snapshot rows: deps as Orca prints them (a JSON string), run_id, a cancel kept in result", () => {
   const rows = snapshotTasks(

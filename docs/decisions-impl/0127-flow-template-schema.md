@@ -28,6 +28,6 @@
 
   모르는 var 를 넘기거나, 쓰인 var 가 없거나, `needs` 가 없는 단계를 가리키거나 순환을 이루면 거부한다.
 - **찾는 곳.** `~/.config/sangsoe/flows/<name>.toml` 이 기본 틀(`core/graph/flows/`)보다 앞선다.
-- **한 번에 펼친다.** `needs` 의 `blocks` 와 `blocks_on_var` 항목은 만들 때 Orca `--deps` 로, 나머지 종류는 단계를 다 만든 뒤 `graph add` 와 같은 길(`addEdgeTo`)로 쓴다. 단계는 위상 순서(같으면 틀 순서)로 만든다. 펼친 결과는 다시 펼치지 않는다(단계 안에 틀이 없다).
+- **한 번에 펼친다.** `needs` 의 `blocks` 와 `blocks_on_var` 항목은 만들 때 Orca `--deps` 로, 나머지 종류는 그 단계를 만든 바로 뒤에 `graph add` 와 같은 길(`addEdgeTo`)로 쓴다(결정 126). `[[steps]]` 의 모르는 키는 거부하고(오타가 게이트를 지우지 않게), 빈 값의 var 는 주지 않은 것으로 본다. 단계는 위상 순서(같으면 틀 순서)로 만든다. 펼친 결과는 다시 펼치지 않는다(단계 안에 틀이 없다).
 - **`--dry-run`** 은 `planFlow` 결과(단계·dep·간선·오너 단계)만 돌려주고 아무것도 쓰지 않는다. CLI 와 MCP `flow_expand` 가 같은 결과를 낸다.
 - **이어 펼치기와 `flow_gap`.** 요청 id 가 필수다. 같은 요청 id 로 다시 부르면 이미 만든 루트·단계를 찾아 이어서 만든다. `flow_expanded` 를 단계보다 먼저 쓰므로(결정 126) 끊긴 펼치기는 `flowGap` 이 빠진 단계를 돌려주고, `doneBlockers` 가 그 루트를 `flow_gap: <step>` 으로 ✅ 에서 막는다.

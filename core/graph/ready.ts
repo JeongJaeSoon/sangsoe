@@ -107,14 +107,14 @@ export function edgeOk(e: InEdge, facts: Facts, tasks: ReadonlyMap<string, ViewT
 
   const t = tasks.get(node.task);
   const state = taskState(t);
+  if (!t) return unknown("Orca 에서 이 Task 를 읽지 못했다");
+  // Decision 26: after ends on ✅ or 🗑️; every other kind leaves a 🗑️ predecessor dangling for the lead.
+  if (t.status === "failed") return e.kind === "after" ? met(state) : dangling(state);
   switch (e.kind) {
     case "blocks":
-      if (!t) return unknown("Orca 에서 이 Task 를 읽지 못했다");
-      if (DONE(t)) return met(state);
-      return t.status === "failed" ? dangling(state) : wait(state, "선행 항목 ✅ 완료를 기다린다");
+      return DONE(t) ? met(state) : wait(state, "선행 항목 ✅ 완료를 기다린다");
     case "after":
-      if (!t) return unknown("Orca 에서 이 Task 를 읽지 못했다");
-      return DONE(t) || CANCELLED(t) ? met(state) : wait(state, "선행 항목이 끝나기를 기다린다");
+      return DONE(t) ? met(state) : wait(state, "선행 항목이 끝나기를 기다린다");
     case "stacked_on": {
       const mine = [...facts.prs.values()].filter((p) => p.tasks.has(node.task)).map((p) => p.pr);
       if (mine.length === 0) return unknown("선행 항목에 붙은 PR 을 모른다");

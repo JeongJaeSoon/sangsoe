@@ -43,6 +43,8 @@ export interface FlowTemplate {
 const GATES: readonly Gate[] = ["owner", "timer", "ci", "pr"];
 const STAGES: readonly Stage[] = ["merge", "dev", "prod"];
 
+const STEP_KEYS = ["id", "title", "done_when", "needs", "stage", "gate", "who", "why_owner", "trigger", "blocks_on_var"];
+
 function fail(msg: string): never {
   throw new TomlError(msg);
 }
@@ -68,6 +70,9 @@ export function parseFlow(text: string): FlowTemplate {
   if (!Array.isArray(t.steps) || t.steps.length === 0) fail("steps: a template has at least one [[steps]]");
   const steps: FlowStep[] = (t.steps as TomlTable[]).map((s, i) => {
     const at = `steps[${i}]`;
+    // A misspelt key (`need = …`) would silently drop a gate.
+    const stray = Object.keys(s).filter((k) => !STEP_KEYS.includes(k));
+    if (stray.length > 0) fail(`${at}: unknown key(s) ${stray.join(", ")}`);
     const id = asStr(s.id, `${at}.id`) as string;
     const gate = s.gate === undefined ? undefined : GATES.includes(s.gate as Gate) ? (s.gate as Gate) : fail(`${at}.gate: one of ${GATES.join(", ")}`);
     const stage = s.stage === undefined ? undefined : STAGES.includes(s.stage as Stage) ? (s.stage as Stage) : fail(`${at}.stage: one of ${STAGES.join(", ")}`);
@@ -158,7 +163,7 @@ export interface FlowPlan {
 export function planFlow(t: FlowTemplate, given: Readonly<Record<string, string>>): Result<FlowPlan> {
   const vars: Record<string, string> = {};
   for (const [k, spec] of Object.entries(t.vars)) {
-    const v = given[k] ?? spec.default;
+    const v = given[k]?.trim() || spec.default;
     if (v === undefined) {
       if (spec.required) return refuse("invalid_input", `var ${k} is required`, `pass ${k}=<value>`);
       continue;
@@ -230,11 +235,25 @@ export async function expandFlow(
     });
   }
   const made: Record<string, string> = {};
+  // Steps come in need order, so a step's non-blocks predecessors exist when it is made; its edges
+  // go in right after it, and a cut-short expansion never leaves a made step without its gate.
+  const gate = async (s: PlannedStep): Promise<Result<true>> => {
+    if (s.edges.length === 0) return done(true);
+    const snap = await readSnapshot(deps.orca, [a.run]);
+    if (snap.unread.length > 0) return refuse("orca_unreadable", `step ${s.id}: task-list failed`, "re-run with the same request id once Orca answers");
+    for (const e of s.edges) {
+      const w = addEdgeTo(deps, snap.snapshot, { pred: itemRef(made[e.step] as string), succ: itemRef(made[s.id] as string), kind: e.kind });
+      if (!w.ok) return refuse(w.refusal.code, `step ${s.id}: ${w.refusal.reason}`, w.refusal.fix);
+    }
+    return done(true);
+  };
   for (const s of a.plan.steps) {
     facts = foldFacts(deps.store.events());
     const existing = [...facts.items.values()].find((x) => x.flow === root && x.step === s.id);
     if (existing) {
       made[s.id] = existing.task;
+      const g = await gate(s);
+      if (!g.ok) return g;
       continue;
     }
     const taskDeps = [...s.depSteps.map((id) => made[id] as string), ...s.depItems.map(resolve)];
@@ -261,13 +280,8 @@ export async function expandFlow(
         ...(s.trigger ? { trigger: s.trigger } : {}),
       },
     });
-  }
-  const snap = await readSnapshot(deps.orca, [a.run]);
-  for (const s of a.plan.steps) {
-    for (const e of s.edges) {
-      const w = addEdgeTo(deps, snap.snapshot, { pred: itemRef(made[e.step] as string), succ: itemRef(made[s.id] as string), kind: e.kind });
-      if (!w.ok) return refuse(w.refusal.code, `step ${s.id}: ${w.refusal.reason}`, w.refusal.fix);
-    }
+    const g = await gate(s);
+    if (!g.ok) return g;
   }
   return done({ root, steps: made, resumed });
 }
