@@ -1,13 +1,14 @@
 // Orca plugin worker entry. Orca starts it once the plugin is approved and keeps it running while
 // enabled (a `main` plus status bar items), so the timer rounds below need no outside scheduler.
 // Every static import stays inside this folder: Orca's approval and the content hash cover only it.
-// The core is reached at run time through core-link.ts alone (decision 132).
-import { loadMonitors, type MonitorRunner } from "./core-link.ts";
+// The core is reached at run time through core-link.ts alone (decisions 132, 136).
+import { loadMonitors, loadPanelCore, type MonitorRunner, type PanelCore } from "./core-link.ts";
 import { chatMonitor } from "./monitors/chat.ts";
 import { orcaMonitor } from "./monitors/orca.ts";
 import { queueMonitor } from "./monitors/queue.ts";
 import { resourceMonitor } from "./monitors/resource.ts";
 import { type LastRound, monitorRound } from "./monitors/spec.ts";
+import { panelHandlers } from "./panel/requests.ts";
 import { ownKey, probeExec, probeSqlite } from "./probe.ts";
 import { stallWatch } from "./stall.ts";
 import { type Clock, nodeClock, type Round, startRounds } from "./timer.ts";
@@ -24,20 +25,26 @@ export type OrcaWorker = {
 };
 
 /** `monitors` is absent in tests that do not exercise them, so those never open the real store. */
-export type WorkerDeps = { clock: Clock; exec: typeof probeExec; monitors?: () => Promise<MonitorRunner | string> };
+export type WorkerDeps = {
+  clock: Clock;
+  exec: typeof probeExec;
+  panel: () => Promise<PanelCore | string>;
+  monitors?: () => Promise<MonitorRunner | string>;
+};
 
 export const EVENTS = ["workspace.created", "workspace.removed", "workspace.changed", "agent.status.changed"] as const;
 export const MONITORS = [orcaMonitor, resourceMonitor, chatMonitor, queueMonitor];
 // Which Orca event asks which monitor for an early round (a hint; decision 83).
 const HINTS: Partial<Record<(typeof EVENTS)[number], string>> = { "agent.status.changed": orcaMonitor.name };
 const STATUS_ID = "summary";
-const PROBE_INTERVAL_MS = 15_000;
+const PANEL_ID = "brief";
+const STATUS_INTERVAL_MS = 30_000;
 
 let stopRounds: (() => void) | null = null;
 
 export default function activate(
   orca: OrcaWorker,
-  deps: WorkerDeps = { clock: nodeClock, exec: probeExec, monitors: loadMonitors },
+  deps: WorkerDeps = { clock: nodeClock, exec: probeExec, panel: loadPanelCore, monitors: loadMonitors },
 ) {
   const { clock, exec } = deps;
   const startedAt = clock.now();
@@ -62,20 +69,24 @@ export default function activate(
     });
   }
 
-  const status = (text: string, tone: Tone) =>
-    orca.host.call("statusBar.update", { id: STATUS_ID, text, tone }).catch((e: unknown) => orca.log(`statusBar.update: ${e}`));
+  const status = (text: string, tone: Tone, tooltip?: string) =>
+    orca.host
+      .call("statusBar.update", { id: STATUS_ID, text, tone, ...(tooltip ? { tooltip } : {}) })
+      .catch((e: unknown) => orca.log(`statusBar.update: ${e}`));
 
-  // TODO(U19): replace the probe round with the BriefModel summary line.
-  let ticks = 0;
-  const probeRound: Round = {
-    id: "probe",
-    intervalMs: PROBE_INTERVAL_MS,
+  const panel = panelHandlers(deps.panel);
+  // Status bar item B (decision 92⑤): the core's summary line, redrawn each round.
+  const statusRound: Round = {
+    id: "status",
+    intervalMs: STATUS_INTERVAL_MS,
     run: async () => {
-      ticks += 1;
-      await status(`sangsoe · ${ticks}`, ticks % 2 === 0 ? "neutral" : "accent");
+      const s = await panel.status();
+      await status(s.text, s.tone, s.tooltip);
     },
   };
-  const rounds = startRounds([probeRound], clock);
+  const rounds = startRounds([statusRound], clock);
+  orca.panels.handle("panel.brief", panel["panel.brief"]);
+  orca.panels.handle("panel.act", panel["panel.act"]);
   stopRounds = () => {
     stopped = true;
     void rounds.stop();
@@ -110,7 +121,7 @@ export default function activate(
     const list = await exec("orca", ["plugin", "list", "--json"], 8000, Number.POSITIVE_INFINITY);
     const key = list.ok ? ownKey(list.out) : null;
     if (!key) return `sangsoe: plugin key not found (${list.code})`;
-    const open = await exec("orca", ["plugin", "open", key, "--panel", "probe", "--json"]);
+    const open = await exec("orca", ["plugin", "open", key, "--panel", PANEL_ID, "--json"]);
     orca.log(`sangsoe.open: ${open.ok ? "opened" : open.err || open.out}`);
     return open.ok ? "sangsoe: panel opened" : `sangsoe: open failed (${open.code})`;
   };
@@ -141,7 +152,9 @@ export default function activate(
     orca: await exec("orca", ["--version"]),
   }));
 
-  void status("sangsoe", "neutral");
+  void Promise.resolve()
+    .then(() => statusRound.run(clock.now(), new AbortController().signal))
+    .catch((e: unknown) => orca.log(`status: ${e}`));
   orca.log(`sangsoe worker started on node ${process.version}`);
 }
 
