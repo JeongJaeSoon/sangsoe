@@ -1,5 +1,4 @@
-import { isAbsolute, join } from "node:path";
-import { option, parse, unwrap } from "./shell.ts";
+import { againstCwd, option, parse, unwrap } from "./shell.ts";
 import type { Facts, Gate, Verdict } from "./types.ts";
 
 // Appendix #gates [gate:self-land] and decision 81: merging is `sangsoe land` alone, and a worker does not
@@ -7,7 +6,7 @@ import type { Facts, Gate, Verdict } from "./types.ts";
 // What cannot be read (the open PRs) is not judged: the call passes.
 
 const WAIT_LINE = /(?:^|[\s"'])READY-WAIT:[ \t]*[\w-]+/m;
-const LAND = "the MCP tool land (mcp__plugin_sangsoe_sangsoe__land), or `sangsoe land <pr>` from a person's terminal";
+const LAND = "the MCP tool land (mcp__plugin_sangsoe_sangsoe__land), or `sangsoe land --pr <N>` from a person's terminal";
 
 function verdict(reason: string): Verdict {
   return { decision: "deny", gate: "self-land", reason: `[gate:self-land] ${reason}` };
@@ -17,19 +16,36 @@ function openWithoutLand(facts: Facts): string | undefined {
   return facts.ownOpenPrs()?.find((p) => !p.landRequested)?.pr;
 }
 
-// The report body as sent: `--body` text (a `$(cat f)` or `$(<f)` body read from f) or `--body-file`.
-function body(argv: readonly string[], cwd: string, facts: Facts): string {
-  const read = (path: string) => facts.readScript(isAbsolute(path) ? path : join(cwd, path)) ?? "";
+/** The lines of the heredoc that `<<WORD` opens in the raw command text. */
+function heredoc(text: string, word: string): string {
+  const lines = text.split("\n");
+  const at = lines.findIndex((l) => new RegExp(`<<-?\\s*['"]?${word}['"]?`).test(l));
+  if (at === -1) return "";
+  const out: string[] = [];
+  for (const l of lines.slice(at + 1)) {
+    if (l.replace(/^\t+/, "") === word) break;
+    out.push(l);
+  }
+  return out.join("\n");
+}
+
+// The report body as sent: `--body` text (a `$(cat f)`, `$(<f)` or `$(cat <<EOF …)` body resolved) or
+// `--body-file`. undefined when it cannot be read from the command (stdin).
+function body(argv: readonly string[], text: string, cwd: string, facts: Facts): string | undefined {
+  const read = (path: string) => facts.readScript(againstCwd(cwd, path)) ?? "";
   const file = option(argv, "--body-file");
+  if (file === "-") return undefined;
   if (file !== undefined) return read(file);
-  const text = option(argv, "--body") ?? "";
-  const cat = /^\$\(\s*(?:cat\s+|<\s*)(['"]?)([^'"\s)]+)\1\s*\)$/.exec(text.trim());
-  return cat ? read(cat[2] ?? "") : text;
+  const value = (option(argv, "--body") ?? "").trim();
+  const doc = /^\$\(\s*cat\s*<<-?\s*(['"]?)(\w+)\1/.exec(value);
+  if (doc) return heredoc(text, doc[2] ?? "");
+  const cat = /^\$\(\s*(?:cat\s+|<\s*)(['"]?)([^'"\s)]+)\1\s*\)$/.exec(value);
+  return cat ? read(cat[2] ?? "") : value;
 }
 
 // `gh api -X PUT repos/o/r/pulls/N/merge` is the same merge as `gh pr merge`.
 function apiMerge(argv: readonly string[]): boolean {
-  if (!argv.some((a) => /(^|\/)pulls\/\d+\/merge$/.test(a))) return false;
+  if (!argv.some((a) => /(^|\/)pulls\/\d+\/merge(\?|$)/.test(a))) return false;
   const method = option(argv, "--method") ?? option(argv, "-X") ?? argv.find((a) => /^-X\w+$/.test(a))?.slice(2);
   return method?.toUpperCase() === "PUT";
 }
@@ -50,7 +66,8 @@ export const selfLandGate: Gate = (call, facts) => {
       pos[2] === "send" &&
       option(argv, "--type") === "worker_done" &&
       option(argv, "--outcome") !== "failed";
-    if (done && facts.role() === "worker" && !WAIT_LINE.test(body(argv, call.cwd, facts))) {
+    const sent = done ? body(argv, text, call.cwd, facts) : undefined;
+    if (sent !== undefined && facts.role() === "worker" && !WAIT_LINE.test(sent)) {
       const pr = openWithoutLand(facts);
       if (pr) {
         return verdict(

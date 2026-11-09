@@ -87,7 +87,9 @@ export function hostFacts(input: HookInput, host: Host, store: () => Pick<Store,
     role: once((): Role => roleOf(input.agent_type, () => firstPrompt(input.transcript_path))),
     load: once(() => judgeLoad(sampleLoad(host.env.HOME))),
     ownOpenPrs: once(() => openPrs(host, input.cwd, store)),
-    readScript: (path) => {
+    readScript: (named) => {
+      const home = host.env.HOME;
+      const path = home ? named.replace(/^(~|\$HOME|\$\{HOME\})\//, `${home}/`) : named;
       try {
         // isFile: a FIFO or device named as a script would block the hook on read.
         const st = statSync(path);

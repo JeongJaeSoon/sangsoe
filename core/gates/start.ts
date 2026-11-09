@@ -1,5 +1,4 @@
-import { isAbsolute, join } from "node:path";
-import { has, type Parsed, parse, scriptPath, unwrap } from "./shell.ts";
+import { againstCwd, has, type Parsed, parse, scriptPath, unwrap } from "./shell.ts";
 import type { Facts, Gate, ToolCall, Verdict } from "./types.ts";
 
 // Decision 94 (마): the start guard. The core's own Orca calls run as child processes of the MCP server
@@ -47,17 +46,65 @@ const positionals = (argv: readonly string[]) => argv.slice(1).filter((a) => !a.
 const asksHelp = (argv: readonly string[]) =>
   has(argv, "--help") || argv.some((a, i) => i > 0 && a === "-h" && !(argv[i - 1] ?? "").startsWith("-"));
 
+/** Whether shell text runs claude as a command (not a claude tool subcommand). */
+function runsClaude(text: string): boolean {
+  return parse(text).commands.some((c) => {
+    const { argv } = unwrap(c.words);
+    const [p0] = positionals(argv);
+    return argv[0] === "claude" && !(p0 && CLAUDE_TOOLS.has(p0));
+  });
+}
+
+/** Splits flags from operands; a flag cluster whose last letter is in `valued` takes the next word. */
+function operands(args: readonly string[], valued: string): { rest: string[]; values: Map<string, string> } {
+  const values = new Map<string, string>();
+  let i = 0;
+  for (; i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (a === "--") {
+      i++;
+      break;
+    }
+    if (!/^-\w+$/.test(a)) break;
+    const last = a.slice(-1);
+    const next = args[i + 1];
+    if (valued.includes(last) && next !== undefined && !next.startsWith("-")) {
+      values.set(last, next);
+      i++;
+    }
+  }
+  return { rest: args.slice(i), values };
+}
+
+// tmux's global options before the subcommand; `-c` there is a shell command.
+const TMUX_GLOBAL = "LSfTc";
+const TMUX_VALUED = "ceFflnstxy";
+const TMUX_KEYS_VALUED = "tN";
+const SCREEN_VALUED = "SrxdDXcpTehs";
+
 function heldStart(parsed: Parsed, text: string, read: (path: string) => string | undefined): boolean {
   for (const cmd of parsed.commands) {
     const { argv } = unwrap(cmd.words);
-    const [head, sub] = argv;
-    const args = argv.slice(1);
-    const names = args.some((a) => CLAUDE_WORD.test(a) || a === "claude");
-    if (head === "tmux" && sub && TMUX_RUN.has(sub) && names) return true;
-    if (head === "screen" && names) return true;
-    if ((head === "at" || head === "batch") && CLAUDE_WORD.test(text)) return true;
-    if (head === "launchctl" && sub && LAUNCHCTL_RUN.has(sub)) {
-      if (names) return true;
+    const [head, ...args] = argv;
+    if (head === "tmux") {
+      const global = operands(args, TMUX_GLOBAL);
+      if (runsClaude(global.values.get("c") ?? "")) return true;
+      const [sub, ...subArgs] = global.rest;
+      if (!sub || !TMUX_RUN.has(sub)) continue;
+      const keys = sub === "send-keys" || sub === "send";
+      if (runsClaude(operands(subArgs, keys ? TMUX_KEYS_VALUED : TMUX_VALUED).rest.join(" "))) return true;
+    }
+    if (head === "screen" && runsClaude(operands(args, SCREEN_VALUED).rest.join(" "))) return true;
+    if (head === "at" || head === "batch") {
+      const file = operands(args, "fqmMt").values.get("f");
+      if (file !== undefined && runsClaude(read(file) ?? "")) return true;
+      // The job arrives on stdin (a pipe, a heredoc, a here-string): claude named anywhere in the call
+      // but not run by it in the foreground goes to the job.
+      if (CLAUDE_WORD.test(text) && !parsed.commands.some((c) => unwrap(c.words).argv[0] === "claude")) return true;
+    }
+    if (head === "launchctl" && args[0] && LAUNCHCTL_RUN.has(args[0])) {
+      const submit = operands(args.slice(1), "lpoe");
+      if (runsClaude(submit.rest.join(" ")) || unwrap([submit.values.get("p") ?? ""]).argv[0] === "claude") return true;
       if (args.some((a) => a.endsWith(".plist") && CLAUDE_WORD.test(read(a) ?? ""))) return true;
     }
   }
@@ -92,7 +139,7 @@ export const startGuard: Gate = (call: ToolCall, facts: Facts): Verdict | null =
   const text = String(call.input.command ?? "");
   const background = call.input.run_in_background === true;
   const parsed = parse(text);
-  const read = (path: string) => facts.readScript(isAbsolute(path) ? path : join(call.cwd, path));
+  const read = (path: string) => facts.readScript(againstCwd(call.cwd, path));
   let kind = rawStart(parsed, background) ?? (heldStart(parsed, text, read) ? KIND.holder : undefined);
   if (!kind) {
     // A start wrapped in a script file is the same start (R-10): read each script once, no deeper.
@@ -100,7 +147,8 @@ export const startGuard: Gate = (call: ToolCall, facts: Facts): Verdict | null =
       const path = scriptPath(unwrap(cmd.words));
       if (!path) continue;
       const script = read(path);
-      const inner = script === undefined ? undefined : rawStart(parse(script), background || cmd.background);
+      const detached = background || cmd.background || cmd.detached || unwrap(cmd.words).detached;
+      const inner = script === undefined ? undefined : rawStart(parse(script), detached);
       if (inner) {
         kind = `${inner}, inside ${path}`;
         break;

@@ -1,3 +1,5 @@
+import { isAbsolute, join } from "node:path";
+
 // Reads a Bash command the way the gates need it: simple commands with their words, whether each runs in
 // the background, and the loop keywords. Not a full shell parser: what it cannot read stays words, and the
 // gates only ever deny on a shape they recognise, so an unreadable command passes rather than blocks.
@@ -12,8 +14,10 @@ export type Simple = {
 
 export type Parsed = { commands: Simple[]; loops: boolean };
 
-const KEYWORDS = new Set(["if", "then", "else", "elif", "fi", "do", "done", "while", "until", "for", "!", "{", "}", "time"]);
+const KEYWORDS = new Set(["if", "then", "else", "elif", "fi", "do", "done", "while", "until", "for", "case", "esac", "!", "{", "}", "time"]);
 const LOOP = new Set(["while", "until", "for"]);
+const OPENS = new Set(["{", "if", "while", "until", "for", "case"]);
+const CLOSES = new Set(["}", "fi", "done", "esac"]);
 
 /** Drops heredoc bodies: their lines are data, not commands. */
 function stripHeredocs(text: string): string {
@@ -56,20 +60,24 @@ function substitution(s: string, i: number): { inner: string; next: number } {
 export function parse(text: string, depth = 0): Parsed {
   const s = stripHeredocs(text);
   const commands: Simple[] = [];
-  const nested: Parsed[] = [];
+  // Each substitution's commands with the index of the command that holds it.
+  const nested: { parsed: Parsed; owner: number }[] = [];
+  const sub = (inner: string) => {
+    if (depth < 3) nested.push({ parsed: parse(inner, depth + 1), owner: commands.length });
+  };
   let loops = false;
   let words: string[] = [];
   let word = "";
   let inWord = false;
   let skipNext = false;
   // A trailing `&` backgrounds the whole and-or list before it, back to the last `;`, newline or `&`;
-  // a group closed just before it counts as one command.
+  // a group, loop, `if` or `case` closed just before it counts as one command.
   let listStart = 0;
-  const groups: number[] = [];
-  const open = () => groups.push(commands.length);
+  const groups: { start: number; kind: string }[] = [];
+  const open = (kind: string) => groups.push({ start: commands.length, kind });
   const close = () => {
-    const start = groups.pop();
-    if (start !== undefined) listStart = Math.min(listStart, start);
+    const g = groups.pop();
+    if (g) listStart = Math.min(listStart, g.start);
   };
 
   const flushWord = () => {
@@ -77,8 +85,8 @@ export function parse(text: string, depth = 0): Parsed {
     if (skipNext) skipNext = false;
     else if (words.length === 0 && KEYWORDS.has(word)) {
       if (LOOP.has(word)) loops = true;
-      if (word === "{") open();
-      if (word === "}") close();
+      if (OPENS.has(word)) open(word);
+      if (CLOSES.has(word)) close();
     } else words.push(word);
     word = "";
     inWord = false;
@@ -113,20 +121,20 @@ export function parse(text: string, depth = 0): Parsed {
         if (s[j] === "\\" && j + 1 < s.length) {
           word += s[++j];
         } else if ((s[j] === "$" && s[j + 1] === "(") || s[j] === "`") {
-          const sub = substitution(s, j);
-          if (depth < 3) nested.push(parse(sub.inner, depth + 1));
-          word += s.slice(j, sub.next);
-          j = sub.next - 1;
+          const span = substitution(s, j);
+          sub(span.inner);
+          word += s.slice(j, span.next);
+          j = span.next - 1;
         } else word += s[j];
       }
       inWord = true;
       i = j;
     } else if ((c === "$" && n === "(") || c === "`") {
-      const sub = substitution(s, i);
-      if (depth < 3) nested.push(parse(sub.inner, depth + 1));
-      word += s.slice(i, sub.next);
+      const span = substitution(s, i);
+      sub(span.inner);
+      word += s.slice(i, span.next);
       inWord = true;
-      i = sub.next - 1;
+      i = span.next - 1;
     } else if (c === "#" && !inWord) {
       const nl = s.indexOf("\n", i);
       i = nl === -1 ? s.length : nl - 1;
@@ -152,10 +160,11 @@ export function parse(text: string, depth = 0): Parsed {
       flushCommand();
     } else if (c === "(") {
       flushCommand();
-      open();
+      open("(");
     } else if (c === ")") {
       flushCommand();
-      close();
+      // A case pattern's `)` closes nothing.
+      if (groups.at(-1)?.kind !== "case") close();
     } else if (c === " " || c === "\t") {
       flushWord();
     } else {
@@ -165,8 +174,16 @@ export function parse(text: string, depth = 0): Parsed {
   }
   endList(false);
 
-  for (const p of nested) {
-    commands.push(...p.commands);
+  for (const { parsed: p, owner } of nested) {
+    const holder = commands[owner];
+    const detached = holder ? holder.detached || unwrap(holder.words).detached : false;
+    commands.push(
+      ...p.commands.map((x) => ({
+        ...x,
+        background: x.background || (holder?.background ?? false),
+        detached: x.detached || detached,
+      })),
+    );
     loops ||= p.loops;
   }
   // `bash -c '<script>'` and `eval` run text: read that text as commands too.
@@ -196,6 +213,11 @@ function shellText(argv: readonly string[]): string | undefined {
   if (!head || !SHELLS.has(head)) return undefined;
   const flag = rest.findIndex((a) => /^-[a-z]*c[a-z]*$/.test(a));
   return flag === -1 ? undefined : rest[flag + 1];
+}
+
+/** A path as the command names it, against cwd; `~/` and `$HOME/` are left for the reader to expand. */
+export function againstCwd(cwd: string, path: string): string {
+  return isAbsolute(path) || /^(~|\$HOME|\$\{HOME\})\//.test(path) ? path : join(cwd, path);
 }
 
 /** The script file a command runs (`sh x.sh`, `source x.sh`, `./bin/x`, `x.sh`), if any. */
