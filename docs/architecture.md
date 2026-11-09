@@ -25,11 +25,13 @@
 | 실행 | `core/decision/` | X | ④ 공유 코어 | 결정 루프: `decision_open`(재질문 게이트) · `decision_answer` · `moot` 닫기 · 결정 84③ 읽기 |
 | 실행 | `core/notify/` | X | ④ 공유 코어 | `notify`: Orca 메시지 한 번 + `notified`, 받는 순서 · `term_` 거부 |
 | 실행 | `core/owner/` | X | ④ 공유 코어 | 오너 큐: `owner_todo` 몸체 · `verify` probe 다섯 · 입력 연결 규칙 · 표지 · `waiting_released` · 완료 버튼(결정 89·91) |
+| 실행 | `core/brief/` | X | ④ 공유 코어 | 현황 세 단계: `buildBrief`·`renderMarkdown` 한 쌍과 `owner_todo`·`item_status`·`group_*` 뷰 몸체(결정 89, 구현 결정 128·129) |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
 | 실행 | `orca-plugin/reaper/` | X | ② Orca plugin | REAPER 라운드 타이머 |
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |
 | 실행 | `claude-plugin/mcp/` | X | ③ Claude Code plugin | MCP 서버(에이전트의 입구) |
 | 실행 | `claude-plugin/mcp/tools/` | X | ③ Claude Code plugin | MCP tool 하나 = 파일 하나 |
+| 실행 | `claude-plugin/mcp/resources/` | X | ③ Claude Code plugin | MCP resource 하나 = 파일 하나(읽기, 현황 `brief`) |
 | 판단 | `claude-plugin/skills/` | O | ③ Claude Code plugin | 판단 절차 skill |
 | 판단 | `claude-plugin/skills/general/` | O | ③ Claude Code plugin | 일반 작업 skill(결정 95) |
 | 판단 | `claude-plugin/agents/` | O | ③ Claude Code plugin | 오케스트레이터 · 리드 · 워커 정의 |

@@ -1,0 +1,67 @@
+{"ts":"2026-10-20T09:00:00.000Z","type":"owner_action","source":"hook","text":"API 이전과 로그인 정리 시작해줘","payload":{"origin":"chat","summary":"API 이전과 로그인 정리 시작","hash":"h1"}}
+{"ts":"2026-10-20T09:01:00.000Z","type":"owner_class","source":"orchestrator","subject":"owner_action:1","payload":{"class":"새 일"}}
+{"ts":"2026-10-20T09:02:00.000Z","type":"priority_set","source":"orchestrator","payload":{"subject":"lead:api-migration","value":"P0"}}
+{"ts":"2026-10-20T09:03:00.000Z","type":"priority_set","source":"orchestrator","payload":{"subject":"lead:app-login","value":"P1"}}
+{"ts":"2026-10-20T10:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_21","payload":{"task":"task_21","alias":"i021","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-10-20T10:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_21","lead":"api-migration"}}
+{"ts":"2026-10-31T12:00:00.000Z","type":"item_transition","source":"pr-monitor","payload":{"task":"task_21","from":"in_progress","to":"done","reason":"머지 확인"}}
+{"ts":"2026-11-01T10:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_20","payload":{"task":"task_20","alias":"i020","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-01T10:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_20","lead":"api-migration"}}
+{"ts":"2026-11-03T08:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_33","payload":{"task":"task_33","alias":"i033","who":"worker","done_when":"curl -f https://staging.example/health","owner_action":1}}
+{"ts":"2026-11-03T08:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_33","lead":"api-migration"}}
+{"ts":"2026-11-03T09:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_28","payload":{"task":"task_28","alias":"i028","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-03T09:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_28","lead":"app-login","hold":true,"review_trigger":"d013 답 뒤"}}
+{"ts":"2026-11-04T12:00:00.000Z","type":"item_transition","source":"lead","payload":{"task":"task_28","from":"planned","to":"on_hold","reason":"d013 을 기다린다"}}
+{"ts":"2026-11-05T09:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_23","payload":{"task":"task_23","alias":"i023","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-05T09:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_23","lead":"app-login"}}
+{"ts":"2026-11-05T10:00:00.000Z","type":"item_transition","source":"lead","payload":{"task":"task_23","from":"planned","to":"cancelled","reason":"범위 밖"}}
+{"ts":"2026-11-06T09:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_41","payload":{"task":"task_41","alias":"i041","who":"worker","done_when":"npm run docs","owner_action":1}}
+{"ts":"2026-11-06T09:01:00.000Z","type":"item_extra_set","source":"orchestrator","payload":{"task":"task_41","hold":true,"review_trigger":"다음 스프린트"}}
+{"ts":"2026-11-07T12:00:00.000Z","type":"item_transition","source":"orchestrator","payload":{"task":"task_41","from":"planned","to":"on_hold","reason":"다음 스프린트"}}
+{"ts":"2026-11-07T12:00:01.000Z","type":"item_transition","source":"lead","payload":{"task":"task_33","from":"in_progress","to":"blocked","reason":"키 도착 확인"}}
+{"ts":"2026-11-07T12:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_33","waits_on":"infra"}}
+{"ts":"2026-11-08T09:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_31","payload":{"task":"task_31","alias":"i031","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-08T09:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_31","lead":"api-migration"}}
+{"ts":"2026-11-08T10:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_29","payload":{"task":"task_29","alias":"i029","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-08T10:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_29","lead":"api-migration"}}
+{"ts":"2026-11-08T11:00:00.000Z","type":"evidence","source":"worker","entity":"task","entity_id":"task_20","payload":{"kind":"npm test","exit_code":0}}
+{"ts":"2026-11-08T12:00:00.000Z","type":"item_transition","source":"lead","payload":{"task":"task_20","from":"in_progress","to":"done","reason":"worker_done 수락"}}
+{"ts":"2026-11-09T00:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_50","payload":{"task":"task_50","alias":"i050","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-09T00:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_50","lead":"billing-platform-consolidation"}}
+{"ts":"2026-11-09T08:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_40","payload":{"task":"task_40","alias":"i040","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-09T08:00:30.000Z","type":"decision_opened","source":"core:decision","dedupe_key":"decision:k-session-expiry","payload":{"decision":"d011","decision_key":"k-session-expiry","task":"task_40","gate":"g11"}}
+{"ts":"2026-11-09T08:01:00.000Z","type":"item_transition","source":"worker","payload":{"task":"task_40","from":"in_progress","to":"blocked","reason":"d011 대기"}}
+{"ts":"2026-11-09T09:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_27","payload":{"task":"task_27","alias":"i027","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-09T09:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_27","lead":"api-migration","priority":"P1"}}
+{"ts":"2026-11-09T10:00:00.000Z","type":"decision_opened","source":"core:decision","dedupe_key":"decision:k-old-flag","payload":{"decision":"d010","decision_key":"k-old-flag"}}
+{"ts":"2026-11-09T11:00:00.000Z","type":"decision_closed","source":"queue-monitor","payload":{"decision":"d010","reason":"moot","evidence":"tasks_closed"}}
+{"ts":"2026-11-09T12:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_22","payload":{"task":"task_22","alias":"i022","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-09T12:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_22","lead":"app-login"}}
+{"ts":"2026-11-09T12:30:00.000Z","type":"item_transition","source":"worker","payload":{"task":"task_22","from":"in_progress","to":"done","reason":"자체 판정"}}
+{"ts":"2026-11-09T13:00:00.000Z","type":"pr_opened","source":"pr-monitor","payload":{"pr":"acme-platform-infrastructure/payments-service#1234","task":"task_27"}}
+{"ts":"2026-11-09T14:00:00.000Z","type":"pr_opened","source":"pr-monitor","payload":{"pr":"acme/api#31","task":"task_31"}}
+{"ts":"2026-11-09T19:00:00.000Z","type":"decision_opened","source":"core:decision","dedupe_key":"decision:k-webhook-retry","payload":{"decision":"d012","decision_key":"k-webhook-retry","task":"task_31","gate":"g12"}}
+{"ts":"2026-11-09T19:00:30.000Z","type":"item_transition","source":"worker","payload":{"task":"task_31","from":"in_progress","to":"blocked","reason":"d012 대기"}}
+{"ts":"2026-11-09T20:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_34","payload":{"task":"task_34","alias":"i034","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-09T20:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_34","lead":"app-login"}}
+{"ts":"2026-11-10T00:00:00.000Z","type":"decision_opened","source":"core:decision","dedupe_key":"decision:k-merge-style","payload":{"decision":"d013","decision_key":"k-merge-style","task":"task_34","gate":"g13"}}
+{"ts":"2026-11-10T00:00:30.000Z","type":"item_transition","source":"worker","payload":{"task":"task_34","from":"in_progress","to":"blocked","reason":"d013 대기"}}
+{"ts":"2026-11-10T06:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_32","payload":{"task":"task_32","alias":"i032","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-10T06:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_32","lead":"app-login"}}
+{"ts":"2026-11-10T07:00:00.000Z","type":"waiting_human","source":"hook","entity":"task","entity_id":"task_32","payload":{"session":"sess-32","tool":"Bash","excerpt":"권한 입력"}}
+{"ts":"2026-11-10T07:30:00.000Z","type":"escalation_stale","source":"queue-monitor","payload":{"ref":"51","reason":"waiting_unreleased"}}
+{"ts":"2026-11-10T08:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_26","payload":{"task":"task_26","alias":"i026","who":"worker","done_when":"npm test","owner_action":1}}
+{"ts":"2026-11-10T08:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_26","lead":"api-migration"}}
+{"ts":"2026-11-10T08:30:00.000Z","type":"waiting_human","source":"hook","entity":"task","entity_id":"task_26","payload":{"session":"sess-26","tool":"Bash"}}
+{"ts":"2026-11-10T08:45:00.000Z","type":"escalation_stale","source":"queue-monitor","payload":{"ref":"55","reason":"waiting_unreleased"}}
+{"ts":"2026-11-10T08:50:00.000Z","type":"waiting_released","source":"hook","dedupe_key":"waiting_released:55","payload":{"ref":"55","outcome":"answered","by":"owner","evidence":"turn_ended"}}
+{"ts":"2026-11-10T09:00:00.000Z","type":"owner_act_unlinked","source":"pr-monitor","payload":{"act":"acme/api#77 직접 머지"}}
+{"ts":"2026-11-10T10:00:00.000Z","type":"item_transition","source":"lead","payload":{"task":"task_26","from":"ready","to":"in_progress","reason":"worker-start"}}
+{"ts":"2026-11-10T10:00:00.000Z","type":"item_created","source":"core:item","entity":"task","entity_id":"task_35","payload":{"task":"task_35","alias":"i035","who":"owner","done_when":"prod 동기화 확인","owner_action":1}}
+{"ts":"2026-11-10T10:01:00.000Z","type":"item_extra_set","source":"lead","payload":{"task":"task_35","lead":"api-migration","exec_by":"owner","why_owner":"prod 콘솔 권한은 오너만 있다","cmd_hint":"prod 콘솔"}}
+{"ts":"2026-11-10T10:29:00.000Z","type":"owner_action","source":"hook","text":"d011 은 B 로 해줘","payload":{"origin":"chat","summary":"d011 은 B 로","hash":"h2"}}
+{"ts":"2026-11-10T10:29:30.000Z","type":"decision_answered","source":"hook","payload":{"decision":"d011","owner_action":62,"answer":"B 로","linked_by":"hook"}}
+{"ts":"2026-11-10T10:29:40.000Z","type":"decision_closed","source":"core:decision","payload":{"decision":"d011","reason":"answered"}}
+{"ts":"2026-11-10T10:30:00.000Z","type":"pr_opened","source":"pr-monitor","payload":{"pr":"acme/api#40","task":"task_26"}}
+{"ts":"2026-11-10T11:00:00.000Z","type":"ci_failed","source":"pr-monitor","payload":{"pr":"acme/api#40","run_id":"9001"}}
+{"ts":"2026-11-10T11:30:00.000Z","type":"escalation","source":"core:start","entity":"task","entity_id":"task_99","payload":{"to":"owner","reason":"start_refused:depth_exceeded"}}
