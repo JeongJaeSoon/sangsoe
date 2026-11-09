@@ -91,9 +91,9 @@ test("the table covers all three layers, and only 판단 spends tokens", () => {
 
 test("every mapped home has a README whose label matches the table", () => {
   for (const [dir, want] of mapped) {
-    assert.ok(labelled.has(dir), `${dir}/README.md missing`);
+    assert.ok(labelled.has(dir), `${dir}/ has no README.md (or .layout) label file`);
     const got = labelled.get(dir);
-    assert.ok(got, `${dir}/README.md: first line is not a layout label`);
+    assert.ok(got, `${dir}/ label file: first line is not a layout label`);
     assert.equal(fmt(got), fmt(want), `${dir}/ label disagrees with docs/architecture.md`);
   }
 });
