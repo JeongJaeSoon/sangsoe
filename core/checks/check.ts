@@ -11,13 +11,19 @@ export type CheckResult = {
   fix?: string;
 };
 
+export type Unmeasured = { error: string; fix: string };
+
 /**
- * The installed Orca plugin folder and the reviewed build it should equal (decision 105). A port,
- * because the build is a download; the start leaves it unset so it never fetches.
+ * The installed Orca plugin folder and where its reviewed build comes from (decisions 105, 112). A
+ * port, because the trees are downloads; the start leaves it unset so it never fetches.
  */
 export type PluginBuild = {
   dir: string;
-  fetchBuild(): Promise<{ commit: string; dir: string; dispose(): Promise<void> } | { error: string; fix: string }>;
+  /** The commit the folder was built from: a checkout's HEAD even when dirty, else build-info.json. */
+  buildCommit(): Promise<string | Unmeasured>;
+  /** The head of the one PR that merged `commit` into main, whose review approve requires. */
+  reviewedHead(commit: string): Promise<string | Unmeasured>;
+  fetchTree(commit: string): Promise<{ dir: string; dispose(): Promise<void> } | Unmeasured>;
 };
 
 /** Host state comes in here, so tests run every check against the fake Orca. */

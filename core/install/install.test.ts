@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createFakeOrca, type FakeReply } from "../../test/fake-orca/index.ts";
 import type { CheckContext, PluginBuild } from "../checks/index.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
-import { doctor } from "./doctor.ts";
-import { type Host, type Marketplace, type RunResult, sangsoeOrca, treeRoot } from "./host.ts";
+import { doctor, realCheckContext } from "./doctor.ts";
+import { type Host, type Marketplace, type RunResult, realHost, sangsoeOrca, treeRoot } from "./host.ts";
 import { install, uninstall } from "./install.ts";
 
 const ROOT = "/opt/homebrew/opt/sangsoe/libexec";
@@ -210,26 +213,33 @@ test("doctor prints exactly one claude-plugin-version row", async () => {
 });
 
 const DIR = join(ROOT, "orca-plugin");
-const SHA = "a".repeat(40);
-function hashes(installed: string, build: string) {
+const BUILT = "b".repeat(40);
+const HEAD = "d".repeat(40);
+// contentHash per folder: the installed one, and each fetched commit's tree at /trees/<sha>.
+function hashes(o: { installed: string | null; built: string; head?: string; reviewedHead?: PluginBuild["reviewedHead"] }) {
+  const disposed: string[] = [];
+  const byDir: Record<string, string | null> = { [DIR]: o.installed, [`/trees/${BUILT}`]: o.built, [`/trees/${HEAD}`]: o.head ?? o.built };
   const replies = {
-    "plugin-inspect": (args: readonly string[]): RunResult => ({
-      code: 0,
-      stdout: JSON.stringify({ ok: true, result: { contentHash: args[2] === DIR ? installed : build } }),
-      stderr: "",
-    }),
+    "plugin-inspect": (args: readonly string[]): RunResult => {
+      const hash = byDir[args[2] ?? ""];
+      return hash
+        ? { code: 0, stdout: JSON.stringify({ ok: true, result: { contentHash: hash } }), stderr: "" }
+        : { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "invalid_plugin" } }), stderr: "" };
+    },
   };
   const pluginBuild: PluginBuild = {
     dir: DIR,
-    fetchBuild: async () => ({ commit: SHA, dir: "/tmp/build/orca-plugin", dispose: async () => {} }),
+    buildCommit: async () => BUILT,
+    reviewedHead: o.reviewedHead ?? (async () => HEAD),
+    fetchTree: async (commit) => ({ dir: `/trees/${commit}`, dispose: async () => void disposed.push(commit) }),
   };
-  return orcaCtx({ replies, pluginBuild });
+  return { ...orcaCtx({ replies, pluginBuild }), disposed };
 }
 
-test("an installed plugin folder that differs from its reviewed build fails doctor with sangsoe plugin approve", async (t) => {
+test("an installed plugin folder that differs from its build fails doctor with sangsoe plugin approve", async (t) => {
   const { host, calls } = fakeHost({ orcaManifest: true });
   await install(host, ROOT, online().ctx);
-  const { ctx, fake } = hashes("sha256-edited", "sha256-reviewed");
+  const { ctx, fake, disposed } = hashes({ installed: "sha256-edited", built: "sha256-reviewed" });
   const r = await doctor(host, ROOT, { ctx });
   show(t, r);
   assert.equal(r.code, 1, r.lines.join("\n"));
@@ -238,25 +248,66 @@ test("an installed plugin folder that differs from its reviewed build fails doct
     r.lines.join("\n"),
   );
   assert.ok(![...calls, ...fake.calls.map((c) => c.join(" "))].some((c) => /\benable\b/.test(c)), "doctor never enables");
+  assert.deepEqual(disposed, [BUILT], "the fetched tree is removed");
 });
 
-test("an installed plugin folder equal to its reviewed build is green", async () => {
+test("a build commit whose tree differs from the reviewed PR head fails, as approve would", async () => {
   const { host } = fakeHost({ orcaManifest: true });
-  await install(host, ROOT, online().ctx);
-  const { ctx } = hashes("sha256-same", "sha256-same");
+  const { ctx, disposed } = hashes({ installed: "sha256-main", built: "sha256-main", head: "sha256-reviewed" });
+  const r = await doctor(host, ROOT, { ctx });
+  assert.ok(
+    r.lines.some((l) => new RegExp(`^FAIL +orca-plugin-content: .*리뷰된 head ${HEAD}.* — fix: sangsoe plugin approve$`).test(l)),
+    r.lines.join("\n"),
+  );
+  assert.deepEqual(disposed, [BUILT, HEAD]);
+});
+
+test("an installed plugin folder equal to its build and reviewed head is green", async () => {
+  const { host } = fakeHost({ orcaManifest: true });
+  const { ctx } = hashes({ installed: "sha256-same", built: "sha256-same" });
   const r = await doctor(host, ROOT, { ctx });
   assert.ok(r.lines.some((l) => /^ok +orca-plugin-content: /.test(l)), r.lines.join("\n"));
 });
 
-test("a build that cannot be fetched is a warning, not a pass or a failure", async () => {
+test("an installed folder Orca cannot inspect, while its build has a plugin, fails", async () => {
+  const { host } = fakeHost({ orcaManifest: true });
+  const { ctx } = hashes({ installed: null, built: "sha256-reviewed" });
+  const r = await doctor(host, ROOT, { ctx });
+  assert.ok(r.lines.some((l) => /^FAIL +orca-plugin-content: .*inspect .* — fix: brew reinstall sangsoe$/.test(l)), r.lines.join("\n"));
+});
+
+test("a reviewed head that cannot be found is a warning, not a pass or a failure", async () => {
   const { host } = fakeHost({ orcaManifest: true });
   await install(host, ROOT, online().ctx);
-  const { ctx } = orcaCtx({
-    replies: { "plugin-inspect": { ok: true, result: { contentHash: "sha256-x" } } },
-    pluginBuild: { dir: DIR, fetchBuild: async () => ({ error: "no build commit", fix: "brew reinstall sangsoe" }) },
+  const { ctx } = hashes({
+    installed: "sha256-same",
+    built: "sha256-same",
+    reviewedHead: async () => ({ error: "no merged PR", fix: "gh api x" }),
   });
   const r = await doctor(host, ROOT, { ctx });
-  assert.ok(r.lines.some((l) => /^warn +orca-plugin-content: no build commit — fix: brew reinstall sangsoe$/.test(l)), r.lines.join("\n"));
+  assert.equal(r.code, 0, r.lines.join("\n"));
+  assert.ok(r.lines.some((l) => /^warn +orca-plugin-content: no merged PR — fix: gh api x$/.test(l)), r.lines.join("\n"));
+});
+
+test("the real build commit of a dirty checkout is its HEAD, so a local edit is compared, not skipped", async () => {
+  const root = mkdtempSync(join(tmpdir(), "sangsoe-doctor-"));
+  try {
+    mkdirSync(join(root, "orca-plugin"));
+    writeFileSync(join(root, "orca-plugin", "orca-plugin.json"), "{}");
+    const git = (...args: string[]) =>
+      execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", ...args], {
+        cwd: root,
+        encoding: "utf8",
+      }).trim();
+    git("init", "-q");
+    git("add", ".");
+    git("commit", "-q", "-m", "x");
+    writeFileSync(join(root, "orca-plugin", "main.ts"), "edited");
+    const build = realCheckContext({ ...realHost, env: {} }, root).pluginBuild;
+    assert.equal(await build?.buildCommit(), git("rev-parse", "HEAD"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("doctor flags a node below the engines floor", async () => {

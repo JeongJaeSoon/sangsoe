@@ -1,7 +1,8 @@
 import { join } from "node:path";
-import { SANGSOE_REPO } from "../approve/approve.ts";
+import { FULL_SHA, SANGSOE_REPO } from "../approve/approve.ts";
 import { nodePorts, resolveCommit } from "../approve/ports.ts";
 import { type CheckContext, type CheckResult, DOCTOR_CHECKS, type PluginBuild, runChecks } from "../checks/index.ts";
+import type { Exec } from "../contract/orca.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { VERSION } from "../version.ts";
@@ -130,20 +131,40 @@ const fromStart = (r: CheckResult): Check =>
     ? { state: "ok", name: r.id, detail: r.summary }
     : { state: r.status, name: r.id, detail: r.summary, fix: r.fix ?? "sangsoe doctor" };
 
-// The reviewed build is the commit the folder was built from, fetched as `sangsoe plugin approve` does.
-function realPluginBuild(root: string): PluginBuild {
+// Trees are fetched as `sangsoe plugin approve` fetches them, from the same trust root.
+function realPluginBuild(root: string, exec: Exec): PluginBuild {
   const dir = orcaPluginDir(root);
   return {
     dir,
-    async fetchBuild() {
-      const commit = await resolveCommit(dir);
-      if (!commit) {
-        return { error: `${dir} 의 빌드 커밋을 모른다 (깨끗한 git checkout 도, build-info.json 도 아니다)`, fix: "brew reinstall sangsoe" };
-      }
+    async buildCommit() {
+      // Unlike approve, a dirty checkout still names HEAD: its edits are the drift to report.
+      const tracked = await exec("git", ["-C", dir, "ls-files", "--error-unmatch", "--", "orca-plugin.json"]);
+      const head = tracked.code === 0 ? await exec("git", ["-C", dir, "rev-parse", "HEAD"]) : undefined;
+      if (head?.code === 0) return head.stdout.trim();
+      return (
+        (await resolveCommit(dir)) ?? {
+          error: `${dir} 의 빌드 커밋을 모른다 (git checkout 도, build-info.json 도 아니다)`,
+          fix: "brew reinstall sangsoe",
+        }
+      );
+    },
+    async reviewedHead(commit) {
+      const jq = '[.[] | select(.merged_at != null and .base.ref == "main") | .head.sha]';
+      const r = await exec("gh", ["api", `repos/${SANGSOE_REPO}/commits/${commit}/pulls`, "--jq", jq]);
+      let heads: unknown;
       try {
-        return { commit, ...(await nodePorts(() => {}).fetchPluginTree(SANGSOE_REPO, commit)) };
+        heads = JSON.parse(r.stdout);
+      } catch {
+        heads = undefined;
+      }
+      if (r.code === 0 && Array.isArray(heads) && heads.length === 1 && FULL_SHA.test(String(heads[0]))) return String(heads[0]);
+      return { error: `빌드 커밋 ${commit} 을 main 으로 머지한 PR 하나를 찾지 못해 리뷰된 head 를 모른다`, fix: `gh api repos/${SANGSOE_REPO}/commits/${commit}/pulls` };
+    },
+    async fetchTree(commit) {
+      try {
+        return await nodePorts(() => {}).fetchPluginTree(SANGSOE_REPO, commit);
       } catch (e) {
-        return { error: `빌드 커밋 ${commit} 을 받지 못했다: ${e instanceof Error ? e.message : String(e)}`, fix: "gh auth status" };
+        return { error: `${commit} 트리를 받지 못했다: ${e instanceof Error ? e.message : String(e)}`, fix: "gh auth status" };
       }
     },
   };
@@ -155,7 +176,8 @@ export function realCheckContext(host: Host, root: string): CheckContext {
     orca: createOrcaAdapter(exec),
     exec,
     coreVersion: VERSION,
-    ...(host.exists(orcaManifest(root)) ? { pluginBuild: realPluginBuild(root) } : {}),
+    // The folder, not its manifest: a deleted manifest is drift, not an absent plugin.
+    ...(host.exists(orcaPluginDir(root)) ? { pluginBuild: realPluginBuild(root, exec) } : {}),
   };
 }
 

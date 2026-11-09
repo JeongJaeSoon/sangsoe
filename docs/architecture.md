@@ -80,7 +80,7 @@ runChecks(START_CHECKS, ctx) → startReport(results) | doctorReport(results)
 DOCTOR_CHECKS = [...START_CHECKS, orcaPluginContent]   // sangsoe doctor·install 이 돌린다
 ```
 
-- **내용 해시 점검(`orca-plugin-content`).** 설치된 `orca-plugin/` 의 `contentHash` 를 그 폴더의 빌드 커밋 트리(리뷰된 빌드, `sangsoe plugin approve` 가 비교하는 바이트)와 다시 비교한다. 다르면 `fail` + `sangsoe plugin approve`, 잴 수 없으면 `warn`. 빌드 트리는 내려받아야 하므로 `CheckContext.pluginBuild` 포트로 들어오고, 시작 점검은 그 포트를 비워 `DOCTOR_CHECKS` 에만 든다(결정 112).
+- **내용 해시 점검(`orca-plugin-content`).** 설치된 `orca-plugin/` 의 `contentHash` 를 그 폴더의 빌드 커밋 트리와 그 커밋을 머지한 PR 의 리뷰된 head 트리(`sangsoe plugin approve` 가 비교하는 바이트)와 다시 비교한다. 다르면 `fail` + `sangsoe plugin approve`, 잴 수 없으면 `warn`. 빌드 트리는 내려받아야 하므로 `CheckContext.pluginBuild` 포트로 들어오고, 시작 점검은 그 포트를 비워 `DOCTOR_CHECKS` 에만 든다(결정 112).
 
 - **명령 표 하나.** `core/orca/commands.ts` 의 `ORCA_COMMANDS` 가 래퍼의 argv 와 시작 점검 `orca-commands` 의 대조 대상을 같이 정한다. 설계 2절 첫째 칸 표의 명령마다 한 행이 있고, 표에 없는 옵션은 래퍼가 넘기지 못한다.
 - **호스트.** 호스트를 가진 행(`worktree list`·`worktree ps`·`worker-list`)은 로컬 행만 어댑터 밖으로 나가고 나머지는 수만 남는다(결정 88).

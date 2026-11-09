@@ -1,7 +1,8 @@
 import type { OrcaAdapter } from "../contract/orca.ts";
-import type { Check } from "./check.ts";
+import type { Check, CheckResult, PluginBuild } from "./check.ts";
 
 const id = "orca-plugin-content";
+const APPROVE = "sangsoe plugin approve";
 
 async function contentHash(orca: OrcaAdapter, dir: string): Promise<string | null> {
   const r = await orca.pluginInspect({ dir });
@@ -9,35 +10,45 @@ async function contentHash(orca: OrcaAdapter, dir: string): Promise<string | nul
   return typeof hash === "string" ? hash : null;
 }
 
+async function treeHash(orca: OrcaAdapter, build: PluginBuild, commit: string): Promise<string | CheckResult> {
+  const tree = await build.fetchTree(commit);
+  if ("error" in tree) return { id, status: "warn", summary: tree.error, fix: tree.fix };
+  try {
+    return (await contentHash(orca, tree.dir)) ?? { id, status: "warn", summary: `${commit} 트리의 contentHash 를 읽지 못했다`, fix: "sangsoe doctor" };
+  } finally {
+    await tree.dispose();
+  }
+}
+
 /**
  * Orca approves a dev folder by path, so edits and version bumps after approval run without a new
- * consent (T4). This repeats approve's comparison: the installed folder against its reviewed build.
+ * consent (T4). This repeats approve's comparison: the installed folder against the build commit's
+ * tree and the reviewed PR head's tree.
  */
 export const orcaPluginContent: Check = {
   id,
-  async run({ orca, pluginBuild }) {
-    if (!pluginBuild) return { id, status: "ok", summary: "이 빌드에는 Orca plugin 이 없다" };
-    const here = await contentHash(orca, pluginBuild.dir);
-    if (!here) {
-      return { id, status: "warn", summary: `${pluginBuild.dir} 의 contentHash 를 읽지 못했다`, fix: `orca plugin inspect ${pluginBuild.dir} --json` };
+  async run({ orca, pluginBuild: build }) {
+    if (!build) return { id, status: "ok", summary: "이 빌드에는 Orca plugin 폴더가 없다" };
+    const here = await contentHash(orca, build.dir);
+    const commit = await build.buildCommit();
+    if (typeof commit !== "string") return { id, status: "warn", summary: commit.error, fix: commit.fix };
+
+    const built = await treeHash(orca, build, commit);
+    if (typeof built !== "string") return built;
+    if (here === null) {
+      return { id, status: "fail", summary: `${build.dir} 를 inspect 할 수 없다 (빌드 커밋 ${commit} 에는 plugin 이 있다)`, fix: "brew reinstall sangsoe" };
     }
-    const build = await pluginBuild.fetchBuild();
-    if ("error" in build) return { id, status: "warn", summary: build.error, fix: build.fix };
-    let reviewed: string | null;
-    try {
-      reviewed = await contentHash(orca, build.dir);
-    } finally {
-      await build.dispose();
+    if (here !== built) {
+      return { id, status: "fail", summary: `설치된 Orca plugin 내용 ${here} 이 빌드 커밋 ${commit} 의 ${built} 와 다르다 (Orca 는 다시 묻지 않는다)`, fix: APPROVE };
     }
-    if (!reviewed) return { id, status: "warn", summary: `빌드 커밋 ${build.commit} 의 contentHash 를 읽지 못했다`, fix: "sangsoe doctor" };
+
+    const head = await build.reviewedHead(commit);
+    if (typeof head !== "string") return { id, status: "warn", summary: head.error, fix: head.fix };
+    const reviewed = head === commit ? built : await treeHash(orca, build, head);
+    if (typeof reviewed !== "string") return reviewed;
     if (reviewed !== here) {
-      return {
-        id,
-        status: "fail",
-        summary: `설치된 Orca plugin 내용 ${here} 이 빌드 커밋 ${build.commit} 의 ${reviewed} 와 다르다 (Orca 는 다시 묻지 않는다)`,
-        fix: "sangsoe plugin approve",
-      };
+      return { id, status: "fail", summary: `설치된 Orca plugin 내용 ${here} 이 리뷰된 head ${head} 의 ${reviewed} 와 다르다`, fix: APPROVE };
     }
-    return { id, status: "ok", summary: `내용 ${here} = 빌드 커밋 ${build.commit.slice(0, 12)}` };
+    return { id, status: "ok", summary: `내용 ${here} = 빌드 커밋 ${commit.slice(0, 12)} = 리뷰된 head ${head.slice(0, 12)}` };
   },
 };
