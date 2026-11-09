@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { EVENTS } from "../orca-plugin/main.ts";
 import { dagSvg } from "../orca-plugin/panel/probe.ts";
-import { meetsSqliteFloor, ownKey, probeSqlite } from "../orca-plugin/probe.ts";
+import { meetsSqliteFloor, ownKey, probeExec, probeSqlite } from "../orca-plugin/probe.ts";
 import { type Clock, startRounds } from "../orca-plugin/timer.ts";
 
 const root = new URL("..", import.meta.url);
@@ -36,6 +36,15 @@ test("ownKey picks the one sangsoe key and refuses ambiguity", () => {
   assert.equal(ownKey(list("acme.monitor", "local.sangsoe")), "local.sangsoe");
   assert.equal(ownKey(list("acme.monitor")), null);
   assert.equal(ownKey(list("local.sangsoe", "acme.sangsoe")), null);
+  assert.equal(ownKey(list("local.sangsoe").slice(0, 20)), null, "a cut-off list is not a crash");
+});
+
+test("probeExec keeps parseable output whole when asked", async () => {
+  const long = "x".repeat(5000);
+  const capped = await probeExec(process.execPath, ["-e", `process.stdout.write("${long}")`]);
+  assert.equal(capped.out.length, 2000);
+  const whole = await probeExec(process.execPath, ["-e", `process.stdout.write("${long}")`], 8000, Number.POSITIVE_INFINITY);
+  assert.equal(whole.out.length, 5000);
 });
 
 test("probeSqlite opens, writes and reads the version", async () => {

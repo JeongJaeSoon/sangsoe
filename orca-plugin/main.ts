@@ -48,14 +48,16 @@ export default function activate(orca: OrcaWorker) {
   const rounds = startRounds([probeRound]);
 
   // T3: Orca has no host call that shows a plugin's own panel, so the command asks the CLI to.
-  orca.commands.register("sangsoe.open", async () => {
-    const list = await probeExec("orca", ["plugin", "list", "--json"]);
+  const openPanel = async () => {
+    const list = await probeExec("orca", ["plugin", "list", "--json"], 8000, Number.POSITIVE_INFINITY);
     const key = list.ok ? ownKey(list.out) : null;
     if (!key) return `sangsoe: plugin key not found (${list.code})`;
     const open = await probeExec("orca", ["plugin", "open", key, "--panel", "probe", "--json"]);
     orca.log(`sangsoe.open: ${open.ok ? "opened" : open.out}`);
     return open.ok ? "sangsoe: panel opened" : `sangsoe: open failed (${open.code})`;
-  });
+  };
+  orca.commands.register("sangsoe.open", openPanel);
+  orca.panels.handle("probe.open", openPanel);
 
   orca.panels.handle("probe.report", () => ({
     startedAt,
@@ -72,6 +74,7 @@ export default function activate(orca: OrcaWorker) {
   });
   orca.panels.handle("probe.exec", async () => ({
     gh: await probeExec("gh", ["--version"]),
+    ghApi: await probeExec("gh", ["api", "rate_limit", "--jq", ".resources.core.remaining"]),
     orca: await probeExec("orca", ["--version"]),
   }));
 

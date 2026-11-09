@@ -40,7 +40,8 @@ export async function probeSqlite(path: string): Promise<SqliteProbe> {
 
 export type ExecProbe = { cmd: string; ok: boolean; code: string | number | null; out: string; ms: number };
 
-export function probeExec(cmd: string, args: readonly string[], timeoutMs = 8000): Promise<ExecProbe> {
+// `maxOut` caps what a report carries; callers that parse the output pass Infinity.
+export function probeExec(cmd: string, args: readonly string[], timeoutMs = 8000, maxOut = 2000): Promise<ExecProbe> {
   const t0 = Date.now();
   return new Promise((resolve) => {
     execFile(cmd, [...args], { timeout: timeoutMs }, (err, stdout, stderr) => {
@@ -49,7 +50,7 @@ export function probeExec(cmd: string, args: readonly string[], timeoutMs = 8000
         cmd: [cmd, ...args].join(" "),
         ok: !err,
         code: err ? ((err as NodeJS.ErrnoException).code ?? null) : 0,
-        out: text.slice(0, 2000),
+        out: text.slice(0, maxOut),
         ms: Date.now() - t0,
       });
     });
@@ -68,7 +69,12 @@ export async function probeCore(): Promise<{ ok: boolean; version?: string; erro
 }
 
 export function ownKey(listJson: string): string | null {
-  const parsed = JSON.parse(listJson) as { result?: { plugins?: { pluginKey: string }[] } };
+  let parsed: { result?: { plugins?: { pluginKey: string }[] } };
+  try {
+    parsed = JSON.parse(listJson);
+  } catch {
+    return null;
+  }
   const keys = (parsed.result?.plugins ?? []).map((p) => p.pluginKey).filter((k) => k.endsWith(".sangsoe"));
   return keys.length === 1 ? (keys[0] ?? null) : null;
 }
