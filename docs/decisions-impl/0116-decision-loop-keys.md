@@ -1,0 +1,13 @@
+# 116. 결정 루프의 열쇠와 칸: 대기자마다 Run id, 답의 `notified` 키는 `notify:<task>:dNNN`
+
+결정 36·91 을 계약에 맞추며 정한 것이다.
+
+- **`notified` 키.** 결정 91④ 는 `notified:dNNN:<task>` 로 적었다. 계약의 `notified` 는 접두가 `notify` 이고 첫 칸을 줄의 `target` 에 묶으므로(U1 `dedupe.ts`) 받아들여지는 꼴은 `notify:<task>:dNNN`(`target` = 대기자 Task) 하나다. 받는 쪽이 워커든 Run 이든 같은 키다: 답 하나는 대기자 Task 하나에 한 번 간다. `decision_answer`, 시작 절차의 첫 프롬프트(91④(i), U10), SessionStart(U13)가 모두 `answerNotifiedKey(dNNN, task)` 를 부른다. `moot` 알림은 `mootNotifiedKey` = `notify:<task>:moot:dNNN` 이다.
+- **받는 순서의 다음 사람.** 같은 조건을 다음 사람에게 올릴 때는 앞사람의 줄이 있어야 하고 키 끝에 받는 쪽(`lead`·`orchestrator`)을 붙인다. 처음 받는 사람의 키에는 붙이지 않는다. 그래서 위 키를 읽는 쪽은 "처음 전달"만 본다.
+- **대기자의 Run id.** `gate-list`·`gate-resolve` 는 묶인 Run 안에서만 된다(결정 77 라). Task 의 Run 은 Orca 가 원본이지만 Orca id 는 sqlite 가 가질 수 있는 유일한 Orca 사실이므로(결정 74) `decision_joined` 에 선택 칸 `run` 을 더했다. 답할 때 Dispatch 로 Run 을 찾는 대안은 아직 워커가 없는 대기자에서 실패한다.
+- **대기자는 모두 `decision_joined` 로 적는다.** `decision_opened` 는 키를 잡는 줄이고 게이트가 생기기 전에 쓴다(`task`·`gate` 를 비운다). 대기자마다 `decision_joined`(`dedupe_key = decision_joined:<dNNN>:<task>`)를 쓰고, 그 전에 같은 Task 에 `dNNN:` 으로 시작하는 열린 게이트가 있으면 새로 만들지 않는다. 도중에 죽은 `decision_open` 을 다시 불러도 게이트는 하나다.
+- **결정 운반 Task 표시.** 부록이 말한 `exec_by=owner` 를 `item_extra_set` 로 쓴다. `moot` 판정은 이 Task 를 대기자에서 뺀다. 같은 Run 에 제목이 `dNNN` 인 Task 가 이미 있으면 다시 만들지 않는다.
+- **닫는 줄은 결정마다 하나.** `decision_answered` 는 `decision_answered:<dNNN>`, 늦은 답은 `decision_answered:<dNNN>:late:<seq>`, `decision_closed` 는 답이든 `moot` 든 `decision_closed:<dNNN>` 하나다. 먼저 쓴 쪽이 이긴다.
+- **`decision_closed.evidence`.** 결정 91③ 이 `moot` 에 증거를 싣는다고 해서 선택 칸을 더했다(`tasks_closed` 또는 `pr_closed:<owner/repo#N>`).
+- **`owner_direct_merge` 의 `owner_action` 칸.** `linked_by=observed` 에는 오너의 말이 없다. 그 칸에는 답의 근거가 된 관측 event(`pr_merged`)의 seq 를 넣는다. 칸 이름은 바꾸지 않았다(U1 계약, 읽는 쪽 없음).
+- **다시 묻기(`reopens`, `:r<n>`)는 이번에 만들지 않았다.** U8 수락 항목에 없고 `decision_opened` 에 칸이 없다.

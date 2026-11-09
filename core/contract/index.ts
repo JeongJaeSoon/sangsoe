@@ -77,6 +77,7 @@ import worker_stuck from "./events/worker_stuck.ts";
 export * from "./clock.ts";
 export * from "./dedupe.ts";
 export * from "./define.ts";
+export * from "./notify-key.ts";
 export * from "./transitions.ts";
 export type * from "./views.ts";
 

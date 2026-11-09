@@ -1,3 +1,8 @@
-import { decisionNo, defineEvent, oneOf } from "../define.ts";
+import { decisionNo, defineEvent, oneOf, opt, str } from "../define.ts";
 
-export default defineEvent("decision_closed", { decision: decisionNo, reason: oneOf("answered", "moot") });
+// `evidence` says why a moot decision lost its cause (decision 91③): "tasks_closed" or "pr_closed:<owner/repo#N>".
+export default defineEvent("decision_closed", {
+  decision: decisionNo,
+  reason: oneOf("answered", "moot"),
+  evidence: opt(str),
+});
