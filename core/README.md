@@ -3,7 +3,7 @@
 
 두 plugin·MCP 서버·CLI·plugin worker 가 같이 부르는 TS/Node 판단 함수와 sqlite 다(결정 77 가·78). 다른 칸은 `core/index.ts` 로만 들어온다.
 
-지금 있는 것: `version.ts`(버전 문자열 하나, `package.json` 이 원본).
+지금 있는 것: `version.ts`(버전 문자열 하나, `package.json` 이 원본), `contract/`(event type·뷰 시그니처·`dedupe_key` 규칙·전이표·시계), `store/`(sqlite 와 시작 점검).
 
 뒤 유닛이 채울 자리(지금은 비어 있다):
 
