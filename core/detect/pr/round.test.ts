@@ -227,6 +227,22 @@ test("repo_level_main (main_* side): red after a failed rerun, then any later me
   assert.deepEqual((await w.round()).written, [], "a settled sha is not read again");
 });
 
+test("main CI judges only the repository's newest merge: an older sha's red never lands after a newer green", async () => {
+  const w = world({ watch: { linkedOnly: false } });
+  w.routes[CLOSED] = ok([listed(2, { merged_at: "2026-11-10T11:30:00Z" }), listed(1, { merged_at: "2026-11-10T09:00:00Z" })]);
+  w.merged(1, SHA);
+  w.merged(2, SHA2);
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#1" } });
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#2" } });
+  mainRuns(w, SHA, [runAt(51, "failure", 2)]);
+  mainRuns(w, SHA2, [runAt(52, "success")]);
+  const first = await w.round();
+  assert.deepEqual(w.rows("pr_merged").map((e) => e.payload.pr), ["acme/api#1", "acme/api#2"], "written in merge order");
+  assert.deepEqual(first.written.filter((x) => x.type.startsWith("main_")), []);
+  assert.deepEqual((await w.round()).written.map((x) => x.type), ["main_green"]);
+  assert.deepEqual(w.rows("main_red"), []);
+});
+
 test("main CI: a cancelled run is not red and a 0-job failure (GitHub outage) is unknown", async () => {
   const w = world();
   merge(w, 1, SHA);

@@ -306,13 +306,18 @@ async function readyToMerge(r: Reads, repo: string, p: ListedPull, link: Link | 
   });
 }
 
-/** Decision 79 N2: the push CI of each recent merge sha, one main state per repository. */
+/**
+ * Decision 79 N2: the push CI of the repository's newest merge sha. land reads the last main_* row
+ * per repository, so an older sha judged after a newer one would overwrite the newer state.
+ */
 async function mainCi(r: Reads): Promise<void> {
   const now = r.d.now();
   const since = now - r.d.config.mainWatchHours * 3_600_000;
   const settled = new Set(["main_green", "main_red"].flatMap((t) => (r.rows.get(t) ?? []).map((e) => `${e.payload.repo}@${e.payload.sha}`)));
   const failed = new Set((r.rows.get("ci_failed") ?? []).map((e) => e.dedupe_key));
-  for (const m of r.rows.get("pr_merged") ?? []) {
+  const newest = new Map<string, StoredEvent>();
+  for (const m of r.rows.get("pr_merged") ?? []) newest.set((str(m.payload.pr) ?? "").split("#")[0] ?? "", m);
+  for (const m of newest.values()) {
     const ref = str(m.payload.pr) ?? "";
     const repo = ref.split("#")[0] ?? "";
     const sha = str(m.payload.merge_sha) ?? "";
@@ -368,6 +373,8 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal): Promise<Read
       if (signal.aborted) break;
       const open = level === "essential" ? [] : ((await get<ListedPull[]>(r, `repos/${repo}/pulls?state=open&per_page=100`)) ?? []);
       const closed = (await get<ListedPull[]>(r, `repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=${CLOSED_PAGE}`)) ?? [];
+      // pr_merged rows then follow merge order, so the newest merge has the repository's last row.
+      closed.sort((a, b) => (a.merged_at ?? "").localeCompare(b.merged_at ?? ""));
       for (const [p, isOpen] of [...open.map((x) => [x, true] as const), ...closed.map((x) => [x, false] as const)]) {
         if (signal.aborted) break;
         const ref = prRef(repo, p.number);
