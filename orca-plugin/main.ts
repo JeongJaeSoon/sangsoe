@@ -1,6 +1,12 @@
 // Orca plugin worker entry. Orca starts it once the plugin is approved and keeps it running while
 // enabled (a `main` plus status bar items), so the timer rounds below need no outside scheduler.
-// Every import stays inside this folder: Orca's approval and the content hash cover only it.
+// Every static import stays inside this folder: Orca's approval and the content hash cover only it.
+// The core is reached at run time through core-link.ts alone (decision 132).
+import { loadMonitors, type MonitorRunner } from "./core-link.ts";
+import { chatMonitor } from "./monitors/chat.ts";
+import { orcaMonitor } from "./monitors/orca.ts";
+import { resourceMonitor } from "./monitors/resource.ts";
+import { type LastRound, monitorRound } from "./monitors/spec.ts";
 import { ownKey, probeExec, probeSqlite } from "./probe.ts";
 import { type Clock, nodeClock, type Round, startRounds } from "./timer.ts";
 
@@ -15,18 +21,30 @@ export type OrcaWorker = {
   panels: { handle(name: string, handler: (input: unknown) => unknown): void };
 };
 
-export type WorkerDeps = { clock: Clock; exec: typeof probeExec };
+/** `monitors` is absent in tests that do not exercise them, so those never open the real store. */
+export type WorkerDeps = { clock: Clock; exec: typeof probeExec; monitors?: () => Promise<MonitorRunner | string> };
 
 export const EVENTS = ["workspace.created", "workspace.removed", "workspace.changed", "agent.status.changed"] as const;
+export const MONITORS = [orcaMonitor, resourceMonitor, chatMonitor];
+// Which Orca event asks which monitor for an early round (a hint; decision 83).
+const HINTS: Partial<Record<(typeof EVENTS)[number], string>> = { "agent.status.changed": orcaMonitor.name };
 const STATUS_ID = "summary";
 const PROBE_INTERVAL_MS = 15_000;
 
 let stopRounds: (() => void) | null = null;
 
-export default function activate(orca: OrcaWorker, deps: WorkerDeps = { clock: nodeClock, exec: probeExec }) {
+export default function activate(
+  orca: OrcaWorker,
+  deps: WorkerDeps = { clock: nodeClock, exec: probeExec, monitors: loadMonitors },
+) {
   const { clock, exec } = deps;
   const startedAt = clock.now();
   const events: Record<string, { count: number; lastAt: number | null }> = {};
+  let monitorRounds: ReturnType<typeof startRounds> | null = null;
+  let runner: MonitorRunner | null = null;
+  let stopped = false;
+  const lastRounds = new Map<string, LastRound>();
+  let monitorState = deps.monitors ? "loading" : "off";
   for (const e of EVENTS) {
     events[e] = { count: 0, lastAt: null };
     orca.events.on(e, () => {
@@ -35,13 +53,15 @@ export default function activate(orca: OrcaWorker, deps: WorkerDeps = { clock: n
         seen.count += 1;
         seen.lastAt = clock.now();
       }
+      const target = HINTS[e];
+      if (target) monitorRounds?.hint(target);
     });
   }
 
   const status = (text: string, tone: Tone) =>
     orca.host.call("statusBar.update", { id: STATUS_ID, text, tone }).catch((e: unknown) => orca.log(`statusBar.update: ${e}`));
 
-  // TODO(U15/U19): replace the probe round with the monitors and the BriefModel summary line.
+  // TODO(U19): replace the probe round with the BriefModel summary line.
   let ticks = 0;
   const probeRound: Round = {
     id: "probe",
@@ -52,7 +72,31 @@ export default function activate(orca: OrcaWorker, deps: WorkerDeps = { clock: n
     },
   };
   const rounds = startRounds([probeRound], clock);
-  stopRounds = rounds.stop;
+  stopRounds = () => {
+    stopped = true;
+    void rounds.stop();
+    const m = monitorRounds;
+    const open = runner;
+    monitorRounds = null;
+    runner = null;
+    // A round still in flight holds the store: close it only after that round has returned.
+    void (m?.stop() ?? Promise.resolve()).then(() => open?.close());
+  };
+
+  void deps.monitors?.().then((r) => {
+    if (typeof r === "string") {
+      monitorState = r;
+      orca.log(`sangsoe monitors off: ${r}`);
+      return;
+    }
+    if (stopped) return r.close();
+    runner = r;
+    monitorState = "running";
+    monitorRounds = startRounds(
+      MONITORS.map((m) => monitorRound(m, r, lastRounds)),
+      clock,
+    );
+  });
 
   // T3: Orca has no host call that shows a plugin's own panel, so the command asks the CLI to.
   const openPanel = async () => {
@@ -72,6 +116,7 @@ export default function activate(orca: OrcaWorker, deps: WorkerDeps = { clock: n
     sqlite: process.versions.sqlite ?? null,
     path: process.env.PATH ?? null,
     rounds: rounds.stats(),
+    monitors: { state: monitorState, rounds: monitorRounds?.stats() ?? {}, last: Object.fromEntries(lastRounds) },
     events,
   }));
   orca.panels.handle("probe.t1", async (input) => {
