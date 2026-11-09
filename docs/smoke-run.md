@@ -15,7 +15,22 @@
 }
 ```
 
-이 Mac 의 agent-skills 는 `enabledPlugins` 가 아니라 사용자 설정의 `env.CLAUDE_CODE_PLUGIN_DIRS` 로 실린다(`claude plugin list` 에 `agent-skills@inline`). 그래서 격리는 그 env 를 비워야 한다. `--settings` 로 비우면 `claude plugin list` 에서 사라지고, 프로젝트 `.claude/settings.json` 으로는 사라지지 않았다.
+이 Mac 의 agent-skills 는 `enabledPlugins` 가 아니라 사용자 설정의 `env.CLAUDE_CODE_PLUGIN_DIRS` 로 실린다(`claude plugin list` 에 `agent-skills@inline`). 그래서 격리는 그 env 를 비워야 한다. headless 세션의 init 기록으로 잰 값:
+
+| 설정 | init 의 plugin 목록에 agent-skills | `agent-skills:` skill 수 | `sangsoe:` skill 수 |
+|---|---|---|---|
+| 없음(프로젝트 `.claude/settings.json` 에 같은 json) | 있음 | 31 | 14 |
+| `claude --settings <위 json>` | 없음 | 0 | 14 |
+
+`orca orchestration worker-start` 에는 agent 인자·env·실행 명령을 넘길 칸이 없다("How the worker runs follows the user's own setting for new agent tabs; there is no flag for it"). 그래서 `start_unit` 이 여는 리드·워커는 `--settings` 를 받지 못한다. 오너가 smoke 동안 사용자 설정의 그 변수를 비우면 코드 변경 없이 리드·워커도 격리된다.
+
+세션마다 격리 확인(코드 없음): 세션 transcript 는 skill 목록을 attachment 로 남긴다. `grep -c "agent-skills:" <transcript>` 가 0 이고 `grep -c "sangsoe:" <transcript>` 가 1 이상이면 그 세션은 격리됐다. transcript 경로는 `orca orchestration worker-show --dispatch <id> --json` 의 세션 id 와 작업 폴더로 찾는다.
+
+## 준비 순서
+
+1. 버리는 저장소를 scratch 에 clone 하고 `orca repo add` 로 Orca 에 올린다. Orca CLI 에 저장소를 내리는 명령이 없어 등록은 남고, 보고에 적는다.
+2. 그 저장소의 Orca worktree 하나에 터미널을 열고 `claude --settings <scratch>/smoke-settings.json --agent sangsoe:orchestrator` 를 띄운다. 이 터미널의 handle 과 PID 를 적는다.
+3. 오케스트레이터는 `orca orchestration run-create` 로 자기 Run 을 쥐고 `item_create` → `start_unit`(리드)을 부른다. 그 아래는 위 실행 계획대로다.
 
 ## 1. 리드의 Run 과 start_unit 으로 워커 시작 (unit_lineage_complete)
 
