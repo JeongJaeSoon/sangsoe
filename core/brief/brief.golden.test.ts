@@ -138,7 +138,8 @@ test("(8) owner_act_unlinked: one PR row inside show_hours, counted in N, no buc
   assert.equal(model.inProgress.count, model.inProgress.rows.filter((r) => !r.id.startsWith("lead:")).length);
 });
 
-test("an escalation{to owner} from a refused orchestrator start is not one of decision 89's four kinds", () => {
+// A refused start on a real item is that item's row (impl 0134); test/owner/owner-todo.test.ts pins it.
+test("an escalation{to owner} naming no item adds no owner_todo row", () => {
   assert.ok(events.some((e) => e.type === "escalation" && e.payload.to === "owner"));
   const without = input({ events: events.filter((e) => e.type !== "escalation") });
   assert.equal(owner_todo(input()).length, owner_todo(without).length);
