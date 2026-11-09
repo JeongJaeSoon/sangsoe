@@ -43,6 +43,9 @@ test("the MCP server lists the brief resource", async () => {
   };
   assert.deepEqual(
     res.result.resources.map((r) => [r.name, r.uri]),
-    [["brief", "sangsoe://brief"]],
+    [
+      ["brief", "sangsoe://brief"],
+      ["ready", "sangsoe://ready"],
+    ],
   );
 });

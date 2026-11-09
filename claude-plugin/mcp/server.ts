@@ -37,6 +37,8 @@ export async function createServer(
 ): Promise<Server> {
   const tools = await collect<ToolDef>(dirs.tools ?? new URL("./tools/", import.meta.url));
   const resources = await collect<ResourceDef>(dirs.resources ?? new URL("./resources/", import.meta.url));
+  const fixed = [...resources.values()].filter((r) => "uri" in r);
+  const templated = [...resources.values()].filter((r) => "uriTemplate" in r);
 
   const methods: Record<string, (p: Record<string, unknown>) => unknown> = {
     initialize: (p) => {
@@ -68,18 +70,21 @@ export async function createServer(
       return toCallResult(bad ? { ok: false, refusal: bad } : await tool.handler(input));
     },
     "resources/list": () => ({
-      resources: [...resources.values()].map(({ uri, name, description, mimeType }) => ({
-        uri,
-        name,
-        description,
-        mimeType,
-      })),
+      resources: fixed.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType })),
+    }),
+    "resources/templates/list": () => ({
+      resourceTemplates: templated.map(({ uriTemplate, name, description, mimeType }) => ({ uriTemplate, name, description, mimeType })),
     }),
     "resources/read": async (p) => {
-      if (typeof p.uri !== "string") throw new RpcError(-32602, "resources/read needs a string uri");
-      const res = [...resources.values()].find((r) => r.uri === p.uri);
-      if (!res) throw new RpcError(-32002, `Resource not found: ${String(p.uri)}`);
-      return { contents: [{ uri: res.uri, mimeType: res.mimeType, text: await res.read() }] };
+      const uri = p.uri;
+      if (typeof uri !== "string") throw new RpcError(-32602, "resources/read needs a string uri");
+      const res = fixed.find((r) => r.uri === uri);
+      if (res) return { contents: [{ uri, mimeType: res.mimeType, text: await res.read() }] };
+      for (const t of templated) {
+        const vars = matchTemplate(t.uriTemplate, uri);
+        if (vars) return { contents: [{ uri, mimeType: t.mimeType, text: await t.read(vars) }] };
+      }
+      throw new RpcError(-32002, `Resource not found: ${uri}`);
     },
   };
 
@@ -108,6 +113,26 @@ function describe(thrown: unknown): string {
     return String(thrown);
   } catch {
     return "internal error";
+  }
+}
+
+function matchTemplate(template: string, uri: string): Record<string, string> | undefined {
+  const names: string[] = [];
+  const source = template
+    .split(/(\{[a-z_]+\})/)
+    .map((part) => {
+      const name = /^\{([a-z_]+)\}$/.exec(part)?.[1];
+      if (!name) return part.replace(/[.*+?^$()|[\]\\]/g, "\\$&");
+      names.push(name);
+      return "([^/?#]+)";
+    })
+    .join("");
+  const m = new RegExp(`^${source}$`).exec(uri);
+  if (!m) return undefined;
+  try {
+    return Object.fromEntries(names.map((n, i) => [n, decodeURIComponent(m[i + 1] ?? "")]));
+  } catch {
+    return undefined;
   }
 }
 

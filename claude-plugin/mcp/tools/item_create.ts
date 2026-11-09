@@ -15,9 +15,19 @@ export async function handle(input: Record<string, unknown>, ports: { orca: Orca
     ...(s("title") ? { title: s("title") } : {}),
     ...(deps?.length ? { deps } : {}),
   });
-  if (r.ok) recordOwnerExtra(ports.store, r.task, extra.value);
+  if (r.ok) {
+    recordOwnerExtra(ports.store, r.task, extra.value);
+    const timing = Object.fromEntries(TIMING.filter((k) => input[k] !== undefined).map((k) => [k, input[k]]));
+    if (Object.keys(timing).length > 0) {
+      ports.store.append({ type: "item_extra_set", source: "core:item", payload: { task: r.task, ...timing }, entity: "task", entity_id: r.task });
+    }
+  }
   return r.ok ? { ok: true, value: { task: r.task, alias: r.alias } } : { ok: false, refusal: { code: r.code, reason: r.error, fix: FIX[r.code] } };
 }
+
+// item_extra_set fields that decide when the item may start (decision 162). The server checks
+// their types against inputSchema before the Task exists, so the row cannot fail after it.
+const TIMING = ["trigger", "review_trigger", "hold", "exec_by"] as const;
 
 // Same mapping as `sangsoe item new`, so both entrances give the same Outcome.
 const FIX = {
@@ -44,6 +54,14 @@ export default {
           "Owner items: the observed fact that shows the owner did it (decision 91②). kind is one of pr_merged{pr: owner/repo#N}, orca_field{target, field, value}, plugin_approved{key}, run_ok{repo}, pr_found{repo, search}; run_ok and pr_found are read only after the owner's `!` line matched cmdHint.",
       },
       cmdHint: { type: "string", description: "Owner items: the command's prefix and key arguments, e.g. `gh workflow run promote.yml`; an owner `!` line containing every piece links to this item." },
+      trigger: {
+        type: "string",
+        description:
+          "📅 scheduled: the item is not ready before this ISO date (2026-11-17 or a full timestamp) or until this PR (owner/repo#N) merges. Any other text is not ready and raises trigger_unclear for a lead to judge.",
+      },
+      hold: { type: "boolean", description: "⏸️ on hold: not ready until a lead or the owner reopens it." },
+      review_trigger: { type: "string", description: "With hold: the condition, in words, to look at the item again." },
+      exec_by: { type: "string", enum: ["owner", "lead", "worker"], description: "Who starts it; owner items go to the owner's to-do once ready." },
     },
     required: ["runId", "spec", "who", "doneWhen"],
     additionalProperties: false,
