@@ -13,5 +13,5 @@ export {
   releasesFor,
   unreleasedWaits,
 } from "./release.ts";
-export { isUndelivered, ownerTodoFrom } from "./todo.ts";
+export { ownerTodoFrom } from "./todo.ts";
 export { isOpenState, isOwnerItem, OWNER_DEFAULTS, type OwnerConfig, type OwnerItemFacts } from "./types.ts";
