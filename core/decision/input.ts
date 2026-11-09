@@ -1,9 +1,11 @@
 import { type CoreDeps, done, type Result, refuse } from "../notify/result.ts";
 import { type DecisionAnswered, type DecisionAnswerInput, decisionAnswer } from "./answer.ts";
+import { type DecisionMooted, type DecisionMootInput, decisionMoot } from "./moot.ts";
 import { type DecisionOpened, type DecisionOpenInput, decisionOpen } from "./open.ts";
 
 // One parser per function, shared by the MCP tool and the CLI command, so both entrances accept and
-// refuse the same input. Parsing runs before the store is opened.
+// refuse the same input. Parsing runs before the store is opened. The caller's Run is never taken from
+// the input: gate-create and gate-resolve bind to the Run Orca reports, so only that one is true.
 
 type Raw = Readonly<Record<string, unknown>>;
 /** The caller's deps, or a factory the entrance gives so a malformed call opens nothing. */
@@ -12,9 +14,9 @@ type DepsSource = CoreDeps | (() => CoreDeps);
 const bad = (field: string, want: string) => refuse("bad_input", `${field}: expected ${want}`, `pass ${field} as ${want}`);
 const text = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
 const LINKED_BY = ["hook", "button", "orchestrator", "observed"] as const;
+const DECISION = /^d\d{3,}$/;
 
-/** Everything but the caller's Run, which may have to be read from Orca. */
-export function parseDecisionOpen(raw: Raw): Result<Omit<DecisionOpenInput, "callerRun"> & { run?: string }> {
+export function parseDecisionOpen(raw: Raw): Result<Omit<DecisionOpenInput, "callerRun">> {
   if (!text(raw.subject) || !/^(item:i\d{3,}|scope:\S+)$/.test(raw.subject)) return bad("subject", "item:iNNN or scope:<group>");
   if (!text(raw.question)) return bad("question", "a non-empty string");
   const options = raw.options ?? [];
@@ -27,32 +29,32 @@ export function parseDecisionOpen(raw: Raw): Result<Omit<DecisionOpenInput, "cal
     return bad("waiters", "an array of { task, run }");
   }
   if (raw.carrier_run !== undefined && !text(raw.carrier_run)) return bad("carrier_run", "a Run id");
-  if (raw.run !== undefined && !text(raw.run)) return bad("run", "a Run id");
   return done({
     subject: raw.subject,
     question: raw.question,
     options,
     waiters: waiters.map((w) => ({ task: String((w as Raw).task), run: String((w as Raw).run) })),
     ...(raw.carrier_run !== undefined ? { carrierRun: raw.carrier_run } : {}),
-    ...(raw.run !== undefined ? { run: raw.run } : {}),
   });
 }
 
-/** Everything but the caller's Run, which may have to be read from Orca. */
-export function parseDecisionAnswer(raw: Raw): Result<Omit<DecisionAnswerInput, "callerRun"> & { run?: string }> {
-  if (!text(raw.decision) || !/^d\d{3,}$/.test(raw.decision)) return bad("decision", "dNNN");
+export function parseDecisionAnswer(raw: Raw): Result<Omit<DecisionAnswerInput, "callerRun">> {
+  if (!text(raw.decision) || !DECISION.test(raw.decision)) return bad("decision", "dNNN");
   if (!text(raw.answer)) return bad("answer", "the masked answer text");
   const seq = Number(raw.owner_action);
   if (!Number.isInteger(seq) || seq < 1) return bad("owner_action", "the owner_action seq");
   const linkedBy = raw.linked_by ?? "orchestrator";
   if (!LINKED_BY.includes(linkedBy as (typeof LINKED_BY)[number])) return bad("linked_by", LINKED_BY.join("|"));
-  if (raw.run !== undefined && !text(raw.run)) return bad("run", "a Run id");
+  return done({ decision: raw.decision, answer: raw.answer, ownerAction: seq, linkedBy: linkedBy as DecisionAnswerInput["linkedBy"] });
+}
+
+/** `pr` names a closed PR (`owner/repo#N`); without it the evidence is that every waiter Task closed. */
+export function parseDecisionMoot(raw: Raw): Result<Omit<DecisionMootInput, "callerRun">> {
+  if (!text(raw.decision) || !DECISION.test(raw.decision)) return bad("decision", "dNNN");
+  if (raw.pr !== undefined && (!text(raw.pr) || !/^[\w.-]+\/[\w.-]+#\d+$/.test(raw.pr))) return bad("pr", "owner/repo#N");
   return done({
     decision: raw.decision,
-    answer: raw.answer,
-    ownerAction: seq,
-    linkedBy: linkedBy as DecisionAnswerInput["linkedBy"],
-    ...(raw.run !== undefined ? { run: raw.run } : {}),
+    evidence: raw.pr !== undefined ? { kind: "pr_closed", pr: String(raw.pr) } : { kind: "tasks_closed" },
   });
 }
 
@@ -66,30 +68,28 @@ async function withDeps<T>(source: DepsSource, fn: (deps: CoreDeps) => Promise<T
   }
 }
 
-/** The MCP tool's and the CLI command's whole body: parse, then open the deps, then call. */
-export async function decisionOpenFrom(raw: Raw, deps: DepsSource): Promise<Result<DecisionOpened>> {
-  const input = parseDecisionOpen(raw);
-  if (!input.ok) return input;
-  return withDeps(deps, async (d) => {
-    const { run, ...rest } = input.value;
-    const callerRun = await callerRunOf(d, run);
-    return callerRun.ok ? decisionOpen(d, { ...rest, callerRun: callerRun.value }) : callerRun;
+/** Parse, open the deps, read the caller's Run, then call. */
+async function entrance<I, O>(
+  parsed: Result<I>,
+  source: DepsSource,
+  call: (deps: CoreDeps, input: I & { callerRun: string }) => Promise<Result<O>>,
+): Promise<Result<O>> {
+  if (!parsed.ok) return parsed;
+  return withDeps(source, async (deps) => {
+    const current = await deps.orca.runCurrent();
+    if (!current.ok) return refuse("orca_error", `run-current: ${current.error.code}`, "retry once Orca answers");
+    const run = current.value.runId;
+    if (!text(run)) return refuse("no_run", "this session holds no Run", "run-use the Run first");
+    return call(deps, { ...parsed.value, callerRun: run });
   });
 }
 
-export async function decisionAnswerFrom(raw: Raw, deps: DepsSource): Promise<Result<DecisionAnswered>> {
-  const input = parseDecisionAnswer(raw);
-  if (!input.ok) return input;
-  return withDeps(deps, async (d) => {
-    const { run, ...rest } = input.value;
-    const callerRun = await callerRunOf(d, run);
-    return callerRun.ok ? decisionAnswer(d, { ...rest, callerRun: callerRun.value }) : callerRun;
-  });
-}
+export const decisionOpenFrom = (raw: Raw, deps: DepsSource): Promise<Result<DecisionOpened>> =>
+  entrance(parseDecisionOpen(raw), deps, decisionOpen);
 
-async function callerRunOf(deps: CoreDeps, run: string | undefined): Promise<Result<string>> {
-  if (run !== undefined) return done(run);
-  const current = await deps.orca.runCurrent();
-  const id = current.ok ? current.value.runId : null;
-  return text(id) ? done(id) : refuse("no_run", "this session holds no Run", "pass run, or run-use the Run first");
-}
+export const decisionAnswerFrom = (raw: Raw, deps: DepsSource): Promise<Result<DecisionAnswered>> =>
+  entrance(parseDecisionAnswer(raw), deps, decisionAnswer);
+
+/** The CLI's only: queue-monitor's call, and the other Run's resume of a moot (decision 91③ adds no MCP tool). */
+export const decisionMootFrom = (raw: Raw, deps: DepsSource): Promise<Result<DecisionMooted>> =>
+  entrance(parseDecisionMoot(raw), deps, decisionMoot);

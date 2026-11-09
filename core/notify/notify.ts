@@ -1,4 +1,5 @@
 import { dedupeSegment, type NotifiedKey, type StoredEvent } from "../contract/index.ts";
+import { recoverWrite } from "../orca/adapter.ts";
 import { bareId } from "./address.ts";
 import { receiptId } from "./receipt.ts";
 import { type CoreDeps, done, type Result, refuse } from "./result.ts";
@@ -94,7 +95,22 @@ export async function notify(deps: CoreDeps, input: NotifyInput): Promise<Result
   }
 
   const msgType = input.msgType ?? "status";
-  const r = await deps.orca.send({ to: address, subject: input.subject, body: input.body, type: msgType });
+  const message = { to: address, subject: input.subject, body: input.body, type: msgType };
+  let r = await deps.orca.send(message);
+  // A send whose response was lost may have arrived: replay only under Orca's request id (decision 60).
+  const lost = !r.ok && r.error.code === "response_lost";
+  if (!r.ok && lost && r.requestId) r = await recoverWrite(deps.orca, r.requestId, (o) => deps.orca.send(message, o));
+  if (!r.ok && lost) {
+    // Recorded so a re-call does not send it again; whether it arrived is the recipient's to say.
+    deps.store.append({
+      type: "notified",
+      source: input.source ?? "notify",
+      target: input.key.target,
+      dedupe_key: key,
+      payload: { msg_id: `undetermined:${r.requestId ?? "none"}`, to: address, msg_type: msgType },
+    });
+    return refuse("send_undetermined", `orca send to ${address}: ${r.error.code} ${r.error.message}`, "do not resend; ask the recipient whether it arrived");
+  }
   if (!r.ok) return refuse("send_failed", `orca send to ${address}: ${r.error.code} ${r.error.message}`, "retry; nothing was recorded");
   const msgId = receiptId(r.value, "message") ?? r.requestId ?? "unrecorded";
   const row = deps.store.append({

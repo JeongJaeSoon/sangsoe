@@ -22,7 +22,6 @@ export default {
         },
       },
       carrier_run: { type: "string", description: "The orchestrator Run, used when no Task waits" },
-      run: { type: "string", description: "This session's Run; read from Orca when left out" },
     },
     required: ["subject", "question"],
     additionalProperties: false,

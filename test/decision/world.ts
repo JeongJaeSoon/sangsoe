@@ -16,6 +16,12 @@ export interface World {
   readonly sends: WorldSend[];
   /** Every orca call as its subcommand words, e.g. "orchestration gate-resolve". */
   calls(name?: string): string[][];
+  /** The Run run-current reports from now on, as when another Run's session makes the call. */
+  useRun(run: string): void;
+  /** Make sends to this address fail (null: none), as when that worker died. */
+  failSendTo(address: string | null): void;
+  /** The next send arrives but its response is lost, with or without Orca's request id on stderr. */
+  loseNextSend(withRequestId: boolean): void;
 }
 
 const ok = (result: unknown): ExecResult => ({ code: 0, stdout: JSON.stringify({ ok: true, result }), stderr: "" });
@@ -35,9 +41,13 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
   const gates = new Map<string, WorldGate>();
   const sends: WorldSend[] = [];
   let n = 0;
+  let current = o.currentRun ?? null;
+  let deadAddress: string | null = null;
+  let lose: boolean | null = null;
+  const requests = new Map<string, string>();
   const runOf = (task: string) => taskMap.get(task)?.run;
   const replies: Record<string, FakeReply> = {
-    "orchestration-run-current": () => ok({ runId: o.currentRun ?? null }),
+    "orchestration-run-current": () => ok({ runId: current }),
     "orchestration-task-list": (args: readonly string[]) => {
       const run = flag(args, "run");
       // Like Orca, `result` (where a cancel shows) comes only with --full.
@@ -75,15 +85,28 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
       return ok({ gates: rows, runId: run });
     },
     "orchestration-send": (args: readonly string[]) => {
-      if (o.failSend) return err("recipient_not_found");
+      if (o.failSend || flag(args, "to") === deadAddress) return err("recipient_not_found");
+      // Orca replays a request it already did without sending again.
+      const replay = flag(args, "retry-request");
+      if (replay && requests.has(replay)) return ok({ message: { id: requests.get(replay) } });
+      const msgId = `msg_${String(++n).padStart(12, "0")}`;
       sends.push({
         to: flag(args, "to") ?? "",
         subject: flag(args, "subject") ?? "",
         body: flag(args, "body") ?? "",
         type: flag(args, "type") ?? "",
       });
-      return ok({ message: { id: `msg_${String(++n).padStart(12, "0")}` } });
+      if (lose !== null) {
+        const withId = lose;
+        lose = null;
+        const req = `req_${String(++n).padStart(12, "0")}`;
+        requests.set(req, msgId);
+        return { code: null, stdout: "", stderr: withId ? `retry with --retry-request ${req}` : "", failure: "timeout" };
+      }
+      return ok({ message: { id: msgId } });
     },
+    "orchestration-request-show": (args: readonly string[]) =>
+      ok({ state: requests.has(flag(args, "request") ?? "") ? "completed" : "absent" }),
   };
   const fake = createFakeOrca({ replies });
   const store = Store.open({ path: ":memory:" });
@@ -96,6 +119,15 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
     calls: (name) => {
       const words = fake.calls.filter((c) => c[0] === "orca").map((c) => c.slice(1, 3));
       return name ? words.filter((w) => w.join(" ") === name) : words;
+    },
+    useRun: (run) => {
+      current = run;
+    },
+    failSendTo: (address) => {
+      deadAddress = address;
+    },
+    loseNextSend: (withRequestId) => {
+      lose = withRequestId;
     },
   };
 }

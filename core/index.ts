@@ -20,7 +20,14 @@ export { type DecisionAnswered, type DecisionAnswerInput, decisionAnswer } from 
 export { type DecisionMooted, type DecisionMootInput, decisionMoot, type MootEvidence } from "./decision/moot.ts";
 export { waiterReading } from "./decision/held.ts";
 export { defaultDeps } from "./decision/deps.ts";
-export { decisionAnswerFrom, decisionOpenFrom, parseDecisionAnswer, parseDecisionOpen } from "./decision/input.ts";
+export {
+  decisionAnswerFrom,
+  decisionMootFrom,
+  decisionOpenFrom,
+  parseDecisionAnswer,
+  parseDecisionMoot,
+  parseDecisionOpen,
+} from "./decision/input.ts";
 
 export type * from "./contract/orca.ts";
 export { createOrcaAdapter, recoverWrite } from "./orca/adapter.ts";

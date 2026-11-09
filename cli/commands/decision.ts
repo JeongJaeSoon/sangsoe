@@ -1,4 +1,4 @@
-import { decisionAnswerFrom, decisionOpenFrom, defaultDeps } from "../../core/index.ts";
+import { decisionAnswerFrom, decisionMootFrom, decisionOpenFrom, defaultDeps } from "../../core/index.ts";
 import type { CommandDef, Outcome } from "../contract.ts";
 
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : v === undefined ? [] : [String(v)]);
@@ -20,13 +20,15 @@ function waiters(v: unknown): { task: string; run: string }[] | string {
 }
 
 // The shell entrance (hooks, the owner's terminal) to the same functions as the decision_open and
-// decision_answer MCP tools.
+// decision_answer MCP tools. `moot` has no MCP tool (decision 91③): queue-monitor calls it, and a Run
+// handed a moot gate resumes it here. Every subcommand acts in the Run this terminal holds.
 export default {
   name: "decision",
-  summary: "open a decision (re-ask gate) or link an answer to one",
+  summary: "open a decision (re-ask gate), link an answer to one, or moot one",
   usage:
-    "add --subject <item:iNNN|scope:x> --question <text> [--option <o>]... [--waiter <task>@<run>]... [--carrier-run <run>] [--run <run>]\n" +
-    "       | answer --decision <dNNN> --answer <text> --owner-action <seq> [--linked-by <how>] [--run <run>]",
+    "add --subject <item:iNNN|scope:x> --question <text> [--option <o>]... [--waiter <task>@<run>]... [--carrier-run <run>]\n" +
+    "       | answer --decision <dNNN> --answer <text> --owner-action <seq> [--linked-by <how>]\n" +
+    "       | moot --decision <dNNN> [--pr <owner/repo#N>]",
   options: {
     subject: { type: "string" },
     question: { type: "string" },
@@ -37,7 +39,7 @@ export default {
     answer: { type: "string" },
     "owner-action": { type: "string" },
     "linked-by": { type: "string" },
-    run: { type: "string" },
+    pr: { type: "string" },
   },
   maxPositionals: 1,
   async run({ values, positionals }) {
@@ -52,7 +54,6 @@ export default {
           options: list(values.option),
           waiters: w,
           carrier_run: values["carrier-run"],
-          run: values.run,
         },
         defaultDeps,
       );
@@ -64,11 +65,11 @@ export default {
           answer: values.answer,
           owner_action: values["owner-action"],
           linked_by: values["linked-by"],
-          run: values.run,
         },
         defaultDeps,
       );
     }
-    return refused("expected add or answer");
+    if (sub === "moot") return decisionMootFrom({ decision: values.decision, pr: values.pr }, defaultDeps);
+    return refused("expected add, answer or moot");
   },
 } satisfies CommandDef;

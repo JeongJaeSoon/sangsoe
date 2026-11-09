@@ -72,6 +72,7 @@ export async function decisionAnswer(deps: CoreDeps, input: DecisionAnswerInput)
     keyFor: (task) => answerNotifiedKey(d, task),
     subject: `${d} answered`,
     resumeWith: "decision_answer",
+    resume: `decision_answer with decision=${d} owner_action=${answeredBy(store, d, input.ownerAction)} linked_by=${state.row.linkedBy ?? input.linkedBy} and the answer quoted above`,
   });
   return r.ok ? done({ status: "answered", decision: d, ...r.value }) : r;
 }
@@ -94,3 +95,9 @@ function sourceOf(store: Store, input: DecisionAnswerInput): Result<StoredEvent>
 }
 
 const OBSERVED = ["pr_merged"];
+
+// The owner_action of the answer that stands, which the other Run must cite to pass sourceOf.
+function answeredBy(store: Store, d: string, fallback: number): number {
+  const row = store.events({ type: "decision_answered" }).find((e) => e.dedupe_key === `decision_answered:${d}`);
+  return typeof row?.payload.owner_action === "number" ? row.payload.owner_action : fallback;
+}

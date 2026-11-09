@@ -108,6 +108,31 @@ test("notify refuses a tier with no id, and a failed send writes no notified", a
   assert.equal(down.store.events({ type: "notified" }).length, 0);
 });
 
+test("a send whose response was lost is replayed under Orca's request id, never sent twice", async () => {
+  const w = createWorld([]);
+  const key = answerNotifiedKey("d001", "task_000000000001");
+  const input = { ...base, key, to: "lead" as const, chain: { leadRun: "run_000000000001" } };
+  w.loseNextSend(true);
+  const r = await notify(w, input);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.equal(r.value.status, "sent");
+  assert.equal(w.sends.length, 1);
+  assert.equal(w.calls("orchestration request-show").length, 1);
+  assert.equal(w.store.events({ type: "notified" })[0]?.payload.msg_id, "msg_000000000001");
+
+  // No request id to ask about: the send may have arrived, so it is recorded and never sent again.
+  const v = createWorld([]);
+  v.loseNextSend(false);
+  const unknown = await notify(v, input);
+  assert.ok(!unknown.ok);
+  assert.equal(unknown.refusal.code, "send_undetermined");
+  const again = await notify(v, input);
+  assert.ok(again.ok);
+  assert.equal(again.value.status, "already");
+  assert.equal(v.sends.length, 1);
+  assert.equal(v.store.events({ type: "notified" })[0]?.payload.msg_id, "undetermined:none");
+});
+
 test("reportAddress takes run: and dispatch: addresses and refuses a terminal handle", () => {
   assert.ok(reportAddress("run:run_000000000001").ok);
   assert.ok(reportAddress("dispatch:ctx_000000000001").ok);

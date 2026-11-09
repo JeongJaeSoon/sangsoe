@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decisionAnswerFrom, decisionOpenFrom, parseDecisionAnswer, parseDecisionOpen } from "../../core/index.ts";
+import { decisionAnswerFrom, decisionOpenFrom, parseDecisionAnswer, parseDecisionMoot, parseDecisionOpen } from "../../core/index.ts";
 import { expectSameViaBothEntrances } from "../boundaries/both-entrances.ts";
 import { createWorld, ownerSays } from "./world.ts";
 
@@ -56,7 +56,7 @@ test("both entrances refuse the same malformed decision the same way", async () 
   });
 });
 
-test("decision_open and decision_answer without a run read this session's Run from Orca", async () => {
+test("decision_open, decision_answer and decision moot act in the Run Orca reports for this session", async () => {
   const none = await decisionAnswerFrom({ decision: "d001", answer: "a", owner_action: 1 }, createWorld([]));
   assert.ok(!none.ok);
   assert.equal(none.refusal.code, "no_run");
@@ -73,6 +73,24 @@ test("decision_open and decision_answer without a run read this session's Run fr
   assert.equal(w.calls("orchestration run-current").length, 2);
   assert.deepEqual(r.value.resolved, ["gate_000000000001"]);
   assert.equal(w.store.events({ type: "decision_answered" })[0]?.payload.linked_by, "orchestrator");
+});
+
+test("decision moot parses its evidence, and the parsers ignore a run passed in the input", async () => {
+  assert.deepEqual(parseDecisionMoot({ decision: "d001" }), { ok: true, value: { decision: "d001", evidence: { kind: "tasks_closed" } } });
+  assert.deepEqual(parseDecisionMoot({ decision: "d001", pr: "acme/api#3" }), {
+    ok: true,
+    value: { decision: "d001", evidence: { kind: "pr_closed", pr: "acme/api#3" } },
+  });
+  const badPr = parseDecisionMoot({ decision: "d001", pr: "acme/api" });
+  assert.ok(!badPr.ok);
+  assert.equal(badPr.refusal.code, "bad_input");
+
+  // A run in the input cannot stand in for the bound one: gate-create would still bind to Orca's.
+  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }]);
+  const r = await decisionOpenFrom({ subject: "item:i012", question: "Which?", waiters: [{ task: T1, run: RUN }], run: RUN }, w);
+  assert.ok(!r.ok);
+  assert.equal(r.refusal.code, "no_run");
+  assert.equal(w.calls("orchestration gate-create").length, 0);
 });
 
 test("the CLI refuses a bad subcommand or waiter", async () => {

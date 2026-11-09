@@ -67,6 +67,7 @@ export async function decisionMoot(deps: CoreDeps, input: DecisionMootInput): Pr
     keyFor: (task) => mootNotifiedKey(d, task),
     subject: `${d} is moot`,
     resumeWith: "decision_moot",
+    resume: `sangsoe decision moot --decision ${d}`,
   });
   return r.ok ? done({ status: "moot", decision: d, ...r.value }) : r;
 }
