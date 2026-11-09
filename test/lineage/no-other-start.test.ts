@@ -23,25 +23,29 @@ function walk(dir: string): string[] {
 
 const RAW_STARTS: [string, RegExp][] = [
   ["fallback start", /agent["'`,\s]+launch/],
-  ["worktree create with a prompt or agent", /worktree["'`,\s]+create\b.*(--prompt|--agent|--spec)/],
+  ["worktree create with a prompt or agent", /worktree["'`,\s]+create\b[^;)]{0,200}(--prompt|--agent|--spec)/],
   ["claude run directly", /(exec|spawn|execFile|execSync|spawnSync)\w*\(\s*["'`]claude["'`]\s*,\s*\[(?!\s*["'`]plugin["'`])/],
   ["claude run directly", /\bclaude\s+-p\b|nohup\s+claude\b/],
   ["unsupervised dispatch", /["'`]orchestration["'`]\s*,\s*["'`]dispatch["'`]|orchestration\s+dispatch(?![-\w])/],
 ];
 
-const lines = walk(ROOT)
+// package.json scripts run too, so they are scanned as code.
+const files = walk(ROOT)
   .map((f) => relative(ROOT, f))
-  .filter((rel) => rel !== SELF && CODE.test(rel))
-  .flatMap((rel) =>
-    readFileSync(join(ROOT, rel), "utf8")
-      .split("\n")
-      .map((text, i) => ({ rel, n: i + 1, text })),
-  );
+  .filter((rel) => rel !== SELF && (CODE.test(rel) || rel === "package.json"))
+  .map((rel) => ({ rel, text: readFileSync(join(ROOT, rel), "utf8") }));
+const lines = files.flatMap(({ rel, text }) => text.split("\n").map((line, i) => ({ rel, n: i + 1, text: line })));
+
+/** A call split over several lines matches once its whitespace is collapsed. */
+const flat = (text: string) => text.replace(/\s+/g, " ");
+const rawStarts = (text: string) => RAW_STARTS.filter(([, re]) => re.test(text)).map(([what]) => what);
 
 test("no code opens a session outside the core start function", () => {
-  const hits = lines.flatMap(({ rel, n, text }) =>
-    RAW_STARTS.filter(([, re]) => re.test(text)).map(([what]) => `${rel}:${n} (${what}): ${text.trim()}`),
-  );
+  const hits = lines.flatMap(({ rel, n, text }) => rawStarts(text).map((what) => `${rel}:${n} (${what}): ${text.trim()}`));
+  const lineHit = new Set(hits.map((h) => h.split(":")[0]));
+  for (const { rel, text } of files) {
+    if (!lineHit.has(rel)) hits.push(...rawStarts(flat(text)).map((what) => `${rel} (${what}, across lines)`));
+  }
   assert.deepEqual(hits, []);
 });
 
@@ -62,6 +66,9 @@ test("the patterns catch what they are meant to", () => {
     `exec("orca", ["orchestration", "dispatch", "--task", id])`,
   ];
   for (const b of bad) assert.ok(RAW_STARTS.some(([, re]) => re.test(b)), b);
+  const multiline = `execFile(\n  "orca",\n  ["worktree", "create",\n   "--agent", "claude"],\n)`;
+  assert.ok(rawStarts(flat(multiline)).length > 0, "a call split over lines");
+  assert.ok(rawStarts(flat(`spawn(\n  "claude",\n  ["-p", x],\n)`)).length > 0);
   const fine = [`exec("claude", ["plugin", "list", "--json"])`, `orca.workerStart({ task, worktree: "new-child" })`];
   for (const f of fine) assert.ok(!RAW_STARTS.some(([, re]) => re.test(f)), f);
 });

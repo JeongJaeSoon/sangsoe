@@ -17,7 +17,7 @@ test("unit_lineage_complete on real Orca", { skip: !run || !parent }, async () =
   assert.ok(tasks.ok, JSON.stringify(tasks));
   const started = tasks.value.filter((t) => t.status === "dispatched" || t.status === "completed");
   assert.ok(started.length > 0, "no started units on this Run");
-  const r = await checkLineage(orca, started.map((t) => ({ taskId: t.id, parentWorktreeId: parent ?? "" })));
+  const r = await checkLineage(orca, started.map((t) => ({ taskId: t.id, runId: run ?? "", parentWorktreeId: parent ?? "" })));
   console.log(JSON.stringify(r, null, 1));
   // A completed unit's worktree is removed once it lands; only that one problem is tolerated, only then.
   const done = new Set(started.filter((t) => t.status === "completed").map((t) => t.id));

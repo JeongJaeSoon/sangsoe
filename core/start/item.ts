@@ -1,7 +1,7 @@
 import { capacity, judgeLoad, type LoadSample, sampleLoad } from "../capacity/capacity.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
 import type { Store } from "../store/store.ts";
-import { findKey } from "./start.ts";
+import { findKey, roleLine } from "./start.ts";
 
 export type NewItem = {
   run: string;
@@ -10,6 +10,8 @@ export type NewItem = {
   deps?: string[];
   who: string;
   doneWhen: string;
+  /** The role of the session that will work it; its role line goes first in the spec. Default worker. */
+  role?: "lead" | "worker";
 };
 
 export type ItemCreated = { ok: true; task: string; alias: string } | { ok: false; error: string };
@@ -19,7 +21,7 @@ export type ItemCreated = { ok: true; task: string; alias: string } | { ok: fals
  * its iNNN alias. The Task's spec, title and deps stay in Orca only. Starting it is startUnit's.
  */
 export async function createItem(orca: OrcaAdapter, store: Pick<Store, "append" | "allocate">, a: NewItem): Promise<ItemCreated> {
-  const args = { spec: a.spec, run: a.run, ...(a.title ? { title: a.title } : {}), ...(a.deps?.length ? { deps: a.deps } : {}) };
+  const args = { spec: `${roleLine(a.role ?? "worker")}\n${a.spec}`, run: a.run, ...(a.title ? { title: a.title } : {}), ...(a.deps?.length ? { deps: a.deps } : {}) };
   const r = await orca.taskCreate(args);
   if (!r.ok) return { ok: false, error: `task-create 실패 (${r.error.code}: ${r.error.message})` };
   const task = findKey(r.value, ["taskId", "task_id"]) ?? findKey((r.value as { task?: unknown }).task, ["id"]);
@@ -38,7 +40,7 @@ export async function createItem(orca: OrcaAdapter, store: Pick<Store, "append" 
 /** Free slots on a Run: live workers against `limit`, with the one load judgment (decision 83). */
 export async function runSlots(orca: OrcaAdapter, run: string, limit: number, sample: LoadSample = sampleLoad()): Promise<number> {
   const w = await orca.workerList({ run, limit: 100 });
-  if (!w.ok) return 0;
+  if (!w.ok) throw new Error(`worker-list ${w.error.code}`);
   const live = w.value.rows.filter((r) => r.liveness === "live" && r.state !== "settled").length;
   return capacity({ live, limit, level: judgeLoad(sample).level });
 }

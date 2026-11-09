@@ -51,7 +51,7 @@ export type StartRefusal = {
   reason: RefusalReason;
   detail: string;
   taskId?: string;
-  /** Who the escalation went to: a terminal handle, "owner_todo" for the orchestrator, or null when the parent is unknown. */
+  /** Who the escalation went to: the parent's terminal handle, "owner" for the orchestrator (an `escalation` row), or null when the parent is unknown. */
   escalatedTo: string | null;
 };
 
@@ -66,7 +66,7 @@ export type StartOutcome =
 export type StartPorts = {
   orca: OrcaAdapter;
   store: Pick<Store, "append" | "events">;
-  /** Free worker slots now (core/capacity). */
+  /** Free worker slots now (core/capacity). Throws when they cannot be read: that is not "no room". */
   slots: () => number | Promise<number>;
   /** The `source` written on events. */
   source?: string;

@@ -9,15 +9,15 @@ export type UnitLineage = {
   problems: string[];
 };
 
+export type ExpectedUnit = { taskId: string; runId: string; parentWorktreeId: string };
+
 /**
  * Regression scenario `unit_lineage_complete` (decision 94 (사)): for every started unit read its
- * Dispatch, Run and new worktree's `parentWorktreeId` back from Orca. Any one missing, or a parent
- * other than the expected one, is a problem. Read-only.
+ * Dispatch, worker and new worktree back from Orca and check they are one chain: the Dispatch is
+ * the Task's and in the expected Run, the worker is that Dispatch's, and the worker's worktree has
+ * the expected `parentWorktreeId`. Anything missing or crossed is a problem. Read-only.
  */
-export async function checkLineage(
-  orca: OrcaAdapter,
-  units: readonly { taskId: string; parentWorktreeId: string }[],
-): Promise<{ ok: boolean; units: UnitLineage[] }> {
+export async function checkLineage(orca: OrcaAdapter, units: readonly ExpectedUnit[]): Promise<{ ok: boolean; units: UnitLineage[] }> {
   const trees = await orca.worktreeList({});
   const out: UnitLineage[] = [];
   for (const u of units) {
@@ -29,12 +29,19 @@ export async function checkLineage(
       continue;
     }
     row.dispatchId = d.value.id;
-    if (typeof d.value.run_id === "string" && d.value.run_id !== "") row.runId = d.value.run_id;
-    else row.problems.push("Dispatch 에 Run 이 없다");
+    if (d.value.task_id !== u.taskId) row.problems.push(`Dispatch 의 Task 가 다르다: ${d.value.task_id}`);
+    if (typeof d.value.run_id !== "string" || d.value.run_id === "") row.problems.push("Dispatch 에 Run 이 없다");
+    else {
+      row.runId = d.value.run_id;
+      if (d.value.run_id !== u.runId) row.problems.push(`Dispatch 의 Run 이 다르다: ${d.value.run_id}`);
+    }
     const w = await orca.workerShow({ dispatch: d.value.id });
     if (!w.ok || !w.value.workspace) {
       row.problems.push(`워커의 worktree 를 읽지 못했다 (${w.ok ? "workspace 없음" : w.error.code})`);
       continue;
+    }
+    if (w.value.dispatchId !== d.value.id || w.value.taskId !== u.taskId || w.value.runId !== u.runId) {
+      row.problems.push("워커가 이 Dispatch·Task·Run 의 것이 아니다");
     }
     row.worktreeId = w.value.workspace;
     if (!trees.ok) {

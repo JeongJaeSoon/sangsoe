@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { handle } from "../../claude-plugin/mcp/tools/start_unit.ts";
 import {
   checkLineage,
   createOrcaAdapter,
@@ -14,7 +15,9 @@ import { createFakeOrca, type FakeReply } from "../fake-orca/index.ts";
 const PARENT_TREE = "repo-0001::/home/dev/src/api";
 const CHILD_TREE = "repo-0001::/home/dev/workspaces/api/feature-a";
 const ORCH = "term_00000000-0000-4000-8000-00000000000f";
+/** The lead's own Run, where it creates and starts; its Dispatch lives in the orchestrator's. */
 const RUN = "run_000000000001";
+const ORCH_RUN = "run_00000000000f";
 const NEW_TASK = "task_new";
 
 const ok = (result: unknown): ExecResult => ({ code: 0, stdout: JSON.stringify({ ok: true, result }), stderr: "" });
@@ -25,17 +28,22 @@ const fail = (code: string, message = code): ExecResult => ({
 });
 const flag = (args: readonly string[], name: string) => args[args.indexOf(`--${name}`) + 1];
 
-const dispatchRow = (id: string, task: string, depth: number) => ({
-  dispatch: { id, run_id: RUN, task_id: task, status: "dispatched", depth, failure_count: 0, creator_handle: ORCH },
+const dispatchRow = (id: string, task: string, depth: number, run: string) => ({
+  dispatch: { id, run_id: run, task_id: task, status: "dispatched", depth, failure_count: 0, creator_handle: ORCH },
 });
 
 type Setup = {
   scenario?: string;
   requesterDepth?: number;
   requesterDispatch?: "missing";
+  /** The worktree Orca says the requester's Dispatch runs in. */
+  requesterWorkspace?: string;
+  /** What run-current answers for the calling session. */
+  heldRun?: string | null;
   newTaskStatus?: string;
   /** What `dispatch-show --task task_new` answers after the start. */
   newDispatch?: "missing";
+  taskList?: () => ExecResult;
   workerStart?: () => ExecResult;
   replies?: Record<string, FakeReply>;
 };
@@ -53,13 +61,22 @@ function harness(s: Setup = {}) {
       "orchestration-dispatch-show": (args: readonly string[]) => {
         const task = flag(args, "task");
         if (task === "task_lead") {
-          return s.requesterDispatch === "missing" ? fail("dispatch_not_found") : ok(dispatchRow("ctx_lead", task, s.requesterDepth ?? 1));
+          return s.requesterDispatch === "missing" ? fail("dispatch_not_found") : ok(dispatchRow("ctx_lead", task, s.requesterDepth ?? 1, ORCH_RUN));
         }
-        if (task === NEW_TASK && s.newDispatch !== "missing") return ok(dispatchRow("ctx_new", task, (s.requesterDepth ?? 1) + 1));
+        if (task === NEW_TASK && s.newDispatch !== "missing") return ok(dispatchRow("ctx_new", task, (s.requesterDepth ?? 1) + 1, RUN));
         return fail("dispatch_not_found");
       },
+      "orchestration-worker-show": ok({
+        dispatchId: "ctx_lead",
+        taskId: "task_lead",
+        runId: ORCH_RUN,
+        state: "ready",
+        workspace: s.requesterWorkspace ?? PARENT_TREE,
+      }),
+      "orchestration-run-current": ok({ runId: s.heldRun === undefined ? RUN : s.heldRun }),
       "orchestration-task-create": ok({ task: { id: NEW_TASK } }),
-      "orchestration-task-list": ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t" }] }),
+      "orchestration-task-list": () =>
+        s.taskList ? s.taskList() : ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t" }] }),
       "orchestration-worker-start": () => (s.workerStart ? s.workerStart() : ok({ dispatchId: "ctx_new", worktreeId: CHILD_TREE })),
       ...s.replies,
     }),
@@ -71,6 +88,8 @@ function harness(s: Setup = {}) {
 }
 
 const lead: Requester = { role: "lead", worktreeId: PARENT_TREE, taskId: "task_lead", runId: RUN };
+const { taskId: _unused, ...noTask } = lead;
+const orchestrator: Requester = { ...noTask, role: "orchestrator" };
 const request = (over: Partial<StartRequest> = {}): StartRequest => ({
   requester: lead,
   childRole: "worker",
@@ -79,11 +98,12 @@ const request = (over: Partial<StartRequest> = {}): StartRequest => ({
   ...over,
 });
 
-async function start(h: ReturnType<typeof harness>, req: StartRequest = request(), slots = 1) {
-  return startUnit({ orca: h.orca, store: h.store, slots: () => slots }, req);
+type H = ReturnType<typeof harness>;
+async function start(h: H, req: StartRequest = request(), slots: () => number = () => 1) {
+  return startUnit({ orca: h.orca, store: h.store, slots }, req);
 }
 
-function assertRefused(h: ReturnType<typeof harness>, out: Awaited<ReturnType<typeof start>>, reason: string) {
+function assertRefused(h: H, out: Awaited<ReturnType<typeof start>>, reason: string) {
   assert.equal(out.kind, "refused");
   assert.equal(out.kind === "refused" && out.reason, reason);
   const sig = h.signals();
@@ -92,24 +112,29 @@ function assertRefused(h: ReturnType<typeof harness>, out: Awaited<ReturnType<ty
   assert.equal(h.called("worker-start").length, 0, "no session opened");
 }
 
+function assertEscalatedToParent(h: H, out: Awaited<ReturnType<typeof start>>) {
+  const sent = h.called("send");
+  assert.equal(sent.length, 1, "one escalation");
+  assert.equal(flag(sent[0] ?? [], "type"), "escalation");
+  assert.equal(flag(sent[0] ?? [], "to"), ORCH);
+  assert.equal(out.kind === "refused" && out.escalatedTo, ORCH);
+}
+
 // ---- the five refusals, in decision 94 (나)'s order ----
 
-test("capability_missing: a required capability is absent; nothing is created", async () => {
+test("capability_missing: a required capability is absent; nothing is created and the parent hears", async () => {
   const h = harness({ scenario: "missing-capability" });
   const out = await start(h);
   assertRefused(h, out, "capability_missing");
   assert.equal(h.called("task-create").length, 0);
+  assertEscalatedToParent(h, out);
 });
 
 test("lineage_invalid: a worker starts nothing, and its parent hears about it", async () => {
   const h = harness();
   const out = await start(h, request({ requester: { ...lead, role: "worker" } }));
   assertRefused(h, out, "lineage_invalid");
-  const sent = h.called("send");
-  assert.equal(sent.length, 1, "one escalation");
-  assert.equal(flag(sent[0] ?? [], "type"), "escalation");
-  assert.equal(flag(sent[0] ?? [], "to"), ORCH);
-  assert.equal(out.kind === "refused" && out.escalatedTo, ORCH);
+  assertEscalatedToParent(h, out);
 });
 
 test("lineage_invalid: a lead does not start a lead", async () => {
@@ -126,7 +151,7 @@ test("lineage_invalid: an unreadable requester Dispatch stops the start; there i
 });
 
 test("lineage_invalid: an unreadable parent worktree stops the start", async () => {
-  const h = harness();
+  const h = harness({ requesterWorkspace: "repo-0001::/nowhere" });
   assertRefused(h, await start(h, request({ requester: { ...lead, worktreeId: "repo-0001::/nowhere" } })), "lineage_invalid");
   assert.equal(h.called("task-create").length, 0);
 });
@@ -136,19 +161,32 @@ test("lineage_invalid: a lead whose Dispatch is not at depth 1 is not a lead", a
   assertRefused(h, await start(h), "lineage_invalid");
 });
 
-test("lineage_invalid: an orchestrator holding a Task is refused; an orchestrator refusal goes to owner_todo", async () => {
+test("lineage_invalid: a claim Orca contradicts is refused (held Run, Dispatch's worktree, Dispatch inside the Run)", async () => {
+  // A worker holds no Run, so claiming to be the orchestrator fails on run-current.
+  const notHeld = harness({ heldRun: null });
+  assertRefused(notHeld, await start(notHeld, request({ requester: orchestrator })), "lineage_invalid");
+  // Someone else's Task: its Dispatch runs in another worktree.
+  const other = harness({ requesterWorkspace: CHILD_TREE });
+  assertRefused(other, await start(other), "lineage_invalid");
+  // Starting inside the Run one's own Dispatch lives in: a worker, not the Run's holder.
+  const inside = harness();
+  assertRefused(inside, await start(inside, request({ requester: { ...lead, runId: ORCH_RUN } })), "lineage_invalid");
+});
+
+test("lineage_invalid: an orchestrator holding a Task is refused; an orchestrator refusal ends at the owner", async () => {
   const h = harness();
-  const out = await start(h, request({ requester: { ...lead, role: "orchestrator" } }));
+  const out = await start(h, request({ requester: { ...orchestrator, taskId: "task_lead" } }));
   assertRefused(h, out, "lineage_invalid");
-  assert.equal(out.kind === "refused" && out.escalatedTo, "owner_todo");
+  assert.equal(out.kind === "refused" && out.escalatedTo, "owner");
   assert.equal(h.called("send").length, 0);
+  const esc = h.store.events({ type: "escalation" });
+  assert.equal(esc.length, 1);
+  assert.deepEqual(esc[0]?.payload, { to: "owner", reason: "start_refused:lineage_invalid" });
 });
 
 test("depth_exceeded: an orchestrator does not start a lead that could not start workers", async () => {
   const h = harness();
-  const { taskId: _, ...orch } = lead;
-  const out = await start(h, request({ requester: { ...orch, role: "orchestrator" }, childRole: "lead", maxDepth: 1 }));
-  assertRefused(h, out, "depth_exceeded");
+  assertRefused(h, await start(h, request({ requester: orchestrator, childRole: "lead", maxDepth: 1 })), "depth_exceeded");
 });
 
 test("orca_error: a failed worker-start is refused with Orca's code; the Task stays", async () => {
@@ -158,6 +196,15 @@ test("orca_error: a failed worker-start is refused with Orca's code; the Task st
   assert.match(out.kind === "refused" ? out.detail : "", /task_not_startable/);
   assert.equal(h.called("task-update").length, 0, "the Task is not closed");
   assert.equal(h.called("send").length, 1);
+});
+
+test("orca_error: unreadable capacity is reported, not taken for a full machine", async () => {
+  const h = harness();
+  const out = await start(h, request(), () => {
+    throw new Error("worker-list runtime_unavailable");
+  });
+  assert.equal(out.kind === "refused" && out.reason, "orca_error");
+  assert.equal(h.called("worker-start").length, 0);
 });
 
 test("no_dispatch: worker-start finished without a Dispatch, read back through dispatch-show", async () => {
@@ -174,7 +221,7 @@ test("worker_start_dispatched (1): too little depth → refused, one start_refus
   const h = harness();
   const out = await start(h, request({ maxDepth: 1 }));
   assertRefused(h, out, "depth_exceeded");
-  assert.equal(h.called("send").length, 1);
+  assertEscalatedToParent(h, out);
 });
 
 test("worker_start_dispatched (2): enough depth → a Dispatch and no event", async () => {
@@ -185,6 +232,7 @@ test("worker_start_dispatched (2): enough depth → a Dispatch and no event", as
   const ws = h.called("worker-start")[0] ?? [];
   assert.equal(flag(ws, "worktree"), "new-child");
   assert.equal(flag(ws, "task"), NEW_TASK);
+  assert.equal(flag(ws, "run"), RUN);
 });
 
 test("worker_start_dispatched (3): setting unread and no Dispatch → not a success, start_refused{no_dispatch}", async () => {
@@ -206,7 +254,7 @@ test("a Task that is not ready waits, and nothing is written", async () => {
 
 test("no capacity waits", async () => {
   const h = harness();
-  const out = await start(h, request(), 0);
+  const out = await start(h, request(), () => 0);
   assert.equal(out.kind === "waiting" && out.why, "no_capacity");
   assert.equal(h.called("worker-start").length, 0);
 });
@@ -230,6 +278,18 @@ test("T5: the third failed start writes loop_detected once; the fourth does not 
   assert.equal(h.called("worker-start").length, 3);
 });
 
+test("T5: no_dispatch starts count too; failed reads before the start do not", async () => {
+  const h = harness({ workerStart: () => ok({}), newDispatch: "missing" });
+  const req = request({ task: { id: NEW_TASK } });
+  for (let i = 0; i < 3; i++) await start(h, req);
+  assert.equal(h.store.events({ type: "loop_detected" }).length, 1);
+  assert.equal((await start(h, req)).kind, "stopped");
+
+  const reads = harness({ taskList: () => fail("runtime_unavailable") });
+  for (let i = 0; i < 4; i++) assert.equal((await start(reads, req)).kind, "refused");
+  assert.equal(reads.store.events({ type: "loop_detected" }).length, 0);
+});
+
 test("a failed start that reports a Dispatch writes worker_dead{start_failed}", async () => {
   const h = harness({
     workerStart: () => ({ code: 1, stdout: JSON.stringify({ ok: false, error: { code: "start_failed", message: "x", data: { dispatchId: "ctx_dead" } } }), stderr: "" }),
@@ -242,13 +302,19 @@ test("a failed start that reports a Dispatch writes worker_dead{start_failed}", 
 
 // ---- task-create, first prompt, references ----
 
-test("a new Task goes through task-create --deps on the requester's Run, late answers in the first prompt", async () => {
+test("a new Task goes through task-create --deps on the requester's Run: role line first, late answers after the brief", async () => {
   const h = harness();
   await start(h, request({ task: { spec: "brief x", deps: ["task_a"], lateAnswers: ["d001: yes"] } }));
   const tc = h.called("task-create")[0] ?? [];
   assert.equal(flag(tc, "deps"), JSON.stringify(["task_a"]));
   assert.equal(flag(tc, "run"), RUN);
-  assert.match(flag(tc, "spec") ?? "", /^brief x\n[\s\S]*d001: yes/);
+  assert.match(flag(tc, "spec") ?? "", /^sangsoe-role: worker\nbrief x\n[\s\S]*d001: yes/);
+});
+
+test("a lead's Task carries the lead role line", async () => {
+  const h = harness();
+  await start(h, request({ requester: orchestrator, childRole: "lead" }));
+  assert.match(flag(h.called("task-create")[0] ?? [], "spec") ?? "", /^sangsoe-role: lead\n/);
 });
 
 test("ticket references attach to the new worktree; a failure does not stop the start", async () => {
@@ -261,29 +327,45 @@ test("ticket references attach to the new worktree; a failure does not stop the 
   assert.ok(ref.includes("https://tracker.example/acme-1"));
 });
 
+test("the start_unit MCP tool carries late answers into the first prompt", async () => {
+  const h = harness();
+  const r = await handle(
+    { role: "lead", worktreeId: PARENT_TREE, taskId: "task_lead", runId: RUN, childRole: "worker", spec: "brief", lateAnswers: ["d002: no"] },
+    { orca: h.orca, store: h.store, slots: () => 1 },
+  );
+  assert.equal(r.ok, true);
+  assert.match(flag(h.called("task-create")[0] ?? [], "spec") ?? "", /d002: no/);
+});
+
 // ---- unit_lineage_complete on fake Orca ----
 
+const recorded = { "orchestration-dispatch-show": ok(dispatchRow("ctx_000000000001", "task_000000000001", 1, RUN)) };
+const unit = { taskId: "task_000000000001", runId: RUN, parentWorktreeId: PARENT_TREE };
+
 test("unit_lineage_complete: a started unit has its Dispatch, Run and parentWorktreeId", async () => {
-  const h = harness({ replies: { "orchestration-dispatch-show": ok(dispatchRow("ctx_000000000001", "task_000000000001", 1)) } });
-  const r = await checkLineage(h.orca, [{ taskId: "task_000000000001", parentWorktreeId: PARENT_TREE }]);
+  // worker-show and worktree list come from the recording: ctx_000000000001 in feature-a, a child of the api worktree.
+  const fake = createFakeOrca({ replies: asReplies(recorded) });
+  const r = await checkLineage(createOrcaAdapter(fake.exec), [unit]);
   assert.deepEqual(r.units[0]?.problems, []);
   assert.equal(r.ok, true);
 });
 
-test("unit_lineage_complete: a missing parent, Dispatch or a different parent fails", async () => {
-  const h = harness();
-  const noDispatch = await checkLineage(h.orca, [{ taskId: "task_unknown", parentWorktreeId: PARENT_TREE }]);
-  assert.equal(noDispatch.ok, false);
-  const h2 = harness({ replies: { "orchestration-dispatch-show": ok(dispatchRow("ctx_000000000001", "task_000000000001", 1)) } });
-  const wrong = await checkLineage(h2.orca, [{ taskId: "task_000000000001", parentWorktreeId: "repo-0001::/elsewhere" }]);
-  assert.equal(wrong.ok, false);
-  assert.match(wrong.units[0]?.problems[0] ?? "", /부모가 다르다/);
-  const h3 = harness({
-    replies: {
-      "orchestration-dispatch-show": ok(dispatchRow("ctx_000000000001", "task_000000000001", 1)),
-      "orchestration-worker-show": ok({ dispatchId: "ctx_000000000001", taskId: "task_000000000001", runId: RUN, state: "ready", workspace: PARENT_TREE }),
-    },
+test("unit_lineage_complete: a missing Dispatch, a different parent or Run, a crossed worker, or no parent fails", async () => {
+  const lineage = async (replies: Record<string, FakeReply>, u = unit) =>
+    checkLineage(createOrcaAdapter(createFakeOrca({ replies: asReplies(replies) }).exec), [u]);
+  assert.equal((await lineage({}, { ...unit, taskId: "task_unknown" })).ok, false);
+  const wrongParent = await lineage(recorded, { ...unit, parentWorktreeId: "repo-0001::/elsewhere" });
+  assert.match(wrongParent.units[0]?.problems.join() ?? "", /부모가 다르다/);
+  const wrongRun = await lineage(recorded, { ...unit, runId: "run_other" });
+  assert.match(wrongRun.units[0]?.problems.join() ?? "", /Run 이 다르다/);
+  const crossed = await lineage({
+    ...recorded,
+    "orchestration-worker-show": ok({ dispatchId: "ctx_other", taskId: "task_other", runId: "run_other", state: "ready", workspace: CHILD_TREE }),
   });
-  const orphan = await checkLineage(h3.orca, [{ taskId: "task_000000000001", parentWorktreeId: PARENT_TREE }]);
-  assert.match(orphan.units[0]?.problems[0] ?? "", /parentWorktreeId 가 없다/);
+  assert.match(crossed.units[0]?.problems.join() ?? "", /워커가 이 Dispatch/);
+  const orphan = await lineage({
+    ...recorded,
+    "orchestration-worker-show": ok({ dispatchId: "ctx_000000000001", taskId: "task_000000000001", runId: RUN, state: "ready", workspace: PARENT_TREE }),
+  });
+  assert.match(orphan.units[0]?.problems.join() ?? "", /parentWorktreeId 가 없다/);
 });
