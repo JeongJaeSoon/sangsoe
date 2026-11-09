@@ -4,6 +4,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { coreUrl } from "../orca-plugin/core-link.ts";
 import activate, { deactivate, EVENTS, type OrcaWorker } from "../orca-plugin/main.ts";
 import { dagSvg } from "../orca-plugin/panel/probe.ts";
 import { type ExecProbe, meetsSqliteFloor, ownKey, probeExec, probeSqlite } from "../orca-plugin/probe.ts";
@@ -66,14 +67,19 @@ test("probeSqlite opens, writes and reads the version", async () => {
 
 function fakeClock() {
   let now = 0;
+  // ms 0 marks a one-shot timer (`after`), removed once it fires.
   const timers: { ms: number; next: number; fn: () => void }[] = [];
+  const add = (t: { ms: number; next: number; fn: () => void }) => {
+    timers.push(t);
+    return () => {
+      const i = timers.indexOf(t);
+      if (i >= 0) timers.splice(i, 1);
+    };
+  };
   const clock: Clock = {
     now: () => now,
-    every(ms, fn) {
-      const t = { ms, next: ms, fn };
-      timers.push(t);
-      return () => timers.splice(timers.indexOf(t), 1);
-    },
+    every: (ms, fn) => add({ ms, next: now + ms, fn }),
+    after: (ms, fn) => add({ ms: 0, next: now + ms, fn }),
   };
   const advance = async (ms: number) => {
     const end = now + ms;
@@ -81,7 +87,8 @@ function fakeClock() {
       const t = timers.filter((x) => x.next <= end).sort((a, b) => a.next - b.next)[0];
       if (!t) break;
       now = t.next;
-      t.next += t.ms;
+      if (t.ms === 0) timers.splice(timers.indexOf(t), 1);
+      else t.next += t.ms;
       t.fn();
       await new Promise((r) => setImmediate(r));
     }
@@ -89,6 +96,115 @@ function fakeClock() {
   };
   return { clock, advance, timers };
 }
+
+const settle = () => new Promise((r) => setImmediate(r));
+
+test("hints coalesce inside the debounce window into one round, marked as a hint", async () => {
+  const { clock, advance } = fakeClock();
+  const triggers: number[] = [];
+  const rounds = startRounds([{ id: "m", intervalMs: 60_000, run: (at) => void triggers.push(at) }], clock, { debounceMs: 1000 });
+  rounds.hint("m");
+  await advance(200);
+  rounds.hint("m");
+  rounds.hint("m");
+  await advance(1000);
+  assert.deepEqual(triggers, [1000], "three hints, one round, debounceMs after the first");
+  const s = rounds.stats().m;
+  assert.equal(s?.hints, 3);
+  assert.equal(s?.runs, 1);
+  assert.equal(s?.lastTrigger, "hint");
+  assert.deepEqual(s?.gapsMs, [], "a hint round is not a timer tick, so it adds no gap");
+  assert.equal(rounds.hint("nope"), false, "an unknown monitor is refused, not created");
+  rounds.stop();
+});
+
+test("a hint while a round runs re-runs once after it, never alongside it", async () => {
+  const { clock, advance } = fakeClock();
+  let release: () => void = () => {};
+  let running = 0;
+  let maxRunning = 0;
+  let started = 0;
+  const rounds = startRounds(
+    [
+      {
+        id: "m",
+        intervalMs: 10_000,
+        run: () =>
+          new Promise<void>((r) => {
+            started++;
+            running++;
+            maxRunning = Math.max(maxRunning, running);
+            release = () => {
+              running--;
+              r();
+            };
+          }),
+      },
+    ],
+    clock,
+    { debounceMs: 100 },
+  );
+  await advance(10_000);
+  assert.equal(started, 1);
+  rounds.hint("m");
+  rounds.hint("m");
+  await advance(500);
+  assert.equal(started, 1, "the hinted round waits for the running one");
+  release();
+  await settle();
+  await advance(100);
+  assert.equal(started, 2, "pending hints run exactly one more round");
+  release();
+  await settle();
+  await advance(1000);
+  assert.equal(started, 2);
+  assert.equal(maxRunning, 1);
+  rounds.stop();
+});
+
+test("a round over its cap is aborted and counted, and single-flight holds until it settles", async () => {
+  const { clock, advance } = fakeClock();
+  let signal: AbortSignal | undefined;
+  let finish: () => void = () => {};
+  let started = 0;
+  const rounds = startRounds(
+    [
+      {
+        id: "m",
+        intervalMs: 1000,
+        capMs: 300,
+        run: (_at, s) =>
+          new Promise<void>((r) => {
+            started++;
+            signal = s;
+            finish = r;
+          }),
+      },
+    ],
+    clock,
+  );
+  await advance(1000);
+  assert.equal(signal?.aborted, false);
+  await advance(300);
+  assert.equal(signal?.aborted, true, "the cap aborts the round's signal");
+  assert.equal(rounds.stats().m?.timeouts, 1);
+  await advance(1000);
+  assert.equal(started, 1, "an aborted round that has not returned still blocks the next tick");
+  finish();
+  await settle();
+  await advance(1000);
+  assert.equal(started, 2);
+  rounds.stop();
+});
+
+test("stop cancels pending hints and the cap timer", async () => {
+  const { clock, advance, timers } = fakeClock();
+  const rounds = startRounds([{ id: "m", intervalMs: 1000, capMs: 300, run: () => new Promise<void>(() => {}) }], clock);
+  await advance(1000);
+  rounds.hint("m");
+  rounds.stop();
+  assert.equal(timers.length, 0);
+});
 
 test("rounds run on their interval, record gaps and errors, and stop", async () => {
   const { clock, advance, timers } = fakeClock();
@@ -197,15 +313,80 @@ test("the open command parses stdout only, so stderr noise does not break it", a
   }
 });
 
-test("plugin code imports nothing outside orca-plugin/", () => {
+test("plugin code imports nothing outside orca-plugin/, and only core-link.ts names the core", () => {
   const dir = new URL("orca-plugin/", root);
   const files = readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(m?ts|m?js|tsx)$/.test(f));
   for (const f of files) {
     const depth = f.split("/").length - 1;
-    for (const m of readFileSync(new URL(f, dir), "utf8").matchAll(/(?:from|import)\s*\(?\s*["'](\.[^"']*)["']/g)) {
+    const text = readFileSync(new URL(f, dir), "utf8");
+    for (const m of text.matchAll(/(?:from|import)\s*\(?\s*["'](\.[^"']*)["']/g)) {
       const ups = (m[1] ?? "").split("/").filter((s) => s === "..").length;
       assert.ok(ups <= depth, `${f} reaches outside the plugin folder: ${m[1]}`);
     }
+    // Decision 132: the one run-time path to the core, resolved beside the folder.
+    const outside = [...text.matchAll(/["'](\.\.\/[^"']*)["']/g)].map((m) => m[1]).filter((s) => (s ?? "").split("/").filter((x) => x === "..").length > depth);
+    if (f === "core-link.ts") assert.deepEqual(outside, ["../dist/core/index.js", "../core/index.ts"]);
+    else assert.deepEqual(outside, [], `${f} names a path outside the plugin folder`);
+  }
+});
+
+test("core-link finds the source core in a checkout and nothing in an empty tree", () => {
+  assert.equal(coreUrl()?.href, new URL("core/index.ts", root).href);
+  const dir = mkdtempSync(join(tmpdir(), "sangsoe-link-"));
+  try {
+    assert.equal(coreUrl(new URL(`file://${dir}/orca-plugin/core-link.ts`).href), null);
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+});
+
+test("activate starts the three monitors once the core opens, hints orca on agent status, and closes it", async () => {
+  const w = fakeWorker();
+  const { clock, advance } = fakeClock();
+  const handlers = new Map<string, (p: unknown) => void>();
+  w.orca.events.on = (e, h) => void handlers.set(e, h);
+  const ran: string[] = [];
+  let closed = 0;
+  activate(w.orca, {
+    clock,
+    exec: async (cmd) => ok(cmd, ""),
+    monitors: async () => ({
+      run: async (name) => {
+        ran.push(name);
+        return { planned: [], written: [], unseen: [], aborted: false };
+      },
+      close: () => void closed++,
+    }),
+  });
+  try {
+    await settle();
+    handlers.get("agent.status.changed")?.({});
+    handlers.get("agent.status.changed")?.({});
+    await advance(5_000);
+    assert.deepEqual(ran, ["orca"], "two status events, one hinted orca round");
+    await advance(55_000);
+    assert.deepEqual(ran, ["orca", "orca"]);
+    await advance(240_000);
+    assert.deepEqual(ran.filter((n) => n !== "orca").sort(), ["chat", "resource"]);
+    const report = (await w.handlers.get("probe.report")?.(null)) as { monitors: { state: string; last: Record<string, unknown> } };
+    assert.equal(report.monitors.state, "running");
+    assert.deepEqual(Object.keys(report.monitors.last).sort(), ["chat", "orca", "resource"]);
+  } finally {
+    deactivate();
+  }
+  assert.equal(closed, 1);
+});
+
+test("a core that does not open leaves the worker running without monitors", async () => {
+  const w = fakeWorker();
+  const { clock } = fakeClock();
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), monitors: async () => "core not found" });
+  try {
+    await settle();
+    const report = (await w.handlers.get("probe.report")?.(null)) as { monitors: { state: string } };
+    assert.equal(report.monitors.state, "core not found");
+  } finally {
+    deactivate();
   }
 });
 
