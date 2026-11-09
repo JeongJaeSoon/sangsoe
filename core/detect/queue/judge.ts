@@ -61,6 +61,8 @@ export function judgeQueue(input: ViewInput, cfg: { decisionWaitMinutes: number 
   }
 
   const runOf = joinedRuns(input.events);
+  const openedAt = seqOf(input.events, "decision_opened", "decision");
+  const closedAt = seqOf(input.events, "pr_closed", "pr");
   const answered = new Map(
     input.events.filter((e) => e.type === "decision_answered" && e.payload.late !== true).map((e) => [String(e.payload.decision), e] as const),
   );
@@ -79,8 +81,19 @@ export function judgeQueue(input: ViewInput, cfg: { decisionWaitMinutes: number 
         moot.push({ decision: d.decision, evidence: { kind: "tasks_closed" } });
         continue;
       }
-      const pr = [...facts.prs.values()].find((p) => p.closed && !p.merged && waiters.some((w) => p.tasks.has(w.task)));
-      if (pr) moot.push({ decision: d.decision, evidence: { kind: "pr_closed", pr: pr.pr } });
+      // A waiter lost its cause when its PR closed unmerged after the decision opened and no other PR of
+      // its Task is still open; every live waiter must have lost it, or someone still waits on the answer.
+      const since = openedAt.get(d.decision) ?? Number.POSITIVE_INFINITY;
+      const prs = [...facts.prs.values()];
+      const lost = (task: string) => {
+        const mine = prs.filter((p) => p.tasks.has(task));
+        if (mine.some((p) => !p.closed && !p.merged)) return undefined;
+        return mine.find((p) => p.closed && !p.merged && (closedAt.get(p.pr) ?? 0) > since);
+      };
+      const live = waiters.filter((_, i) => !(rows[i] && closed(rows[i])));
+      const lostPrs = live.map((w) => lost(w.task));
+      const first = lostPrs[0];
+      if (first && lostPrs.every((p) => p !== undefined)) moot.push({ decision: d.decision, evidence: { kind: "pr_closed", pr: first.pr } });
       continue;
     }
     if (!d.undelivered) continue;
@@ -115,6 +128,16 @@ export function judgeQueue(input: ViewInput, cfg: { decisionWaitMinutes: number 
 
 function taskEvent(type: "item_ready" | "todo_due" | "trigger_unclear", task: string, key: string): Planned {
   return { type, source: QUEUE_SOURCE, payload: { task }, entity: "task", entity_id: task, dedupe_key: key };
+}
+
+/** The seq of the first row of `type` per value of `field`. */
+function seqOf(events: readonly StoredEvent[], type: string, field: string): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const e of events) {
+    const k = e.payload[field];
+    if (e.type === type && typeof k === "string" && !out.has(k)) out.set(k, e.seq);
+  }
+  return out;
 }
 
 function joinedRuns(events: readonly StoredEvent[]): Map<string, string> {
