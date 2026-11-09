@@ -8,7 +8,7 @@ export default {
     type: "object" as const,
     properties: {
       runId: { type: "string" as const },
-      spec: { type: "string" as const, description: "First prompt of the Task, /goal line first." },
+      spec: { type: "string" as const, description: "The Task's brief, acceptance criteria included. A /goal line in it does not take effect on a worker." },
       title: { type: "string" as const },
       deps: { type: "array" as const, items: { type: "string" as const } },
       who: { type: "string" as const, description: "Who owns the item, e.g. lead:api." },

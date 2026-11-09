@@ -10,7 +10,7 @@ test("createItem: task-create --deps on the Run, then one item_created row with 
   const store = Store.open({ path: ":memory:" });
   const r = await createItem(createOrcaAdapter(fake.exec), store, {
     run: "run_1",
-    spec: "/goal x",
+    spec: "brief x",
     deps: ["task_1"],
     who: "lead:api",
     doneWhen: "PR merged",

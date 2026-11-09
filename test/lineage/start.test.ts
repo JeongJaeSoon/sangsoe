@@ -74,7 +74,7 @@ const lead: Requester = { role: "lead", worktreeId: PARENT_TREE, taskId: "task_l
 const request = (over: Partial<StartRequest> = {}): StartRequest => ({
   requester: lead,
   childRole: "worker",
-  task: { spec: "/goal do the thing", title: "thing", deps: ["task_000000000002"] },
+  task: { spec: "do the thing", title: "thing", deps: ["task_000000000002"] },
   agent: "claude",
   ...over,
 });
@@ -244,11 +244,11 @@ test("a failed start that reports a Dispatch writes worker_dead{start_failed}", 
 
 test("a new Task goes through task-create --deps on the requester's Run, late answers in the first prompt", async () => {
   const h = harness();
-  await start(h, request({ task: { spec: "/goal x", deps: ["task_a"], lateAnswers: ["d001: yes"] } }));
+  await start(h, request({ task: { spec: "brief x", deps: ["task_a"], lateAnswers: ["d001: yes"] } }));
   const tc = h.called("task-create")[0] ?? [];
   assert.equal(flag(tc, "deps"), JSON.stringify(["task_a"]));
   assert.equal(flag(tc, "run"), RUN);
-  assert.match(flag(tc, "spec") ?? "", /^\/goal x\n[\s\S]*d001: yes/);
+  assert.match(flag(tc, "spec") ?? "", /^brief x\n[\s\S]*d001: yes/);
 });
 
 test("ticket references attach to the new worktree; a failure does not stop the start", async () => {

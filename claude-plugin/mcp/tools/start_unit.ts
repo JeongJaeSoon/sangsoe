@@ -16,7 +16,7 @@ export default {
       runId: { type: "string" as const, description: "The Run you hold." },
       childRole: { type: "string" as const, enum: ["lead", "worker"] },
       task: { type: "string" as const, description: "An existing Task id to start. Omit to create one from spec." },
-      spec: { type: "string" as const, description: "First prompt of the new Task, /goal line first." },
+      spec: { type: "string" as const, description: "The new Task's brief, acceptance criteria included. A /goal line in it does not take effect on a worker." },
       title: { type: "string" as const },
       deps: { type: "array" as const, items: { type: "string" as const } },
       references: { type: "array" as const, items: { type: "string" as const }, description: "Ticket URLs." },
