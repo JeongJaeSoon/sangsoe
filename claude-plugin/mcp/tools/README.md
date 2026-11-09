@@ -45,7 +45,7 @@ export default {
 | `decision_open` | 결정 열기(닫힌 같은 결정 키는 기존 dNNN 과 답 반환, 열린 것은 대기자 합류) | `{subject, question, options?, waiters?: [{task, run}], carrier_run?}` | U8 |
 | `decision_answer` | 결정 답·게이트 풀기·대기자마다 notify 한 번(다시 불러도 같다) | `{decision, answer, owner_action, linked_by?, run?}` | U8 |
 | `notify` | 판단이 필요한 신호로 세션 한 번 깨우기. 코어 함수 `notify` 는 U8 에 있고 tool 은 아직 없다(받는 사슬 id 를 항목에서 읽는 쪽이 필요) | `{item, kind, body}` | 미정 |
-| `land` | land 판정 함수 호출(머지 예약 또는 "승인되면 머지") | `{pr, head_sha}` | U11 |
+| `land` | land 판정 함수 호출(머지 예약 또는 "승인되면 머지"). 이름·입력 확정, CLI `sangsoe land` 와 같은 결과 | `{pr, repo?, head_sha?, dry_run?, main_fix?}` | U11 |
 | `handoff_save` | 판단 상태 넷의 모양을 검사해 자기 Run 우편함에 Orca `handoff` 메시지로 남기기(sqlite 에 쓰지 않음) | `{next, waiting, open_questions, reply_to}` | U13 |
 | `review_ask_record` | 리뷰 의뢰·리마인드 한 건을 `review_ask_sent` 로, 설정에 없는 리뷰어는 `unmapped_reviewer` 도 | `{pr, reviewer, reminder?}` | U13 |
 

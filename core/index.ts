@@ -91,6 +91,32 @@ export {
 export { type RecoverPlan, type RecoverRow, recoverPlan, renderRecover } from "./recover/recover.ts";
 
 export {
+  type LandAction,
+  type LandConfig,
+  type LandDeps,
+  type LandInput,
+  type LandOutcome,
+  type LandStore,
+  type LandValue,
+  land,
+  type MergePort,
+} from "./land/land.ts";
+export { mergeConfirm } from "./land/github.ts";
+export { ghMerge, readLandConfig, realLandDeps } from "./land/ports.ts";
+export { type TierOfPr, tierOfPr } from "./land/tier.ts";
+export { type EvidenceGap, evidenceGaps, mergedItemMark } from "./verify/evidence.ts";
+export {
+  type DiffFile,
+  parseTierConfig,
+  requiredEvidence,
+  type Tier as VerifyTier,
+  type TierConfig,
+  type TierLabel,
+  type TierVerdict,
+  verifyTier,
+} from "./verify/verify-tier.ts";
+
+export {
   type Check,
   type CheckContext,
   type CheckResult,
