@@ -21,8 +21,8 @@
 | P6 | U18 | | | | | |
 | P7 | U20 | | | | | |
 | P8 | U15 | | | | | |
-| P9 | U13 | | | | | |
+| P9 | U13 | 2026-11-10 | 입력을 JSONL 로 적는 일회용 plugin 을 `claude -p --plugin-dir <scratch>` 로 싣고 startup · `/compact` · resume · `/clear` 를 돌림(Claude Code 2.1.319) | SessionStart(startup) 에 `model` 없음, compact 에는 있음, resume 에 `context_tokens`. UserPromptSubmit `prompt_id`·`prompt`. PostToolUse `tool_name`·`tool_use_id`. Stop `last_assistant_message`·`stop_hook_active`. PostCompact `trigger`·`compact_summary`(토큰 수 없음) — transcript 의 `compact_boundary` 기록에 `compactMetadata.preTokens`. `/clear` → 옛 세션 SessionEnd `reason: "clear"`, 새 `session_id` 로 SessionStart `source: "clear"` | 통과(자기 Run 우편함 handoff 보내기·읽기는 미실행: 워커는 Run 을 쥐지 않아 같은 Run 으로 잴 수 없음. 가짜 Orca 시험으로 대신) | 130 |
 | P10 | U15 | | | | | |
 | P11 | U15 | | | | | |
-| P12 | U13 | | | | | |
-| P13 | U13 | | | | | |
+| P12 | U13 | 2026-11-10 | 같은 일회용 plugin 으로 `claude -p` 세션 | Notification 과 PostCompact(auto) 는 `-p` 모드에서 나오지 않음 | 미실행(대화형 세션의 권한 묻기가 필요. 워커 세션이 띄울 수 없음) | 131(결정 91 의 되돌아갈 곳: `notification_type` 과 메시지로 대기 판정, 리드 알림) |
+| P13 | U13 | 2026-11-10 | 기존 세션 transcript(Claude Code 2.1.310) 에서 `<bash-input>` 기록 읽기 | `!` 입력은 내용이 `<bash-input>…</bash-input>` 인 user 기록(`uuid`·`promptId`), 자식 기록(`parentUuid` = 입력 uuid)에 `<bash-stdout>…</bash-stdout><bash-stderr>…</bash-stderr>`. 종료 코드 없음 | 통과(형식). `!` 입력 때 어느 hook 이 부르는지는 미실행(대화형 필요) → UserPromptSubmit·Stop·SessionEnd 마다 꼬리를 다시 읽음 | 131(결정 91 ④ 나: stderr → failed, stdout URL → seen) |
