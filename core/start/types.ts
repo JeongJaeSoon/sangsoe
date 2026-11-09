@@ -70,4 +70,9 @@ export type StartPorts = {
   slots: () => number | Promise<number>;
   /** The `source` written on events. */
   source?: string;
+  /**
+   * The calling session's working directory; the declared worktree must contain it. The core runs
+   * as a child of that session (MCP server or CLI), so this is not the caller's word. Default process.cwd().
+   */
+  cwd?: () => string;
 };

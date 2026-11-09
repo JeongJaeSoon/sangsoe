@@ -15,7 +15,7 @@ export type RecoverPlan = { rows: RecoverRow[]; truncated: boolean; nonLocal: nu
 
 // Real Orca reports a finished worker's state as its outcome (`succeeded`), the recording as `settled`.
 const FINISHED = new Set(["settled", "released", "succeeded", "failed", "cancelled", "abandoned", "stopped"]);
-const settled = (w: WorkerRow) => FINISHED.has(w.state) || w.terminalState === "released";
+export const settled = (w: Pick<WorkerRow, "state" | "terminalState">) => FINISHED.has(w.state) || w.terminalState === "released";
 
 /** Decision 80 N4: one read-only table; reviving is Orca's (`worker-start --retry-of`, `run-use`). */
 export async function recoverPlan(orca: OrcaAdapter, a: { run?: string; limit?: number } = {}): Promise<RecoverPlan> {

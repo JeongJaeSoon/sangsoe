@@ -1,6 +1,7 @@
 import { REQUIRED_CAPABILITIES } from "../checks/orca-capabilities.ts";
 import type { OrcaAdapter, OrcaResult, Receipt, WriteOptions } from "../contract/orca.ts";
 import { recoverWrite } from "../orca/adapter.ts";
+import { settled } from "../recover/recover.ts";
 import type { NewTask, RefusalReason, Role, StartOutcome, StartPorts, StartRefusal, StartRequest } from "./types.ts";
 
 type Json = Record<string, unknown>;
@@ -44,9 +45,14 @@ async function write(orca: OrcaAdapter, first: Promise<OrcaResult<Receipt>>, aga
 
 const MAX_WORKER_PAGES = 50;
 
+const within = (dir: string, root: string) => {
+  const r = root.replace(/\/+$/, "");
+  return r !== "" && (dir === r || dir.startsWith(`${r}/`));
+};
+
 /**
  * A lead also holds its own Run, so "no taskId" and run-current alone cannot tell it from the
- * orchestrator. What can: the orchestrator's worktree carries no live Dispatch. worker-list spans
+ * orchestrator. What can: the orchestrator's worktree carries no unsettled Dispatch. worker-list spans
  * every Run, newest first; an unreadable or unfinished scan is a problem, never a pass.
  */
 async function liveDispatchIn(orca: OrcaAdapter, worktreeId: string): Promise<string | null> {
@@ -54,8 +60,9 @@ async function liveDispatchIn(orca: OrcaAdapter, worktreeId: string): Promise<st
   for (let page = 0; page < MAX_WORKER_PAGES; page++) {
     const r = await orca.workerList({ limit: 100, ...(cursor ? { cursor } : {}) });
     if (!r.ok) return `오케스트레이터 worktree 의 Dispatch 를 확인하지 못했다 (${r.error.code})`;
-    const own = r.value.rows.find((w) => w.workspace === worktreeId && w.liveness === "live");
-    if (own) return `오케스트레이터라고 밝혔지만 이 worktree 에 살아 있는 Dispatch ${own.dispatchId} 가 있다(리드·워커 세션)`;
+    // Not settled is enough: a Dispatch whose liveness Orca cannot tell (after a restart) still counts.
+    const own = r.value.rows.find((w) => w.workspace === worktreeId && !settled(w));
+    if (own) return `오케스트레이터라고 밝혔지만 이 worktree 에 끝나지 않은 Dispatch ${own.dispatchId} 가 있다(리드·워커 세션)`;
     cursor = r.value.nextCursor;
     if (!cursor) return null;
   }
@@ -160,8 +167,12 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   }
   const trees = await orca.worktreeList({});
   if (!trees.ok) return refuse("lineage_invalid", `worktree 목록을 읽지 못했다 (${trees.error.code})`);
-  if (!trees.value.rows.some((w) => w.id === requester.worktreeId)) {
-    return refuse("lineage_invalid", "부모 worktree 를 읽지 못했다(로컬 worktree 목록에 없다)");
+  const tree = trees.value.rows.find((w) => w.id === requester.worktreeId);
+  if (!tree) return refuse("lineage_invalid", "부모 worktree 를 읽지 못했다(로컬 worktree 목록에 없다)");
+  // The declared worktree is the caller's own only if the calling session runs inside it.
+  const cwd = (ports.cwd ?? (() => process.cwd()))();
+  if (!within(cwd, tree.path)) {
+    return refuse("lineage_invalid", `밝힌 worktree(${tree.path})가 부르는 세션의 작업 폴더(${cwd})를 품지 않는다`);
   }
 
   // ③ depth_exceeded: only when the setting was read; otherwise the receipt decides (⑤).

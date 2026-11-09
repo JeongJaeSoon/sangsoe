@@ -14,18 +14,24 @@ export type NewItem = {
   role?: "lead" | "worker";
 };
 
-export type ItemCreated = { ok: true; task: string; alias: string } | { ok: false; error: string };
+export type ItemCreated =
+  | { ok: true; task: string; alias: string }
+  | { ok: false; code: "invalid_input" | "task_create_failed"; error: string };
+
+const REQUIRED = ["run", "spec", "who", "doneWhen"] as const;
 
 /**
  * An item is an Orca Task (decision 74): task-create --deps, then one `item_created` row binding
  * its iNNN alias. The Task's spec, title and deps stay in Orca only. Starting it is startUnit's.
  */
 export async function createItem(orca: OrcaAdapter, store: Pick<Store, "append" | "allocate">, a: NewItem): Promise<ItemCreated> {
+  const empty = REQUIRED.filter((k) => a[k].trim() === "");
+  if (empty.length > 0) return { ok: false, code: "invalid_input", error: `empty: ${empty.join(", ")}` };
   const args = { spec: `${roleLine(a.role ?? "worker")}\n${a.spec}`, run: a.run, ...(a.title ? { title: a.title } : {}), ...(a.deps?.length ? { deps: a.deps } : {}) };
   const r = await orca.taskCreate(args);
-  if (!r.ok) return { ok: false, error: `task-create 실패 (${r.error.code}: ${r.error.message})` };
+  if (!r.ok) return { ok: false, code: "task_create_failed", error: `task-create 실패 (${r.error.code}: ${r.error.message})` };
   const task = findKey(r.value, ["taskId", "task_id"]) ?? findKey((r.value as { task?: unknown }).task, ["id"]);
-  if (!task) return { ok: false, error: "task-create 영수증에 Task id 가 없다" };
+  if (!task) return { ok: false, code: "task_create_failed", error: "task-create 영수증에 Task id 가 없다" };
   const alias = store.allocate("i");
   store.append({
     type: "item_created",

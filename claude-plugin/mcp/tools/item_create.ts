@@ -13,10 +13,14 @@ export async function handle(input: Record<string, unknown>, ports: { orca: Orca
     ...(s("title") ? { title: s("title") } : {}),
     ...(deps?.length ? { deps } : {}),
   });
-  return r.ok
-    ? { ok: true, value: { task: r.task, alias: r.alias } }
-    : { ok: false, refusal: { code: "task_create_failed", reason: r.error, fix: "check that the Run id is right and the deps are Tasks of that Run" } };
+  return r.ok ? { ok: true, value: { task: r.task, alias: r.alias } } : { ok: false, refusal: { code: r.code, reason: r.error, fix: FIX[r.code] } };
 }
+
+// Same mapping as `sangsoe item new`, so both entrances give the same Outcome.
+const FIX = {
+  invalid_input: "give run, spec, who and done-when, none empty",
+  task_create_failed: "check that the Run id is right and the deps are Tasks of that Run",
+} as const;
 
 export default {
   name: "item_create",

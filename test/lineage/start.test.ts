@@ -118,8 +118,11 @@ const request = (over: Partial<StartRequest> = {}): StartRequest => ({
 });
 
 type H = ReturnType<typeof harness>;
+/** The calling session runs inside the api worktree (PARENT_TREE's path in the recording). */
+const CALLER_CWD = "/home/dev/src/api/packages/web";
+const ports = (h: H, slots: () => number = () => 1, cwd = CALLER_CWD) => ({ orca: h.orca, store: h.store, slots, cwd: () => cwd });
 async function start(h: H, req: StartRequest = request(), slots: () => number = () => 1) {
-  return startUnit({ orca: h.orca, store: h.store, slots }, req);
+  return startUnit(ports(h, slots), req);
 }
 
 function assertRefused(h: H, out: Awaited<ReturnType<typeof start>>, reason: string) {
@@ -214,6 +217,29 @@ test("lineage_invalid: a lead claiming to be the orchestrator is refused by its 
   // The same worktree with only settled Dispatches is the orchestrator's.
   const clean = harness();
   assert.equal((await start(clean, request({ requester: orchestrator, childRole: "lead" }))).kind, "started");
+});
+
+test("lineage_invalid: a declared worktree the calling session does not run in is refused, on every path", async () => {
+  // A lead naming some other clean worktree as its own, to pass as the orchestrator.
+  const elsewhere = "/home/dev/workspaces/api/feature-a";
+  const orch = harness();
+  const out = await startUnit(ports(orch, () => 1, elsewhere), request({ requester: orchestrator, childRole: "lead" }));
+  assertRefused(orch, out, "lineage_invalid");
+  assert.match(out.kind === "refused" ? out.detail : "", /작업 폴더/);
+  const asLead = harness();
+  assertRefused(asLead, await startUnit(ports(asLead, () => 1, elsewhere), request()), "lineage_invalid");
+  // A sibling folder sharing the prefix is not inside.
+  const sibling = harness();
+  assertRefused(sibling, await startUnit(ports(sibling, () => 1, "/home/dev/src/api-old"), request()), "lineage_invalid");
+});
+
+test("lineage_invalid: an unsettled Dispatch Orca cannot call live still gives a lead away", async () => {
+  const h = harness({
+    replies: {
+      "orchestration-worker-list": () => ok({ workers: [{ ...workerRow("ctx_lead", PARENT_TREE, "unknown"), state: "ready" }], scope: { source: "all" } }),
+    },
+  });
+  assertRefused(h, await start(h, request({ requester: orchestrator })), "lineage_invalid");
 });
 
 test("lineage_invalid: an unreadable worker-list is not a pass for the orchestrator", async () => {
@@ -368,7 +394,7 @@ test("the start_unit MCP tool carries late answers into the first prompt", async
   const h = harness();
   const r = await handle(
     { role: "lead", worktreeId: PARENT_TREE, taskId: "task_lead", runId: RUN, childRole: "worker", spec: "brief", lateAnswers: ["d002: no"] },
-    { orca: h.orca, store: h.store, slots: () => 1 },
+    ports(h),
   );
   assert.equal(r.ok, true);
   assert.match(flag(h.called("task-create")[0] ?? [], "spec") ?? "", /d002: no/);
@@ -383,7 +409,7 @@ test("MCP start_unit refuses input it would otherwise drop or misread, before ca
   ];
   for (const input of cases) {
     const h = harness();
-    const r = await handle(input, { orca: h.orca, store: h.store, slots: () => 1 });
+    const r = await handle(input, ports(h));
     assert.equal(r.ok === false && r.refusal.code, "invalid_input", JSON.stringify(input));
     assert.equal(h.fake.calls.length, 0);
   }
