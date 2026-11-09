@@ -4,8 +4,10 @@
 
 export type Simple = {
   words: string[];
-  /** Ended with a single `&`. */
+  /** Part of a pipeline, and-or list or group that ended with a single `&`. */
   background: boolean;
+  /** Text run by `bash -c` or `eval` under a wrapper that outlives the shell (`nohup`, `setsid`). */
+  detached?: boolean;
 };
 
 export type Parsed = { commands: Simple[]; loops: boolean };
@@ -60,23 +62,36 @@ export function parse(text: string, depth = 0): Parsed {
   let word = "";
   let inWord = false;
   let skipNext = false;
+  // A trailing `&` backgrounds the whole and-or list before it, back to the last `;`, newline or `&`;
+  // a group closed just before it counts as one command.
+  let listStart = 0;
+  const groups: number[] = [];
+  const open = () => groups.push(commands.length);
+  const close = () => {
+    const start = groups.pop();
+    if (start !== undefined) listStart = Math.min(listStart, start);
+  };
 
   const flushWord = () => {
     if (!inWord) return;
     if (skipNext) skipNext = false;
-    else {
-      if (words.length === 0 && LOOP.has(word)) loops = true;
-      if (words.length === 0 && KEYWORDS.has(word)) {
-        if (LOOP.has(word)) loops = true;
-      } else words.push(word);
-    }
+    else if (words.length === 0 && KEYWORDS.has(word)) {
+      if (LOOP.has(word)) loops = true;
+      if (word === "{") open();
+      if (word === "}") close();
+    } else words.push(word);
     word = "";
     inWord = false;
   };
-  const flushCommand = (background: boolean) => {
+  const flushCommand = () => {
     flushWord();
-    if (words.length > 0) commands.push({ words, background });
+    if (words.length > 0) commands.push({ words, background: false });
     words = [];
+  };
+  const endList = (background: boolean) => {
+    flushCommand();
+    if (background) for (let k = listStart; k < commands.length; k++) (commands[k] as Simple).background = true;
+    listStart = commands.length;
   };
 
   for (let i = 0; i < s.length; i++) {
@@ -126,16 +141,21 @@ export function parse(text: string, depth = 0): Parsed {
       // `2>&1` names no file; any other redirection's next word is its target, not an argument.
       if (!/&[\d-]*$/.test(s.slice(i, j)) || c === "&") skipNext = true;
       i = j - 1;
-    } else if (c === "&" && n === "&") {
-      flushCommand(false);
-      i++;
-    } else if (c === "|" && n === "|") {
-      flushCommand(false);
+    } else if ((c === "&" && n === "&") || (c === "|" && (n === "|" || n === "&"))) {
+      flushCommand();
       i++;
     } else if (c === "&") {
-      flushCommand(true);
-    } else if (c === ";" || c === "\n" || c === "|" || c === "(" || c === ")") {
-      flushCommand(false);
+      endList(true);
+    } else if (c === ";" || c === "\n") {
+      endList(false);
+    } else if (c === "|") {
+      flushCommand();
+    } else if (c === "(") {
+      flushCommand();
+      open();
+    } else if (c === ")") {
+      flushCommand();
+      close();
     } else if (c === " " || c === "\t") {
       flushWord();
     } else {
@@ -143,7 +163,7 @@ export function parse(text: string, depth = 0): Parsed {
       inWord = true;
     }
   }
-  flushCommand(false);
+  endList(false);
 
   for (const p of nested) {
     commands.push(...p.commands);
@@ -151,11 +171,17 @@ export function parse(text: string, depth = 0): Parsed {
   }
   // `bash -c '<script>'` and `eval` run text: read that text as commands too.
   for (const cmd of [...commands]) {
-    const { argv } = unwrap(cmd.words);
+    const { argv, detached } = unwrap(cmd.words);
     const inner = shellText(argv);
     if (inner !== undefined && depth < 3) {
       const p = parse(inner, depth + 1);
-      commands.push(...p.commands.map((x) => ({ ...x, background: x.background || cmd.background })));
+      commands.push(
+        ...p.commands.map((x) => ({
+          ...x,
+          background: x.background || cmd.background,
+          detached: x.detached || cmd.detached || detached,
+        })),
+      );
       loops ||= p.loops;
     }
   }

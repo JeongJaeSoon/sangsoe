@@ -22,7 +22,14 @@ const KIND = {
   dispatch: "an unsupervised Orca dispatch",
   workerStart: "a worker-start called outside the core start path",
   interpreter: "a session start inside an interpreter one-liner",
+  holder: "a claude session held by a terminal multiplexer, at/batch or launchd",
 } as const;
+
+// Tools that keep a command running after this shell: tmux and screen when they open or feed a pane,
+// at/batch, launchctl. Plain use of them (a dev server in tmux, `screen -ls`) passes.
+const TMUX_RUN = new Set(["new-session", "new", "new-window", "neww", "split-window", "splitw", "respawn-pane", "respawnp", "respawn-window", "respawnw", "send-keys", "send"]);
+const LAUNCHCTL_RUN = new Set(["submit", "load", "bootstrap"]);
+const CLAUDE_WORD = /(?:^|[\s/;&|("'>])claude(?:\s|$|["'<])/;
 
 // claude subcommands that open no session.
 const CLAUDE_TOOLS = new Set(["plugin", "plugins", "mcp", "config", "doctor", "update", "install", "migrate-installer", "setup-token"]);
@@ -36,12 +43,32 @@ const LOOSE = [
 ];
 
 const positionals = (argv: readonly string[]) => argv.slice(1).filter((a) => !a.startsWith("-"));
+// `-h` counts as a help flag only where it is not the value of the option before it (`--prompt -h`).
+const asksHelp = (argv: readonly string[]) =>
+  has(argv, "--help") || argv.some((a, i) => i > 0 && a === "-h" && !(argv[i - 1] ?? "").startsWith("-"));
+
+function heldStart(parsed: Parsed, text: string, read: (path: string) => string | undefined): boolean {
+  for (const cmd of parsed.commands) {
+    const { argv } = unwrap(cmd.words);
+    const [head, sub] = argv;
+    const args = argv.slice(1);
+    const names = args.some((a) => CLAUDE_WORD.test(a) || a === "claude");
+    if (head === "tmux" && sub && TMUX_RUN.has(sub) && names) return true;
+    if (head === "screen" && names) return true;
+    if ((head === "at" || head === "batch") && CLAUDE_WORD.test(text)) return true;
+    if (head === "launchctl" && sub && LAUNCHCTL_RUN.has(sub)) {
+      if (names) return true;
+      if (args.some((a) => a.endsWith(".plist") && CLAUDE_WORD.test(read(a) ?? ""))) return true;
+    }
+  }
+  return false;
+}
 
 function rawStart(parsed: Parsed, toolBackground: boolean): string | undefined {
   for (const cmd of parsed.commands) {
     const a = unwrap(cmd.words);
     const [head] = a.argv;
-    if (has(a.argv, "--help") || has(a.argv, "-h")) continue;
+    if (asksHelp(a.argv)) continue;
     const [p0, p1] = positionals(a.argv);
     if (head === "orca") {
       if (p0 === "agent" && p1 === "launch") return KIND.fallback;
@@ -49,7 +76,7 @@ function rawStart(parsed: Parsed, toolBackground: boolean): string | undefined {
       if (p0 === "orchestration" && p1 === "dispatch") return KIND.dispatch;
       if (p0 === "orchestration" && p1 === "worker-start") return KIND.workerStart;
     }
-    if (head === "claude" && (cmd.background || a.detached || toolBackground)) {
+    if (head === "claude" && (cmd.background || cmd.detached || a.detached || toolBackground)) {
       if (!(p0 && CLAUDE_TOOLS.has(p0)) && !has(a.argv, "--version") && !has(a.argv, "-v")) return KIND.claude;
     }
     if (head && INTERPRETER.test(head)) {
@@ -65,13 +92,14 @@ export const startGuard: Gate = (call: ToolCall, facts: Facts): Verdict | null =
   const text = String(call.input.command ?? "");
   const background = call.input.run_in_background === true;
   const parsed = parse(text);
-  let kind = rawStart(parsed, background);
+  const read = (path: string) => facts.readScript(isAbsolute(path) ? path : join(call.cwd, path));
+  let kind = rawStart(parsed, background) ?? (heldStart(parsed, text, read) ? KIND.holder : undefined);
   if (!kind) {
     // A start wrapped in a script file is the same start (R-10): read each script once, no deeper.
     for (const cmd of parsed.commands) {
       const path = scriptPath(unwrap(cmd.words));
       if (!path) continue;
-      const script = facts.readScript(isAbsolute(path) ? path : join(call.cwd, path));
+      const script = read(path);
       const inner = script === undefined ? undefined : rawStart(parse(script), background || cmd.background);
       if (inner) {
         kind = `${inner}, inside ${path}`;

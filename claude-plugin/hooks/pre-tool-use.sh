@@ -6,5 +6,5 @@
 cli="${CLAUDE_PLUGIN_ROOT:-$(dirname "$0")/..}/../dist/cli/main.js"
 if [ -f "$cli" ]; then exec node "$cli" hook pre-tool-use; fi
 if command -v sangsoe >/dev/null 2>&1; then exec sangsoe hook pre-tool-use; fi
-echo "sangsoe hook: no $cli and no sangsoe on PATH; run npm run build in a checkout, or install sangsoe" >&2
+echo "sangsoe hook: no $cli and no sangsoe on PATH, so every tool call is held. In your own terminal, run npm run build in the checkout or install sangsoe; to stop the hook instead, run: claude plugin disable sangsoe" >&2
 exit 2

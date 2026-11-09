@@ -59,10 +59,15 @@ export function openPrs(host: Host, cwd: string, store: () => Pick<Store, "event
     return undefined;
   }
   if (prs.length === 0) return [];
-  const s = store();
-  if (!s) return undefined;
-  const landed = new Set(s.events({ type: "land_requested" }).map((e) => String((e.payload as { pr?: string }).pr)));
-  return prs.map((pr) => ({ pr, landRequested: landed.has(pr) }));
+  try {
+    const s = store();
+    if (!s) return undefined;
+    const landed = new Set(s.events({ type: "land_requested" }).map((e) => String((e.payload as { pr?: string }).pr)));
+    return prs.map((pr) => ({ pr, landRequested: landed.has(pr) }));
+  } catch {
+    // An unreadable store is an unread fact, not a reason to fail every Bash call.
+    return undefined;
+  }
 }
 
 /** The facts as this machine has them; each read once per hook process, and only when asked. */
@@ -84,7 +89,9 @@ export function hostFacts(input: HookInput, host: Host, store: () => Pick<Store,
     ownOpenPrs: once(() => openPrs(host, input.cwd, store)),
     readScript: (path) => {
       try {
-        return statSync(path).size <= SCRIPT_BYTES ? host.readText(path) : undefined;
+        // isFile: a FIFO or device named as a script would block the hook on read.
+        const st = statSync(path);
+        return st.isFile() && st.size <= SCRIPT_BYTES ? host.readText(path) : undefined;
       } catch {
         return undefined;
       }

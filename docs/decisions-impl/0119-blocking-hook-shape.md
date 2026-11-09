@@ -6,6 +6,8 @@
 
 **시작 가드(결정 94 마).** 에이전트의 Bash 명령 글만 읽는다. 코어 시작 절차(`start_unit` → `startUnit`, PR #13)가 부르는 Orca 는 MCP 서버 프로세스의 자식이라 PreToolUse 에 보이지 않으므로 표지 없이 통과한다. split §8 Q4 의 "코어 자신의 호출은 환경 표지로 통과" 는 결정 94 (마)가 대체했고 그 문장대로 했다. 스크립트 파일로 감싼 시작은 그 파일을 한 번 읽어 같은 판정을 하고(R-10 의 "다른 경로"), 인터프리터 한 줄(`python3 -c` 등)은 느슨한 패턴으로 본다. 그 너머(변수로 만든 명령, 다른 세션)는 hook 이 못 보며, 단단한 검사는 `unit_lineage_complete` 다.
 
+**결정 94 (마) 목록 밖의 떼어 낸 시작.** 셸보다 오래 사는 실행은 목록에 없어도 같은 시작이다. `&` 로 끝나는 파이프·and-or 목록·`( … )`·`{ … }` 의 claude, `nohup`·`setsid` 가 감싼 `bash -c` 안의 claude, tmux(`new-session`·`new-window`·`split-window`·`respawn-*`·`send-keys`)와 screen 이 여는 claude, `at`·`batch` 에 넘긴 claude, `launchctl submit|load|bootstrap` 이 부르는 claude(plist 는 한 번 읽는다)를 막는다. claude 를 부르지 않는 tmux·screen·at·launchctl 사용(개발 서버, `screen -ls`, `launchctl list`)은 그대로 둔다.
+
 **거부 메시지의 이름.** 에이전트에게는 MCP tool `start_unit`(`mcp__plugin_sangsoe_sangsoe__start_unit`), 사람에게는 `sangsoe item new`(항목을 만들고 오케스트레이터가 시작한다)를 적는다. 사람이 직접 세션을 여는 `sangsoe` CLI 명령은 설계의 CLI 6행에 없다. 자기 머지 게이트는 설계가 정한 `sangsoe land`·MCP `land`(U11)를 가리킨다.
 
 **`gate_denied` 의 사유.** 용어집은 `report_address` 를 `gate_denied` 의 사유 값이라 하지만 event 정의(`core/contract/events/gate_denied.ts`)에는 `gate`·`command_file` 두 칸뿐이다. 계약은 이 단위의 범위 밖이라 칸을 더하지 않고 `gate` 에 `report-address` 를 쓴다. 다음에 계약을 고치는 단위가 `reason` 칸을 더하면 이 값을 그리로 옮긴다.
