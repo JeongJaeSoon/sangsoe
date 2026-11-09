@@ -1,5 +1,6 @@
 import type { StoredEvent, VerifySpec, ViewInput } from "../contract/index.ts";
 import { dedupeKey, EVENTS } from "../contract/index.ts";
+import { mask } from "../session/mask.ts";
 import type { Appended, Store } from "../store/store.ts";
 import { ownerMarks } from "./marks.ts";
 import { isOwnerItem, OWNER_DEFAULTS, type OwnerConfig, type OwnerItemFacts } from "./types.ts";
@@ -27,11 +28,14 @@ export type ShellLink =
 const tokens = (s: string): string[] => s.trim().split(/\s+/).filter(Boolean);
 const URLS = /https?:\/\/\S+/g;
 
+const URL_REPO = /github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\//;
+
+/** The line's repo: `-R`/`--repo`, else a GitHub URL in the command (`gh pr merge <url>`), else the session's. */
 function lineRepo(line: ShellLine): string | null {
   const t = tokens(line.command);
   const i = t.findIndex((w) => w === "-R" || w === "--repo");
   const flag = i >= 0 ? t[i + 1] : t.find((w) => w.startsWith("--repo="))?.slice("--repo=".length);
-  return (flag ?? line.repo)?.toLowerCase() ?? null;
+  return (flag ?? URL_REPO.exec(line.command)?.[1] ?? line.repo)?.toLowerCase() ?? null;
 }
 
 function verifyRepo(v: VerifySpec | null): string | null {
@@ -101,23 +105,31 @@ export function linkShell(input: ViewInput, facts: readonly OwnerItemFacts[], li
   return { kind: "seen", task: one.task, observed };
 }
 
-/** Writes what linkShell decided, once per transcript line. Returns null for an ignored line. */
-export function recordShellLink(store: Pick<Store, "append">, line: ShellLine, link: ShellLink, source = "hook:owner_input"): Appended | null {
+/**
+ * Writes what linkShell decided, once per transcript line, its text masked (decision 34). Returns
+ * null for an ignored line. `ownerAction` is the seq of the line's owner_action row, kept in subject.
+ * Older rows under `evidence:<uuid>:owner_act` / `owner_act_unlinked:<uuid>` are read by type, and
+ * the hook never links a line whose owner_action row exists, so no line gets both key forms.
+ */
+export function recordShellLink(store: Pick<Store, "append">, line: ShellLine, link: ShellLink, source = "hook:owner_input", ownerAction?: number): Appended | null {
   if (link.kind === "ignored") return null;
+  const subject = ownerAction === undefined ? {} : { subject: `owner_action:${ownerAction}` };
   if (link.kind === "unlinked") {
     return store.append({
       type: "owner_act_unlinked",
       source,
-      payload: { act: line.command.slice(0, 500) },
+      payload: { act: mask(line.command).slice(0, 500) },
+      ...subject,
       dedupe_key: dedupeKey(EVENTS.owner_act_unlinked, "owner_act", line.uuid),
     });
   }
   return store.append({
     type: "evidence",
     source,
-    payload: { kind: `owner_act:${link.kind}`, observed: link.observed, ...(line.exitCode !== null ? { exit_code: line.exitCode } : {}) },
+    payload: { kind: `owner_act:${link.kind}`, observed: mask(link.observed), ...(line.exitCode !== null ? { exit_code: line.exitCode } : {}) },
     entity: "task",
     entity_id: link.task,
+    ...subject,
     dedupe_key: dedupeKey(EVENTS.evidence, "owner_act", line.uuid),
   });
 }

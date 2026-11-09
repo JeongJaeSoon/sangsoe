@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Decision 91's input-linking and release rules have one body, core/owner (decision 146). The hooks
 // in core/session call it and keep none of their own.
 
-const dir = new URL("../../core/session/", import.meta.url);
+// Read as files, not imported: built with join so the layout test does not take it for an import.
+const dir = pathToFileURL(`${join(fileURLToPath(new URL("../..", import.meta.url)), "core", "session")}/`);
 const GONE = ["WATCH_COMMANDS", "openHints", "owner_act_unlinked", "owner_act:", "waiting_released", "function release", "startsWith(w)"];
 
 test("core/session holds no decision-91 linking or release rule", () => {

@@ -44,7 +44,7 @@ export function awaitingResume(input: ViewInput): number[] {
  * that tool (a parallel tool must not release another's wait); a wait with no tool name is not
  * released by tools. `by` is owner when the owner spoke on that session after the wait.
  */
-export function releasesFor(input: ViewInput, signal: ReleaseSignal): Release[] {
+export function releasesFor(input: Pick<ViewInput, "events">, signal: ReleaseSignal): Release[] {
   if (signal.hostId !== undefined && signal.hostId !== LOCAL_HOST) return [];
   const waits = openWaits(input.events).filter((w) => w.payload.session === signal.session);
   const by = (w: StoredEvent): Release["by"] => (signal.kind === "button" ? "button" : ownerSpokeAfter(input.events, w) ? "owner" : "unknown");
@@ -62,16 +62,23 @@ export function releasesFor(input: ViewInput, signal: ReleaseSignal): Release[] 
   }
 }
 
-/** Writes each release once: the first signal that saw it wins (dedupe waiting_released:<seq>). */
-export function recordReleases(store: Pick<Store, "append">, input: ViewInput, signal: ReleaseSignal, source = "hook:release"): Appended[] {
-  return releasesFor(input, signal).map((r) =>
-    store.append({
+/**
+ * Writes each release once: the first signal that saw it wins (dedupe waiting_released:<seq>). The
+ * row carries the wait's entity, so it stays on the item's timeline.
+ */
+export function recordReleases(store: Pick<Store, "append">, input: Pick<ViewInput, "events">, signal: ReleaseSignal, source = "hook:release"): Appended[] {
+  const waits = new Map(input.events.map((e) => [e.seq, e]));
+  return releasesFor(input, signal).map((r) => {
+    const w = waits.get(r.ref);
+    return store.append({
       type: "waiting_released",
       source,
       payload: { ref: String(r.ref), outcome: r.outcome, by: r.by, evidence: r.evidence },
+      ...(w?.entity ? { entity: w.entity } : {}),
+      ...(w?.entity_id ? { entity_id: w.entity_id } : {}),
       dedupe_key: dedupeKey(EVENTS.waiting_released, String(r.ref)),
-    }),
-  );
+    });
+  });
 }
 
 /**
