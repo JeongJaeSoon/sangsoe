@@ -47,8 +47,28 @@ for (const m of read(join(ROOT, "docs/architecture.md")).matchAll(ROW)) {
   mapped.set(m[2] ?? "", { slot: m[4] ?? "", layer, tokens: TOKENS[m[3] ?? ""] ?? "" });
 }
 
-test("docs/architecture.md maps every slot root", () => {
-  for (const s of SLOT_ROOTS) assert.ok(mapped.has(s), `${s}/ is not in the architecture table`);
+// Fixed by the design, not by the table: decision 78's slots and "only judgment spends tokens".
+const ROOT_SLOT: Record<string, string> = { core: "④", cli: "④", "orca-plugin": "②", "claude-plugin": "③" };
+const LAYER_TOKENS: Record<string, string> = { 감지: "free", 실행: "free", 판단: "using" };
+
+test("docs/architecture.md maps every slot root to its decision-78 slot", () => {
+  for (const s of SLOT_ROOTS) assert.equal(mapped.get(s)?.slot, ROOT_SLOT[s], `${s}/ slot in the architecture table`);
+});
+
+test("every home sits in its root's slot", () => {
+  for (const [dir, l] of mapped) {
+    const root = SLOT_ROOTS.find((s) => dir === s || dir.startsWith(`${s}/`));
+    assert.ok(root, `${dir}/ is outside the slot roots`);
+    assert.equal(l.slot, ROOT_SLOT[root], `${dir}/ slot`);
+  }
+});
+
+test("the table covers all three layers, and only 판단 spends tokens", () => {
+  const layers = new Set([...mapped.values()].map((l) => l.layer));
+  for (const layer of Object.keys(LAYER_TOKENS)) assert.ok(layers.has(layer), `no home for layer ${layer}`);
+  for (const [dir, l] of mapped) {
+    if (l.layer in LAYER_TOKENS) assert.equal(l.tokens, LAYER_TOKENS[l.layer], `${dir}/ tokens for ${l.layer}`);
+  }
 });
 
 test("every mapped home has a README whose label matches the table", () => {
