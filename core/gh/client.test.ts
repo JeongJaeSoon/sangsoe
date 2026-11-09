@@ -86,6 +86,15 @@ test("a response with no headers still yields its body", async () => {
   assert.deepEqual(r, { kind: "rate_limited", resource: "core", resetAt: NOW / 1000 + 60 });
 });
 
+test("a body with blank lines is never read as headers", () => {
+  const body = '{\n\n  "ok": true\n}';
+  assert.deepEqual(parseIncluded(`HTTP/2.0 200 OK\n\n${body}`)?.body, body);
+  const withHeaders = parseIncluded(`HTTP/2.0 200 OK\r\nEtag: "x"\r\n\r\n${body}`);
+  assert.equal(withHeaders?.headers.get("etag"), '"x"');
+  assert.equal(withHeaders?.body, body);
+  assert.equal(parseIncluded("HTTP/2.0 304 Not Modified\nEtag: \"y\"")?.headers.get("etag"), '"y"');
+});
+
 test("a 403 with budget left is an error, not rate_limited", async () => {
   const s = scripted(http("403 Forbidden", RATE, '{"message":"Resource not accessible by integration"}'));
   const r = await createGhClient({ exec: s.exec, cache: memoryGhCache(), now: () => NOW }).get("repos/acme/api/branches/main/protection");

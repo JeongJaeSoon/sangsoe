@@ -51,13 +51,13 @@ type Raw = { status: number; headers: Map<string, string>; body: string };
 
 /** `gh api -i` prints the status line, headers, a blank line, then the body. */
 export function parseIncluded(stdout: string): Raw | undefined {
-  const m = /^HTTP\/[\d.]+ (\d{3})[^\n]*\r?\n(?:([\s\S]*?)\r?\n)?\r?\n([\s\S]*)$/.exec(stdout);
-  if (!m) {
-    const head = /^HTTP\/[\d.]+ (\d{3})[^\n]*\r?\n([\s\S]*)$/.exec(stdout);
-    if (!head) return undefined;
-    return { status: Number(head[1]), headers: parseHeaders(head[2] ?? ""), body: "" };
-  }
-  return { status: Number(m[1]), headers: parseHeaders(m[2] ?? ""), body: m[3] ?? "" };
+  const m = /^HTTP\/[\d.]+ (\d{3})[^\n]*(?:\n|$)/.exec(stdout);
+  if (!m) return undefined;
+  const rest = stdout.slice(m[0].length);
+  // The first empty line ends the headers; with no header lines it is the very first line.
+  const end = /^\r?\n|\r?\n\r?\n/.exec(rest);
+  if (!end) return { status: Number(m[1]), headers: parseHeaders(rest), body: "" };
+  return { status: Number(m[1]), headers: parseHeaders(rest.slice(0, end.index)), body: rest.slice(end.index + end[0].length) };
 }
 
 function parseHeaders(block: string): Map<string, string> {
