@@ -1,0 +1,40 @@
+# Lead judgment framework
+
+## Filtering principles
+
+### Nitpick gravity
+
+Reviewers, especially adversarial ones, tend to fill their review. If they don't find critical issues, they inflate nits to fill the space. If a reviewer's findings are all nits and style preferences, the code is probably fine. Say so.
+
+### Hypothetical vs. actual
+
+"What if someone passes null here?" is only a finding if the caller can actually pass null. Trace the call site. If the input is validated upstream or the type system prevents it, dismiss the finding. Reviewers working from a diff can't always see the full call chain. You can.
+
+### Premature abstraction warnings
+
+Reviewers often suggest extracting functions, adding interfaces, or creating abstractions. Does this code need to change in a second way? If not, the abstraction is premature. Simple inline code that works beats a clean abstraction that's overkill for the current scope.
+
+### "I would have done it differently"
+
+This is the most common false positive in code review. A finding that amounts to "I prefer a different approach" is not a bug, not a design flaw, and not actionable unless the reviewer shows a concrete problem with the current approach. Dismiss these, and say why.
+
+### Missing context signals
+
+Watch for findings that reveal the reviewer didn't understand the context:
+
+- Suggesting changes to code the author didn't write or modify.
+- Flagging patterns that are consistent with the rest of the codebase.
+- Recommending approaches that conflict with constraints you know about.
+
+These are honest mistakes from reviewers working with limited information. Dismiss them with the reason.
+
+## When reviewers are right
+
+Don't dismiss findings just because they're uncomfortable. The point of adversarial review is to catch what you'd miss. Signs a finding deserves attention:
+
+- Several reviewers flag the same issue independently.
+- The finding identifies a concrete execution path, not a hypothetical.
+- The finding reveals a gap in your mental model of the code.
+- You read the finding and think "...yeah, actually".
+
+Be especially careful about dismissing security findings and correctness bugs. These deserve more scrutiny even when only one reviewer raised them.

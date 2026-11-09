@@ -1,0 +1,55 @@
+# Map mode
+
+A product feature map answers one question for a reader who will plan, write or decide: what can a user do with this product today, and how do we know. Every row is read from the code at one commit, and every status carries evidence a reader can open.
+
+This is not the verification map that `verification-skill` (create mode) writes for an agent driving the app. When that one exists, read it as a source for the feature list, and do not edit it from here.
+
+## 1. Pin the baseline
+
+Name the repo, the ref, its short sha and its commit date in the first line of the map ("기준: `acme/api` origin/main `abc1234`(2026-10-10)"). The ref is the commit, release or branch the user names. When they name none, fetch first and read `origin/<default>`, not a stale local branch. Every statement in the map is true as of that line, except the rows a refresh could not re-check (§6). A product spread over several repos gets one baseline line per repo.
+
+## 2. Find the apps
+
+List the deployable units from what builds and ships them: compose files, Dockerfiles, workspace manifests, CI and deploy config. One row per app: what it does in one line, and its status. Then list, as plain bullets, the apps a reader would expect but which do not exist yet (a web console, a bot), each with what exists in its place, such as a shared package with no app using it or only contract types.
+
+## 3. List the features from the user's side
+
+Read the public surfaces: HTTP routes or the OpenAPI file, CLI commands, UI routes and menus, bot commands, config flags a user sets. One row per thing a user can do, grouped by area (account, sessions, cost, operations). A row names the action, not the module that implements it.
+
+For a large product, split the surfaces across parallel `Explore` subagents, one area each, and merge their rows yourself. Each returns rows with evidence, not prose.
+
+Add the features that plans and docs promise but the code lacks. Those rows are the reason a planning reader opens the map.
+
+## 4. Status and evidence
+
+Use one fixed status set, with the labels translated into the map's language (a Korean map uses the labels in parentheses):
+
+| Status | Means | Evidence it needs |
+|---|---|---|
+| works (동작) | A user can do it on the baseline | The handler, command or screen that does it, and a test that exercises it when there is one |
+| partial (일부) | Some of it works | The working part's evidence, and what is missing |
+| documented only (문서만) | Docs or a runbook describe it, and nothing has run it | The doc path, and what has not been done |
+| absent (없음) | Not in the code | The plan or issue that mentions it, or "no plan" |
+| unknown (확인 못 함) | You could not tell | What you tried |
+
+Open the code behind a row before marking it works. A route or file name alone is not evidence. A row with no evidence is unknown, never works. Evidence is a path, endpoint, env var, flag, or PR as `owner/repo#N`, short enough to fit a table cell.
+
+## 5. Write the map
+
+Write the text per `write-plainly`. Sections in this order:
+
+1. **Baseline line** (§1).
+2. **In plain words** (쉽게 말하면): five to eight bullets for a reader who does not code. A metaphor is fine when it maps one-to-one onto the real parts. End with what does not exist yet.
+3. **Apps**: the table and the absent list (§2).
+4. **Feature map**: area, feature, status, evidence.
+5. **Limits to know** (알아 둘 제한): constraints a planner must know (who may use it, quotas, single-tenant, manual steps), each with its source.
+
+Save it at the path the user names, or publish it as an Artifact when they name none. Do not commit it to the product repo unless asked.
+
+## 6. Refresh
+
+To update a map, pin a new baseline, re-check every row against it, and list the rows whose status changed under the baseline line. A row you could not re-check keeps its old status, is marked with its old baseline in the evidence cell ("옛 기준 `abc1234`"), and is counted apart from the current rows wherever the map or the report counts rows by status.
+
+## Report
+
+The map's location, the baseline, the row count per status with old-baseline rows counted apart (§6), and the unknown rows with what would settle each.
