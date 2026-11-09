@@ -12,6 +12,7 @@
 | 실행 | `core/store/` | X | ④ 공유 코어 | sqlite event 표와 뷰 |
 | 실행 | `core/orca/` | X | ④ 공유 코어 | Orca CLI 어댑터(① 을 부르는 유일한 자리) |
 | 실행 | `core/install/` | X | ④ 공유 코어 | install · uninstall · doctor |
+| 실행 | `core/approve/` | X | ④ 공유 코어 | `sangsoe plugin approve` 의 세 조건 검사와 `orca plugin enable` 을 부르는 유일한 자리 |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
 | 실행 | `orca-plugin/reaper/` | X | ② Orca plugin | REAPER 라운드 타이머 |
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |
@@ -52,6 +53,20 @@
 - 버린 꼴: 최상위를 `token-free/`·`token-using/` 으로 가르는 안. 토큰 구분은 가장 잘 보이지만 한 plugin(③)이 두 뿌리로 찢어져 매니페스트가 가리킬 폴더가 둘이 된다.
 
 결정 번호와 이유는 `decisions-impl/`(결정 96–101).
+
+## Orca plugin 골격 (U3)
+
+U15(monitor)·U18(REAPER)·U19(패널)가 대고 짜는 계약이다. 시험 결과는 `test-outcomes.md`.
+
+**plugin 뿌리와 매니페스트.** `orca-plugin/` 가 plugin 폴더이고 `orca-plugin.json` 은 `trusted-worker`, `main: main.ts`, 능력 `workspace:read`·`agent:read`, 이벤트 4종, 패널 하나, 명령 `sangsoe.open`, 상태 표시줄 항목 `summary` 다. `publisher` 는 두지 않는다(개발 폴더 키는 `local.sangsoe`). 능력·명령·이벤트를 더하면 승인 지문이 바뀌어 다시 승인해야 하므로 리드에 알린다. 내용만 바꾸면 개발 폴더는 다시 묻지 않는다(결정 105). 시험 파일은 지문에 들지 않게 `test/` 에 둔다.
+
+**worker 진입점.** `main.ts` 의 `export default function activate(orca)` 하나. 하는 일: 이벤트 4종 구독, 타이머 라운드 시작, 패널 요청 처리기 등록(`orca.panels.handle(name, fn)`), 명령 등록. `main` 과 상태 표시줄 항목이 함께 있어 worker 는 plugin 이 켜져 있는 동안 계속 돈다.
+
+**타이머 라운드(monitor 의 모양).** `timer.ts` 의 `Round = { id, intervalMs, run(at) }` 하나가 monitor 하나다. `startRounds(rounds, clock)` 가 Node 타이머로 돌리고, 앞 라운드가 안 끝났으면 다음 틱을 건너뛰며(겹치지 않음), 라운드마다 실행 수·오류·실제 간격(`gapsMs`)을 낸다. 시험은 `Clock` 을 주입한다. U15 는 `orca-plugin/monitors/<m>.ts` 하나에 `Round` 하나를 export 하고 `main.ts` 의 목록에 한 줄을 더한다.
+
+**패널과 상태 표시줄.** 패널은 `html` 패널(`panel/*.ts` 진입, Orca 가 페이지를 감싼다)이고 `orca.plugin.request(name)` 로 worker 처리기를 부른다. 패널에서 코어를 직접 부르지 않는다. 상태 표시줄은 worker 가 `host.call("statusBar.update", {id: "summary", text, tone})` 로만 바꾼다. 클릭은 명령 `sangsoe.open` 을 돌리고, 호스트 API 에 "자기 패널 열기"가 없어 명령이 `orca plugin open <key> --panel <id>` 를 부른다.
+
+**승인 흐름.** `sangsoe plugin approve`(④ `core/approve/`). 신뢰 기준(저장소 `JeongJaeSoon/sangsoe`, 키 `local.sangsoe`)은 코어 상수이고 승인할 폴더에서 읽지 않는다. 커밋은 40자 SHA 만 받는다. 순서: 읽기 전용 검사 먼저 — (1) 빌드 커밋이 main 에 있고 그것을 실은, main 으로 머지된 PR 하나의 머지된 head 에 대한 리뷰 증거가 작성자 아닌 리뷰어의 Act-on 0 (2) 폴더 `contentHash` = main 커밋 트리 = 리뷰된 head 트리(결정 105) → 그다음에야 `orca plugin dev reload <폴더> --json` 으로 Orca 가 원하는 키·지문을 읽고(켜지 않는다) (3) 키가 `local.sangsoe` 이고 `contentIdentity` 가 그 폴더 → 켜기 직전에 내용 해시를 다시 재서 같을 때만 `orca plugin enable <key> --approve <지문>` → `plugin_approved`(결정 104). 이미 승인된 폴더도 같은 검사를 지나야 통과로 보인다. `--dry-run` 은 명령만 보인다. plugin 코드는 폴더 밖을 import 하지 않는다(승인과 내용 해시가 폴더만 덮는다, `test/orca-plugin.test.ts`). 리뷰 증거와 event 기록은 U1 의 저장소가 올 때까지 포트로 비워 두어 (1) 은 닫힌 채 실패한다.
 
 ## 설치와 릴리스
 

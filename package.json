@@ -14,6 +14,7 @@
     "claude-plugin/",
     "!claude-plugin/agents/README.md",
     "orca-plugin/",
+    "build-info.json",
     "!**/*.test.ts"
   ],
   "engines": {
