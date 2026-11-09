@@ -41,7 +41,9 @@ export function ownerTodoFrom(input: ViewInput, facts: readonly ItemFacts[]): Ow
     const why = str(e.payload.excerpt) ?? str(e.payload.tool);
     rows.push({ kind: "waiting_human", ref: f ? f.alias : `w${e.seq}`, whyOwner: why, since: e.ts });
   }
-  return rows;
+  // One item, one row: a waiting session on an owner item is still that item's single to-do.
+  const seen = new Set<string>();
+  return rows.filter((r) => !seen.has(r.ref) && seen.add(r.ref));
 }
 
 export const owner_todo: OwnerTodoView = (input) => ownerTodoFrom(input, itemFacts(input));

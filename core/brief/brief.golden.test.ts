@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { test } from "node:test";
 import { decision } from "../store/views/decision.ts";
+import type { StoredEvent } from "../contract/index.ts";
 import { buildBrief, buildGroup, buildItem } from "./build.ts";
+import { group_brief } from "./group.ts";
+import { item_status } from "./item_status.ts";
 import { owner_todo } from "./owner_todo.ts";
 import { renderMarkdown } from "./render.ts";
 import { replayJsonl } from "./replay.ts";
@@ -54,8 +57,12 @@ test("(2) rows = view rows: decisions only in (1), owner items only in (2), none
   for (const r of model.inProgress.rows) assert.ok(!inTodo.has(r.id), `${r.id} is in both 할 일 and 진행 중`);
   for (const r of model.inProgress.rows) assert.ok(!/^d\d+$/.test(r.id), "no decision row in 진행 중");
   // Every open item (not done, not cancelled) has exactly one row somewhere.
-  const open_ = orca.tasks.filter((t) => t.status !== "completed" && t.result !== "cancelled").length;
-  assert.equal(itemRows(model.inProgress).length + itemRows(model.ownerTodo).length + itemRows(model.onHold).length, open_);
+  const openAliases = item_status(input())
+    .filter((r) => r.state !== "done" && r.state !== "cancelled")
+    .map((r) => r.alias)
+    .sort();
+  const drawn = [model.inProgress, model.ownerTodo, model.onHold].flatMap((t) => itemRows(t).map((r) => r.id)).sort();
+  assert.deepEqual(drawn, openAliases);
 });
 
 test("(3) the header and section counts are owner_todo's", () => {
@@ -133,7 +140,41 @@ test("(8) owner_act_unlinked: one PR row inside show_hours, counted in N, no buc
 
 test("an escalation{to owner} from a refused orchestrator start is not one of decision 89's four kinds", () => {
   assert.ok(events.some((e) => e.type === "escalation" && e.payload.to === "owner"));
-  assert.ok(owner_todo(input()).every((r) => r.ref !== "task_99"));
+  const without = input({ events: events.filter((e) => e.type !== "escalation") });
+  assert.equal(owner_todo(input()).length, owner_todo(without).length);
+});
+
+const extra = (type: string, payload: Record<string, unknown>, more: Partial<StoredEvent> = {}): StoredEvent => {
+  const seq = Math.max(...events.map((e) => e.seq)) + 1 + (more.seq ?? 0);
+  const base = { ...events[0], ts: "2026-11-10T11:40:00.000Z", type, payload, entity: null, entity_id: null, subject: null, dedupe_key: null };
+  return { ...base, ...more, seq } as StoredEvent;
+};
+
+test("a waiting session on an owner item is one row in owner_todo and in the brief", () => {
+  const wait = extra("waiting_human", { session: "sess-35", tool: "Bash" }, { entity: "task", entity_id: "task_35" });
+  const stale = extra("escalation_stale", { ref: String(wait.seq), reason: "waiting_unreleased" }, { seq: 1 });
+  const i = input({ events: [...events, wait, stale] });
+  const view = owner_todo(i);
+  assert.equal(view.filter((r) => r.ref === "i035").length, 1);
+  assert.equal(buildBrief(i, opts).todo.total, view.length);
+});
+
+test("a lead row's N건·막힘 M is group_brief's, the same as the stage 2 header", () => {
+  for (const g of group_brief(input())) {
+    const row = model.inProgress.rows.find((r) => r.id === `lead:${g.lead}`);
+    assert.ok(row, g.lead);
+    assert.equal(row.cells[3]?.text, `${g.items}건·막힘 ${g.blocked}`);
+    const detail = buildGroup(input(), g.lead, opts);
+    assert.equal(`${detail?.items}건·막힘 ${detail?.blockedCount}`, row.cells[3]?.text);
+  }
+});
+
+test("the owner_act_unlinked row: 상태 —, 다음 오너 직접 · 연결?; an upper-case repo keeps its PR link", () => {
+  const act = model.inProgress.rows.find((r) => r.id === "act:acme/api#77");
+  assert.deepEqual([act?.cells[0]?.text, act?.cells[3]?.text], ["—", "오너 직접 · 연결?"]);
+  const upper = extra("owner_act_unlinked", { act: "Acme/API#78 직접 머지" });
+  const m = buildBrief(input({ events: [...events, upper] }), opts);
+  assert.ok(m.inProgress.rows.some((r) => r.id === "act:acme/api#78" && r.cells[2]?.link === "https://github.com/acme/api/pull/78"));
 });
 
 test("stage 2: group rows by state, dependency edges, critical path and why-not-ready", () => {

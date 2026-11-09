@@ -50,7 +50,8 @@ export interface Summary {
 
 /**
  * Golden (8)'s input: an owner act that answered nothing (owner_act_unlinked), shown as one PR row
- * in 진행 중 for `showHours` unless a decision_answered{ref} linked it. U14 builds on this shape.
+ * in 진행 중 for `showHours`. Dropping it once linked waits for a `ref` on decision_answered (decision
+ * 91⑤); U14 builds on this shape.
  */
 export interface UnlinkedAct {
   readonly id: string;

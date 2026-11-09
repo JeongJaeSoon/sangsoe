@@ -21,17 +21,17 @@
 
 | 상태 | 항목 | PR | 다음 | 누가 |
 |---|---|---|---|---|
-| 🚧 | **api-migration P0** | — | 5건·막힘 2 | 인프라 2d |
+| 🚧 | **api-migration P0** | — | 6건·막힘 2 | 인프라 2d |
 | 🚧 | └ i033 스테이징 키 발급 | — | 키 도착 확인 | 인프라 2d |
 | 🚧 | └ i031 웹훅 재시도 정책… | [acme/api#31](https://github.com/acme/api/pull/31) | d012 답 | 오너 16h |
 | 🔄 | └ i026 N+1 쿼리 제거 | [acme/api#40](https://github.com/acme/api/pull/40) | 🚨 CI 수정 | w-api-1 2h |
 | 🟢 | └ i027 결제 \| 환불 모듈… | [paymen…#1234](https://github.com/acme-platform-infrastructure/payments-service/pull/1234) | 시작 | — |
 | 📅 | └ i029 로그 정리 | — | 선행 대기 | — |
-| 🚧 | **app-login P1** | — | 1건·막힘 1 | 오너 11h |
+| 🚧 | **app-login P1** | — | 3건·막힘 1 | 오너 11h |
 | 🚧 | └ i034 로그인 화면 | — | d013 답 | 오너 11h |
-| 🚧 | **그 외 P2** | — | 1건·막힘 1 | 오너 27h |
+| 🚧 | **그 외 P2** | — | 2건·막힘 1 | 오너 27h |
 | 🚧 | └ i040 세션 만료 처리 | — | d011 전달 | 오너 27h |
-| — | └ 오너 직접 · 연결? | [acme/api#77](https://github.com/acme/api/pull/77) | 연결 확인 | 오너 3h |
+| — | └ acme/api#77 직접 머지 | [acme/api#77](https://github.com/acme/api/pull/77) | 오너 직접 ·… | 오너 3h |
 | 🟢 | **billing-platform-con… P2** | — | 1건·막힘 0 | — |
 | 🟢 | └ i050 청구서 PDF 생성 | — | 시작 | — |
 

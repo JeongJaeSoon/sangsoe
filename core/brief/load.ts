@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { StoredEvent, ViewTaskStatus } from "../contract/index.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
 import { isOpenGate } from "../decision/waiters.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
-import { Store } from "../store/store.ts";
+import { defaultDbPath, Store } from "../store/store.ts";
 import { replayJsonl } from "./replay.ts";
 import type { BriefGate, BriefInput, BriefSnapshot, BriefTask } from "./types.ts";
 
@@ -61,6 +61,8 @@ export interface LoadOptions {
 export async function loadBriefInput(o: LoadOptions): Promise<Result<BriefInput>> {
   let events: StoredEvent[];
   if (o.eventsFile) events = replayJsonl(readFileSync(o.eventsFile, "utf8"));
+  // Store.open creates the database; a read with no database yet has no events.
+  else if (!existsSync(defaultDbPath())) events = [];
   else {
     const store = Store.open();
     try {

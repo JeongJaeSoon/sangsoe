@@ -57,7 +57,7 @@ function c(name: string, max: number): Column {
 
 const t = (text: string, link?: string): Cell => (link ? { text, link } : { text });
 const pr = (ref: string | null): Cell => (ref ? t(prLabel(ref), prUrl(ref)) : t("—"));
-const PR_REF = /\b([a-z0-9_.-]+\/[a-z0-9_.-]+#[1-9][0-9]*)\b/;
+const PR_REF = /\b([a-z0-9_.-]+\/[a-z0-9_.-]+#[1-9][0-9]*)\b/i;
 const leadName = (lead: string) => (lead === OTHERS ? "그 외" : lead);
 // ISO times compare as strings; a missing time sorts last.
 const byOldest = (a: string | null, b: string | null) => {
@@ -104,7 +104,7 @@ function unlinkedActs(input: BriefInput, showHours: number): UnlinkedAct[] {
     .filter((e) => e.type === "owner_act_unlinked" && Date.parse(e.ts) > cutoff && Date.parse(e.ts) <= Date.parse(input.now))
     .map((e) => {
       const act = String(e.payload.act);
-      const ref = PR_REF.exec(act)?.[1] ?? null;
+      const ref = PR_REF.exec(act)?.[1]?.toLowerCase() ?? null;
       return { id: `act:${ref ?? e.seq}`, seq: e.seq, act, pr: ref, since: e.ts };
     });
 }
@@ -119,7 +119,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
   const now = input.now;
   const facts = itemFacts(input, opts.graph ?? depsGraph);
   const byAlias = new Map(facts.map((f) => [f.alias, f]));
-  const todo = dedupe(ownerTodoFrom(input, facts));
+  const todo = ownerTodoFrom(input, facts);
   const groups = groupBriefFrom(input, facts);
   const todoItems = new Set(todo.filter((r) => r.kind === "owner_item" || r.kind === "waiting_human").map((r) => r.ref));
   const windowStart = Date.parse(now) - doneDays * 86_400_000;
@@ -180,14 +180,14 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
         t(top ? EMOJI[top.state] : "—"),
         { text: leadName(lead), tail: ` ${meta.get(lead)?.priority ?? "P2"}`, strong: true },
         t("—"),
-        t(`${items.length}건·막힘 ${blockedHere.length}`),
+        t(`${meta.get(lead)?.items ?? 0}건·막힘 ${meta.get(lead)?.blocked ?? 0}`),
         t(oldest ? who(oldest, now) : "—"),
       ],
     });
     for (const f of items) progress.push(itemRow(f, now, true));
     if (lead === OTHERS) {
       for (const a of acts) {
-        progress.push({ id: a.id, cells: [t("—"), t("└ 오너 직접 · 연결?"), pr(a.pr), t("연결 확인"), t(`오너 ${since(a.since, now)}`)] });
+        progress.push({ id: a.id, cells: [t("—"), t(`└ ${a.act}`), pr(a.pr), t("오너 직접 · 연결?"), t(`오너 ${since(a.since, now)}`)] });
       }
     }
   }
@@ -221,12 +221,6 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     doneDays,
     evidenceShort,
   };
-}
-
-/** A waiting session on an owner item is still one to-do row (one item, one place). */
-function dedupe(rows: OwnerTodoRow[]): OwnerTodoRow[] {
-  const seen = new Set<string>();
-  return rows.filter((r) => !seen.has(r.ref) && seen.add(r.ref));
 }
 
 function gateFor(input: BriefInput, d: string) {
