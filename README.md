@@ -33,7 +33,7 @@ Orca CLI built-ins are called, not rebuilt. The design spec lives in `docs/` (`d
 
 ## Development
 
-Requires Node.js 24.2 or later. From a fresh clone:
+Requires Node.js 24.15 or later (its bundled SQLite is the first to pass the store's version check). From a fresh clone:
 
 ```sh
 npm ci
