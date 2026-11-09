@@ -36,7 +36,7 @@ export const ORCA_COMMANDS = {
   runCreate: { path: ["orchestration", "run-create"], flags: ["json", "objective", "retry-request"], write: true },
   runUse: { path: ["orchestration", "run-use"], flags: ["json", "id", "retry-request"], write: true },
   runCurrent: { path: ["orchestration", "run-current"], flags: ["json"] },
-  runShow: { path: ["orchestration", "run-show"], flags: ["json", "id"] },
+  runShow: { path: ["orchestration", "run-show"], flags: ["json", "id", "full"] },
 
   gateCreate: {
     path: ["orchestration", "gate-create"],

@@ -108,6 +108,7 @@ export {
   type Reading,
 } from "./detect/monitor.ts";
 export { MONITORS, type MonitorRunner, openMonitors, runMonitor } from "./detect/run.ts";
+export { orchestratorRun, type RunAbove, runAbove, sendNotice } from "./detect/notice.ts";
 export { judgeOrca, type OrcaReads, type SessionActivity, sessionActivity } from "./detect/orca/judge.ts";
 export { judgeResource, type ResourceReads, withDiagnostics } from "./detect/resource/judge.ts";
 export { type ChatProvider, nullChatProvider } from "./detect/chat/provider.ts";

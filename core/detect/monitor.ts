@@ -2,8 +2,7 @@ import type { LoadSample } from "../capacity/capacity.ts";
 import type { EventType, StoredEvent } from "../contract/index.ts";
 import type { Exec, OrcaAdapter } from "../contract/orca.ts";
 import type { GhClient, RateBudget } from "../gh/client.ts";
-import type { NotifyInput, Notified } from "../notify/notify.ts";
-import type { CoreDeps, Result } from "../notify/result.ts";
+import type { CoreDeps } from "../notify/result.ts";
 import type { Appended, EventFilter, NewEvent, StoreOnlyType } from "../store/store.ts";
 import type { TierConfig } from "../verify/verify-tier.ts";
 import type { ChatProvider } from "./chat/provider.ts";
@@ -42,8 +41,6 @@ export type MonitorConfig = {
   mainWatchHours: number;
   /** timer_stalled: the REAPER's timer period; a timer round older than three of these is a stall. */
   reaperIntervalMinutes: number;
-  /** The orchestrator's Run, told of timer_stalled and of an undelivered answer one tier up. Unset: event only. */
-  orchestratorRun?: string;
 };
 
 export const DEFAULT_MONITOR_CONFIG: MonitorConfig = {
@@ -79,8 +76,6 @@ export type MonitorDeps = {
   ghBudget?: () => RateBudget | undefined;
   watch?: () => WatchConfig | null;
   tier?: () => TierConfig | null;
-  /** Absent on a dry run, like `append`. */
-  notify?: (input: NotifyInput) => Promise<Result<Notified>>;
 };
 
 export type Written = { type: string; dedupe_key: string | null; seq: number; inserted: boolean };

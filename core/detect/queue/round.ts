@@ -8,12 +8,12 @@ import type { GhClient } from "../../gh/client.ts";
 import { notifyReady } from "../../graph/notify-ready.ts";
 import { readSnapshot } from "../../graph/snapshot.ts";
 import { syncGraph } from "../../graph/sync.ts";
-import { notify } from "../../notify/notify.ts";
 import { probeRound } from "../../owner/probe.ts";
 import { recordUnreleased, unreleasedWaits } from "../../owner/release.ts";
 import { OWNER_DEFAULTS } from "../../owner/types.ts";
 import type { Appended } from "../../store/store.ts";
-import type { MonitorDeps, Planned, Reading } from "../monitor.ts";
+import type { Act, MonitorDeps, Planned, Reading } from "../monitor.ts";
+import { orchestratorRun, runAbove, sendNotice } from "../notice.ts";
 import { judgeDrift } from "./drift.ts";
 import { judgeQueue, QUEUE_SOURCE } from "./judge.ts";
 import { judgeStall } from "./stall.ts";
@@ -83,7 +83,9 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
     }
   }
 
-  const probes = await probeRound({ orca: d.orca, gh: d.gh ?? NO_GH }, collect, input, itemFacts(input), OWNER_DEFAULTS, QUEUE_SOURCE);
+  const budget = d.ghBudget?.();
+  const ports = { orca: d.orca, gh: d.gh ?? NO_GH, ...(budget ? { budget } : {}) };
+  const probes = await probeRound(ports, collect, input, itemFacts(input), OWNER_DEFAULTS, QUEUE_SOURCE);
   calls.push(`probeRound: read ${probes.read}, passed ${probes.passed.length}, skipped ${probes.skipped.length}`);
   if (!d.gh) unseen.push("gh client");
 
@@ -113,25 +115,29 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
     calls.push(`decision_answer ${a.decision} again: ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}, told ${r.value.notified.length}` : r.refusal.code}`);
   }
 
-  const orchestratorRun = d.config.orchestratorRun;
+  const above = runAbove(d.orca);
+  const told = new Set(events.flatMap((e) => (e.type === "notified" && e.dedupe_key ? [e.dedupe_key] : [])));
   for (const s of j.stale) {
     planned.push(s.event);
-    if (!core || !orchestratorRun) {
-      calls.push(`would raise ${s.decision} on ${s.task} to the orchestrator`);
+    // Raised already: the gate stays open, but the Run lookup (a paged worker list) is not read again.
+    if (told.has(`${s.handoffKey}:${dedupeSegment("orchestrator")}`)) continue;
+    const a = await above(s.run);
+    if (a.kind !== "above") {
+      unseen.push(`Run above ${s.run}${a.kind === "top" ? ": none, its coordinator is no Dispatch" : ""}`);
       continue;
     }
-    const r = await notify(core, {
+    const up = a.run;
+    const r = await sendNotice(d, {
       key: { target: s.task, dedupe_key: s.handoffKey },
       to: "orchestrator",
-      chain: { leadRun: s.run, orchestratorRun },
+      chain: { leadRun: s.run, orchestratorRun: up },
       subject: `${s.decision}: answer not delivered`,
       body: `${s.decision} is answered but the gate on ${s.task} in ${s.run} is still open after the handoff to that Run.`,
       escalate: true,
       source: QUEUE_SOURCE,
     });
-    calls.push(`raise ${s.decision} on ${s.task}: ${r.ok ? r.value.status : r.refusal.code}`);
+    calls.push(`raise ${s.decision} on ${s.task} to run:${up}: ${r.detail}`);
   }
-  if (j.stale.length > 0 && !orchestratorRun) unseen.push("orchestrator Run");
 
   if (d.coreVersion) {
     const pl = await d.orca.pluginList();
@@ -143,7 +149,62 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   } else unseen.push("core version");
 
   const have = new Set(events.flatMap((e) => (e.dedupe_key ? [e.dedupe_key] : [])));
-  return { planned: planned.filter((e) => !e.dedupe_key || !have.has(e.dedupe_key)), unseen, calls };
+  const fresh = planned.filter((e) => !e.dedupe_key || !have.has(e.dedupe_key));
+  const runOf = new Map(input.orca.tasks.map((t) => [t.id, t.runId]));
+  const acts: Act[] = [];
+  // A row already written whose notice never went (a failed send) is offered again; notify keeps it to one.
+  for (const e of planned) {
+    const n = leadNotice(e);
+    if (!n || have.has(n.key)) continue;
+    const lead = runOf.get(n.task);
+    if (!lead) {
+      unseen.push(`owning lead of ${n.task}`);
+      continue;
+    }
+    acts.push({
+      what: `notify run:${lead} ${n.subject}`,
+      run: async (dd) => ({
+        ...(await sendNotice(dd, {
+          key: { target: n.task, dedupe_key: n.key },
+          to: "lead",
+          chain: { leadRun: lead },
+          subject: n.subject,
+          body: n.body,
+          msgType: n.msgType,
+          source: QUEUE_SOURCE,
+        })),
+        planned: [],
+      }),
+    });
+  }
+  return { planned: fresh, unseen, calls, acts };
+}
+
+/** `msgType` is one of Orca's closed `send --type` set; the event name rides in the subject. */
+type LeadNotice = { task: string; key: string; subject: string; body: string; msgType: "status" | "escalation" };
+
+/**
+ * The rows whose notice goes to the item's owning lead (decision 154): todo_due and trigger_unclear
+ * (appendix queue-monitor card), escalation_stale{verify_unconfirmed} (decision 91② row 11). One
+ * notice per row: the key carries the row's own condition.
+ */
+function leadNotice(e: Planned): LeadNotice | undefined {
+  const p = e.payload as Record<string, unknown>;
+  const seg = dedupeSegment;
+  if (e.type === "todo_due" || e.type === "trigger_unclear") {
+    const task = String(p.task);
+    const cond = (e.dedupe_key ?? "").split(":").slice(2);
+    const key = [`notify:${seg(task)}`, e.type, ...cond].join(":");
+    return e.type === "todo_due"
+      ? { task, key, subject: `📅 todo_due: ${task}`, body: `The owner item ${task} has reached its date; bring it to the owner.`, msgType: "status" }
+      : { task, key, subject: `⚠️ trigger_unclear: ${task}`, body: `The trigger of ${task} is text a script cannot read; decide whether it has come.`, msgType: "status" };
+  }
+  if (e.type === "escalation_stale" && p.reason === "verify_unconfirmed") {
+    const task = String(p.ref);
+    const key = `notify:${seg(task)}:verify_unconfirmed:${(e.dedupe_key ?? "").split(":").pop() ?? ""}`;
+    return { task, key, subject: `🔍 verify_unconfirmed: ${task}`, body: `The owner's input on ${task} is still not verified by its probe; check it or ask the owner.`, msgType: "escalation" };
+  }
+  return undefined;
 }
 
 export type StallReport = { planned: Planned[]; written: { type: string; seq: number; inserted: boolean }[]; calls: string[] };
@@ -157,28 +218,36 @@ export async function stallCheck(d: MonitorDeps): Promise<StallReport> {
   const planned = judgeStall(d.events({ type: "reap_round" }), d.now(), d.config.reaperIntervalMinutes * 60_000);
   const written: StallReport["written"] = [];
   const calls: string[] = [];
+  let top: Promise<string | undefined> | undefined;
   for (const e of planned) {
     const reason = String((e.payload as { reason?: unknown }).reason);
-    if (!d.append) {
-      calls.push(`would tell the orchestrator: ${reason}`);
-      continue;
+    let key: string | undefined;
+    if (d.append) {
+      const a = d.append(e);
+      written.push({ type: e.type, seq: a.seq, inserted: a.inserted });
+      key = `notify:${dedupeSegment("reaper")}:stalled:${a.seq}`;
+      // Told already: the orchestrator lookup (a paged worker list) is not read again on every re-check.
+      if (d.events({ type: "notified" }).some((n) => n.dedupe_key === key)) continue;
     }
-    const a = d.append(e);
-    written.push({ type: e.type, seq: a.seq, inserted: a.inserted });
-    const orchestratorRun = d.config.orchestratorRun;
-    if (!d.core || !orchestratorRun) {
+    top ??= orchestratorRun(d.events(), runAbove(d.orca));
+    const orch = await top;
+    if (!orch) {
       calls.push("orchestrator Run unknown: timer_stalled written only");
       continue;
     }
-    const r = await notify(d.core, {
-      key: { target: "reaper", dedupe_key: `notify:${dedupeSegment("reaper")}:stalled:${a.seq}` },
+    if (!key) {
+      calls.push(`would tell orchestrator run:${orch}: ${reason}`);
+      continue;
+    }
+    const r = await sendNotice(d, {
+      key: { target: "reaper", dedupe_key: key },
       to: "orchestrator",
-      chain: { orchestratorRun },
+      chain: { orchestratorRun: orch },
       subject: "timer_stalled: reaper",
       body: reason,
       source: "monitor:stall",
     });
-    calls.push(`tell orchestrator: ${r.ok ? r.value.status : r.refusal.code}`);
+    calls.push(`tell orchestrator run:${orch}: ${r.detail}`);
   }
   return { planned, written, calls };
 }

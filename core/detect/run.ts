@@ -1,7 +1,6 @@
 import { sampleLoad } from "../capacity/capacity.ts";
 import { createGhClient, memoryGhCache } from "../gh/client.ts";
 import { readLandConfig } from "../land/ports.ts";
-import { notify } from "../notify/notify.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { Store } from "../store/store.ts";
@@ -75,7 +74,7 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
     orca,
     exec,
     events: (f) => store.events(f),
-    ...(o.dryRun ? {} : { append: (e) => store.append(e), notify: (input) => notify({ store, orca }, input), core: { store, orca } }),
+    ...(o.dryRun ? {} : { append: (e) => store.append(e), core: { store, orca } }),
     now: () => Date.now(),
     config: DEFAULT_MONITOR_CONFIG,
     chat: nullChatProvider,
