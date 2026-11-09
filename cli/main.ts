@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { doctor, type Host, install, realHost, treeRoot, uninstall, VERSION } from "../core/index.ts";
+import { pluginApprove } from "./commands/plugin-approve.ts";
 
 const USAGE = [
   "usage: sangsoe <command>",
@@ -7,6 +8,8 @@ const USAGE = [
   "  install              register this tree with Claude Code and Orca (idempotent), then run doctor",
   "  uninstall            remove those registrations; data and settings stay",
   "  doctor [--offline]   check the install; --offline checks only the installed tree",
+  "  plugin approve [--dry-run] [--dir <path>] [--commit <sha>]",
+  "                       check review and build, then enable the Orca plugin",
 ].join("\n");
 
 export function run(argv: readonly string[], host: Host = realHost): { code: number; out: string } {
@@ -28,7 +31,12 @@ export function run(argv: readonly string[], host: Host = realHost): { code: num
 }
 
 if (import.meta.main) {
-  const { code, out } = run(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  // TODO(U5): the command router takes this dispatch over.
+  const { code, out } =
+    argv[0] === "plugin" && argv[1] === "approve"
+      ? await pluginApprove(argv.slice(2), (line) => process.stdout.write(`${line}\n`))
+      : run(argv);
   (code === 0 ? process.stdout : process.stderr).write(`${out}\n`);
   process.exitCode = code;
 }
