@@ -4,6 +4,7 @@ import { budgetLevel, type GhResponse } from "../../gh/client.ts";
 import { approvedAndGreen, mergeConfirm, type Pull, readDiff, readLabels, readPull } from "../../land/github.ts";
 import { verifyTier } from "../../verify/verify-tier.ts";
 import type { Act, MonitorDeps, Planned, Reading } from "../monitor.ts";
+import { sendNotice } from "../notice.ts";
 import type { WatchConfig } from "./config.ts";
 import { classifyMain, isClosedTask, itemStateOf, key, type MainRun, prRef, prUrl, requestedTier } from "./judge.ts";
 
@@ -292,8 +293,7 @@ async function readyToMerge(r: Reads, repo: string, p: ListedPull, link: Link | 
   r.acts.push({
     what: `notify run:${lead} ${ref} ready to merge`,
     run: async (d) => {
-      if (!d.notify) return { ok: false, detail: "no notify", planned: [] };
-      const n = await d.notify({
+      const n = await sendNotice(d, {
         key: { target: task, dedupe_key: key("notify", task, "ready_to_merge", p.head.sha) },
         to: "lead",
         // No dispatch in the chain: the author already ended with merge_ready, the lead lands it.
@@ -303,7 +303,7 @@ async function readyToMerge(r: Reads, repo: string, p: ListedPull, link: Link | 
         msgType: "pr_ready_to_merge",
         source: SOURCE,
       });
-      return n.ok ? { ok: true, detail: n.value.status, planned: [] } : { ok: false, detail: n.refusal.code, planned: [] };
+      return { ...n, planned: [] };
     },
   });
 }

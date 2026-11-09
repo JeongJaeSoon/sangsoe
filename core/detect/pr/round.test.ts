@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { OrcaAdapter, TaskRow } from "../../contract/orca.ts";
 import type { GhClient, GhResponse, RateBudget } from "../../gh/client.ts";
-import { notify } from "../../notify/notify.ts";
 import { Store } from "../../store/store.ts";
 import type { TierConfig } from "../../verify/verify-tier.ts";
 import { nullChatProvider } from "../chat/provider.ts";
@@ -81,7 +80,7 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
     ghBudget: () => o.budget,
     watch: () => watch,
     tier: () => TIER,
-    notify: (input) => notify({ store, orca }, input),
+    core: { store, orca },
   };
   /**
    * A Task Orca links to PR n through a local workspace whose agent is the Task's Dispatch. A
@@ -160,7 +159,7 @@ test("a dry run plans pr_merged and the close but writes neither events nor Orca
   w.link(7, "task_item", "blocked");
   w.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
   w.merged(7, SHA);
-  const r = await w.round({}, ["append", "notify"]);
+  const r = await w.round({}, ["append", "core"]);
   assert.deepEqual(r.planned.map((e) => e.type), ["pr_opened", "pr_merged"]);
   assert.deepEqual(r.acts, [{ what: "task-update task_item completed (acme/api#7 merged)", ok: null, detail: "not run" }]);
   assert.deepEqual(w.calls, []);
