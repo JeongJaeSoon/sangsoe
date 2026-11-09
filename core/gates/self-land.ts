@@ -16,10 +16,12 @@ function openWithoutLand(facts: Facts): string | undefined {
   return facts.ownOpenPrs()?.find((p) => !p.landRequested)?.pr;
 }
 
-/** The lines of the heredoc that `<<WORD` opens in the raw command text. */
+/** The lines of the first heredoc that `<<WORD` opens on or after the line holding `--body`. */
 function heredoc(text: string, word: string): string {
   const lines = text.split("\n");
-  const at = lines.findIndex((l) => new RegExp(`<<-?\\s*['"]?${word}['"]?`).test(l));
+  const from = Math.max(0, lines.findIndex((l) => l.includes("--body")));
+  const opens = new RegExp(`<<-?\\s*['"]?${word.replace(/[.-]/g, "\\$&")}['"]?`);
+  const at = lines.findIndex((l, i) => i >= from && opens.test(l));
   if (at === -1) return "";
   const out: string[] = [];
   for (const l of lines.slice(at + 1)) {
@@ -37,8 +39,8 @@ function body(argv: readonly string[], text: string, cwd: string, facts: Facts):
   if (file === "-") return undefined;
   if (file !== undefined) return read(file);
   const value = (option(argv, "--body") ?? "").trim();
-  const doc = /^\$\(\s*cat\s*<<-?\s*(['"]?)(\w+)\1/.exec(value);
-  if (doc) return heredoc(text, doc[2] ?? "");
+  const doc = /\$\(\s*cat\s*<<-?\s*(['"]?)([\w.-]+)\1/.exec(value);
+  if (doc) return `${value}\n${heredoc(text, doc[2] ?? "")}`;
   const cat = /^\$\(\s*(?:cat\s+|<\s*)(['"]?)([^'"\s)]+)\1\s*\)$/.exec(value);
   return cat ? read(cat[2] ?? "") : value;
 }

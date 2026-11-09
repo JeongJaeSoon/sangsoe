@@ -46,13 +46,37 @@ const positionals = (argv: readonly string[]) => argv.slice(1).filter((a) => !a.
 const asksHelp = (argv: readonly string[]) =>
   has(argv, "--help") || argv.some((a, i) => i > 0 && a === "-h" && !(argv[i - 1] ?? "").startsWith("-"));
 
-/** Whether shell text runs claude as a command (not a claude tool subcommand). */
+/** Whether argv opens a claude session (not a tool subcommand or a version check). */
+function startsClaude(argv: readonly string[]): boolean {
+  const [p0] = positionals(argv);
+  return argv[0] === "claude" && !(p0 && CLAUDE_TOOLS.has(p0)) && !has(argv, "--version") && !has(argv, "-v");
+}
+
+/** Whether shell text starts a claude session. */
 function runsClaude(text: string): boolean {
-  return parse(text).commands.some((c) => {
-    const { argv } = unwrap(c.words);
-    const [p0] = positionals(argv);
-    return argv[0] === "claude" && !(p0 && CLAUDE_TOOLS.has(p0));
-  });
+  return parse(text).commands.some((c) => startsClaude(unwrap(c.words).argv));
+}
+
+/** tmux takes several commands in one call, split by a lone `;` (written `\;` or `';'`). */
+function tmuxCommands(words: readonly string[]): string[][] {
+  const out: string[][] = [[]];
+  for (const w of words) {
+    if (w === ";") out.push([]);
+    else out.at(-1)?.push(w);
+  }
+  return out;
+}
+
+// Key names that end a typed line.
+const ENTER_KEYS = new Set(["Enter", "C-m", "KPEnter", "C-j"]);
+
+function tmuxRunsClaude([sub, ...args]: string[]): boolean {
+  if (!sub || !TMUX_RUN.has(sub)) return false;
+  if (sub === "send-keys" || sub === "send") {
+    const keys = operands(args, TMUX_KEYS_VALUED).rest;
+    return runsClaude(keys.map((k) => (ENTER_KEYS.has(k) ? "\n" : k)).join(" "));
+  }
+  return runsClaude(operands(args, TMUX_VALUED).rest.join(" "));
 }
 
 /** Splits flags from operands; a flag cluster whose last letter is in `valued` takes the next word. */
@@ -78,7 +102,7 @@ function operands(args: readonly string[], valued: string): { rest: string[]; va
 
 // tmux's global options before the subcommand; `-c` there is a shell command.
 const TMUX_GLOBAL = "LSfTc";
-const TMUX_VALUED = "ceFflnstxy";
+const TMUX_VALUED = "ceFflnpstxy";
 const TMUX_KEYS_VALUED = "tN";
 const SCREEN_VALUED = "SrxdDXcpTehs";
 
@@ -89,18 +113,20 @@ function heldStart(parsed: Parsed, text: string, read: (path: string) => string 
     if (head === "tmux") {
       const global = operands(args, TMUX_GLOBAL);
       if (runsClaude(global.values.get("c") ?? "")) return true;
-      const [sub, ...subArgs] = global.rest;
-      if (!sub || !TMUX_RUN.has(sub)) continue;
-      const keys = sub === "send-keys" || sub === "send";
-      if (runsClaude(operands(subArgs, keys ? TMUX_KEYS_VALUED : TMUX_VALUED).rest.join(" "))) return true;
+      if (tmuxCommands(global.rest).some(tmuxRunsClaude)) return true;
     }
-    if (head === "screen" && runsClaude(operands(args, SCREEN_VALUED).rest.join(" "))) return true;
+    if (head === "screen") {
+      const { rest, values } = operands(args, SCREEN_VALUED);
+      // `-X stuff <text>` types text into a window, with or without other flags between.
+      const typed = values.get("X") === "stuff" ? rest : rest[0] === "stuff" ? rest.slice(1) : rest;
+      if (runsClaude(typed.join(" "))) return true;
+    }
     if (head === "at" || head === "batch") {
       const file = operands(args, "fqmMt").values.get("f");
       if (file !== undefined && runsClaude(read(file) ?? "")) return true;
       // The job arrives on stdin (a pipe, a heredoc, a here-string): claude named anywhere in the call
-      // but not run by it in the foreground goes to the job.
-      if (CLAUDE_WORD.test(text) && !parsed.commands.some((c) => unwrap(c.words).argv[0] === "claude")) return true;
+      // but not started by it in the foreground goes to the job.
+      if (CLAUDE_WORD.test(text) && !parsed.commands.some((c) => startsClaude(unwrap(c.words).argv))) return true;
     }
     if (head === "launchctl" && args[0] && LAUNCHCTL_RUN.has(args[0])) {
       const submit = operands(args.slice(1), "lpoe");

@@ -162,9 +162,15 @@ export function parse(text: string, depth = 0): Parsed {
       flushCommand();
       open("(");
     } else if (c === ")") {
-      flushCommand();
-      // A case pattern's `)` closes nothing.
-      if (groups.at(-1)?.kind !== "case") close();
+      // flushWord first, so an `esac` right before the `)` closes its case.
+      flushWord();
+      if (groups.at(-1)?.kind === "case") {
+        // A case pattern: its words are not a command, and its `)` closes nothing.
+        words = [];
+      } else {
+        flushCommand();
+        close();
+      }
     } else if (c === " " || c === "\t") {
       flushWord();
     } else {
@@ -174,16 +180,10 @@ export function parse(text: string, depth = 0): Parsed {
   }
   endList(false);
 
+  // A substitution runs before its holder, in the same job: it shares a trailing `&` but not a nohup.
   for (const { parsed: p, owner } of nested) {
-    const holder = commands[owner];
-    const detached = holder ? holder.detached || unwrap(holder.words).detached : false;
-    commands.push(
-      ...p.commands.map((x) => ({
-        ...x,
-        background: x.background || (holder?.background ?? false),
-        detached: x.detached || detached,
-      })),
-    );
+    const background = commands[owner]?.background ?? false;
+    commands.push(...p.commands.map((x) => ({ ...x, background: x.background || background })));
     loops ||= p.loops;
   }
   // `bash -c '<script>'` and `eval` run text: read that text as commands too.
