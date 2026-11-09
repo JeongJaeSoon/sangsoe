@@ -17,6 +17,7 @@
       },
       {
         "id": "repo-0001::/srv/build/api",
+        "instanceId": "00000000-0000-4000-8000-000000000002",
         "repoId": "repo-0001",
         "hostId": "ssh-0000000000001-aaaaaa",
         "path": "/srv/build/api",

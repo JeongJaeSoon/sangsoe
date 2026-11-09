@@ -142,6 +142,7 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     hostKey: string,
     idKey: string,
     call?: Call,
+    nonLocalId?: (row: Json) => unknown,
   ): Promise<OrcaResult<LocalRows<T>>> {
     const r = await run<Json>(name, call);
     if (!r.ok) return r;
@@ -153,7 +154,12 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     const omitted = Array.isArray(scope.omittedHostIds) ? scope.omittedHostIds.map(String) : [];
     const nextCursor = typeof v.nextCursor === "string" && v.nextCursor !== "" ? v.nextCursor : undefined;
     const page = { omittedHostIds: omitted, truncated: v.truncated === true || nextCursor !== undefined };
-    const rows = keepLocal(v[key] as T[], (row) => (row as Json)[hostKey], page);
+    const rows = keepLocal(
+      v[key] as T[],
+      (row) => (row as Json)[hostKey],
+      page,
+      nonLocalId && ((row: T) => nonLocalId(row as Json)),
+    );
     return { ok: true, value: nextCursor ? { ...rows, nextCursor } : rows };
   }
 
@@ -215,7 +221,8 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     dispatchShow: (a) => field("dispatchShow", "dispatch", isObject, { flags: { task: a.task } }),
     requestShow: (a) => shaped("requestShow", isObject, { flags: { request: a.request } }),
 
-    worktreeList: (a) => local("worktreeList", "worktrees", "hostId", "id", { flags: { repo: a.repo, limit: a.limit } }),
+    worktreeList: (a) =>
+      local("worktreeList", "worktrees", "hostId", "id", { flags: { repo: a.repo, limit: a.limit } }, (row) => row.instanceId),
     worktreePs: (a) =>
       local("worktreePs", "worktrees", "hostId", "worktreeId", { flags: { limit: a.limit, "agent-wait": a.agentWait } }),
     worktreeSet: (a) =>
