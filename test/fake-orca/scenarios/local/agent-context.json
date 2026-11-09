@@ -26,7 +26,6 @@
     {"command":"orchestration worker-release","path":["orchestration","worker-release"],"flags":["help","json","pairing-code","environment","dispatch","retry-request","full"]},
     {"command":"orchestration worker-show","path":["orchestration","worker-show"],"flags":["help","json","pairing-code","environment","dispatch","full"]},
     {"command":"orchestration worker-start","path":["orchestration","worker-start"],"flags":["help","json","pairing-code","environment","task","spec","spec-file","keep-open","task-title","deps","parent","on","worktree","name","repo","base-branch","display-name","comment","setup","agent","model","effort","terminal","retry-of","timeout-ms","run","from","retry-request","full"]},
-    {"command":"plugin enable","path":["plugin","enable"],"flags":["help","json","pairing-code","environment","plugin","approve"]},
     {"command":"plugin inspect","path":["plugin","inspect"],"flags":["help","json","pairing-code","environment","path"]},
     {"command":"plugin list","path":["plugin","list"],"flags":["help","json","pairing-code","environment"]},
     {"command":"reference add","path":["reference","add"],"flags":["help","json","pairing-code","environment","worktree","url","reference-site"]},

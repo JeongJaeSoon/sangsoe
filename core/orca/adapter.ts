@@ -238,6 +238,5 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
 
     pluginList: () => field("pluginList", "plugins", rowsWith({ pluginKey: "string", version: "string", status: "string" })),
     pluginInspect: (a) => run("pluginInspect", { pos: [a.dir] }),
-    pluginEnable: (a) => run("pluginEnable", { pos: [a.key], flags: { approve: a.approve } }),
   };
 }

@@ -14,7 +14,7 @@ export type FakeOrca = {
 };
 
 /** Writes Orca keeps no request receipt for, so ORCA_COMMANDS does not mark them `write`. */
-const UNTRACKED_WRITES = new Set(["worktree-set", "worktree-rm", "reference-add", "plugin-enable"]);
+const UNTRACKED_WRITES = new Set(["worktree-set", "worktree-rm", "reference-add"]);
 
 /** The adapter row whose path starts argv; the longest path wins. */
 function specFor(args: readonly string[]): [string, CommandSpec] | undefined {

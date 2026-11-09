@@ -90,7 +90,6 @@ export const ORCA_COMMANDS = {
 
   pluginList: { path: ["plugin", "list"], flags: ["json"] },
   pluginInspect: { path: ["plugin", "inspect"], flags: ["json"] },
-  pluginEnable: { path: ["plugin", "enable"], flags: ["json", "approve"] },
 } as const satisfies Record<keyof OrcaAdapter, CommandSpec>;
 
 export type CommandName = keyof typeof ORCA_COMMANDS;

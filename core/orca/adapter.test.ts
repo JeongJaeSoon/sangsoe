@@ -37,7 +37,7 @@ const DESIGN_TABLE = [
   "terminal wait",
   "diagnostics memory",
   "plugin inspect",
-  "plugin enable",
+  // The table's `plugin enable` is `sangsoe plugin approve`'s alone (decision 77, test/approve-only.test.ts).
   // Start checks (decisions 60, 63, 88, 90).
   "status",
   "agent hooks status",

@@ -29,7 +29,7 @@ export type OrcaResult<T> =
 
 /**
  * Options every write wrapper takes. Set only by `recoverWrite`, never on a first call.
- * `worktree set|rm`, `reference add` and `plugin enable` have no `--retry-request` in Orca:
+ * `worktree set|rm` and `reference add` have no `--retry-request` in Orca:
  * after their `response_lost`, re-read the state they change instead of sending again.
  */
 export type WriteOptions = { retryRequest?: string };
@@ -293,6 +293,5 @@ export interface OrcaAdapter {
   // Plugin
   pluginList(): Promise<OrcaResult<OrcaPluginRow[]>>;
   pluginInspect(a: { dir: string }): Promise<OrcaResult<Receipt>>;
-  /** Exit code 3 (`approval_required` / `approval_stale`) comes back as `ok: false`. */
-  pluginEnable(a: { key: string; approve: string }): Promise<OrcaResult<Receipt>>;
+  // Turning a plugin on is `sangsoe plugin approve`'s alone (core/approve/, decision 77): no wrapper here.
 }
