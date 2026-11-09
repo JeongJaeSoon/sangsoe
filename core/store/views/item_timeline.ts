@@ -11,10 +11,11 @@ export const item_timeline: ItemTimelineView = (input, task) => {
   const decisions = new Set<string>();
   const ownerActions = new Set<string>();
   for (const e of input.events) {
+    const d = s(e.payload.decision);
+    if (e.type === "decision_joined" && d && s(e.payload.waiter) === task) decisions.add(d);
     if (s(e.payload.task) !== task) continue;
     const pr = s(e.payload.pr);
     if (e.type === "pr_opened" && pr) prs.add(pr);
-    const d = s(e.payload.decision);
     if (e.type === "decision_opened" && d) decisions.add(d);
     if (e.type === "item_created") ownerActions.add(`owner_action:${String(e.payload.owner_action)}`);
   }

@@ -1,7 +1,7 @@
 {"type":"capacity_free","source":"resource-monitor","payload":{"slots":2}}
 {"type":"ci_failed","source":"pr-monitor","payload":{"pr":"acme/api#12","head_sha":"a1b2c3d","run_id":"9001"}}
 {"type":"close_suggested","source":"queue-monitor","payload":{"task":"task_owner1","reason":"verified"}}
-{"type":"compacted","source":"PostCompact","payload":{"session":"sess-1"}}
+{"type":"compacted","source":"PostCompact","payload":{"session":"sess-1","trigger":"auto","pre_tokens":180000}}
 {"type":"decision_answered","source":"UserPromptSubmit","payload":{"decision":"d007","owner_action":1,"answer":"go with B","linked_by":"hook"}}
 {"type":"decision_closed","source":"decision_answer","payload":{"decision":"d007","reason":"answered"}}
 {"type":"decision_joined","source":"decision_open","payload":{"decision":"d007","waiter":"task_b2","gate":"gate_2"}}

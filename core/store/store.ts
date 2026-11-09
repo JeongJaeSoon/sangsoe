@@ -32,7 +32,6 @@ export type NewEvent<T extends EventType = EventType> = {
     readonly needs?: Needs;
     readonly severity?: string;
     readonly dedupe_key?: string;
-    readonly before?: unknown;
   };
 }[T];
 
@@ -125,7 +124,7 @@ export class Store {
     const path = opts.path ?? defaultDbPath(opts.home);
     const checks: StartCheck[] = [];
     if (path !== ":memory:") {
-      const fs = checkLocalFs(dirname(path), opts.fsProbe);
+      const fs = checkLocalFs(path, opts.fsProbe);
       checks.push(fs);
       if (!fs.ok) throw new StartRefused(checks);
       mkdirSync(dirname(path), { recursive: true });
@@ -179,11 +178,20 @@ export class Store {
     }
   }
 
-  #insert(e: NewEvent): Appended {
+  #insert(e: NewEvent, viaStoreMethod = false): Appended {
     const def = eventDef(e.type);
     if (!def) throw new ContractError(`unknown event type ${JSON.stringify(e.type)}`);
+    if (def.storeOnly && !viaStoreMethod) {
+      throw new ContractError(`${e.type} is written only by its Store method, never by append`);
+    }
+    if (def.sources && !def.sources.includes(e.source)) {
+      throw new ContractError(`${e.type} may be written only by ${def.sources.join(", ")}, not ${e.source}`);
+    }
     def.payload(e.payload, e.type);
-    if (e.dedupe_key !== undefined) checkDedupeKey(def, e.dedupe_key);
+    const extra = Object.keys(e.payload).filter((k) => !def.fields.includes(k));
+    if (extra.length > 0) throw new ContractError(`${e.type}: unknown payload field(s) ${extra.join(", ")}`);
+    if (e.dedupe_key !== undefined) checkDedupeKey(def, e.dedupe_key, e.payload);
+    else if (def.dedupeRequired) throw new ContractError(`${e.type} needs a dedupe_key`);
     if (e.type === "item_transition" && !canTransition(e.payload.from, e.payload.to)) {
       throw new ContractError(`item_transition ${e.payload.from} → ${e.payload.to} is not in the transition table`);
     }
@@ -206,7 +214,7 @@ export class Store {
         e.severity ?? null,
         e.dedupe_key ?? null,
         def.version,
-        e.before === undefined ? null : JSON.stringify(e.before),
+        null,
         JSON.stringify(e.payload),
       ) as Row | undefined;
     if (row) return { seq: Number(row.seq), inserted: true };
@@ -221,7 +229,7 @@ export class Store {
   /** Records an owner_action with its masked text (masking is the caller's, before this call). */
   appendOwnerAction(e: NewEvent<"owner_action">, maskedText: string): Appended {
     return this.#tx(() => {
-      const out = this.#insert(e);
+      const out = this.#insert(e, true);
       if (out.inserted) this.#db.prepare("INSERT INTO owner_text (seq, text) VALUES (?, ?)").run(out.seq, maskedText);
       return out;
     });
@@ -232,14 +240,17 @@ export class Store {
     return this.#tx(() => {
       const cur = this.#db.prepare("SELECT text FROM owner_text WHERE seq = ?").get(seq) as Row | undefined;
       if (!cur) throw new ContractError(`no owner text at seq ${seq}`);
-      const out = this.#insert({
-        type: "owner_text_redacted",
-        source: "owner-text redact",
-        actor: by.actor,
-        subject: `owner_action:${seq}`,
-        dedupe_key: `owner_text_redacted:${seq}`,
-        payload: { seq, reason: by.reason },
-      });
+      const out = this.#insert(
+        {
+          type: "owner_text_redacted",
+          source: "owner-text redact",
+          actor: by.actor,
+          subject: `owner_action:${seq}`,
+          dedupe_key: `owner_text_redacted:${seq}`,
+          payload: { seq, reason: by.reason },
+        },
+        true,
+      );
       if (cur.text !== null) this.#db.prepare("UPDATE owner_text SET text = NULL WHERE seq = ?").run(seq);
       return out;
     });

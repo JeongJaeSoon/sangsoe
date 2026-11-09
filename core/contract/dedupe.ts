@@ -7,13 +7,20 @@ import { ContractError, type EventDef } from "./define.ts";
 // - A prefix belongs to exactly one event type, so two types can never collide on a key, and two
 //   writers of the same condition (any source) land on one row through UNIQUE(dedupe_key).
 // - <target> is non-empty; segments carry no whitespace. Re-asking a decision appends `:r<n>`.
+// - Where the type derives <target> from its payload (dedupeTarget), the key must start with it.
 const KEY = /^([a-z][a-z_]*):([^\s:]+)(:[^\s:]+)*$/;
 
-export function checkDedupeKey(def: EventDef, key: string): void {
+export function checkDedupeKey(def: EventDef, key: string, payload?: unknown): void {
   const m = KEY.exec(key);
   if (!m) throw new ContractError(`dedupe_key ${JSON.stringify(key)}: expected <prefix>:<target>[:<condition>]`);
   if (m[1] !== def.dedupe) {
     throw new ContractError(`dedupe_key ${JSON.stringify(key)}: ${def.type} keys start with "${def.dedupe}:"`);
+  }
+  if (def.dedupeTarget && payload !== undefined) {
+    const head = `${def.dedupe}:${def.dedupeTarget(payload)}`;
+    if (key !== head && !key.startsWith(`${head}:`)) {
+      throw new ContractError(`dedupe_key ${JSON.stringify(key)}: ${def.type} keys start with "${head}"`);
+    }
   }
 }
 

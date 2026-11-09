@@ -35,7 +35,7 @@ export function checkSqliteVersion(version: string): StartCheck {
   };
 }
 
-/** Returns the filesystem type name of the volume holding `dir`, lower-case; host state, injected in tests. */
+/** Returns the filesystem type name of the volume holding `path`, lower-case; host state, injected in tests. */
 export type FsProbe = (dir: string) => string;
 
 export const NETWORK_FS: ReadonlySet<string> = new Set([
@@ -53,16 +53,33 @@ export const NETWORK_FS: ReadonlySet<string> = new Set([
   "ncpfs",
 ]);
 
-// statfs f_type magic numbers (linux/magic.h) for the network filesystems above.
+// Filesystems known to be local. Anything else, including a network one, is refused.
+export const LOCAL_FS: ReadonlySet<string> = new Set([
+  "apfs",
+  "hfs",
+  "ext4",
+  "xfs",
+  "btrfs",
+  "tmpfs",
+  "overlay",
+  "zfs",
+  "f2fs",
+]);
+
+// statfs f_type magic numbers (linux/magic.h); ext2/3/4 share one.
 const LINUX_MAGIC: ReadonlyMap<number, string> = new Map([
+  [0xef53, "ext4"],
+  [0x58465342, "xfs"],
+  [0x9123683e, "btrfs"],
+  [0x01021994, "tmpfs"],
+  [0x794c7630, "overlay"],
+  [0x2fc12fc1, "zfs"],
+  [0xf2f52010, "f2fs"],
   [0x6969, "nfs"],
   [0x517b, "smb"],
   [0xfe534d42, "smb2"],
   [0xff534d42, "cifs"],
   [0x01021997, "9p"],
-  [0x5346414f, "afs"],
-  [0x73757245, "coda"],
-  [0x564c, "ncpfs"],
 ]);
 
 function nearestExisting(path: string): string {
@@ -71,11 +88,11 @@ function nearestExisting(path: string): string {
   return realpathSync(p);
 }
 
-export const defaultFsProbe: FsProbe = (dir) => {
-  const at = nearestExisting(dir);
+export const defaultFsProbe: FsProbe = (path) => {
+  const at = nearestExisting(path);
   if (process.platform === "linux") {
     const type = statfsSync(at).type;
-    return LINUX_MAGIC.get(type) ?? `local:0x${type.toString(16)}`;
+    return LINUX_MAGIC.get(type) ?? `unknown:0x${type.toString(16)}`;
   }
   if (process.platform === "darwin") {
     const out = execFileSync("/sbin/mount", { encoding: "utf8" });
@@ -92,19 +109,20 @@ export const defaultFsProbe: FsProbe = (dir) => {
   return "unknown";
 };
 
-// Unknown counts as refused: the store does not open where it cannot tell the disk is local.
-export function checkLocalFs(dir: string, probe: FsProbe = defaultFsProbe): StartCheck {
+// Only a filesystem known to be local passes: the store does not open where it cannot tell.
+// `path` is the database file (or where it will be); an existing symlink is followed.
+export function checkLocalFs(path: string, probe: FsProbe = defaultFsProbe): StartCheck {
   let type: string;
   try {
-    type = probe(dir);
+    type = probe(path);
   } catch (e) {
-    return { name: "db_filesystem", ok: false, detail: `cannot read the filesystem of ${dir}: ${String(e)}` };
+    return { name: "db_filesystem", ok: false, detail: `cannot read the filesystem of ${path}: ${String(e)}` };
   }
-  const ok = type !== "unknown" && !NETWORK_FS.has(type);
+  const ok = LOCAL_FS.has(type);
   return {
     name: "db_filesystem",
     ok,
-    detail: `${dir} is on ${type}${ok ? "" : NETWORK_FS.has(type) ? ": a network filesystem" : ": not known to be local"}`,
+    detail: `${path} is on ${type}${ok ? "" : NETWORK_FS.has(type) ? ": a network filesystem" : ": not known to be local"}`,
     ...(ok ? {} : { fix: "keep the database on a local disk (default ~/.local/share/sangsoe/)" }),
   };
 }

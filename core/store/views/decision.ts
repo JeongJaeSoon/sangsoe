@@ -41,8 +41,14 @@ export const decision: DecisionView = (input) => {
         row.linkedBy = s(p.linked_by);
       }
     } else if (e.type === "decision_closed" && row.state !== "closed") {
-      row.state = "closed";
-      row.closedReason = p.reason === "moot" ? "moot" : "answered";
+      // decision_closed{answered} counts only after an answer; moot closes without one.
+      if (p.reason === "moot") {
+        row.state = "closed";
+        row.closedReason = "moot";
+      } else if (row.state === "answered") {
+        row.state = "closed";
+        row.closedReason = "answered";
+      }
     }
   }
   const openGates = new Set(input.orca.gates.filter((g) => g.open).map((g) => g.id));

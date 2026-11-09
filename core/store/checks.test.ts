@@ -20,7 +20,7 @@ test("the runtime's own SQLite passes the floor", () => {
   assert.ok(sqliteVersionOk(process.versions.sqlite ?? ""), `node ${process.version} bundles ${process.versions.sqlite}`);
 });
 
-test("a network filesystem, an unknown one, or a failing probe refuses the location (B3)", () => {
+test("only a known-local filesystem passes; network, unknown or a failing probe refuses (B3)", () => {
   for (const fs of NETWORK_FS) assert.equal(checkLocalFs("/db", () => fs).ok, false, fs);
   assert.equal(checkLocalFs("/db", () => "unknown").ok, false);
   const thrown = checkLocalFs("/db", () => {
@@ -28,7 +28,8 @@ test("a network filesystem, an unknown one, or a failing probe refuses the locat
   });
   assert.equal(thrown.ok, false);
   assert.match(thrown.detail, /no mount table/);
-  for (const fs of ["apfs", "ext4", "local:0xef53", "tmpfs"]) assert.equal(checkLocalFs("/db", () => fs).ok, true, fs);
+  for (const fs of ["apfs", "ext4", "xfs", "tmpfs", "overlay"]) assert.equal(checkLocalFs("/db", () => fs).ok, true, fs);
+  for (const fs of ["unknown:0x65735546", "fuse", "exfat", ""]) assert.equal(checkLocalFs("/db", () => fs).ok, false, fs);
 });
 
 test("the default probe names this machine's temp volume as local", () => {

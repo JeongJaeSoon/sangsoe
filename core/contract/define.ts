@@ -43,13 +43,27 @@ export function opt<T>(inner: Validator<T>): Optional<T> {
 // enter sqlite (decision 74); a payload that carries one is refused whatever its type.
 export const ORCA_OWNED_KEYS = ["title", "status", "spec", "deps", "question", "options", "message_body"] as const;
 
+export function rejectOrcaFacts(v: unknown, p: string): void {
+  if (Array.isArray(v)) {
+    v.forEach((x, i) => {
+      rejectOrcaFacts(x, `${p}[${i}]`);
+    });
+    return;
+  }
+  if (typeof v !== "object" || v === null) return;
+  for (const [k, x] of Object.entries(v)) {
+    if ((ORCA_OWNED_KEYS as readonly string[]).includes(k)) {
+      throw new ContractError(`${p}.${k}: Orca owns this fact; store its id only`);
+    }
+    rejectOrcaFacts(x, `${p}.${k}`);
+  }
+}
+
 export function obj<S extends Shape>(shape: S): Validator<Infer<S>> {
   return (v, p) => {
     if (typeof v !== "object" || v === null || Array.isArray(v)) return fail(p, "object", v);
     const rec = v as Record<string, unknown>;
-    for (const k of ORCA_OWNED_KEYS) {
-      if (k in rec) throw new ContractError(`${p}.${k}: Orca owns this fact; store its id only`);
-    }
+    rejectOrcaFacts(rec, p);
     for (const [k, check] of Object.entries(shape)) {
       if (rec[k] === undefined) {
         if ("optional" in check) continue;
@@ -81,8 +95,18 @@ export interface EventDef<T extends string = string, P = unknown> {
   /** Payload format version; rows written at a lower schema_v are upcast on read. */
   readonly version: number;
   readonly payload: Validator<P>;
+  /** Payload keys this version knows; a new write may carry no other key. */
+  readonly fields: readonly string[];
   /** dedupe_key prefix this type owns; see contract/dedupe.ts. */
   readonly dedupe: string;
+  /** Writes without a dedupe_key are refused: the type's invariant rests on the key. */
+  readonly dedupeRequired: boolean;
+  /** The key's <target> derived from the payload, so a key cannot point at another row's subject. */
+  dedupeTarget?(payload: P): string;
+  /** When set, only these `source` values may write the type (e.g. edges only from GRAPH). */
+  readonly sources: readonly string[] | null;
+  /** Written only by a store method that keeps it atomic with other rows, never by Store.append. */
+  readonly storeOnly: boolean;
   readonly needs: Needs;
   readonly upcast: Readonly<Record<number, (old: Record<string, unknown>) => Record<string, unknown>>>;
 }
@@ -92,6 +116,10 @@ export function defineEvent<const T extends string, S extends Shape>(
   shape: S,
   opts: {
     dedupe?: string;
+    dedupeRequired?: boolean;
+    dedupeTarget?: (payload: Infer<S>) => string;
+    sources?: readonly string[];
+    storeOnly?: boolean;
     needs?: Needs;
     version?: number;
     upcast?: Record<number, (old: Record<string, unknown>) => Record<string, unknown>>;
@@ -101,7 +129,12 @@ export function defineEvent<const T extends string, S extends Shape>(
     type,
     version: opts.version ?? 1,
     payload: obj(shape),
+    fields: Object.keys(shape),
     dedupe: opts.dedupe ?? type,
+    dedupeRequired: opts.dedupeRequired ?? opts.dedupeTarget !== undefined,
+    ...(opts.dedupeTarget ? { dedupeTarget: opts.dedupeTarget } : {}),
+    sources: opts.sources ?? null,
+    storeOnly: opts.storeOnly ?? false,
     needs: opts.needs ?? "none",
     upcast: opts.upcast ?? {},
   };

@@ -92,6 +92,41 @@ test("append validates type, payload, dedupe prefix and the transition table", (
   assert.equal(store.events().length, 0, "a refused append writes nothing");
 });
 
+test("append guards: writer, unknown or nested Orca fields, required and payload-bound keys, store-only types", () => {
+  const store = mem();
+  const edge = { pred: "a", succ: "b", kind: "blocks" } as const;
+  assert.throws(
+    () => store.append({ type: "edge_added", source: "lead:x", dedupe_key: "edge:a:b:blocks", payload: edge }),
+    /only by GRAPH/,
+  );
+  assert.throws(() => store.append({ type: "edge_added", source: "GRAPH", payload: edge }), /needs a dedupe_key/);
+  assert.throws(
+    () => store.append({ type: "turn_ended", source: "Stop", payload: { session: "s", extra: 1 } as never }),
+    /unknown payload field/,
+  );
+  assert.throws(
+    () =>
+      store.append({
+        type: "evidence",
+        source: "w",
+        payload: { kind: "unit", not_verified: [{ task: { title: "copied" } }] } as never,
+      }),
+    /Orca owns this fact/,
+  );
+  assert.throws(
+    () => store.append({ type: "item_ready", source: "queue-monitor", dedupe_key: "ready:t2:h", payload: { task: "t1" } }),
+    /start with "ready:t1"/,
+  );
+  store.append({ type: "item_ready", source: "queue-monitor", dedupe_key: "ready:t1:h", payload: { task: "t1" } });
+  const owner = { origin: "chat", summary: "s", hash: "h" } as const;
+  assert.throws(() => store.append({ type: "owner_action", source: "x", payload: owner }), /only by its Store method/);
+  assert.throws(
+    () => store.append({ type: "owner_text_redacted", source: "x", payload: { seq: 1, reason: "r" } }),
+    /only by its Store method/,
+  );
+  assert.equal(store.events().length, 1);
+});
+
 test("timestamps come from the injected clock (6)", () => {
   const store = mem();
   store.append({ type: "turn_ended", source: "Stop", payload: { session: "s" } });

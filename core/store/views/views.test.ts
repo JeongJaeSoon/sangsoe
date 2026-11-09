@@ -80,6 +80,24 @@ test("item_timeline keeps the item's own rows, its PR and decision signals, and 
   );
 });
 
+test("a joined waiter's timeline carries the decision's answer and close", () => {
+  const withClose = { ...input([]), events: [...events, ev("decision_closed", { decision: "d001", reason: "answered" })] };
+  assert.deepEqual(
+    item_timeline(withClose, "t2").map((r) => r.type),
+    ["decision_opened", "decision_joined", "decision_answered", "decision_answered", "decision_closed"],
+  );
+});
+
+test("decision_closed{answered} before any answer does not close the decision", () => {
+  const evs = [
+    ev("decision_opened", { decision: "d002", decision_key: "k2" }),
+    ev("decision_closed", { decision: "d002", reason: "answered" }),
+  ];
+  const [row] = decision({ ...input([]), events: evs });
+  assert.equal(row?.state, "open");
+  assert.equal(row?.closedReason, null);
+});
+
 test("views are pure: same input, same output, input untouched", () => {
   const i = input([{ id: "g2", taskId: "t2", open: true }]);
   const before = JSON.stringify(i);

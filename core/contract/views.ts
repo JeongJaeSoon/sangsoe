@@ -124,9 +124,14 @@ export interface RestartDueRow {
   readonly rule: "compactions" | "first_call_half" | "compaction_interval" | "token_ceiling";
 }
 
+// The four rules of design N1; defaults live in config. Inputs: compacted{trigger, pre_tokens} and
+// turn_ended{context_tokens} rows per session.
 export interface RestartRules {
-  readonly maxCompactions: number;
+  readonly maxAutoCompactions: number;
+  /** First call after a compaction at or above this share of pre_tokens (0.5). */
+  readonly firstCallShare: number;
   readonly minIntervalMinutes: number;
+  readonly tokenCeiling: number;
 }
 
 export interface AskRules {
