@@ -414,6 +414,20 @@
     - **`ask_due` 뷰는 계약에 시그니처만 있다.** 리뷰 리마인드를 정하는 몸체가 없고, `review_ask_record` 는 의뢰를 기록만 한다. LATER: 리뷰 리마인드를 사람이 아니라 sangsoe 가 정해야 하는 첫 경우에 몸체를 만든다.
     - **요구 집계(`requirements-coverage.md`)의 🔴·🟡 행은 이번에 구현하지 않고 각자 다시 볼 조건을 둔다.** R-06(🔴): land 가 머지 예약이라 독점 구간이 없다는 판단을 고정하는 시험이 없다 → land 가 대기열·독점 구간을 갖게 되면 시험을 만든다. R-20(🔴): write-brief 의 사전 확인 문장을 고정하는 시험이 없다 → 브리프 검사기가 생기면 그 규칙을 넣는다. R-21(🔴): 노트 저장소가 sangsoe 밖이다 → sangsoe 가 노트를 쓰게 되면. R-01(🟡) 금지어 검사가 CI 에 없다 → 결정 100·74 O-4 대로 전환 뒤 저장소 밖 목록이 생기면. R-05(🟡) 재실행으로 가려진 실패 세기 → pr-monitor 가 재실행 횟수를 남기는 첫 사고에서. R-08(🟡) 잘린 메시지를 보낸 쪽이 받는 시험 → Orca 가 잘림을 응답에 싣게 되면. R-10(🟡) 거부된 행동을 다른 경로로 재시도하지 않음 → 재시도가 관측된 첫 거부에서 hook 규칙으로. R-11(🟡) CI 시간 상한·건너뛴 시험 수 → CI 가 10분을 넘거나 건너뛴 시험이 생기면. R-13(🟡) 슬롯 상한을 CPU 에 맞춤 → 슬롯 부족으로 기다린 시작이 관측되면. R-15(🟡) 오너 항목을 올리기 전 거르기 → 에이전트가 할 수 있던 오너 항목이 관측되면. R-18(🟡) monitor 목록(목적·증거·비용·끄는 법) → monitor 가 여섯 번째로 늘 때. R-19(🟡) 머지 PR 당 컨텍스트 측정 → reflect 의 측정 모드를 sangsoe 로 옮길 때. R-22(🟡) 다른 문서의 숫자 → 이 시험(`spec-names`)이 다루지 않는 숫자가 어긋난 첫 경우. R-23(🟡) reload 방송 → 설치가 열린 세션에 갱신을 알려야 할 때.
 
+### 판단 층의 이름 정리에서 정한 것
+
+162. **판단 층(skill·agent)이 부르는 이름은 모두 있는 것이다. 결정 160 의 넷째 묶음 여덟 이름을 층 규칙으로 하나씩 정했다.** sangsoe 가 쥔 읽기·쓰기는 MCP, Orca 자신의 행위는 Orca 명령, 새 규칙 없이 기존 코어 함수 위에만 만든다. agent-skills 를 빼도 리드가 판정을 기록할 수 있게 하는 것이 목적이다.
+    - **`review_record` → MCP tool 을 만든다(코어 `recordReviewVerdict`).** CLI `sangsoe review record` 와 같은 함수·같은 Outcome 이고 시험이 두 입구를 맞춘다. 작성자 거부(리뷰어 = PR 작성자)는 코어 그대로다. 더한 것은 기록하는 세션의 신원 하나: tool 은 부른 세션의 checkout 을 `git rev-parse` 로 읽어, 그 브랜치가 PR 의 head 브랜치이거나 그 커밋이 기록하려는 head 이면 `recorder_is_author` 로 거부하고, 읽지 못하면 `recorder_unknown` 으로 거부한다. 한 계정 저장소에서는 리뷰어 이름만으로 작성자 세션을 가를 수 없어서다(결정 158 의 믿는 경계). CLI 는 사람의 입구라 이 검사를 하지 않는다. 대안: 세션을 Orca `locate` 로 찾아 그 Task 의 PR 과 대조(PR ↔ Task 연결이 없는 PR 에서 읽지 못함).
+    - **`ready` → resource `sangsoe://ready` 를 만든다(코어 `readiness`·`renderWhy`).** `brief` 와 같은 Run 들을 읽고, 리드가 시작할 🟢 항목 뒤에 기다리는 항목마다 "왜 준비되지 않았나" 표를 붙인다. 저장하는 것은 없다.
+    - **`item_timeline` → resource template `sangsoe://item/{task}/timeline` 을 만든다(코어 뷰 `item_timeline`).** 서버가 `resources/templates/list` 와 template 읽기를 갖게 됐다(`{var}` 하나는 경로 한 칸). `reflect` 의 재료는 sqlite event 라 MCP 읽기다. 현황 2·3단계 resource 는 이 template 위에 얹을 수 있으나 이번에는 만들지 않는다.
+    - **`item_trigger` → 따로 만들지 않고 `item_create` 의 입력 `trigger`·`hold`·`review_trigger`·`exec_by` 로 접는다.** 같은 호출이 `item_extra_set` 한 줄을 쓴다(기존 event 계약). 항목을 만든 뒤 trigger 를 따로 달면 그 사이에 준비됨으로 보이는 틈이 생기기 때문이다. 다시 볼 조건: 이미 있는 항목의 trigger 를 바꿔야 하는 첫 경우에 `item_extra_set` 을 쓰는 tool 하나를 만든다.
+    - **`notify` → Orca `send` 로 고쳐 쓴다.** 진행 중인 일의 범위를 그 세션에 알리는 것은 Orca 자신의 메시지다(`--to dispatch:<id>` · `--to run:<id>`). 코어 `notify` 는 감지층의 깨움 길로 남는다(결정 154).
+    - **`item_transition` → Orca `task-update --id <task_id> --status completed` 로 고쳐 쓴다.** 결정 160 그대로다. `close_suggested` 행은 오너 항목을 오너의 완료 버튼으로 닫는다(결정 135·161)에 맞춰 리드가 닫지 않고 오너에게 알리는 것으로 고쳤다.
+    - **`owner_class` → 만들지 않고 `intake` 와 `orchestrator` 가 쓰지 않게 고쳤다.** 이 tool 의 필수 입력인 `owner_action` seq 를 맥락에 붙이는 hook 이 없어 어떤 세션도 이 tool 을 바르게 부를 수 없다(결정 160 LATER). 결과: `core/owner/marks.ts` 가 `owner_class` 로 표시를 지우는 길은 쓰이지 않는다. 다시 볼 조건: 오너 발언 hook 이 seq 를 맥락에 붙이는 단위에서 이 tool 을 함께 만든다.
+    - **`priority_set` → 바꾸지 않는다.** skill·agent 본문이 부르지 않는다. 결정 160 의 다시 볼 조건 그대로다.
+    - 함께 고친 것: `deliver-ticket` 이 없는 land 결과 `merge_scheduled` 를 적고 있던 것을 실제 `action`(`auto_merge` · `merge_approved` · `merge_verdict` · `merge_on_approval`)으로, `end-session` 의 Orca `worker_done` 을 Orca `send --type worker_done` 으로. MCP tool 은 12개다(결정 85–94·160 의 "11개"는 12개로 읽는다).
+163. **`test/spec-names.test.ts` 가 skill·agent 본문도 읽는다.** 결정 160 의 넷째 묶음을 닫는다. 낱말 resource 바로 뒤 backtick 이름은 resource, 낱말 Orca 바로 뒤 backtick 이름의 첫 낱말은 `core/orca/commands.ts` 의 Orca 하위 명령, "tool" 이 머리인 표 칸의 이름은 tool(또는 `x` skill), 그 밖에 backtick 안 snake_case 이름은 코어·MCP 코드가 말하는 낱말이거나 시험의 `OTHER_WORDS`(Orca·Claude Code·보고 낱말, 이유와 함께)에 있어야 한다. 결정 160 이 가정했다가 만들지 않은 다섯(`owner_class` · `notify` · `item_trigger` · `item_transition` · `priority_set`)은 backtick 으로 다시 나타나면 실패한다. 시험은 각 규칙이 잡는 것을 고정 본문(`test/fixtures/judgment-names.md`)으로도 확인한다. 대안: 낱말 하나하나의 허용 목록(이름이 바뀔 때마다 손으로 고쳐야 해 버림).
+
 ## 기존 설계 조사 20항목의 처리
 
 | 항목 | 처리 | 결정 · 위치 |

@@ -290,7 +290,7 @@
 | | 원문 지우기 | `owner_text_redacted` | — |
 | 저장소 단위 기록 | 머지·main 상태를 저장소마다 하나로 쌓는 event 묶음 | `land_*` · `main_*` | — |
 | plugin 승인 기록 | `sangsoe plugin approve` 가 `orca plugin enable` 에 성공한 뒤에만 쓰는 줄. Orca 의 승인 상태를 복사하지 않고 sangsoe 가 승인했다는 사실만 남긴다(결정 104) | `plugin_approved` | — |
-| 리뷰 판정 | 독립 리뷰 하나가 PR head 하나에 낸 판정(Act-on 수 · 리뷰어 · 작성자). 쓰는 곳은 `sangsoe review record` 하나다(결정 111) | `review_verdict` | 리뷰 통과 표시 |
+| 리뷰 판정 | 독립 리뷰 하나가 PR head 하나에 낸 판정(Act-on 수 · 리뷰어 · 작성자). 쓰는 곳은 코어 기록 함수 하나이고, 입구는 리드가 부르는 MCP tool `review_record` 와 사람이 부르는 `sangsoe review record` 다(결정 111·162) | `review_verdict` | 리뷰 통과 표시 |
 | event 칸 | 한 줄의 칸 | `seq` · `ts` · `type` · `source` · `target` · `subject` · `entity` · `entity_id` · `actor` · `needs` · `severity` · `dedupe_key` · `before` · `after` · `schema_v` | by |
 | `needs` 값 | 누구를 깨우나: 기록만·스크립트나 지정 수행자·에이전트 | `none` · `action` · `judgment` | — |
 
@@ -376,6 +376,7 @@
 | 인계 저장 | 재시작해도 남아야 하는 판단 상태 넷(다음에 할 일 · 기다리는 답 · 답 없는 질문 · 오너 요청의 회신 경로)의 모양을 검사해 Orca 메시지 type `handoff` 로 자기 Run 우편함에 남기는 MCP tool. 새 세션이 같은 우편함에서 읽는다 | `handoff_save` | — |
 | 복구 계획 | 머신·Orca 재시작 뒤 항목 ↔ 마지막 세션(`orca search`)·`/goal` 유무를 한 표로 모으고 Orca 가 내는 `worker-list` 의 `next` 를 그대로 보여 주는 읽기 전용 코어 함수. 죽은 워커 찾기와 되살리기는 Orca 가 하고 이 함수는 실행하지 않는다 | `recover_plan` | — |
 | 의뢰 기록 입구 | 리뷰 의뢰를 `review_ask_sent` 로 남기는 MCP tool. 손으로 보낸 의뢰도 자동 의뢰도 이 입구 하나를 지난다 | `review_ask_record` | — |
+| 판정 기록 입구 | 리드가 독립 리뷰 판정을 `review_verdict` 로 남기는 MCP tool. 부른 세션의 checkout 이 그 PR 의 head 를 쥐었으면(PR 을 쓴 세션) 거부한다(결정 162) | `review_record` | — |
 | 리마인드 대상 | 리마인드할 때가 된 의뢰를 `review_ask_sent` 에서 계산하는 뷰 | `ask_due` | — |
 | 릴리스 묶음 틀 | 여러 항목이 dev 배포·확인·prod 승격 한 번을 함께 쓰는 흐름 틀. 구성원 여럿의 `pr_merged` 를 `blocks` 로 기다리고 `stage_recorded` 의 `members` 칸이 전체의 증거다. 단독 긴급 수정은 `ship-change` 다 | `ship-batch` | — |
 | main 수정 land | 그 저장소의 최신 main 이 `main_red` 인 동안 land 판정 함수가 받는 유일한 요청 종류 | `main_fix` | — |
