@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { stageCore } from "../install/stage.ts";
 import { Store } from "../store/store.ts";
 import type { ApprovePorts, Exec } from "./approve.ts";
 import { reviewEvidenceFrom } from "./review-verdict.ts";
@@ -25,7 +26,7 @@ function execBytes(cmd: string, args: readonly string[]): Promise<Buffer> {
 export function nodePorts(write: (line: string) => void, openStore: () => Store = () => Store.open()): ApprovePorts {
   return {
     exec: nodeExec,
-    async fetchPluginTree(repo, commit) {
+    async fetchPluginTree(repo, commit, staged) {
       const root = await mkdtemp(join(tmpdir(), "sangsoe-approve-"));
       const dispose = () => rm(root, { recursive: true, force: true });
       try {
@@ -34,6 +35,7 @@ export function nodePorts(write: (line: string) => void, openStore: () => Store 
         if (tar.code !== 0) throw new Error(`tar: ${tar.stderr.trim()}`);
         const tops = (await readdir(root, { withFileTypes: true })).filter((d) => d.isDirectory());
         if (tops.length !== 1 || !tops[0]) throw new Error("unexpected tarball layout");
+        if (staged) await stageCore(join(root, tops[0].name));
         return { dir: join(root, tops[0].name, "orca-plugin"), dispose };
       } catch (e) {
         await dispose();
@@ -77,8 +79,7 @@ export function nodePorts(write: (line: string) => void, openStore: () => Store 
 // content hash Orca computes for the folder stays the reviewed tree's). A git repo that merely
 // contains the folder (Homebrew's prefix ignores its Cellar) says nothing about the build.
 export async function resolveCommit(dir: string, exec: Exec = nodeExec): Promise<string | null> {
-  const tracked = await exec("git", ["-C", dir, "ls-files", "--error-unmatch", "--", "orca-plugin.json"]);
-  if (tracked.code === 0) {
+  if (await isCheckout(dir, exec)) {
     const dirty = await exec("git", ["-C", dir, "status", "--porcelain", "--", "."]);
     if (dirty.code !== 0 || dirty.stdout.trim() !== "") return null;
     const head = await exec("git", ["-C", dir, "rev-parse", "HEAD"]);
@@ -90,4 +91,9 @@ export async function resolveCommit(dir: string, exec: Exec = nodeExec): Promise
   } catch {
     return null;
   }
+}
+
+/** A git checkout that tracks the folder: Orca loads it as the git tree, with no staged core (decision 152). */
+export async function isCheckout(dir: string, exec: Exec = nodeExec): Promise<boolean> {
+  return (await exec("git", ["-C", dir, "ls-files", "--error-unmatch", "--", "orca-plugin.json"])).code === 0;
 }
