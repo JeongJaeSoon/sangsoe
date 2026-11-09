@@ -71,6 +71,10 @@
 {"expect":"pass","note":"substitution under nohup runs in the foreground","tool_name":"Bash","tool_input":{"command":"nohup make TAG=$(claude -p tag) > build.log"}}
 {"expect":"pass","note":"worker_done heredoc body after another heredoc","tool_name":"Bash","tool_input":{"command":"cat > notes.md <<'EOF'\nnotes\nEOF\norca orchestration send --type worker_done --subject ready --body \"$(cat <<'EOF'\nREADY-WAIT: land-after\nEOF\n)\" --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
 {"expect":"pass","note":"worker_done heredoc with a dashed delimiter after text","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject ready --body \"Done.\n$(cat <<'END-OF'\nREADY-WAIT: land-after\nEND-OF\n)\" --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
+{"expect":"deny","gate":"start","note":"tmux chain with the separator attached","tool_name":"Bash","tool_input":{"command":"tmux new -d -s w\\; send-keys -t w claude Enter"}}
+{"expect":"pass","note":"tmux escaped literal semicolon","tool_name":"Bash","tool_input":{"command":"tmux display -p 'a\\;' send-keys claude Enter"}}
+{"expect":"pass","note":"case arm with alternatives in a background job","tool_name":"Bash","tool_input":{"command":"case $x in a) echo;; claude|codex) echo d;; esac &"}}
+{"expect":"pass","note":"case arm with a parenthesised pattern in a background job","tool_name":"Bash","tool_input":{"command":"case $x in (claude) echo d;; esac &"}}
 {"expect":"pass","note":"pipeline with claude in the foreground","tool_name":"Bash","tool_input":{"command":"git diff | claude -p 'review this diff' | tee review.md"}}
 {"expect":"pass","note":"background job after a foreground claude","tool_name":"Bash","tool_input":{"command":"claude -p 'summarize' < a.md > b.md; npm run build &"}}
 {"expect":"deny","gate":"report-address","note":"send to a terminal handle","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to term_ab12cd --type escalation --subject x --body y"}}
