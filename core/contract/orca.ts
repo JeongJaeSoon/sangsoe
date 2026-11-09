@@ -147,6 +147,8 @@ export type GateRow = {
   taskId?: string;
   status: string;
   question?: string;
+  /** Orca sends a JSON array as text; the adapter parses it. Absent when Orca sent none or it did not parse. */
+  options?: string[];
   resolution?: string | null;
 };
 
