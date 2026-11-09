@@ -75,6 +75,9 @@
 {"expect":"pass","note":"tmux escaped literal semicolon","tool_name":"Bash","tool_input":{"command":"tmux display -p 'a\\;' send-keys claude Enter"}}
 {"expect":"pass","note":"case arm with alternatives in a background job","tool_name":"Bash","tool_input":{"command":"case $x in a) echo;; claude|codex) echo d;; esac &"}}
 {"expect":"pass","note":"case arm with a parenthesised pattern in a background job","tool_name":"Bash","tool_input":{"command":"case $x in (claude) echo d;; esac &"}}
+{"expect":"deny","gate":"start","note":"backgrounded subshell after a nested case","tool_name":"Bash","tool_input":{"command":"case $x in a) case $y in b) :;; esac; (claude) & ;; esac"}}
+{"expect":"deny","gate":"start","note":"backgrounded pipe after a nested case","tool_name":"Bash","tool_input":{"command":"case $x in a) case $y in b) :;; esac; echo | claude & ;; esac"}}
+{"expect":"deny","gate":"start","note":"tmux keys with an escaped semicolon","tool_name":"Bash","tool_input":{"command":"tmux send-keys -t w 'claude\\;' Enter"}}
 {"expect":"pass","note":"pipeline with claude in the foreground","tool_name":"Bash","tool_input":{"command":"git diff | claude -p 'review this diff' | tee review.md"}}
 {"expect":"pass","note":"background job after a foreground claude","tool_name":"Bash","tool_input":{"command":"claude -p 'summarize' < a.md > b.md; npm run build &"}}
 {"expect":"deny","gate":"report-address","note":"send to a terminal handle","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to term_ab12cd --type escalation --subject x --body y"}}
