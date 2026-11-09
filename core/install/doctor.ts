@@ -1,6 +1,9 @@
+import { execFile } from "node:child_process";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FULL_SHA, SANGSOE_REPO } from "../approve/approve.ts";
-import { nodePorts, resolveCommit } from "../approve/ports.ts";
+import { resolveCommit } from "../approve/ports.ts";
 import { type CheckContext, type CheckResult, DOCTOR_CHECKS, type PluginBuild, runChecks } from "../checks/index.ts";
 import type { Exec } from "../contract/orca.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
@@ -131,38 +134,73 @@ const fromStart = (r: CheckResult): Check =>
     ? { state: "ok", name: r.id, detail: r.summary }
     : { state: r.status, name: r.id, detail: r.summary, fix: r.fix ?? "sangsoe doctor" };
 
-// Trees are fetched as `sangsoe plugin approve` fetches them, from the same trust root.
-function realPluginBuild(root: string, exec: Exec): PluginBuild {
+const FETCH_TIMEOUT_MS = 120_000;
+
+function download(cmd: string, args: readonly string[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, [...args], { encoding: "buffer", maxBuffer: 256 * 1024 * 1024, timeout: FETCH_TIMEOUT_MS }, (err, out) =>
+      err ? reject(err) : resolve(out),
+    );
+  });
+}
+
+// The same tarball and trust root as approve's fetch, but bounded: a stalled gh must not hang doctor.
+async function fetchPluginTree(exec: Exec, commit: string): Promise<{ dir: string; dispose(): Promise<void> }> {
+  const root = await mkdtemp(join(tmpdir(), "sangsoe-doctor-"));
+  const dispose = () => rm(root, { recursive: true, force: true });
+  try {
+    await writeFile(join(root, "tree.tgz"), await download("gh", ["api", `repos/${SANGSOE_REPO}/tarball/${commit}`]));
+    const tar = await exec("tar", ["-xzf", join(root, "tree.tgz"), "-C", root]);
+    if (tar.code !== 0) throw new Error(`tar: ${tar.stderr.trim()}`);
+    const tops = (await readdir(root, { withFileTypes: true })).filter((d) => d.isDirectory());
+    if (tops.length !== 1 || !tops[0]) throw new Error("unexpected tarball layout");
+    return { dir: join(root, tops[0].name, "orca-plugin"), dispose };
+  } catch (e) {
+    await dispose();
+    throw e;
+  }
+}
+
+function parseJson(stdout: string): unknown {
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+}
+
+export function realPluginBuild(root: string, exec: Exec): PluginBuild {
   const dir = orcaPluginDir(root);
   return {
     dir,
     async buildCommit() {
-      // Unlike approve, a dirty checkout still names HEAD: its edits are the drift to report.
-      const tracked = await exec("git", ["-C", dir, "ls-files", "--error-unmatch", "--", "orca-plugin.json"]);
-      const head = tracked.code === 0 ? await exec("git", ["-C", dir, "rev-parse", "HEAD"]) : undefined;
+      // Read from the tree root so a removed folder still names its commit. Unlike approve, a
+      // dirty checkout still names HEAD: its edits are the drift to report.
+      const tracked = await exec("git", ["-C", root, "ls-files", "--error-unmatch", "--", "orca-plugin/orca-plugin.json"]);
+      const head = tracked.code === 0 ? await exec("git", ["-C", root, "rev-parse", "HEAD"]) : undefined;
       if (head?.code === 0) return head.stdout.trim();
       return (
         (await resolveCommit(dir)) ?? {
           error: `${dir} 의 빌드 커밋을 모른다 (git checkout 도, build-info.json 도 아니다)`,
-          fix: "brew reinstall sangsoe",
+          fix: REINSTALL,
         }
       );
     },
     async reviewedHead(commit) {
+      const cmp = await exec("gh", ["api", `repos/${SANGSOE_REPO}/compare/${commit}...main`, "--jq", ".status"]);
+      const status = cmp.stdout.trim();
+      if (cmp.code !== 0 || (status !== "ahead" && status !== "identical")) {
+        return { error: `빌드 커밋 ${commit} 이 main 위에 없어 리뷰된 빌드가 아니다 (${status || cmp.code})`, fix: REINSTALL };
+      }
       const jq = '[.[] | select(.merged_at != null and .base.ref == "main") | .head.sha]';
       const r = await exec("gh", ["api", `repos/${SANGSOE_REPO}/commits/${commit}/pulls`, "--jq", jq]);
-      let heads: unknown;
-      try {
-        heads = JSON.parse(r.stdout);
-      } catch {
-        heads = undefined;
-      }
-      if (r.code === 0 && Array.isArray(heads) && heads.length === 1 && FULL_SHA.test(String(heads[0]))) return String(heads[0]);
+      const heads = r.code === 0 ? parseJson(r.stdout) : undefined;
+      if (Array.isArray(heads) && heads.length === 1 && FULL_SHA.test(String(heads[0]))) return String(heads[0]);
       return { error: `빌드 커밋 ${commit} 을 main 으로 머지한 PR 하나를 찾지 못해 리뷰된 head 를 모른다`, fix: `gh api repos/${SANGSOE_REPO}/commits/${commit}/pulls` };
     },
     async fetchTree(commit) {
       try {
-        return await nodePorts(() => {}).fetchPluginTree(SANGSOE_REPO, commit);
+        return await fetchPluginTree(exec, commit);
       } catch (e) {
         return { error: `${commit} 트리를 받지 못했다: ${e instanceof Error ? e.message : String(e)}`, fix: "gh auth status" };
       }
@@ -170,15 +208,9 @@ function realPluginBuild(root: string, exec: Exec): PluginBuild {
   };
 }
 
-export function realCheckContext(host: Host, root: string): CheckContext {
-  const exec = nodeExec();
-  return {
-    orca: createOrcaAdapter(exec),
-    exec,
-    coreVersion: VERSION,
-    // The folder, not its manifest: a deleted manifest is drift, not an absent plugin.
-    ...(host.exists(orcaPluginDir(root)) ? { pluginBuild: realPluginBuild(root, exec) } : {}),
-  };
+// The release always carries orca-plugin/, so the check runs even when the folder is gone.
+export function realCheckContext(root: string, exec: Exec = nodeExec()): CheckContext {
+  return { orca: createOrcaAdapter(exec), exec, coreVersion: VERSION, pluginBuild: realPluginBuild(root, exec) };
 }
 
 export type DoctorOptions = { offline: true } | { ctx: CheckContext };

@@ -7,8 +7,8 @@ import { test } from "node:test";
 import { createFakeOrca, type FakeReply } from "../../test/fake-orca/index.ts";
 import type { CheckContext, PluginBuild } from "../checks/index.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
-import { doctor, realCheckContext } from "./doctor.ts";
-import { type Host, type Marketplace, type RunResult, realHost, sangsoeOrca, treeRoot } from "./host.ts";
+import { doctor, realCheckContext, realPluginBuild } from "./doctor.ts";
+import { type Host, type Marketplace, type RunResult, sangsoeOrca, treeRoot } from "./host.ts";
 import { install, uninstall } from "./install.ts";
 
 const ROOT = "/opt/homebrew/opt/sangsoe/libexec";
@@ -289,7 +289,7 @@ test("a reviewed head that cannot be found is a warning, not a pass or a failure
   assert.ok(r.lines.some((l) => /^warn +orca-plugin-content: no merged PR — fix: gh api x$/.test(l)), r.lines.join("\n"));
 });
 
-test("the real build commit of a dirty checkout is its HEAD, so a local edit is compared, not skipped", async () => {
+test("the real build commit of a checkout is its HEAD when dirty or when the folder is gone", async () => {
   const root = mkdtempSync(join(tmpdir(), "sangsoe-doctor-"));
   try {
     mkdirSync(join(root, "orca-plugin"));
@@ -302,12 +302,32 @@ test("the real build commit of a dirty checkout is its HEAD, so a local edit is 
     git("init", "-q");
     git("add", ".");
     git("commit", "-q", "-m", "x");
+    const build = realCheckContext(root).pluginBuild;
     writeFileSync(join(root, "orca-plugin", "main.ts"), "edited");
-    const build = realCheckContext({ ...realHost, env: {} }, root).pluginBuild;
+    assert.equal(await build?.buildCommit(), git("rev-parse", "HEAD"));
+    rmSync(join(root, "orca-plugin"), { recursive: true });
     assert.equal(await build?.buildCommit(), git("rev-parse", "HEAD"));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("a build commit that is not on main has no reviewed head, as approve requires", async () => {
+  const seen: string[] = [];
+  const exec = async (cmd: string, args: readonly string[]): Promise<RunResult> => {
+    seen.push([cmd, ...args].join(" "));
+    if (args[1]?.includes("/compare/")) return { code: 0, stdout: "diverged\n", stderr: "" };
+    return { code: 0, stdout: JSON.stringify([HEAD]), stderr: "" };
+  };
+  const head = await realPluginBuild(ROOT, exec).reviewedHead(BUILT);
+  assert.ok(typeof head !== "string" && /main 위에 없어/.test(head.error), JSON.stringify(head));
+  assert.ok(!seen.some((c) => c.includes("/pulls")), "the PR lookup waits for the main check");
+});
+
+test("a build commit on main names its one merged PR's head", async () => {
+  const exec = async (_cmd: string, args: readonly string[]): Promise<RunResult> =>
+    args[1]?.includes("/compare/") ? { code: 0, stdout: "ahead\n", stderr: "" } : { code: 0, stdout: JSON.stringify([HEAD]), stderr: "" };
+  assert.equal(await realPluginBuild(ROOT, exec).reviewedHead(BUILT), HEAD);
 });
 
 test("doctor flags a node below the engines floor", async () => {

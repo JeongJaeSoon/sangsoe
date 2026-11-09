@@ -25,7 +25,7 @@ const USAGE = [
 export async function run(
   argv: readonly string[],
   host: Host = realHost,
-  checkContext: (host: Host, root: string) => CheckContext = realCheckContext,
+  checkContext: (root: string) => CheckContext = realCheckContext,
 ): Promise<{ code: number; out: string }> {
   const [cmd, ...rest] = argv;
   if (cmd === "--version" || cmd === "-v" || cmd === "version") {
@@ -38,12 +38,12 @@ export async function run(
   const done = (o: { code: number; lines: string[] }) => ({ code: o.code, out: o.lines.join("\n") });
   if (cmd === "install" && only()) {
     const root = treeRoot(host);
-    return done(await install(host, root, checkContext(host, root)));
+    return done(await install(host, root, checkContext(root)));
   }
   if (cmd === "uninstall" && only()) return done(uninstall(host));
   if (cmd === "doctor" && only("--offline")) {
     const root = treeRoot(host);
-    return done(await doctor(host, root, flags.has("--offline") ? { offline: true } : { ctx: checkContext(host, root) }));
+    return done(await doctor(host, root, flags.has("--offline") ? { offline: true } : { ctx: checkContext(root) }));
   }
   return { code: 2, out: USAGE };
 }
