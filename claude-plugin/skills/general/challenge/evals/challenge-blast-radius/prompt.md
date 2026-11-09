@@ -14,8 +14,3 @@ def display_width(text):
 
 rows.append({"name": name, "width": display_width(line)})
 ```
-
-```python
-# test_width.py
-assert display_width("ab한") == 4
-```

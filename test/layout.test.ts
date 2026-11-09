@@ -46,7 +46,13 @@ test("only claude-plugin/agents/ uses a .layout marker, and it holds agent defin
   const markers = files.filter((f) => f.endsWith("/.layout")).map(rel);
   assert.deepEqual(markers, [`${AGENTS}/.layout`]);
   for (const f of under(AGENTS).filter((x) => x.endsWith(".md"))) {
-    assert.match(read(f), /^---\nname: /, `${rel(f)} is not an agent definition`);
+    const m = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(read(f));
+    assert.ok(m, `${rel(f)} has no closed frontmatter, so it is not an agent definition`);
+    const [, head = "", body = ""] = m;
+    for (const key of ["name", "description"]) {
+      assert.match(head, new RegExp(`^${key}:[ \\t]*\\S`, "m"), `${rel(f)} frontmatter has no ${key}`);
+    }
+    assert.ok(body.trim(), `${rel(f)} has no prompt body`);
   }
 });
 
