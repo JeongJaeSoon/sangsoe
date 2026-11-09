@@ -1,0 +1,24 @@
+{
+  "name": "sangsoe",
+  "version": "0.0.0",
+  "description": "Orchestration for Claude Code sessions on Orca",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "sangsoe": "dist/cli/main.js"
+  },
+  "engines": {
+    "node": ">=24.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint .",
+    "test": "node --test \"core/**/*.test.ts\" \"cli/**/*.test.ts\" \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
