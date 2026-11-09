@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { dedupeKey, defineEvent, eventDef, fixedClock, int, str } from "../contract/index.ts";
+import { dedupeKey, defineEvent, EVENTS, eventDef, fixedClock, int, str } from "../contract/index.ts";
 import { TABLES } from "./schema.ts";
 import { decodeRow, defaultDbPath, REDACTED_MARK, StartRefused, Store } from "./store.ts";
 
@@ -25,13 +25,53 @@ test("opens ~/.local/share/sangsoe/sangsoe.db under the given home and records s
   const path = defaultDbPath(home);
   assert.equal(path, join(home, ".local/share/sangsoe/sangsoe.db"));
   assert.ok(existsSync(path));
-  assert.equal(store.schemaVersion(), 1);
+  assert.equal(store.schemaVersion(), 2);
   store.close();
   const again = Store.open({ home, clock: fixedClock(T0), fsProbe: local });
-  assert.equal(again.schemaVersion(), 1, "reopening does not migrate twice");
+  assert.equal(again.schemaVersion(), 2, "reopening does not migrate twice");
   again.close();
   const raw = new DatabaseSync(path);
   assert.equal((raw.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode, "wal");
+  assert.equal((raw.prepare("SELECT count(*) AS n FROM migration").get() as { n: number }).n, 2);
+  raw.close();
+});
+
+test("a schema-1 database gains the edge triggers on open (schema 2)", () => {
+  const { path, store } = fileStore();
+  store.close();
+  const raw = new DatabaseSync(path);
+  raw.exec("DROP TRIGGER edge_no_cycle; DROP TRIGGER edge_source_graph; DELETE FROM migration WHERE version = 2;");
+  raw.close();
+  const again = Store.open({ path, clock: fixedClock(T0), fsProbe: local });
+  assert.equal(again.schemaVersion(), 2);
+  const add = (pred: string, succ: string) =>
+    again.append({ type: "edge_added", source: "GRAPH", dedupe_key: dedupeKey(EVENTS.edge_added, pred, succ, "blocks"), payload: { pred, succ, kind: "blocks" } });
+  add("a", "b");
+  assert.throws(() => add("b", "a"), /edge would create a cycle/);
+  again.close();
+});
+
+test("edge triggers: a cycle and a non-GRAPH writer are refused below the contract", () => {
+  const { path, store } = fileStore();
+  const edge = (pred: string, succ: string, kind: "blocks" | "after" = "blocks") => ({ pred, succ, kind }) as const;
+  const key = (p: string, s: string, k = "blocks", ...c: string[]) => dedupeKey(EVENTS.edge_added, p, s, k, ...c);
+  store.append({ type: "edge_added", source: "GRAPH", dedupe_key: key("a", "b"), payload: edge("a", "b") });
+  store.append({ type: "edge_added", source: "GRAPH", dedupe_key: key("b", "c", "after"), payload: edge("b", "c", "after") });
+  assert.throws(
+    () => store.append({ type: "edge_added", source: "GRAPH", dedupe_key: key("c", "a"), payload: edge("c", "a") }),
+    /edge would create a cycle/,
+  );
+  assert.throws(
+    () => store.append({ type: "edge_added", source: "GRAPH", dedupe_key: key("a", "a"), payload: edge("a", "a") }),
+    /edge would create a cycle/,
+  );
+  store.append({ type: "edge_removed", source: "GRAPH", payload: { ...edge("b", "c", "after"), reason: "order dropped" } });
+  store.append({ type: "edge_added", source: "GRAPH", dedupe_key: key("c", "a"), payload: edge("c", "a") });
+  store.close();
+  const raw = new DatabaseSync(path);
+  const insert = raw.prepare("INSERT INTO event (ts, type, source, after) VALUES ('t', 'edge_added', ?, ?)");
+  assert.throws(() => insert.run("lead:x", JSON.stringify(edge("x", "y"))), /only by GRAPH/);
+  assert.throws(() => insert.run("GRAPH", JSON.stringify(edge("b", "c"))), /edge would create a cycle/);
   raw.close();
 });
 
@@ -84,12 +124,11 @@ test("UNIQUE(dedupe_key): a second writer of the same key gets the first row bac
   const edge = { pred: "task:a", succ: "task:b", kind: "blocks" } as const;
   const edgeKey = "edge:task%3Aa:task%3Ab:blocks";
   assert.equal(store.append({ type: "edge_added", source: "GRAPH", dedupe_key: edgeKey, payload: edge }).inserted, true);
-  for (const k of ["edge:task:a:task:b:blocks", `${edgeKey}:again`]) {
-    assert.throws(
-      () => store.append({ type: "edge_added", source: "GRAPH", dedupe_key: k, payload: edge }),
-      /keys are "edge:task%3Aa:task%3Ab:blocks"/,
-    );
-  }
+  assert.throws(
+    () => store.append({ type: "edge_added", source: "GRAPH", dedupe_key: "edge:task:a:task:b:blocks", payload: edge }),
+    /keys are "edge:task%3Aa:task%3Ab:blocks\[:<condition>\]"/,
+  );
+  assert.equal(store.append({ type: "edge_added", source: "GRAPH", dedupe_key: edgeKey, payload: edge }).inserted, false);
   assert.equal(store.events().length, 2);
 });
 
