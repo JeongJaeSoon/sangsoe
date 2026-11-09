@@ -1,0 +1,14 @@
+{
+  "name": "sangsoe",
+  "owner": {
+    "name": "sangsoe"
+  },
+  "description": "The sangsoe Claude Code plugin, registered from the Homebrew tree by `sangsoe install`",
+  "plugins": [
+    {
+      "name": "sangsoe",
+      "source": "./claude-plugin",
+      "description": "Orchestration for Claude Code sessions on Orca"
+    }
+  ]
+}
