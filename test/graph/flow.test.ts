@@ -164,6 +164,12 @@ test("flow_gap: an expansion cut short refuses ✅ until resumed, or until the m
   w.store.append({ type: "flow_step_skipped", source: "lead:api", subject: `item:${root}`, payload: { step: "deploy_prod", reason: "internal tool, no prod" } });
   assert.deepEqual(doneBlockers(await w.input(), root), []);
 
+  const u = createGraphWorld();
+  u.failRun(RUN);
+  const unread = await expandFlow(u, { plan: p, run: RUN, who: "lead:api", requestId: "req-unread" });
+  assert.ok(!unread.ok && unread.refusal.code === "orca_unreadable");
+  assert.equal(u.tasks.size, 0, "an unreadable Run is refused before any create, so no step is left ungated");
+
   const v = createGraphWorld();
   v.failCreateAfter(3);
   await expandFlow(v, { plan: p, run: RUN, who: "lead:api", requestId: "req-gap" });

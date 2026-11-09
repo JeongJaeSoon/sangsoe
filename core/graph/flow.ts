@@ -215,6 +215,11 @@ export async function expandFlow(
   a: { plan: FlowPlan; run: string; who: string; requestId: string },
 ): Promise<Result<Expanded>> {
   if (a.requestId.trim() === "") return refuse("invalid_input", "expanding needs a request id", "pass a request id; re-running with it resumes");
+  // Read before any create: a read failing after a create would leave that step without its gate.
+  // The snapshot goes stale as steps are made; addEdgeTo still knows them by alias, and a new step has
+  // no out-edge yet, so no cycle can run through it.
+  const snap = await readSnapshot(deps.orca, [a.run]);
+  if (snap.unread.length > 0) return refuse("orca_unreadable", `task-list ${a.run} failed`, "re-run with the same request id once Orca answers");
   let facts = foldFacts(deps.store.events());
   const resolve = (ref: string) => facts.aliases.get(ref.replace(/^item:/, "")) ?? ref.replace(/^item:/, "");
   let root = [...facts.items.values()].find((x) => x.links?.includes(requestLink(a.requestId)))?.task;
@@ -236,11 +241,8 @@ export async function expandFlow(
   }
   const made: Record<string, string> = {};
   // Steps come in need order, so a step's non-blocks predecessors exist when it is made; its edges
-  // go in right after it, and a cut-short expansion never leaves a made step without its gate.
-  const gate = async (s: PlannedStep): Promise<Result<true>> => {
-    if (s.edges.length === 0) return done(true);
-    const snap = await readSnapshot(deps.orca, [a.run]);
-    if (snap.unread.length > 0) return refuse("orca_unreadable", `step ${s.id}: task-list failed`, "re-run with the same request id once Orca answers");
+  // go in right after it with no Orca call between, so only a crash there leaves a step ungated.
+  const gate = (s: PlannedStep): Result<true> => {
     for (const e of s.edges) {
       const w = addEdgeTo(deps, snap.snapshot, { pred: itemRef(made[e.step] as string), succ: itemRef(made[s.id] as string), kind: e.kind });
       if (!w.ok) return refuse(w.refusal.code, `step ${s.id}: ${w.refusal.reason}`, w.refusal.fix);
@@ -252,7 +254,7 @@ export async function expandFlow(
     const existing = [...facts.items.values()].find((x) => x.flow === root && x.step === s.id);
     if (existing) {
       made[s.id] = existing.task;
-      const g = await gate(s);
+      const g = gate(s);
       if (!g.ok) return g;
       continue;
     }
@@ -280,7 +282,7 @@ export async function expandFlow(
         ...(s.trigger ? { trigger: s.trigger } : {}),
       },
     });
-    const g = await gate(s);
+    const g = gate(s);
     if (!g.ok) return g;
   }
   return done({ root, steps: made, resumed });
