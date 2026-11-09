@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { recordResource } from "../../core/index.ts";
+import type { Exec } from "../../core/contract/orca.ts";
+import { recordResource, resourceRecord } from "../../core/index.ts";
 import {
   assertNeverForbidden,
   card,
@@ -260,6 +261,33 @@ test("reap_docker_order: a name a second owner also claims is refused and never 
   assert.equal(rms(w).length, 1, "the first owner's card goes");
   assert.ok(!w.docker.calls.some((c) => c.startsWith("volume")), "the shared volume is not touched");
   assert.ok(w.docker.objects.has("shared_data"));
+});
+
+test("reap_docker_order: a compose project two owners record marks every shared name, not only the first", async () => {
+  const w = world();
+  finishedCard(w, "stack-a");
+  let containers = "c1\n";
+  const compose: Exec = async (_file, args) => {
+    const out = args.includes("ps") ? containers : "data\n";
+    return { code: 0, stdout: out, stderr: "" };
+  };
+  for (const [kind, ref] of [["container", "c1"], ["volume", "P_data"], ["network", "P_default"]] as const) {
+    w.docker.objects.set(ref, { kind, running: false });
+  }
+  assert.ok((await resourceRecord(w.store, compose, { owner: "inst-stack-a", compose: "P" })).ok);
+  containers = "c2\n";
+  const b = await resourceRecord(w.store, compose, { owner: "inst-stack-b", compose: "P" });
+  assert.equal(!b.ok && b.refusal.code, "held_by_other");
+  assert.deepEqual(
+    w.types("reap_blocked").map((r) => r.ref),
+    ["P_data", "P_default"],
+  );
+  await rounds(w, 4);
+  assert.deepEqual(
+    w.docker.calls.filter((c) => / rm /.test(c)),
+    ["container rm c1"],
+    "only the first owner's own container goes",
+  );
 });
 
 test("reap_docker_order: an inspect that fails without a not-found answer keeps the record", async () => {

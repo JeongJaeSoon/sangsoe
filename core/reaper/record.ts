@@ -167,13 +167,16 @@ export async function resourceRecord(store: Appender, exec: Exec, input: RecordI
   if (input.kind !== undefined || input.ref !== undefined) return refusal("compose and kind/ref together", "pass either compose or kind and ref");
   const refs = await composeResources(exec, input.compose);
   if (typeof refs === "string") return { ok: false, refusal: { code: "unavailable", reason: refs, fix: "run it right after compose up, with the same -p project" } };
+  // Every ref is tried even after a refusal, so each name the project shares with another owner is
+  // marked contested; stopping early would leave the later shared names held and sweepable.
   const recorded: ResourceRecorded[] = [];
+  let refused: Exclude<Result<ResourceRecorded>, { ok: true }> | null = null;
   for (const r of refs) {
     const one = recordResource(store, { ...r, owner: input.owner, action });
-    if (!one.ok) return one;
-    recorded.push(one.value);
+    if (one.ok) recorded.push(one.value);
+    else refused ??= one;
   }
-  return { ok: true, value: { recorded } };
+  return refused ?? { ok: true, value: { recorded } };
 }
 
 /**
