@@ -4,11 +4,14 @@ import {
   json,
   lastLine,
   listMarketplaces,
+  listOrcaPlugins,
   listPlugins,
   MARKETPLACE,
   orcaManifest,
   orcaPluginDir,
   PLUGIN_ID,
+  sangsoeOrca,
+  UNREADABLE,
   userPlugin,
 } from "./host.ts";
 
@@ -55,14 +58,20 @@ export function install(host: Host, root: string): Outcome {
 
   const markets = listMarketplaces(host);
   if (!markets) {
-    lines.push("claude: cannot read `claude plugin marketplace list --json`; is Claude Code on PATH?");
+    lines.push(`claude: ${UNREADABLE("plugin marketplace list --json")}`);
     return { code: 1, lines };
   }
   let m = markets.find((x) => x.name === MARKETPLACE);
   if (m && m.path !== root) {
-    if (!step(`removed marketplace ${MARKETPLACE} (pointed at ${m.path ?? m.source})`, ["plugin", "marketplace", "remove", MARKETPLACE])) {
-      return { code: 1, lines };
-    }
+    const removed = step(`removed marketplace ${MARKETPLACE} (pointed at ${m.path ?? m.source})`, [
+      "plugin",
+      "marketplace",
+      "remove",
+      MARKETPLACE,
+      "--scope",
+      "user",
+    ]);
+    if (!removed) return { code: 1, lines };
     m = undefined;
   }
   const ok = m
@@ -70,7 +79,12 @@ export function install(host: Host, root: string): Outcome {
     : step(`added marketplace ${MARKETPLACE} → ${root}`, ["plugin", "marketplace", "add", root, "--scope", "user"]);
   if (!ok) return { code: 1, lines };
 
-  const installed = userPlugin(listPlugins(host));
+  const plugins = listPlugins(host);
+  if (!plugins) {
+    lines.push(`claude: ${UNREADABLE("plugin list --json")}`);
+    return { code: 1, lines };
+  }
+  const installed = userPlugin(plugins);
   const pluginOk = installed
     ? step(`updated ${PLUGIN_ID} (open a new session to use it)`, ["plugin", "update", PLUGIN_ID, "--scope", "user"])
     : step(`installed ${PLUGIN_ID}`, ["plugin", "install", PLUGIN_ID, "--scope", "user"]);
@@ -91,21 +105,32 @@ export function uninstall(host: Host, root: string): Outcome {
     lines.push(r.code === 0 ? `${cmd}: ${label}` : `${cmd}: ${label} failed (exit ${r.code}): ${lastLine(r)}`);
   };
 
-  if (userPlugin(listPlugins(host))) {
+  const unreadable = (cmd: string, what: string) => {
+    code = 1;
+    lines.push(`${cmd}: ${UNREADABLE(what)}`);
+  };
+
+  const plugins = listPlugins(host);
+  if (!plugins) unreadable("claude", "plugin list --json");
+  else if (userPlugin(plugins)) {
     step("claude", `uninstalled ${PLUGIN_ID}`, ["plugin", "uninstall", PLUGIN_ID, "--scope", "user", "--keep-data"]);
-  } else {
-    lines.push(`claude: ${PLUGIN_ID} was not installed`);
-  }
-  if (listMarketplaces(host)?.some((x) => x.name === MARKETPLACE)) {
-    step("claude", `removed marketplace ${MARKETPLACE}`, ["plugin", "marketplace", "remove", MARKETPLACE]);
-  } else {
-    lines.push(`claude: marketplace ${MARKETPLACE} was not added`);
-  }
-  if (host.exists(orcaManifest(root))) {
-    step("orca", `unloaded ${orcaPluginDir(root)}`, ["plugin", "dev", "unload", orcaPluginDir(root), "--json"]);
-  } else {
-    lines.push("orca: skipped — this build carries no Orca plugin");
-  }
+  } else lines.push(`claude: ${PLUGIN_ID} was not installed`);
+
+  const markets = listMarketplaces(host);
+  if (!markets) unreadable("claude", "plugin marketplace list --json");
+  else if (markets.some((x) => x.name === MARKETPLACE)) {
+    step("claude", `removed marketplace ${MARKETPLACE}`, ["plugin", "marketplace", "remove", MARKETPLACE, "--scope", "user"]);
+  } else lines.push(`claude: marketplace ${MARKETPLACE} was not added`);
+
+  // Decided from Orca's own list, not the tree: an older tree may have loaded a plugin this one lacks.
+  const orca = listOrcaPlugins(host);
+  const loaded = orca && sangsoeOrca(orca);
+  if (!orca) {
+    if (host.exists(orcaManifest(root))) unreadable("orca", "plugin list --json");
+    else lines.push("orca: skipped — Orca's plugin list is unreadable and this build carries no Orca plugin");
+  } else if (loaded?.isDev) {
+    step("orca", `unloaded ${loaded.pluginKey}`, ["plugin", "dev", "unload", loaded.pluginKey, "--json"]);
+  } else lines.push("orca: no sangsoe development plugin loaded");
   lines.push("kept: ~/.local/share/sangsoe (data) and ~/.config/sangsoe (settings); `brew uninstall sangsoe` removes the tree");
   return { code, lines };
 }

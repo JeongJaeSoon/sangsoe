@@ -11,7 +11,16 @@ const V = "0.1.0-rc.1";
 type State = { markets: Marketplace[]; plugins: { id: string; version: string; scope: string; enabled: boolean }[]; orca: boolean };
 
 // A stand-in for claude and orca that keeps just enough state to show idempotence.
-function fakeHost(opts: { orcaManifest?: boolean; state?: Partial<State>; fail?: string; devLoadCode?: number } = {}) {
+function fakeHost(
+  opts: {
+    orcaManifest?: boolean;
+    state?: Partial<State>;
+    fail?: string;
+    devLoadCode?: number;
+    orcaPlugin?: { status: string; isDev: boolean };
+    files?: Record<string, string>;
+  } = {},
+) {
   const state: State = { markets: [], plugins: [], orca: false, ...opts.state };
   const calls: string[] = [];
   const files = new Map<string, string>([
@@ -20,6 +29,8 @@ function fakeHost(opts: { orcaManifest?: boolean; state?: Partial<State>; fail?:
     [join(ROOT, ".claude-plugin/marketplace.json"), "{}"],
   ]);
   if (opts.orcaManifest) files.set(join(ROOT, "orca-plugin/orca-plugin.json"), JSON.stringify({ version: V }));
+  for (const [rel, text] of Object.entries(opts.files ?? {})) files.set(join(ROOT, rel), text);
+  const orcaPlugin = opts.orcaPlugin ?? { status: "running", isDev: true };
   const ok = (stdout = ""): RunResult => ({ code: 0, stdout, stderr: "" });
   const host: Host = {
     env: { SANGSOE_ROOT: ROOT },
@@ -42,7 +53,7 @@ function fakeHost(opts: { orcaManifest?: boolean; state?: Partial<State>; fail?:
         return ok();
       }
       if (a === "plugin list --json") {
-        const plugins = state.orca ? [{ pluginKey: "local.sangsoe", version: V, status: "running", isDev: true }] : [];
+        const plugins = state.orca ? [{ pluginKey: "local.sangsoe", version: V, ...orcaPlugin }] : [];
         return ok(JSON.stringify({ ok: true, result: { plugins } }));
       }
       if (a.startsWith("plugin dev load ")) {
@@ -84,7 +95,7 @@ test("a marketplace named sangsoe pointing elsewhere is replaced", () => {
   const { host, calls } = fakeHost({ state: { markets: [{ name: "sangsoe", source: "directory", path: "/elsewhere" }] } });
   install(host, ROOT);
   assert.deepEqual(writes(calls).slice(0, 2), [
-    "claude plugin marketplace remove sangsoe",
+    "claude plugin marketplace remove sangsoe --scope user",
     `claude plugin marketplace add ${ROOT} --scope user`,
   ]);
 });
@@ -112,8 +123,8 @@ test("uninstall removes the three registrations and keeps data", () => {
   assert.equal(r.code, 0, r.lines.join("\n"));
   assert.deepEqual(writes(calls), [
     "claude plugin uninstall sangsoe@sangsoe --scope user --keep-data",
-    "claude plugin marketplace remove sangsoe",
-    `orca plugin dev unload ${join(ROOT, "orca-plugin")} --json`,
+    "claude plugin marketplace remove sangsoe --scope user",
+    "orca plugin dev unload local.sangsoe --json",
   ]);
   assert.deepEqual(state.markets, []);
   assert.match(r.lines.join("\n"), /kept: ~\/\.local\/share\/sangsoe/);
@@ -155,6 +166,47 @@ test("doctor flags a node below the engines floor", () => {
   const r = doctor({ ...host, nodeVersion: "24.2.0" }, ROOT, { offline: true });
   assert.equal(r.code, 1);
 });
+
+test("an unreadable plugin list stops install before installing anything", () => {
+  const { host, calls } = fakeHost({ fail: "claude plugin list" });
+  const r = install(host, ROOT);
+  assert.equal(r.code, 1);
+  assert.ok(!calls.some((c) => c.startsWith("claude plugin install") || c.startsWith("claude plugin update")));
+});
+
+test("uninstall fails, not succeeds, when it cannot read what is registered", () => {
+  const { host } = fakeHost({ fail: "claude plugin list" });
+  const r = uninstall(host, ROOT);
+  assert.equal(r.code, 1);
+  assert.match(r.lines.join("\n"), /cannot read `plugin list --json`/);
+});
+
+test("uninstall unloads a sangsoe dev plugin even when this tree has no Orca manifest", () => {
+  const { host, calls } = fakeHost({ state: { orca: true } });
+  uninstall(host, ROOT);
+  assert.ok(calls.includes("orca plugin dev unload local.sangsoe --json"));
+});
+
+test("doctor reports a malformed manifest as FAIL instead of throwing", () => {
+  const { host } = fakeHost({ files: { "claude-plugin/.claude-plugin/plugin.json": "{" } });
+  const r = doctor(host, ROOT, { offline: true });
+  assert.equal(r.code, 1);
+  assert.match(r.lines[0] ?? "", /^FAIL +tree: .*plugin\.json is unreadable/);
+});
+
+for (const [orcaPlugin, why] of [
+  [{ status: "errored", isDev: true }, /is errored/],
+  [{ status: "pending", isDev: true }, /waits for approval/],
+  [{ status: "running", isDev: false }, /not the Homebrew tree's development load/],
+] as const) {
+  test(`doctor fails an Orca plugin that is ${orcaPlugin.status}${orcaPlugin.isDev ? "" : ", not dev"}`, () => {
+    const { host } = fakeHost({ orcaManifest: true, orcaPlugin });
+    install(host, ROOT);
+    const r = doctor(host, ROOT);
+    assert.equal(r.code, 1);
+    assert.ok(r.lines.some((l) => /^FAIL +orca plugin/.test(l) && why.test(l)), r.lines.join("\n"));
+  });
+}
 
 test("treeRoot prefers SANGSOE_ROOT, else walks up to the marketplace file", () => {
   const { host } = fakeHost();
