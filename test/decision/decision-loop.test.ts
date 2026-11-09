@@ -171,10 +171,11 @@ test("decision_answer_linked: an answer linked to dNNN resolves the waiter's gat
     { id: "gate_000000000001", taskId: T1, open: false },
   ]), "in_progress");
   assert.equal(waiterReading({ id: T1, runId: RUN, status: "ready", deps: [] }, []), null);
-  // A closed Task keeps its gate open on purpose (91④(ii)); it is not 🚧.
-  assert.equal(waiterReading({ id: T1, runId: RUN, status: "completed", deps: [] }, [
-    { id: "gate_000000000001", taskId: T1, open: true },
-  ]), null);
+  // A closed Task keeps its gate open on purpose (91④(ii)); it is not 🚧. A plain failed one still waits.
+  const leftOpen = [{ id: "gate_000000000001", taskId: T1, open: true }];
+  assert.equal(waiterReading({ id: T1, runId: RUN, status: "completed", deps: [] }, leftOpen), null);
+  assert.equal(waiterReading({ id: T1, runId: RUN, status: "failed", result: "cancelled", deps: [] }, leftOpen), null);
+  assert.equal(waiterReading({ id: T1, runId: RUN, status: "failed", deps: [] }, leftOpen), "blocked");
 });
 
 test("a re-called decision_answer is idempotent: one gate-resolve, one notify", async () => {

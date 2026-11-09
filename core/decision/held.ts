@@ -7,7 +7,7 @@ import type { ViewGate, ViewTask } from "../contract/index.ts";
  * (decision 91③④(ii)), so it reads as closed, not blocked.
  */
 export function waiterReading(task: ViewTask, gates: readonly ViewGate[]): "blocked" | "in_progress" | null {
-  if (task.status === "completed" || task.status === "failed") return null;
+  if (task.status === "completed" || (task.status === "failed" && task.result === "cancelled")) return null;
   const own = gates.filter((g) => g.taskId === task.id);
   if (own.some((g) => g.open)) return "blocked";
   if (own.length > 0 && task.activeDispatchId !== undefined) return "in_progress";

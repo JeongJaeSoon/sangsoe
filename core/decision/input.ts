@@ -48,14 +48,14 @@ export function parseDecisionAnswer(raw: Raw): Result<Omit<DecisionAnswerInput, 
   return done({ decision: raw.decision, answer: raw.answer, ownerAction: seq, linkedBy: linkedBy as DecisionAnswerInput["linkedBy"] });
 }
 
-/** `pr` names a closed PR (`owner/repo#N`); without it the evidence is that every waiter Task closed. */
+/**
+ * The entrance takes no evidence: an open decision is mooted only when Orca shows every waiter closed,
+ * and a moot decision resumes under the evidence first recorded. A closed PR is queue-monitor's to
+ * observe; it calls `decisionMoot` itself, so no caller can moot a decision by naming a PR.
+ */
 export function parseDecisionMoot(raw: Raw): Result<Omit<DecisionMootInput, "callerRun">> {
   if (!text(raw.decision) || !DECISION.test(raw.decision)) return bad("decision", "dNNN");
-  if (raw.pr !== undefined && (!text(raw.pr) || !/^[\w.-]+\/[\w.-]+#\d+$/.test(raw.pr))) return bad("pr", "owner/repo#N");
-  return done({
-    decision: raw.decision,
-    evidence: raw.pr !== undefined ? { kind: "pr_closed", pr: String(raw.pr) } : { kind: "tasks_closed" },
-  });
+  return done({ decision: raw.decision, evidence: { kind: "tasks_closed" } });
 }
 
 async function withDeps<T>(source: DepsSource, fn: (deps: CoreDeps) => Promise<T>): Promise<T> {

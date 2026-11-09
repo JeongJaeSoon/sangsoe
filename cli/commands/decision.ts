@@ -28,7 +28,7 @@ export default {
   usage:
     "add --subject <item:iNNN|scope:x> --question <text> [--option <o>]... [--waiter <task>@<run>]... [--carrier-run <run>]\n" +
     "       | answer --decision <dNNN> --answer <text> --owner-action <seq> [--linked-by <how>]\n" +
-    "       | moot --decision <dNNN> [--pr <owner/repo#N>]",
+    "       | moot --decision <dNNN>",
   options: {
     subject: { type: "string" },
     question: { type: "string" },
@@ -39,7 +39,6 @@ export default {
     answer: { type: "string" },
     "owner-action": { type: "string" },
     "linked-by": { type: "string" },
-    pr: { type: "string" },
   },
   maxPositionals: 1,
   async run({ values, positionals }) {
@@ -69,7 +68,7 @@ export default {
         defaultDeps,
       );
     }
-    if (sub === "moot") return decisionMootFrom({ decision: values.decision, pr: values.pr }, defaultDeps);
+    if (sub === "moot") return decisionMootFrom({ decision: values.decision }, defaultDeps);
     return refused("expected add, answer or moot");
   },
 } satisfies CommandDef;

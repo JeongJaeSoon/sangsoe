@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decisionAnswerFrom, decisionOpenFrom, parseDecisionAnswer, parseDecisionMoot, parseDecisionOpen } from "../../core/index.ts";
+import {
+  decisionAnswerFrom,
+  decisionMootFrom,
+  decisionOpenFrom,
+  parseDecisionAnswer,
+  parseDecisionMoot,
+  parseDecisionOpen,
+} from "../../core/index.ts";
 import { expectSameViaBothEntrances } from "../boundaries/both-entrances.ts";
 import { createWorld, ownerSays } from "./world.ts";
 
@@ -75,15 +82,17 @@ test("decision_open, decision_answer and decision moot act in the Run Orca repor
   assert.equal(w.store.events({ type: "decision_answered" })[0]?.payload.linked_by, "orchestrator");
 });
 
-test("decision moot parses its evidence, and the parsers ignore a run passed in the input", async () => {
-  assert.deepEqual(parseDecisionMoot({ decision: "d001" }), { ok: true, value: { decision: "d001", evidence: { kind: "tasks_closed" } } });
-  assert.deepEqual(parseDecisionMoot({ decision: "d001", pr: "acme/api#3" }), {
-    ok: true,
-    value: { decision: "d001", evidence: { kind: "pr_closed", pr: "acme/api#3" } },
-  });
-  const badPr = parseDecisionMoot({ decision: "d001", pr: "acme/api" });
-  assert.ok(!badPr.ok);
-  assert.equal(badPr.refusal.code, "bad_input");
+test("decision moot takes no evidence from its caller, and the parsers ignore a run passed in the input", async () => {
+  // Naming a PR cannot moot a decision: the entrance only checks Orca's waiters or resumes a moot.
+  for (const raw of [{ decision: "d001" }, { decision: "d001", pr: "acme/api#999" }]) {
+    assert.deepEqual(parseDecisionMoot(raw), { ok: true, value: { decision: "d001", evidence: { kind: "tasks_closed" } } });
+  }
+  const live = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }], { currentRun: RUN });
+  assert.ok((await decisionOpenFrom({ subject: "item:i012", question: "Which?", waiters: [{ task: T1, run: RUN }] }, live)).ok);
+  const claimed = await decisionMootFrom({ decision: "d001", pr: "acme/api#999" }, live);
+  assert.ok(!claimed.ok);
+  assert.equal(claimed.refusal.code, "not_moot");
+  assert.equal(live.store.events({ type: "decision_closed" }).length, 0);
 
   // A run in the input cannot stand in for the bound one: gate-create would still bind to Orca's.
   const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }]);

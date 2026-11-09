@@ -32,8 +32,9 @@ export interface ReleaseInput {
 export async function release(deps: CoreDeps, state: DecisionState, input: ReleaseInput): Promise<Result<Released>> {
   const out: Out = { resolved: [], notified: [], handedOff: [] };
   const failed: string[] = [];
+  const reads = orcaReads(deps.orca);
   for (const w of state.waiters) {
-    const r = await releaseOne(deps, state.row.decision, w, input, out);
+    const r = await releaseOne(deps, reads, state.row.decision, w, input, out);
     if (!r.ok) failed.push(`${w.task}: ${r.refusal.code} ${r.refusal.reason}`);
   }
   if (failed.length > 0) {
@@ -44,9 +45,15 @@ export async function release(deps: CoreDeps, state: DecisionState, input: Relea
 
 type Out = { resolved: string[]; notified: string[]; handedOff: string[] };
 
-async function releaseOne(deps: CoreDeps, d: string, w: Waiter, input: ReleaseInput, out: Out): Promise<Result<null>> {
+async function releaseOne(
+  deps: CoreDeps,
+  reads: ReturnType<typeof orcaReads>,
+  d: string,
+  w: Waiter,
+  input: ReleaseInput,
+  out: Out,
+): Promise<Result<null>> {
   if (!w.run || !w.gate) return done(null);
-  const reads = orcaReads(deps.orca);
   const task = await reads.task(w.run, w.task);
   if (!task.ok) return task;
   const gate = await reads.gate(w.run, w.gate);
