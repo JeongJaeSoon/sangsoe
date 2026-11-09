@@ -37,7 +37,12 @@ function flag(args: readonly string[], name: string): string | undefined {
   return i >= 0 ? args[i + 1] : undefined;
 }
 
-export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; currentRun?: string } = {}): World {
+/**
+ * `above`: lead Run → the Run whose Dispatch runs that lead's session, as Orca shows it (run-show's
+ * coordinator_handle is that Dispatch's worker terminal). Given, run-show, worker-list and
+ * worker-show answer from it; a Run not in it has a coordinator no Dispatch runs.
+ */
+export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; currentRun?: string; above?: Record<string, string> } = {}): World {
   const taskMap = new Map(tasks.map((t) => [t.id, { ...t }]));
   const gates = new Map<string, WorldGate>();
   const sends: WorldSend[] = [];
@@ -110,6 +115,20 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
     "orchestration-request-show": (args: readonly string[]) =>
       ok({ state: requests.has(flag(args, "request") ?? "") ? "completed" : "absent" }),
   };
+  if (o.above) {
+    const above = o.above;
+    const term = (run: string) => `term_coord_${run}`;
+    replies["orchestration-run-show"] = (args: readonly string[]) => {
+      const id = flag(args, "id") ?? "";
+      return ok({ run: { id, objective: id, coordinator_handle: term(id), consumer_generation: 1, legacy: 0 } });
+    };
+    replies["orchestration-worker-list"] = () =>
+      ok({ workers: Object.keys(above).map((run) => ({ dispatchId: `ctx_lead_${run}`, taskId: `task_lead_${run}`, state: "ready", terminal: term(run), host: "local" })) });
+    replies["orchestration-worker-show"] = (args: readonly string[]) => {
+      const run = (flag(args, "dispatch") ?? "").replace(/^ctx_lead_/, "");
+      return ok({ dispatchId: `ctx_lead_${run}`, taskId: `task_lead_${run}`, runId: above[run], state: "ready", terminal: term(run) });
+    };
+  }
   const fake = createFakeOrca({ replies });
   const store = Store.open({ path: ":memory:" });
   return {

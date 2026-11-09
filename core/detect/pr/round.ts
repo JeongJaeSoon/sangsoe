@@ -4,6 +4,7 @@ import { budgetLevel, type GhResponse } from "../../gh/client.ts";
 import { approvedAndGreen, mergeConfirm, type Pull, readDiff, readLabels, readPull } from "../../land/github.ts";
 import { verifyTier } from "../../verify/verify-tier.ts";
 import type { Act, MonitorDeps, Planned, Reading } from "../monitor.ts";
+import { sendNotice } from "../notice.ts";
 import type { WatchConfig } from "./config.ts";
 import { classifyMain, isClosedTask, itemStateOf, key, type MainRun, prRef, prUrl, requestedTier } from "./judge.ts";
 
@@ -292,18 +293,17 @@ async function readyToMerge(r: Reads, repo: string, p: ListedPull, link: Link | 
   r.acts.push({
     what: `notify run:${lead} ${ref} ready to merge`,
     run: async (d) => {
-      if (!d.notify) return { ok: false, detail: "no notify", planned: [] };
-      const n = await d.notify({
+      const n = await sendNotice(d, {
         key: { target: task, dedupe_key: key("notify", task, "ready_to_merge", p.head.sha) },
         to: "lead",
         // No dispatch in the chain: the author already ended with merge_ready, the lead lands it.
         chain: { leadRun: lead },
         subject: `🟢 머지 가능: ${ref}`,
         body: `${ref} 가 승인과 필수 검사를 채웠다(head ${p.head.sha.slice(0, 7)}). sangsoe land 를 다시 불러 머지한다.`,
-        msgType: "pr_ready_to_merge",
+        msgType: "status",
         source: SOURCE,
       });
-      return n.ok ? { ok: true, detail: n.value.status, planned: [] } : { ok: false, detail: n.refusal.code, planned: [] };
+      return { ...n, planned: [] };
     },
   });
 }

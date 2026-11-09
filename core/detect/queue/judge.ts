@@ -81,6 +81,8 @@ export function judgeQueue(input: ViewInput, cfg: { decisionWaitMinutes: number 
         moot.push({ decision: d.decision, evidence: { kind: "tasks_closed" } });
         continue;
       }
+      // A waiter whose Task row was not read (its Run unread) is unknown: zero action.
+      if (rows.some((t) => t === undefined)) continue;
       // A waiter lost its cause when its PR closed unmerged after the decision opened and no other PR of
       // its Task is still open; every live waiter must have lost it, or someone still waits on the answer.
       const since = openedAt.get(d.decision) ?? Number.POSITIVE_INFINITY;

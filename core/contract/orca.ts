@@ -204,7 +204,8 @@ export type DispatchRow = {
   completed_at: string | null;
 };
 
-export type RunShow = { runId: string; objective: string };
+/** `coordinatorHandle`: the terminal bound to the Run (`run-show --full`'s `run.coordinator_handle`). */
+export type RunShow = { runId: string; objective: string; coordinatorHandle?: string };
 export type RunCurrent = { runId: string | null };
 
 export type RequestShow = {
