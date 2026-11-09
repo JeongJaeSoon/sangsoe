@@ -83,6 +83,14 @@ test("a PR touching a protected path, on any page or by rename, is not auto-merg
   assert.equal(r.autoMerge, false);
 });
 
+test("an unreadable protected_paths setting is false without reading the PR", async () => {
+  const gh = fakeGh({ [RULES]: ok(STRICT_RULES) });
+  const r = await readMergeConditions(gh, { ...A, protectedPaths: null });
+  assert.ok(r.kind === "read" && !r.autoMerge);
+  assert.deepEqual(r.conditions[3], { id: "no_protected_paths", ok: false, reason: "protected_paths unreadable" });
+  assert.ok(!gh.paths.some((p) => p.includes("/files")));
+});
+
 test("rate limiting anywhere returns rate_limited, not a verdict", async () => {
   const gh = fakeGh({ [RULES]: { kind: "rate_limited", resource: "core", resetAt: 99 } });
   assert.deepEqual(await readMergeConditions(gh, A), { kind: "rate_limited", resetAt: 99 });
@@ -95,5 +103,8 @@ test("matchesPath: subtree, one segment and any depth", () => {
   assert.equal(matchesPath("*.tf", "main.tf"), true);
   assert.equal(matchesPath("*.tf", "infra/main.tf"), false);
   assert.equal(matchesPath("**/*.tf", "infra/main.tf"), true);
+  assert.equal(matchesPath("**/*.tf", "main.tf"), true);
+  assert.equal(matchesPath("deploy/**", "deployment.md"), false);
+  assert.equal(matchesPath("a.b", "aXb"), false);
   assert.equal(matchesPath(".github/workflows/*.yml", ".github/workflows/ci.yml"), true);
 });

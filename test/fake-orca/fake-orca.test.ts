@@ -24,6 +24,7 @@ test("commands outside ORCA_COMMANDS are refused, so no test can reach them", as
   const { exec } = createFakeOrca();
   await assert.rejects(exec("orca", ["automations", "list", "--json"]), /not in ORCA_COMMANDS/);
   await assert.rejects(exec("git", ["status"]), /is not faked/);
+  await assert.rejects(exec("orca", ["worktree", "rm", "--worktree", "x", "--force", "--json"]), /--force is not in ORCA_COMMANDS/);
   assert.throws(() => createFakeOrca({ scenario: "no-such-scenario" }), /no scenario/);
 });
 

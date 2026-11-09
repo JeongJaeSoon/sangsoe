@@ -20,7 +20,11 @@ const isObject = (v: unknown): v is Json => typeof v === "object" && v !== null 
 export function buildArgs(name: CommandName, call: Call = {}, o?: WriteOptions): string[] {
   const spec = ORCA_COMMANDS[name];
   const allowed: readonly string[] = spec.flags;
-  const args = [...spec.path, ...(call.pos ?? [])];
+  const pos = call.pos ?? [];
+  // Orca would parse a leading dash as an option; whether it honours `--` is unverified.
+  const dashed = pos.find((p) => p.startsWith("-"));
+  if (dashed !== undefined) throw new Error(`orca ${spec.path.join(" ")}: argument ${JSON.stringify(dashed)} starts with "-"`);
+  const args = [...spec.path, ...pos];
   const flags: Record<string, FlagValue> = { ...call.flags };
   if (o?.retryRequest) flags["retry-request"] = o.retryRequest;
   for (const [flag, value] of Object.entries(flags)) {
@@ -83,11 +87,10 @@ export async function recoverWrite<T>(
 ): Promise<OrcaResult<T>> {
   const shown = await orca.requestShow({ request: requestId });
   if (!shown.ok) return { ok: false, error: shown.error, requestId };
-  if (shown.value.state === "absent") {
-    const message = shown.value.interpretation ?? "Orca holds no receipt for this request";
-    return { ok: false, error: { code: "request_absent", message }, requestId };
-  }
-  return replay({ retryRequest: requestId });
+  const state: unknown = shown.value?.state;
+  if (state === "completed" || state === "pending") return replay({ retryRequest: requestId });
+  const message = shown.value?.interpretation ?? `request-show answered state ${JSON.stringify(state)}`;
+  return { ok: false, error: { code: state === "absent" ? "request_absent" : "unexpected_shape", message }, requestId };
 }
 
 function placement(p: WorkerPlacement): string {
@@ -97,7 +100,13 @@ function placement(p: WorkerPlacement): string {
 export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
   async function run<T>(name: CommandName, call?: Call, o?: WriteOptions): Promise<OrcaResult<T>> {
     const spec = ORCA_COMMANDS[name];
-    const r = await exec(orcaBin, buildArgs(name, call, o));
+    let args: string[];
+    try {
+      args = buildArgs(name, call, o);
+    } catch (err) {
+      return { ok: false, error: { code: "invalid_argument", message: String((err as Error).message) } };
+    }
+    const r = await exec(orcaBin, args);
     return parseEnvelope(r, "write" in spec) as OrcaResult<T>;
   }
 
@@ -113,11 +122,16 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
   async function local<T>(name: CommandName, key: string, hostKey: string, call?: Call): Promise<OrcaResult<LocalRows<T>>> {
     const r = await run<Json>(name, call);
     if (!r.ok) return r;
-    const rows = isObject(r.value) && Array.isArray(r.value[key]) ? (r.value[key] as T[]) : [];
-    const scope = isObject(r.value) && isObject(r.value.hostScope) ? r.value.hostScope : {};
+    if (!isObject(r.value) || !Array.isArray(r.value[key])) {
+      return { ok: false, error: { code: "unexpected_shape", message: `no "${key}" array in the result`, data: r.value } };
+    }
+    const v = r.value;
+    const scope = isObject(v.hostScope) ? v.hostScope : {};
     const omitted = Array.isArray(scope.omittedHostIds) ? scope.omittedHostIds.map(String) : [];
-    const truncated = isObject(r.value) && r.value.truncated === true;
-    return { ok: true, value: keepLocal(rows, (row) => (row as Json)[hostKey], { omittedHostIds: omitted, truncated }) };
+    const nextCursor = typeof v.nextCursor === "string" && v.nextCursor !== "" ? v.nextCursor : undefined;
+    const page = { omittedHostIds: omitted, truncated: v.truncated === true || nextCursor !== undefined };
+    const rows = keepLocal(v[key] as T[], (row) => (row as Json)[hostKey], page);
+    return { ok: true, value: nextCursor ? { ...rows, nextCursor } : rows };
   }
 
   const jsonArray = (xs: readonly string[] | undefined) => (xs ? JSON.stringify(xs) : undefined);

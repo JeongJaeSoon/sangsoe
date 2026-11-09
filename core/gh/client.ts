@@ -105,7 +105,7 @@ export function createGhClient(deps: { exec: Exec; cache: GhCache; now: () => nu
       const budget = readBudget(raw.headers);
       if (budget) cache.setBudget(budget);
       if (raw.status === 304) return { kind: "not_modified" };
-      if ((raw.status === 403 || raw.status === 429) && (budget?.remaining === 0 || raw.headers.has("retry-after"))) {
+      if (raw.status === 429 || (raw.status === 403 && (budget?.remaining === 0 || raw.headers.has("retry-after")))) {
         const retryAfter = Number(raw.headers.get("retry-after"));
         const resetAt = Number.isFinite(retryAfter) ? Math.ceil(now() / 1000) + retryAfter : (budget?.resetAt ?? 0);
         return { kind: "rate_limited", resource: budget?.resource ?? "core", resetAt };

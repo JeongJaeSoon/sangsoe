@@ -62,6 +62,8 @@ export function createFakeOrca(o: { scenario?: string; replies?: Record<string, 
     const found = specFor(args);
     if (!found) throw new Error(`fake orca: orca ${args.join(" ")} is not in ORCA_COMMANDS`);
     const [key, spec] = found;
+    const unlisted = args.filter((a) => a.startsWith("--") && !spec.flags.includes(a.slice(2)));
+    if (unlisted.length > 0) throw new Error(`fake orca: ${unlisted.join(" ")} is not in ORCA_COMMANDS for ${key}`);
     const doc = o.replies?.[key] ?? recorded(scenario, key);
     if (doc !== undefined) return reply(doc, args);
     if ("write" in spec || UNTRACKED_WRITES.has(key)) return reply({ ok: true, result: {} }, args);

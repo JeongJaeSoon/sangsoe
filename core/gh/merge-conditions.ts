@@ -21,14 +21,18 @@ type PrFile = { filename: string; previous_filename?: string };
 
 const MAX_FILE_PAGES = 30; // GitHub lists at most 3000 files of a PR.
 
-/** `dir/` and `dir/**` cover a subtree, `*` stays inside one segment, `**` crosses segments. */
+// `dir/` covers a subtree, `*` stays inside one segment, `**` crosses segments, and `**/` also matches no directory.
 export function matchesPath(pattern: string, file: string): boolean {
   if (pattern.endsWith("/")) return file.startsWith(pattern);
-  if (pattern.endsWith("/**") && !pattern.slice(0, -3).includes("*")) return file.startsWith(pattern.slice(0, -2));
   const re = pattern
-    .split("**")
-    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*"))
-    .join(".*");
+    .split(/(\*\*\/|\*\*|\*)/)
+    .map((part) => {
+      if (part === "**/") return "(?:.*/)?";
+      if (part === "**") return ".*";
+      if (part === "*") return "[^/]*";
+      return part.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+    })
+    .join("");
   return new RegExp(`^${re}$`).test(file);
 }
 
@@ -38,7 +42,8 @@ export function matchesPath(pattern: string, file: string): boolean {
  */
 export async function readMergeConditions(
   gh: GhClient,
-  a: { repo: string; base: string; pr: number; protectedPaths: readonly string[] },
+  /** `protectedPaths: null` means the `protected_paths` setting could not be read. */
+  a: { repo: string; base: string; pr: number; protectedPaths: readonly string[] | null },
 ): Promise<MergeConditions> {
   const branch = encodeURIComponent(a.base);
   const rulesRes = await gh.get<Rule[]>(`repos/${a.repo}/rules/branches/${branch}`);
@@ -94,10 +99,12 @@ export async function readMergeConditions(
 
 async function protectedPathsCondition(
   gh: GhClient,
-  a: { repo: string; pr: number; protectedPaths: readonly string[] },
+  a: { repo: string; pr: number; protectedPaths: readonly string[] | null },
 ): Promise<MergeCondition | { kind: "rate_limited"; resetAt: number }> {
   const id = "no_protected_paths";
-  if (a.protectedPaths.length === 0) return { id, ok: true, reason: "no protected_paths configured" };
+  const protectedPaths = a.protectedPaths;
+  if (protectedPaths === null) return { id, ok: false, reason: "protected_paths unreadable" };
+  if (protectedPaths.length === 0) return { id, ok: true, reason: "protected_paths is empty" };
   const files: string[] = [];
   let complete = false;
   for (let page = 1; page <= MAX_FILE_PAGES && !complete; page++) {
@@ -108,6 +115,6 @@ async function protectedPathsCondition(
     complete = res.data.length < 100;
   }
   if (!complete) return { id, ok: false, reason: "PR lists more files than GitHub returns" };
-  const hit = files.find((f) => a.protectedPaths.some((p) => matchesPath(p, f)));
+  const hit = files.find((f) => protectedPaths.some((p) => matchesPath(p, f)));
   return hit ? { id, ok: false, reason: `touches protected path ${hit}` } : { id, ok: true, reason: "no protected path touched" };
 }

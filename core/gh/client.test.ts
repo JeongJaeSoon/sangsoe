@@ -68,6 +68,12 @@ test("an exhausted budget is rate_limited, and the next call is not made until r
   assert.equal(s.calls.length, 1);
 });
 
+test("a 429 is rate_limited even without rate headers", async () => {
+  const s = scripted(http("429 Too Many Requests", {}, '{"message":"slow down"}'));
+  const r = await createGhClient({ exec: s.exec, cache: memoryGhCache(), now: () => NOW }).get("repos/acme/api");
+  assert.equal(r.kind, "rate_limited");
+});
+
 test("a 403 with budget left is an error, not rate_limited", async () => {
   const s = scripted(http("403 Forbidden", RATE, '{"message":"Resource not accessible by integration"}'));
   const r = await createGhClient({ exec: s.exec, cache: memoryGhCache(), now: () => NOW }).get("repos/acme/api/branches/main/protection");

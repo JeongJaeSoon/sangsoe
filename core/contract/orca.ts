@@ -27,7 +27,11 @@ export type OrcaResult<T> =
   | { ok: true; value: T; requestId?: string }
   | { ok: false; error: OrcaError; requestId?: string };
 
-/** Options every write wrapper takes. Set only by `recoverWrite`, never on a first call. */
+/**
+ * Options every write wrapper takes. Set only by `recoverWrite`, never on a first call.
+ * `worktree set|rm`, `reference add` and `plugin enable` have no `--retry-request` in Orca:
+ * after their `response_lost`, re-read the state they change instead of sending again.
+ */
 export type WriteOptions = { retryRequest?: string };
 
 /**
@@ -38,7 +42,10 @@ export type LocalRows<T> = {
   rows: T[];
   nonLocal: { rows: number; hostIds: string[] };
   omittedHostIds: string[];
+  /** More rows exist than this page holds. */
   truncated: boolean;
+  /** Pass back as `cursor` for the next page (worker-list). */
+  nextCursor?: string;
 };
 
 export type WorktreeRow = {

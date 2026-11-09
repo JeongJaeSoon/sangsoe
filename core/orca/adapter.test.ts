@@ -133,6 +133,34 @@ test("recoverWrite replays only after request-show, and never on absent", async 
   assert.equal(send[send.indexOf("--retry-request") + 1], "req_9");
 });
 
+test("recoverWrite does not replay on a state it does not know", async () => {
+  const odd = createFakeOrca({ replies: { "orchestration-request-show": { ok: true, result: {} } } });
+  const orca = createOrcaAdapter(odd.exec);
+  const r = await recoverWrite(orca, "req_9", (o) => orca.send({ to: "run:r", subject: "s" }, o));
+  assert.equal(!r.ok && r.error.code, "unexpected_shape");
+  assert.equal(odd.calls.length, 1, "only request-show ran");
+});
+
+test("a positional value starting with a dash is refused before Orca runs", async () => {
+  const fake = createFakeOrca();
+  const r = await createOrcaAdapter(fake.exec).referenceFind({ query: "--include-archived" });
+  assert.equal(!r.ok && r.error.code, "invalid_argument");
+  assert.equal(fake.calls.length, 0);
+});
+
+test("worker-list keeps the cursor of the next page", async () => {
+  const r = await createOrcaAdapter(createFakeOrca().exec).workerList({});
+  assert.ok(r.ok);
+  assert.equal(r.value.nextCursor, "cursor-0002");
+  assert.equal(r.value.truncated, true);
+});
+
+test("a host-row read without its row array is unexpected_shape, not zero rows", async () => {
+  const fake = createFakeOrca({ replies: { "worktree-list": { ok: true, result: { hostScope: {} } } } });
+  const r = await createOrcaAdapter(fake.exec).worktreeList({});
+  assert.equal(!r.ok && r.error.code, "unexpected_shape");
+});
+
 test("first writes never mint a request id", async () => {
   const fake = createFakeOrca();
   await createOrcaAdapter(fake.exec).taskCreate({ spec: "do it", deps: ["task_1"] });
