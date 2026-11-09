@@ -19,12 +19,20 @@ export type ApprovePorts = {
   fetchPluginTree(repo: string, commit: string): Promise<{ dir: string; dispose(): Promise<void> }>;
   // The `review_verdict` rows for the PR head (decision 111); null when there is none.
   reviewEvidence(repo: string, pr: number, headSha: string): Promise<ReviewEvidence | null>;
-  record(event: PluginApproved): Promise<void>;
+  // Opened before the enable and held across it: a store that cannot take `plugin_approved`
+  // refuses the approval instead of leaving the plugin on with no record (decision 123).
+  openLedger(): Promise<Ledger>;
   readManifest(dir: string): Promise<{ id: string; version: string }>;
   now(): number;
 };
 
-export type ApproveInput = { dir: string; commit: string; dryRun: boolean };
+export type Ledger = { record(event: PluginApproved): Promise<void>; close(): void };
+
+/**
+ * `dir` is the path Orca loaded (Homebrew's opt/ symlink); `realDir` is where it resolves, which
+ * Orca names as the approval's `contentIdentity` (decision 122). Without it the two are the same.
+ */
+export type ApproveInput = { dir: string; realDir?: string; commit: string; dryRun: boolean };
 
 export type CheckName = "target_is_sangsoe" | "merged_with_clean_review" | "folder_is_reviewed_build";
 export type Check = { name: CheckName; ok: boolean; detail: string };
@@ -158,7 +166,8 @@ export async function approvePlugin(input: ApproveInput, ports: ApprovePorts): P
   const fingerprint = typeof data.approvalFingerprint === "string" ? data.approvalFingerprint : null;
   result.key = key;
   result.fingerprint = fingerprint;
-  const target = key === SANGSOE_KEY && fingerprint !== null && data.contentIdentity === `dev:${input.dir}`;
+  const identities = new Set([`dev:${input.dir}`, `dev:${input.realDir ?? input.dir}`]);
+  const target = key === SANGSOE_KEY && fingerprint !== null && identities.has(String(data.contentIdentity));
   result.checks.unshift({
     name: "target_is_sangsoe",
     ok: target,
@@ -169,7 +178,7 @@ export async function approvePlugin(input: ApproveInput, ports: ApprovePorts): P
     return result;
   }
   // Orca binds a dev approval to the path, not the bytes, so re-read them just before enabling.
-  // This narrows the window but cannot close it; the snapshot fix is deferred to U4 (decision 0105).
+  // This narrows the window but cannot close it (decisions 0105, 122).
   if ((await contentHash(ports.exec, input.dir)) !== here) {
     result.note = "not enabled: the folder changed while it was being checked";
     return result;
@@ -181,22 +190,33 @@ export async function approvePlugin(input: ApproveInput, ports: ApprovePorts): P
     result.note = "dry run: would enable";
     return result;
   }
-  const [cmd = "orca", ...args] = result.command;
-  const enable = await ports.exec(cmd, args);
-  if (enable.code !== 0) {
-    result.note = `orca plugin enable failed: ${parse(enable.stdout)?.error?.code ?? enable.code}`;
+  let ledger: Ledger;
+  try {
+    ledger = await ports.openLedger();
+  } catch (e) {
+    result.note = `not enabled: the store cannot take plugin_approved: ${e instanceof Error ? e.message : String(e)}`;
     return result;
   }
-  await ports.record({
-    type: "plugin_approved",
-    key,
-    version: manifest.version,
-    fingerprint,
-    commit: input.commit,
-    at: ports.now(),
-  });
-  result.ok = true;
-  result.enabled = true;
-  result.note = "enabled";
-  return result;
+  try {
+    const [cmd = "orca", ...args] = result.command;
+    const enable = await ports.exec(cmd, args);
+    if (enable.code !== 0) {
+      result.note = `orca plugin enable failed: ${parse(enable.stdout)?.error?.code ?? enable.code}`;
+      return result;
+    }
+    result.enabled = true;
+    await ledger.record({
+      type: "plugin_approved",
+      key,
+      version: manifest.version,
+      fingerprint,
+      commit: input.commit,
+      at: ports.now(),
+    });
+    result.ok = true;
+    result.note = "enabled";
+    return result;
+  } finally {
+    ledger.close();
+  }
 }

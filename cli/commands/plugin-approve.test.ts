@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import type { ApprovePorts } from "../../core/index.ts";
 import { defaultPluginDir, parseArgs, pluginApprove } from "./plugin-approve.ts";
@@ -10,7 +13,7 @@ function untouchable(): { ports: ApprovePorts; touched: () => number } {
     throw new Error("must not be called");
   };
   return {
-    ports: { exec: no, fetchPluginTree: no, reviewEvidence: no, record: no, readManifest: no, now: () => 0 },
+    ports: { exec: no, fetchPluginTree: no, reviewEvidence: no, openLedger: no, readManifest: no, now: () => 0 },
     touched: () => n,
   };
 }
@@ -38,5 +41,17 @@ test("parseArgs", () => {
 });
 
 test("the default folder is this tree's orca-plugin/", () => {
-  assert.match(defaultPluginDir() ?? "", /\/orca-plugin$/);
+  assert.match(defaultPluginDir(undefined, "") ?? "", /\/orca-plugin$/);
+});
+
+// Node runs the CLI from its real (Cellar) path; install dev-loads SANGSOE_ROOT's opt/ path.
+test("under the Homebrew wrapper the default folder is SANGSOE_ROOT's, the path install loaded", () => {
+  const root = mkdtempSync(join(tmpdir(), "sangsoe-approve-root-"));
+  try {
+    mkdirSync(join(root, "orca-plugin"));
+    writeFileSync(join(root, "orca-plugin", "orca-plugin.json"), "{}");
+    assert.equal(defaultPluginDir(undefined, root), join(root, "orca-plugin"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

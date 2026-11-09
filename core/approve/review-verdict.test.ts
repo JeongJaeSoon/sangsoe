@@ -103,7 +103,9 @@ test("the node ports read evidence from and record plugin_approved into the stor
   const lines: string[] = [];
   const ports = nodePorts((l) => lines.push(l), openStore);
   assert.equal((await ports.reviewEvidence("acme/api", 7, HEAD))?.reviewer, "codex");
-  await ports.record({ type: "plugin_approved", key: "local.sangsoe", version: "0.1.0", fingerprint: "ap1-0", commit: "a".repeat(40), at: 1000 });
+  const ledger = await ports.openLedger();
+  await ledger.record({ type: "plugin_approved", key: "local.sangsoe", version: "0.1.0", fingerprint: "ap1-0", commit: "a".repeat(40), at: 1000 });
+  ledger.close();
   const s = openStore();
   const [row] = s.events({ type: "plugin_approved" });
   s.close();
@@ -118,4 +120,5 @@ test("the node ports read evidence from and record plugin_approved into the stor
   );
   assert.equal(await broken.reviewEvidence("acme/api", 7, HEAD), null, "no store, no evidence: condition (1) fails closed");
   assert.ok(lines.some((l) => l.includes("refused: nfs")));
+  await assert.rejects(broken.openLedger(), /refused: nfs/, "a ledger that cannot open throws before any enable");
 });
