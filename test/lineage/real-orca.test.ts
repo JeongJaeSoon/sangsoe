@@ -5,7 +5,8 @@ import { checkLineage, createOrcaAdapter, nodeExec, Store, startUnit } from "../
 // Real Orca, opt-in only (CI never sets these). unit_lineage_complete reads the units already
 // started on a Run; the throwaway start opens one worker through startUnit and is released by hand.
 //   SANGSOE_REAL_RUN=<run id> SANGSOE_REAL_PARENT=<worktree id the Run's workers hang under>
-//   SANGSOE_REAL_START=1 SANGSOE_REAL_TASK=<requester's Task> SANGSOE_REAL_WORKTREE=<requester's worktree>
+//   SANGSOE_REAL_START=1 SANGSOE_REAL_WORKTREE=<requester's worktree> and either SANGSOE_REAL_TASK=<the
+//   requester's own Task, a lead's> or SANGSOE_REAL_ROLE=orchestrator (a session holding the Run with no Dispatch)
 const env = process.env;
 const run = env.SANGSOE_REAL_RUN;
 const parent = env.SANGSOE_REAL_PARENT;
@@ -37,7 +38,12 @@ test("throwaway start through startUnit on real Orca", { skip: env.SANGSOE_REAL_
   const out = await startUnit(
     { orca, store, slots: () => 1, source: "test:real-orca" },
     {
-      requester: { role: "lead", worktreeId: env.SANGSOE_REAL_WORKTREE ?? "", taskId: env.SANGSOE_REAL_TASK ?? "", runId: run ?? "" },
+      requester: {
+        role: env.SANGSOE_REAL_ROLE === "orchestrator" ? "orchestrator" : "lead",
+        worktreeId: env.SANGSOE_REAL_WORKTREE ?? "",
+        runId: run ?? "",
+        ...(env.SANGSOE_REAL_TASK ? { taskId: env.SANGSOE_REAL_TASK } : {}),
+      },
       childRole: "worker",
       task: { spec, title: "U10 throwaway: /goal first prompt" },
       agent: "claude",
