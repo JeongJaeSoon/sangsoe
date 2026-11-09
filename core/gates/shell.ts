@@ -74,7 +74,14 @@ export function parse(text: string, depth = 0): Parsed {
   // a group, loop, `if` or `case` closed just before it counts as one command.
   let listStart = 0;
   const groups: { start: number; kind: string }[] = [];
-  const open = (kind: string) => groups.push({ start: commands.length, kind });
+  // Inside a case, after `in` or an arm's `;;`, words up to `)` are a pattern: `|` and `(` there are not
+  // a pipe or a subshell.
+  let pattern = false;
+  const inPattern = () => pattern && groups.at(-1)?.kind === "case";
+  const open = (kind: string) => {
+    groups.push({ start: commands.length, kind });
+    if (kind === "case") pattern = true;
+  };
   const close = () => {
     const g = groups.pop();
     if (g) listStart = Math.min(listStart, g.start);
@@ -154,10 +161,19 @@ export function parse(text: string, depth = 0): Parsed {
       i++;
     } else if (c === "&") {
       endList(true);
+    } else if (c === ";" && (n === ";" || n === "&")) {
+      // An arm ends (`;;`, `;&`, `;;&`); the next words are a pattern.
+      endList(false);
+      i += s[i + 2] === "&" && n === ";" ? 2 : 1;
+      pattern = true;
     } else if (c === ";" || c === "\n") {
       endList(false);
+    } else if (c === "|" && inPattern()) {
+      flushWord();
     } else if (c === "|") {
       flushCommand();
+    } else if (c === "(" && inPattern()) {
+      flushWord();
     } else if (c === "(") {
       flushCommand();
       open("(");
@@ -167,6 +183,7 @@ export function parse(text: string, depth = 0): Parsed {
       if (groups.at(-1)?.kind === "case") {
         // A case pattern: its words are not a command, and its `)` closes nothing.
         words = [];
+        pattern = false;
       } else {
         flushCommand();
         close();

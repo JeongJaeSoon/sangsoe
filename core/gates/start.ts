@@ -57,12 +57,14 @@ function runsClaude(text: string): boolean {
   return parse(text).commands.some((c) => startsClaude(unwrap(c.words).argv));
 }
 
-/** tmux takes several commands in one call, split by a lone `;` (written `\;` or `';'`). */
+/** tmux takes several commands in one call: an argument ending in `;` ends one (`\;` there is a literal). */
 function tmuxCommands(words: readonly string[]): string[][] {
   const out: string[][] = [[]];
   for (const w of words) {
-    if (w === ";") out.push([]);
-    else out.at(-1)?.push(w);
+    if (w.endsWith(";") && !w.endsWith("\\;")) {
+      if (w.length > 1) out.at(-1)?.push(w.slice(0, -1));
+      out.push([]);
+    } else out.at(-1)?.push(w);
   }
   return out;
 }
