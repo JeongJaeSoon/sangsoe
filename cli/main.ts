@@ -1,60 +1,86 @@
 #!/usr/bin/env node
-import {
-  type CheckContext,
-  doctor,
-  type Host,
-  install,
-  realCheckContext,
-  realHost,
-  treeRoot,
-  uninstall,
-  VERSION,
-} from "../core/index.ts";
-import { pluginApprove } from "./commands/plugin-approve.ts";
+import { readdirSync } from "node:fs";
+import { basename, extname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+import { type Host, realHost } from "../core/index.ts";
+import type { CommandDef, Outcome, Refusal, Report } from "./contract.ts";
 
-const USAGE = [
-  "usage: sangsoe <command>",
-  "  --version            print the version",
-  "  install              register this tree with Claude Code and Orca (idempotent), then run doctor",
-  "  uninstall            remove those registrations; data and settings stay",
-  "  doctor [--offline]   check the install; --offline checks only the installed tree",
-  "  plugin approve [--dry-run] [--dir <path>] [--commit <sha>]",
-  "                       check review and build, then enable the Orca plugin",
-].join("\n");
+export type Result = { code: number; out: string };
+
+// Exit codes: 0 done, 1 refused by the core (a Refusal) or a failing Report, 2 usage error (nothing ran).
+const USAGE = "usage: sangsoe <command> [args] [--json]";
+
+// Same rule as claude-plugin/mcp/collect.ts: one file per command, found by listing the
+// folder, so a unit adds commands/<name>.ts and never edits this router.
+const ITEM = /^[^.]+\.(ts|js)$/;
+
+export async function collectCommands(dir: URL): Promise<Map<string, CommandDef>> {
+  const commands = new Map<string, CommandDef>();
+  for (const file of readdirSync(dir).filter((n) => ITEM.test(n)).sort()) {
+    const cmd: CommandDef | undefined = (await import(new URL(file, dir).href)).default;
+    const stem = basename(file, extname(file));
+    if (!cmd || cmd.name.replaceAll(" ", "-") !== stem) {
+      throw new Error(`${fileURLToPath(new URL(file, dir))}: default export must have name "${stem.replaceAll("-", " ")}"`);
+    }
+    commands.set(cmd.name, cmd);
+  }
+  return commands;
+}
 
 export async function run(
   argv: readonly string[],
-  host: Host = realHost,
-  checkContext: (root: string) => CheckContext = realCheckContext,
-): Promise<{ code: number; out: string }> {
-  const [cmd, ...rest] = argv;
-  if (cmd === "--version" || cmd === "-v" || cmd === "version") {
-    return { code: 0, out: `sangsoe ${VERSION}` };
+  opts: { commands?: URL; host?: Host } = {},
+): Promise<Result> {
+  const commands = await collectCommands(opts.commands ?? new URL("./commands/", import.meta.url));
+  const json = argv.includes("--json");
+  const args = argv.filter((a) => a !== "--json");
+  const [first, second] = args;
+
+  if (first === undefined) return { code: 2, out: `${USAGE}\nrun sangsoe --help for the commands` };
+  if (first === "--help" || first === "-h" || first === "help") return { code: 0, out: help(commands) };
+
+  const name = first === "--version" || first === "-v" ? "version" : first;
+  const cmd = commands.get(`${name} ${second}`) ?? commands.get(name);
+  if (!cmd) return { code: 2, out: `${USAGE}\nunknown command "${first}"; run sangsoe --help for the commands` };
+
+  const rest = args.slice(cmd.name.split(" ").length);
+  const form = `usage: sangsoe ${cmd.name}${cmd.usage ? ` ${cmd.usage}` : ""}`;
+  if (rest.includes("--help") || rest.includes("-h")) return { code: 0, out: `${form}\n${cmd.summary}` };
+
+  let parsed: ReturnType<typeof parseArgs>;
+  try {
+    parsed = parseArgs({ args: rest, options: cmd.options ?? {}, allowPositionals: true, strict: true });
+    if (parsed.positionals.length > (cmd.maxPositionals ?? 0)) {
+      throw new Error(`unexpected argument "${parsed.positionals[cmd.maxPositionals ?? 0]}"`);
+    }
+  } catch (e) {
+    const refusal: Refusal = { code: "invalid_input", reason: (e as Error).message, fix: form };
+    return { code: 2, out: json ? JSON.stringify(refusal) : `${form}\n${refusal.reason}` };
   }
-  if (cmd === "--help" || cmd === "-h" || cmd === "help") return { code: 0, out: USAGE };
-  if (rest.includes("--help") || rest.includes("-h")) return { code: 0, out: USAGE };
-  const flags = new Set(rest);
-  const only = (...allowed: string[]) => [...flags].every((f) => allowed.includes(f));
-  const done = (o: { code: number; lines: string[] }) => ({ code: o.code, out: o.lines.join("\n") });
-  if (cmd === "install" && only()) {
-    const root = treeRoot(host);
-    return done(await install(host, root, checkContext(root)));
+
+  const host = opts.host ?? realHost;
+  return render(cmd, await cmd.run({ values: parsed.values, positionals: parsed.positionals, host }), json);
+}
+
+function render(cmd: CommandDef, o: Outcome | Report, json: boolean): Result {
+  if ("lines" in o) return { code: o.code, out: json ? JSON.stringify(o.lines) : o.lines.join("\n") };
+  if (o.ok) {
+    const text = json || typeof o.value !== "string" ? JSON.stringify(o.value) : o.value;
+    return { code: 0, out: text };
   }
-  if (cmd === "uninstall" && only()) return done(uninstall(host));
-  if (cmd === "doctor" && only("--offline")) {
-    const root = treeRoot(host);
-    return done(await doctor(host, root, flags.has("--offline") ? { offline: true } : { ctx: checkContext(root) }));
-  }
-  return { code: 2, out: USAGE };
+  const { code, reason, fix } = o.refusal;
+  return { code: 1, out: json ? JSON.stringify(o.refusal) : `sangsoe ${cmd.name}: ${reason} [${code}]\nfix: ${fix}` };
+}
+
+function help(commands: ReadonlyMap<string, CommandDef>): string {
+  const width = Math.max(0, ...[...commands.keys()].map((n) => n.length));
+  const rows = [...commands.values()].map((c) => `  ${c.name.padEnd(width)}  ${c.summary}`);
+  return [USAGE, "", "commands:", ...rows, "", "sangsoe <command> --help shows one command's arguments."].join("\n");
 }
 
 if (import.meta.main) {
-  const argv = process.argv.slice(2);
-  // TODO(U5): the command router takes this dispatch over.
-  const { code, out } =
-    argv[0] === "plugin" && argv[1] === "approve"
-      ? await pluginApprove(argv.slice(2), (line) => process.stdout.write(`${line}\n`))
-      : await run(argv);
+  const { code, out } = await run(process.argv.slice(2));
   (code === 0 ? process.stdout : process.stderr).write(`${out}\n`);
   process.exitCode = code;
 }
