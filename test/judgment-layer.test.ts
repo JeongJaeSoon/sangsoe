@@ -69,14 +69,18 @@ test("agent bodies reach sangsoe through MCP, never through a shell command", ()
 });
 
 test("the delegate gate lets the orchestrator read each sangsoe resource its agent text names", () => {
+  // Claude Code names a plugin's server `plugin:<plugin name>:<.mcp.json key>` (appendix #mcp).
+  const plugin = (JSON.parse(read("claude-plugin/.claude-plugin/plugin.json")) as { name: string }).name;
   const servers = Object.keys((JSON.parse(read("claude-plugin/.mcp.json")) as { mcpServers: object }).mcpServers);
   const named = [...read("claude-plugin/agents/orchestrator.md").matchAll(/resource `([a-z_]+)`/g)].map((m) => m[1] ?? "");
   assert.ok(named.length > 0, "orchestrator.md names no resource");
-  const role: GateFacts ={ role: () => "orchestrator", load: () => ({ level: "ok", reasons: [] }), ownOpenPrs: () => undefined, readScript: () => undefined };
+  const role: GateFacts = { role: () => "orchestrator", load: () => ({ level: "ok", reasons: [] }), ownOpenPrs: () => undefined, readScript: () => undefined };
   const verdict = (tool: string, input: Record<string, unknown>) =>
     evaluate({ tool, input, cwd: "/work/acme", subagent: false }, role).decision;
+  // The agent text names a resource, not its server: the first call is a list with no server.
+  assert.notEqual(verdict("ListMcpResourcesTool", {}), "deny", "listing every server's resources denied");
   for (const key of servers) {
-    const server = `plugin:sangsoe:${key}`;
+    const server = `plugin:${plugin}:${key}`;
     assert.notEqual(verdict("ListMcpResourcesTool", { server }), "deny", `${server}: listing denied`);
     for (const name of named) {
       const uri = /uri: "([^"]+)"/.exec(read(`claude-plugin/mcp/resources/${name}.ts`))?.[1];

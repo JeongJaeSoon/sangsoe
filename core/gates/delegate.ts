@@ -48,12 +48,15 @@ function coordination(argv: readonly string[]): boolean {
 }
 
 // Decision 89: the orchestrator reads 현황 from sangsoe's resources through Claude Code's two built-in
-// resource tools, which carry the server name instead of an mcp__ prefix.
-const RESOURCE_TOOLS = new Set(["ListMcpResourcesTool", "ReadMcpResourceTool"]);
+// resource tools, which carry the server name instead of an mcp__ prefix. A list with no server is how
+// it learns that name (the agent text names only the resource), and it reads metadata only.
+const SANGSOE_SERVER = /^plugin:sangsoe:/;
 
 function allowed(call: ToolCall): boolean {
   if (TOOLS.has(call.tool) || call.tool.startsWith("mcp__plugin_sangsoe_")) return true;
-  if (RESOURCE_TOOLS.has(call.tool)) return String(call.input.server ?? "").startsWith("plugin:sangsoe:");
+  const server = call.input.server;
+  if (call.tool === "ListMcpResourcesTool") return server === undefined || SANGSOE_SERVER.test(String(server));
+  if (call.tool === "ReadMcpResourceTool") return SANGSOE_SERVER.test(String(server ?? ""));
   const file = String(call.input.file_path ?? call.input.path ?? "");
   if (call.tool === "Read") return READABLE.test(file);
   if (call.tool === "Write" || call.tool === "Edit") return WRITABLE.test(file);
