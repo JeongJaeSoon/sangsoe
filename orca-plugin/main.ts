@@ -2,7 +2,7 @@
 // enabled (a `main` plus status bar items), so the timer rounds below need no outside scheduler.
 // Every static import stays inside this folder: Orca's approval and the content hash cover only it.
 // The core is reached at run time through core-link.ts alone (decisions 132, 136).
-import { loadMonitors, loadPanelCore, type MonitorRunner, type PanelCore } from "./core-link.ts";
+import { loadPanelCore, loadRunners, type MonitorRunner, type PanelCore, type Runners } from "./core-link.ts";
 import { chatMonitor } from "./monitors/chat.ts";
 import { orcaMonitor } from "./monitors/orca.ts";
 import { prMonitor } from "./monitors/pr.ts";
@@ -11,6 +11,7 @@ import { resourceMonitor } from "./monitors/resource.ts";
 import { type LastRound, monitorRound } from "./monitors/spec.ts";
 import { panelHandlers } from "./panel/requests.ts";
 import { ownKey, probeExec, probeSqlite } from "./probe.ts";
+import { type LastReap, REAPER_HINTS, REAPER_ID, reaperRound } from "./reaper/round.ts";
 import { stallWatch } from "./stall.ts";
 import { type Clock, nodeClock, type Round, startRounds } from "./timer.ts";
 
@@ -25,12 +26,12 @@ export type OrcaWorker = {
   panels: { handle(name: string, handler: (input: unknown) => unknown): void };
 };
 
-/** `monitors` is absent in tests that do not exercise them, so those never open the real store. */
+/** `runners` is absent in tests that do not exercise them, so those never open the real store. */
 export type WorkerDeps = {
   clock: Clock;
   exec: typeof probeExec;
   panel: () => Promise<PanelCore | string>;
-  monitors?: () => Promise<MonitorRunner | string>;
+  runners?: () => Promise<Runners | string>;
 };
 
 export const EVENTS = ["workspace.created", "workspace.removed", "workspace.changed", "agent.status.changed"] as const;
@@ -45,16 +46,17 @@ let stopRounds: (() => void) | null = null;
 
 export default function activate(
   orca: OrcaWorker,
-  deps: WorkerDeps = { clock: nodeClock, exec: probeExec, panel: loadPanelCore, monitors: loadMonitors },
+  deps: WorkerDeps = { clock: nodeClock, exec: probeExec, panel: loadPanelCore, runners: loadRunners },
 ) {
   const { clock, exec } = deps;
   const startedAt = clock.now();
   const events: Record<string, { count: number; lastAt: number | null }> = {};
   let monitorRounds: ReturnType<typeof startRounds> | null = null;
-  let runner: MonitorRunner | null = null;
+  let runner: Runners | null = null;
   let stopped = false;
   const lastRounds = new Map<string, LastRound>();
-  let monitorState = deps.monitors ? "loading" : "off";
+  const lastReap: { value: LastReap | null } = { value: null };
+  let monitorState = deps.runners ? "loading" : "off";
   let stall: ReturnType<typeof stallWatch> | null = null;
   for (const e of EVENTS) {
     events[e] = { count: 0, lastAt: null };
@@ -101,22 +103,38 @@ export default function activate(
     runner = null;
     stall = null;
     // A round still in flight holds the store: close it only after that round has returned.
-    void (m?.stop() ?? Promise.resolve()).then(() => open?.close());
+    void (m?.stop() ?? Promise.resolve()).then(() => {
+      open?.monitors.close();
+      open?.reaper.close();
+    });
   };
 
-  void deps.monitors?.().then((r) => {
+  void deps.runners?.().then((r) => {
     if (typeof r === "string") {
       monitorState = r;
       orca.log(`sangsoe monitors off: ${r}`);
       return;
     }
-    if (stopped) return r.close();
+    if (stopped) {
+      r.monitors.close();
+      r.reaper.close();
+      return;
+    }
     runner = r;
     monitorState = "running";
-    const check = r.stall?.bind(r);
+    const check = r.monitors.stall?.bind(r.monitors);
     if (check) stall = stallWatch(check, clock);
+    // A monitor that wrote a finishing or pressure event asks REAPER for an early round.
+    const hinting: MonitorRunner = {
+      run: async (name, signal) => {
+        const out = await r.monitors.run(name, signal);
+        if (out.written.some((w) => REAPER_HINTS.has((w as { type?: string }).type ?? ""))) monitorRounds?.hint(REAPER_ID);
+        return out;
+      },
+      close: () => r.monitors.close(),
+    };
     monitorRounds = startRounds(
-      MONITORS.map((m) => monitorRound(m, r, lastRounds)),
+      [...MONITORS.map((m) => monitorRound(m, hinting, lastRounds)), reaperRound(r.reaper, lastReap)],
       clock,
     );
   });
@@ -144,6 +162,7 @@ export default function activate(
     path: process.env.PATH ?? null,
     rounds: rounds.stats(),
     monitors: { state: monitorState, rounds: monitorRounds?.stats() ?? {}, last: Object.fromEntries(lastRounds), stall: stall?.state() ?? null },
+    reaper: lastReap.value,
     events,
   });
   orca.panels.handle("probe.t1", async (input) => {
@@ -158,7 +177,7 @@ export default function activate(
   }));
 
   void Promise.resolve()
-    .then(() => statusRound.run(clock.now(), new AbortController().signal))
+    .then(() => statusRound.run(clock.now(), new AbortController().signal, "timer"))
     .catch((e: unknown) => orca.log(`status: ${e}`));
   orca.log(`sangsoe worker started on node ${process.version}`);
 }

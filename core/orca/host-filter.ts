@@ -11,9 +11,11 @@ export function keepLocal<T>(
   rows: readonly T[],
   hostOf: (row: T) => unknown,
   scope: { omittedHostIds?: readonly string[]; truncated?: boolean } = {},
+  idOf?: (row: T) => unknown,
 ): LocalRows<T> {
   const local: T[] = [];
   const hostIds = new Set<string>();
+  const ids: string[] = [];
   let nonLocal = 0;
   for (const row of rows) {
     const host = hostOf(row);
@@ -23,10 +25,12 @@ export function keepLocal<T>(
     }
     nonLocal++;
     hostIds.add(typeof host === "string" && host !== "" ? host : "(none)");
+    const id = idOf?.(row);
+    if (typeof id === "string" && id !== "") ids.push(id);
   }
   return {
     rows: local,
-    nonLocal: { rows: nonLocal, hostIds: [...hostIds].sort() },
+    nonLocal: { rows: nonLocal, hostIds: [...hostIds].sort(), ...(idOf ? { ids } : {}) },
     omittedHostIds: [...(scope.omittedHostIds ?? [])],
     truncated: scope.truncated ?? false,
   };

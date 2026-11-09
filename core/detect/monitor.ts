@@ -51,7 +51,7 @@ export const DEFAULT_MONITOR_CONFIG: MonitorConfig = {
   slotLimit: 8,
   mainRerunMinutes: 30,
   mainWatchHours: 24,
-  reaperIntervalMinutes: 15,
+  reaperIntervalMinutes: 10,
 };
 
 export type MonitorDeps = {

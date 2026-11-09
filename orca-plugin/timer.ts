@@ -30,7 +30,7 @@ export type Round = {
   id: string;
   intervalMs: number;
   capMs?: number;
-  run(at: number, signal: AbortSignal): void | Promise<void>;
+  run(at: number, signal: AbortSignal, trigger: Trigger): void | Promise<void>;
 };
 
 export type Trigger = "timer" | "hint";
@@ -96,7 +96,7 @@ export function startRounds(rounds: readonly Round[], clock: Clock = nodeClock, 
         });
       }
       const done: Promise<void> = Promise.resolve()
-        .then(() => r.run(clock.now(), ctl.signal))
+        .then(() => r.run(clock.now(), ctl.signal, trigger))
         .catch((e: unknown) => {
           s.errors += 1;
           s.lastError = e instanceof Error ? e.message : String(e);

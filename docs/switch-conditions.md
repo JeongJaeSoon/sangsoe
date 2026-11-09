@@ -27,13 +27,13 @@
 | L4 | 랜드 | `main_red` 동결·`main_fix` 예외·`repo_level_main`(R-05) | U11(+U16) | `core/land/land.test.ts` "main_red freezes" · "scenario repo_level_main (land side)" |
 | L5 | 랜드 | `stack_bottom`·`retarget_approval` | U11 | `core/land/land.test.ts` "scenario stack_bottom" · "scenario retarget_approval" 두 경우(patch-id 다름 거부 · 같음 승계) |
 | L6 | 랜드 | 어느 입구로 불러도 같은 결과·거부 문구 하나(R-03) | U11 | `test/land/entrances.test.ts`(함수·MCP·CLI 셋이 dry run · 거부 · 실제 land 에서 같은 결과, `verify-tier` CLI = 함수), `core/land/land.test.ts` "--dry-run runs the same judgment" |
-| R1 | 정리 | 루트 읽기 실패 → 정리 0 | U18 | |
-| R2 | 정리 | 두 라운드 연속 + 유예 + 끝남 긍정일 때만 대상, 잠잠함은 기준 아님 | U18 | |
-| R3 | 정리 | 기록 없는 카드 편입(`resource_adopted`), 편입 ≠ 삭제 | U18 | |
-| R4 | 정리 | 삭제 전 검사(미커밋·추적 안 된 파일·원격에 없는 커밋·다른 패치) | U18 | |
-| R5 | 정리 | `rm --run-hooks --delete-branch`(`--force` 없음), 훅 실패 → `archive_hook_failed`(P6) | U18 | |
-| R6 | 정리 | Docker 기록 id 만·순서·`prune`/`down -v`/라벨 선택 없음 | U18 | |
-| R7 | 정리 | `remote_host` 카드당 한 번·`isMainWorktree` 건너뜀·터미널 안 닫음 | U18 | |
+| R1 | 정리 | 루트 읽기 실패 → 정리 0 | U18 | `test/reaper/scenarios.test.ts` `reap_roots_fail_no_sweep`: 루트 넷(worker-list · worktree ps · gh · 보호 목록) 각각 실패 × 4 라운드에 `worktree rm` 0 · `reap_candidate` 0 · `reap_round.roots_ok=false` 4 |
+| R2 | 정리 | 두 라운드 연속 + 유예 + 끝남 긍정일 때만 대상, 잠잠함은 기준 아님 | U18 | `reap_two_rounds_grace` 5건: 1·2 라운드 rm 0, 3 라운드(40 분) rm 1 · 다시 표시되면 `cleared` 뒤 처음부터 · 압박 시 10 분 하한 · PR·Dispatch 없는 조용한 카드 5 라운드 rm 0 · 열린 PR rm 0 · HEAD 를 싣지 않은 머지 rm 0 |
+| R3 | 정리 | 기록 없는 카드 편입(`resource_adopted`), 편입 ≠ 삭제 | U18 | `reap_two_rounds_grace` 의 `resource_adopted` 1줄. 실제 Orca 표시 라운드(`sangsoe reap run --dry-run --mark-only`): 카드 22 · 편입 계획 22 · 정리 0 |
+| R4 | 정리 | 삭제 전 검사(미커밋·추적 안 된 파일·원격에 없는 커밋·다른 패치) | U18 | `reap_uncommitted_blocked`(실제 git 저장소): 추적 안 된 파일 → `uncommitted` · GitHub 에 없는 HEAD → `unpushed`(`commits/<HEAD>` 를 물음) · 브랜치 끝과 메시지만 같음 → `unpushed_other_patch`, 셋 다 rm 0. P6: Orca 는 미푸시 커밋을 거부하지 않는다(결정 145) |
+| R5 | 정리 | `rm --run-hooks --delete-branch`(`--force` 없음), 훅 실패 → `archive_hook_failed`(P6) | U18 | `reap_archive_hook_failed`: `reap_blocked{archive_hook_failed}` 1 · `reap_done` 0 · Docker 호출 0. 모든 시나리오가 Orca 호출에 `force`·`allow-failed`·`release`·`terminal` 0 을 확인. P6 실측은 `docs/test-outcomes.md` |
+| R6 | 정리 | Docker 기록 id 만·순서·`prune`/`down -v`/라벨 선택 없음 | U18 | `reap_docker_order`: `rm` 순서 container → volume → network → image 4건, 도는 컨테이너 `in_use` 1, 기록 없는 컨테이너·base 이미지 그대로, 데몬 없음 → `docker_skipped=true` · `version` 외 호출 0. 가짜 Docker 는 `prune`·`down`·`-f`·`--filter`·`label=` 이 오면 실패한다 |
+| R7 | 정리 | `remote_host` 카드당 한 번·`isMainWorktree` 건너뜀·터미널 안 닫음 | U18 | `reap_remote_host_once`: 3 라운드에 `reap_blocked{remote_host}` 1줄 · 편입 0 · rm 0 · `unknown=1`. `reap_main_worktree_skipped`: 머지된 PR 이 있어도 편입·후보·rm 0. REAPER 의 Orca 의존은 읽기 셋 + `worktreeRm` 뿐(`ReaperOrca`) |
 | R8 | 정리 | `reap_round` 필드·`timer_stalled`(간격 3배·`roots_ok=false` 3회) | U17 | `test/detect/queue.test.ts` "timer_stalled"(행 없음 0 · 3배 안 0 · 3배 넘음 1 · 힌트 라운드가 가리지 못함 · 실패 2회 0 · 3회 1 · 4회 같은 키 1) · "stallCheck"(쓰기 1 · 다시 0 · 오케스트레이터 알림 1 · Run 없으면 0) · `test/orca-plugin.test.ts` "the stall check runs on Orca events"(타이머 10분 0 · 이벤트 둘 1 · 패널 1). `reap_round` 를 쓰는 쪽은 U18 |
 | D1 | 감지기 | orca-monitor 멈춤 판정 = 시각 필드, 못 보면 행동 0(R-07, P10) | U15 | |
 | D2 | 감지기 | `one_session_two_terminals` | U15 | |

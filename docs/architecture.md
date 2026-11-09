@@ -24,6 +24,7 @@
 | 실행 | `core/gates/` | X | ④ 공유 코어 | 막는 hook 의 판정 함수: 게이트 4종 · 시작 가드 · 모양 검사 · 합치기 · `gate_denied` 기록 |
 | 실행 | `core/start/` | X | ④ 공유 코어 | 세션을 여는 유일한 시작 함수(Task + Dispatch + new-child lineage)와 lineage·깊이 검사, `unit_lineage_complete` 읽기(결정 94) |
 | 실행 | `core/capacity/` | X | ④ 공유 코어 | 부하 판정 함수 하나(압박 게이트·resource-monitor·REAPER·`capacity` 공용, 결정 83) |
+| 실행 | `core/reaper/` | X | ④ 공유 코어 | REAPER 라운드(표시 → 정리): 루트 읽기 · 끝남 판정 · 삭제 전 검사 · `worktree rm --run-hooks` · 기록된 Docker id · `resource_record` 몸체(결정 82·83·86·88, 구현 결정 144·145) |
 | 실행 | `core/recover/` | X | ④ 공유 코어 | `sangsoe recover` 의 읽기 전용 표(결정 80 N4) |
 | 실행 | `core/decision/` | X | ④ 공유 코어 | 결정 루프: `decision_open`(재질문 게이트) · `decision_answer` · `moot` 닫기 · 결정 84③ 읽기 |
 | 실행 | `core/notify/` | X | ④ 공유 코어 | `notify`: Orca 메시지 한 번 + `notified`, 받는 순서 · `term_` 거부 |

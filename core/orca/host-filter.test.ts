@@ -28,7 +28,12 @@ test("worktree list through the adapter drops non-local rows", async () => {
     r.value.rows.map((w) => w.path),
     ["/home/dev/src/api"],
   );
-  assert.deepEqual(r.value.nonLocal, { rows: 3, hostIds: ["(none)", "ssh-0000000000001-aaaaaa"] });
+  // Only rows that carry an instance id are named; REAPER counts the rest as unknown.
+  assert.deepEqual(r.value.nonLocal, {
+    rows: 3,
+    hostIds: ["(none)", "ssh-0000000000001-aaaaaa"],
+    ids: ["00000000-0000-4000-8000-000000000002"],
+  });
   assert.deepEqual(r.value.omittedHostIds, ["ssh-0000000000002-bbbbbb"]);
 });
 

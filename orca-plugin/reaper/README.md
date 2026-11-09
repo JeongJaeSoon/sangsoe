@@ -1,4 +1,4 @@
 <!-- layout: slot=② layer=실행 tokens=free -->
 # orca-plugin/reaper — 실행
 
-비어 있다. 뒤 유닛이 REAPER 라운드(표시 → 정리, 결정 82·83)를 돌리는 worker 타이머를 둔다. 삭제 전 안전 검사는 코어 함수이고, 지우는 일은 `orca worktree rm --run-hooks --delete-branch` 를 부른다(결정 86).
+REAPER 라운드를 U15 의 `startRounds` 에 `Round` 하나로 싣는다(`round.ts`: 10 분 주기, 상한 5 분). 타이머를 따로 두지 않는다. monitor 라운드가 `pr_merged`·`pr_closed`·`worker_done`·`worker_dead`·`pressure_high` 를 쓰면 힌트로 한 번 앞당길 뿐이고, 판정과 지우기는 모두 코어의 `reapRound`(`core/reaper/`, 결정 144)다. 코어는 `core-link.ts` 의 `loadRunners` 로만 닿는다.

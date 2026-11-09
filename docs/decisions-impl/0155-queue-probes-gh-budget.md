@@ -6,4 +6,4 @@
 
 **왜.** U16 이 만든 한도는 pr 라운드만 보았고 queue 라운드는 `budget` 을 넘기지 않아, 한도가 바닥이어도 probe 가 gh 를 읽었다. `probeRound` 에 판정이 이미 있었으므로 값을 넘기는 것으로 끝냈다(규칙의 두 번째 사본을 쓰지 않는다).
 
-**REAPER 간격.** `reaperIntervalMinutes` 기본값(15)은 U18(REAPER)이 아직 머지되지 않아 그대로 두었다. U18 이 실제 간격을 정하면 그 값과 맞춘다.
+**REAPER 간격.** `reaperIntervalMinutes` 기본값은 U18(REAPER)의 실제 라운드 간격(`orca-plugin/reaper/round.ts` 의 10 분, 결정 144)에 맞춰 10 이다. 두 값이 같다는 것은 `test/orca-plugin.test.ts` 가 확인한다.
