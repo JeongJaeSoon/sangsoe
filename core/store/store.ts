@@ -231,7 +231,9 @@ export class Store {
 
   /** Records an owner_action with its masked text (masking is the caller's, before this call). */
   appendOwnerAction(e: NewEvent<"owner_action">, maskedText: string): Appended {
-    if (typeof maskedText !== "string") throw new ContractError("owner text: expected a string");
+    if (typeof maskedText !== "string" || maskedText.length === 0) {
+      throw new ContractError("owner text: expected a non-empty string");
+    }
     return this.#tx(() => {
       const out = this.#insert(e, true);
       if (out.inserted) this.#db.prepare("INSERT INTO owner_text (seq, text) VALUES (?, ?)").run(out.seq, maskedText);

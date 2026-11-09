@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { defineEvent, fixedClock, int, str } from "../contract/index.ts";
+import { dedupeKey, defineEvent, eventDef, fixedClock, int, str } from "../contract/index.ts";
 import { TABLES } from "./schema.ts";
 import { decodeRow, defaultDbPath, REDACTED_MARK, StartRefused, Store } from "./store.ts";
 
@@ -119,16 +119,38 @@ test("append guards: writer, unknown or nested Orca fields, required and payload
   );
   assert.throws(
     () => store.append({ type: "item_ready", source: "queue-monitor", dedupe_key: "ready:t1:x:h", payload: { task: "t1:x" } }),
-    /Orca id without spaces or ':'/,
+    /start with "ready:t1%3Ax"/,
   );
-  store.append({ type: "item_ready", source: "queue-monitor", dedupe_key: "ready:t1:h", payload: { task: "t1" } });
+  const ready = eventDef("item_ready");
+  assert.ok(ready);
+  const colon = store.append({
+    type: "item_ready",
+    source: "queue-monitor",
+    dedupe_key: dedupeKey(ready, "t1:x", "h"),
+    payload: { task: "t1:x" },
+  });
+  const plain = store.append({ type: "item_ready", source: "queue-monitor", dedupe_key: "ready:t1:x:h", payload: { task: "t1" } });
+  assert.ok(colon.inserted && plain.inserted, "task t1:x and task t1 with condition x:h are two keys");
   assert.throws(
     () => store.append({ type: "resource", source: "w", payload: { action: "created", kind: "worktree", owner: "w", ref: "/Users/a/wt" } }),
     /Orca id, not a path/,
   );
   assert.throws(
+    // @ts-expect-error VerifySpec is a union: orca_field needs field and value at compile time too
     () => store.append({ type: "item_extra_set", source: "lead:a", payload: { task: "t1", verify: { kind: "orca_field", target: "t1" } } }),
     /verify orca_field needs field/,
+  );
+  assert.throws(
+    () => store.append({ type: "evidence", source: "w", payload: { kind: "probe:orca_field" } }),
+    /a probe's evidence records what it observed/,
+  );
+  assert.throws(
+    () => store.append({ type: "resource", source: "w", payload: { action: "created", kind: "worktree", owner: "w", ref: "not an id" } }),
+    /Orca id, not a path/,
+  );
+  assert.throws(
+    () => store.append({ type: "reap_blocked", source: "REAPER", payload: { ref: "/Users/a/wt", reason: "unpushed" } as never }),
+    /kind: expected a value/,
   );
   store.append({
     type: "item_extra_set",
@@ -143,7 +165,7 @@ test("append guards: writer, unknown or nested Orca fields, required and payload
     () => store.append({ type: "owner_text_redacted", source: "x", payload: { seq: 1, reason: "r" } }),
     /only by its Store method/,
   );
-  assert.equal(store.events().length, 2);
+  assert.equal(store.events().length, 3);
 });
 
 test("timestamps come from the injected clock (6)", () => {
@@ -181,17 +203,24 @@ test("owner text lives apart from the event and may only be emptied, after owner
     /text of an owner_action/,
     "an owner_action row with no text is refused",
   );
+  assert.throws(
+    () => raw.exec("INSERT INTO owner_text (seq, text) VALUES (last_insert_rowid(), '')"),
+    /text of an owner_action/,
+    "nor with empty text: only a redaction empties it",
+  );
   raw.close();
 
   const again = Store.open({ path, clock: fixedClock(T0), fsProbe: local });
-  assert.throws(
-    () =>
-      again.appendOwnerAction(
-        { type: "owner_action", source: "x", payload: { origin: "chat", summary: "s", hash: "h2" } },
-        null as never,
-      ),
-    /expected a string/,
-  );
+  for (const bad of [null as never, ""]) {
+    assert.throws(
+      () =>
+        again.appendOwnerAction(
+          { type: "owner_action", source: "x", payload: { origin: "chat", summary: "s", hash: "h2" } },
+          bad,
+        ),
+      /expected a non-empty string/,
+    );
+  }
   const red = again.redactOwnerText(action.seq, { actor: "owner", reason: "secret leaked" });
   assert.ok(red.inserted);
   assert.equal(again.ownerText(action.seq), REDACTED_MARK);

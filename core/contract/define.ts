@@ -85,7 +85,13 @@ const VERIFY_OPERANDS: Readonly<Record<string, readonly string[]>> = {
   run_ok: ["repo"],
   pr_found: ["repo", "search"],
 };
-export const verifySpec = obj(
+export type VerifySpec =
+  | { readonly kind: "pr_merged"; readonly pr: string }
+  | { readonly kind: "orca_field"; readonly target: string; readonly field: string; readonly value: string }
+  | { readonly kind: "plugin_approved"; readonly key: string }
+  | { readonly kind: "run_ok"; readonly repo: string; readonly run?: string }
+  | { readonly kind: "pr_found"; readonly repo: string; readonly search: string };
+const verifyFields = obj(
   {
     kind: oneOf("pr_merged", "orca_field", "plugin_approved", "run_ok", "pr_found"),
     pr: opt(match(/^[a-z0-9_.-]+\/[a-z0-9_.-]+#[1-9][0-9]*$/, "lowercase owner/repo#N")),
@@ -105,10 +111,12 @@ export const verifySpec = obj(
     }
   },
 );
+// The refine above checked each kind's operands, which is what narrows the flat shape to the union.
+export const verifySpec: Validator<VerifySpec> = (v, p) => verifyFields(v, p) as VerifySpec;
 
 // A worktree is Orca's: a resource row names it by its Orca id, never by its path.
 export function refOrcaIdForWorktree(v: Readonly<Record<string, unknown>>, p: string): void {
-  if (v.kind === "worktree" && /[/\\]/.test(String(v.ref))) {
+  if (v.kind === "worktree" && /[\s/\\]/.test(String(v.ref))) {
     throw new ContractError(`${p}.ref: a worktree is named by its Orca id, not a path`);
   }
 }
@@ -124,7 +132,8 @@ export const priority = oneOf("P0", "P1", "P2", "P3");
 export const edgeKind = oneOf("blocks", "after", "stacked_on", "deploys_after");
 /** Orca ids (Task, Dispatch, Run, gate, message, worktree): the only Orca facts sqlite keeps. No ':' so a
  * dedupe_key segment holding one is unambiguous. */
-export const orcaId = match(/^[^\s:]+$/, "Orca id without spaces or ':'");
+/** Opaque: sangsoe never parses an Orca id. dedupe keys encode it (dedupeSegment). */
+export const orcaId = str;
 export const who = str;
 
 export type Needs = "none" | "action" | "judgment";
