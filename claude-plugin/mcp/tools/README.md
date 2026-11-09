@@ -46,8 +46,8 @@ export default {
 | `decision_answer` | 결정 답·게이트 풀기·대기자마다 notify 한 번(다시 불러도 같다) | `{decision, answer, owner_action, linked_by?, run?}` | U8 |
 | `notify` | 판단이 필요한 신호로 세션 한 번 깨우기. 코어 함수 `notify` 는 U8 에 있고 tool 은 아직 없다(받는 사슬 id 를 항목에서 읽는 쪽이 필요) | `{item, kind, body}` | 미정 |
 | `land` | land 판정 함수 호출(머지 예약 또는 "승인되면 머지"). 이름·입력 확정, CLI `sangsoe land` 와 같은 결과 | `{pr, repo?, head_sha?, dry_run?, main_fix?}` | U11 |
-| `handoff_save` | 판단 상태 넷을 Orca `handoff` 메시지로 남기기 | `{next, waiting, open_questions, reply_to}` | U13 |
-| `review_ask_record` | 리뷰 의뢰를 `review_ask_sent` 로 남기기 | `{pr, reviewer, channel}` | U13 |
+| `handoff_save` | 판단 상태 넷의 모양을 검사해 자기 Run 우편함에 Orca `handoff` 메시지로 남기기(sqlite 에 쓰지 않음) | `{next, waiting, open_questions, reply_to}` | U13 |
+| `review_ask_record` | 리뷰 의뢰·리마인드 한 건을 `review_ask_sent` 로, 설정에 없는 리뷰어는 `unmapped_reviewer` 도 | `{pr, reviewer, reminder?}` | U13 |
 
 표 밖의 tool 하나: `start_unit`(U10)은 세션을 여는 유일한 길인 코어 시작 함수(결정 94)를 부른다. 입력은 `{role, worktreeId, runId, childRole, taskId?, task 또는 spec, title?, deps?, lateAnswers?, references?, agent?}` 이다.
 

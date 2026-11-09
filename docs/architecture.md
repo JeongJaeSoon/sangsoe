@@ -25,6 +25,7 @@
 | 실행 | `core/decision/` | X | ④ 공유 코어 | 결정 루프: `decision_open`(재질문 게이트) · `decision_answer` · `moot` 닫기 · 결정 84③ 읽기 |
 | 실행 | `core/notify/` | X | ④ 공유 코어 | `notify`: Orca 메시지 한 번 + `notified`, 받는 순서 · `term_` 거부 |
 | 실행 | `core/owner/` | X | ④ 공유 코어 | 오너 큐: `owner_todo` 몸체 · `verify` probe 다섯 · 입력 연결 규칙 · 표지 · `waiting_released` · 완료 버튼(결정 89·91) |
+| 감지 | `core/session/` | X | ④ 공유 코어 | 기록 hook 일곱의 판정(`session_started` · `owner_action` · `waiting_human`/`waiting_released` · `turn_ended` · `compacted` · `!` 입력), SessionStart 주입, `restart_due`, `handoff_save` · `review_ask_record` |
 | 실행 | `core/graph/` | X | ④ 공유 코어 | GRAPH: 간선의 유일한 입구 · 순환 거부 · `ready` · `why` · 크리티컬 패스 · 영향 범위 · 흐름 틀 · `graph sync` |
 | 실행 | `core/brief/` | X | ④ 공유 코어 | 현황 세 단계: `buildBrief`·`renderMarkdown` 한 쌍과 `item_status`·`group_*` 뷰 몸체(`owner_todo` 는 `core/owner/` 에 넘긴다)(결정 89, 구현 결정 128·129) |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
