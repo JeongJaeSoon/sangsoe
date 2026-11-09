@@ -17,6 +17,7 @@
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |
 | 실행 | `claude-plugin/mcp/` | X | ③ Claude Code plugin | MCP 서버(에이전트의 입구) |
 | 판단 | `claude-plugin/skills/` | O | ③ Claude Code plugin | 판단 절차 skill |
+| 판단 | `claude-plugin/skills/general/` | O | ③ Claude Code plugin | 일반 작업 skill(결정 95) |
 | 판단 | `claude-plugin/agents/` | O | ③ Claude Code plugin | 오케스트레이터 · 리드 · 워커 정의 |
 | — | `orca-plugin/` | X | ② Orca plugin | 칸 뿌리(매니페스트 `orca-plugin.json` 자리) |
 | — | `claude-plugin/` | 섞임 | ③ Claude Code plugin | 칸 뿌리(매니페스트 `.claude-plugin/plugin.json` 자리) |
