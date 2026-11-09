@@ -1,0 +1,7 @@
+# 105. 승인 조건 (2) 는 폴더 내용 해시로 읽는다
+
+결정 77 다의 조건 (2) "`orca plugin inspect` 의 지문이 리뷰된 커밋 빌드와 같음"을 바꾼다. Orca 1.4.250 에서 확인한 것: `orca plugin inspect` 는 지문을 내지 않고 폴더의 `contentHash` 를 낸다. 승인 지문(`ap1-…`)은 `orca plugin dev load`·`dev reload` 의 `approval_required` 가 내며, 개발 폴더에서는 그 지문이 파일 내용이 아니라 경로(`contentIdentity: dev:<폴더>`)와 접근에 묶인다. Orca 문구 그대로 "이 개발 폴더의 이후 코드 수정은 다시 묻지 않고 돈다. 새 접근·더 높은 실행 단계·바뀐 명령과 단축키만 새 승인이 든다".
+
+그래서 조건 (2) 는 "승인할 폴더의 `contentHash` 가 리뷰된 커밋 트리의 `orca-plugin/` 의 `contentHash` 와 같다"로 읽는다. 리뷰된 트리는 `gh api repos/<repo>/tarball/<commit>` 로 받아 같은 `orca plugin inspect` 로 잰다(내용만 같으면 해시가 같다: `git archive` 사본과 작업 트리가 같은 값을 냈다). 커밋은 깨끗한 git checkout 의 HEAD, 아니면 릴리스 빌드가 plugin 폴더 **옆**에 쓰는 `build-info.json` 의 `commit` 이다(폴더 안에 두면 내용 해시가 리뷰된 트리와 달라진다). 지문 자체는 Orca 가 준 값을 그대로 `--approve` 에 넘긴다.
+
+남는 틈: 승인이 경로에 묶이므로 승인 뒤 같은 경로의 내용이 바뀌어도(`brew upgrade` 가 `opt/sangsoe` 아래를 바꿔도) Orca 는 다시 묻지 않는다. 승인 시점의 검사만으로는 그 뒤의 내용을 지키지 못하므로, 시작 점검·`doctor`·queue-monitor 의 `job_drift` 가 같은 내용 해시 비교를 되풀이해야 한다(T4 행과 worker_done 의 발견 항목).
