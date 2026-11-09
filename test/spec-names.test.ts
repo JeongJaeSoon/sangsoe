@@ -152,7 +152,18 @@ const CATEGORIES: Category[] = [
 ];
 
 /** `<category>:<name>:<side>` → the decision that records why design and code differ. */
-const ALLOWED = new Map<string, string>([]);
+const ALLOWED = new Map<string, string>([
+  // Logical views folded inside itemFacts / foldFacts / core/owner with no function of that name.
+  ["view:edge:design-only", "160"],
+  ["view:evidence:design-only", "160"],
+  ["view:item:design-only", "160"],
+  ["view:item_extra:design-only", "160"],
+  ["view:owner_action:design-only", "160"],
+  // Design commands not built yet, each with a revisit trigger in the decision.
+  ["cli:graph:design-only", "160"],
+  ["cli:owner-text redact:design-only", "160"],
+  ["cli:priority set:design-only", "160"],
+]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };
 
@@ -193,4 +204,9 @@ test("every design/code name difference is a recorded decision", () => {
 test("the allow-list holds no entry that is no longer a difference", () => {
   const live = new Set(diffs().map((d) => d.key));
   assert.deepEqual([...ALLOWED.keys()].filter((k) => !live.has(k)), []);
+});
+
+test("every decision the allow-list cites is written in decisions.md", () => {
+  const decisions = read("docs/decisions.md");
+  for (const n of new Set(ALLOWED.values())) assert.match(decisions, new RegExp(`^${n}\\. \\*\\*`, "m"), `decision ${n}`);
 });

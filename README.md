@@ -79,7 +79,7 @@ For a listed repository, land merges at once (`gh pr merge --squash --match-head
 - every required check passed, or every check when GitHub reports none as required, and at least one check ran;
 - no unresolved review thread, and GitHub calls the pull request mergeable.
 
-A V3 change or one touching `protected_paths` still waits for the owner's approval. Anything land cannot read refuses the merge. `sangsoe land --dry-run` prints the path it would take without merging. Without the key, land behaves as before. See `docs/decisions-impl/0158-verdict-approval-merge.md`.
+A V3 change or one touching `protected_paths` still waits for the owner's approval. Anything land cannot read refuses the merge. `sangsoe land --dry-run` prints the path it would take without merging. Without the key, land behaves as before. See decision 158 in `docs/decisions.md`.
 
 ## Layout
 

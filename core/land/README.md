@@ -8,4 +8,4 @@ sangsoe 가 PR 을 머지하는 유일한 길이다(결정 72·81·85, 부록 `#
 - `ports.ts` — 실제 의존: store, gh 클라이언트, 설정(`~/.config/sangsoe/config.json`), 그리고 GitHub 에 쓰는 두 호출: 머지 예약 `ghMerge`(결정 0124)와 바로 머지 `ghMergeNow`(결정 158).
 - `tier.ts` — `sangsoe verify-tier` 의 읽기 전용 함수.
 
-거부 사유와 설정 키는 `docs/decisions-impl/0124-land-function.md`, 등급과 증거는 `0125-verify-tier-evidence.md`.
+거부 사유와 설정 키는 `docs/decisions.md` 결정 124, 등급과 증거는 결정 125, 계정 하나인 저장소의 바로 머지는 결정 158.
