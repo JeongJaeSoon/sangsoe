@@ -7,7 +7,7 @@ const DIR = "/opt/sangsoe/orca-plugin";
 const SHA = "a".repeat(40);
 const HEAD = "b".repeat(40);
 const FP = "ap1-0000";
-const tree = (sha: string) => `/tmp/reviewed/${sha}/orca-plugin`;
+const tree = (sha: string, staged = false) => `/tmp/reviewed/${sha}${staged ? "-staged" : ""}/orca-plugin`;
 
 type World = {
   manifestId: string;
@@ -70,8 +70,8 @@ function fake(w: World) {
       if (cmd === "gh" && a.includes("/pulls")) return json(w.pulls);
       throw new Error(`unexpected ${cmd} ${a}`);
     },
-    async fetchPluginTree(_repo, commit) {
-      return { dir: tree(commit), dispose: async () => void disposed++ };
+    async fetchPluginTree(_repo, commit, staged) {
+      return { dir: tree(commit, staged), dispose: async () => void disposed++ };
     },
     reviewEvidence: async () => w.evidence,
     async openLedger() {
@@ -87,9 +87,15 @@ function fake(w: World) {
   return { ports, calls, recorded, enables, reloads, disposed: () => disposed };
 }
 
-const run = (w: World, opts: { dryRun?: boolean; commit?: string; realDir?: string } = {}) => {
+const run = (w: World, opts: { dryRun?: boolean; commit?: string; realDir?: string; staged?: boolean } = {}) => {
   const f = fake(w);
-  const input = { dir: DIR, commit: opts.commit ?? SHA, dryRun: opts.dryRun ?? false, ...(opts.realDir ? { realDir: opts.realDir } : {}) };
+  const input = {
+    dir: DIR,
+    commit: opts.commit ?? SHA,
+    staged: opts.staged ?? false,
+    dryRun: opts.dryRun ?? false,
+    ...(opts.realDir ? { realDir: opts.realDir } : {}),
+  };
   return approvePlugin(input, f.ports).then((r) => ({
     r,
     ...f,
@@ -105,6 +111,15 @@ test("all three conditions hold: enables with Orca's key and fingerprint and rec
     { type: "plugin_approved", key: "local.sangsoe", version: "0.1.0", fingerprint: FP, commit: SHA, at: 1_000 },
   ]);
   assert.equal(disposed(), 2, "both downloaded trees are removed");
+});
+
+test("a release build is compared with the reviewed trees with the core staged in, the way it was packed (decision 152)", async () => {
+  const hashes = { [DIR]: ["h-core"], [tree(SHA)]: ["h"], [tree(HEAD)]: ["h"], [tree(SHA, true)]: ["h-core"], [tree(HEAD, true)]: ["h-core"] };
+  const release = await run(world({ hashes }), { staged: true });
+  assert.equal(release.r.ok, true, release.r.note);
+  const checkout = await run(world({ hashes }));
+  assert.equal(checkout.r.ok, false, "the same folder against unstaged trees is not the reviewed build");
+  assert.match(checkout.r.checks.find((c) => c.name === "folder_is_reviewed_build")?.detail ?? "", /differs/);
 });
 
 test("dry run checks everything and names the command, but never enables or records", async () => {

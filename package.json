@@ -23,6 +23,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome lint .",
+    "prepack": "node scripts/stage-core.ts",
+    "postpack": "node scripts/stage-core.ts --remove",
     "test": "node --test \"{core,cli,orca-plugin,claude-plugin,test}/**/*.test.ts\""
   },
   "devDependencies": {

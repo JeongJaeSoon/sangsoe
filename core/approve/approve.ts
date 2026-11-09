@@ -15,8 +15,9 @@ export type ReviewEvidence = { headSha: string; actOn: number; reviewer: string;
 
 export type ApprovePorts = {
   exec: Exec;
-  // The plugin folder of `commit` as a local folder; `dispose` removes the download.
-  fetchPluginTree(repo: string, commit: string): Promise<{ dir: string; dispose(): Promise<void> }>;
+  // The plugin folder of `commit` as a local folder, the core staged in when `staged` (decision 152);
+  // `dispose` removes the download.
+  fetchPluginTree(repo: string, commit: string, staged: boolean): Promise<{ dir: string; dispose(): Promise<void> }>;
   // The `review_verdict` rows for the PR head (decision 111); null when there is none.
   reviewEvidence(repo: string, pr: number, headSha: string): Promise<ReviewEvidence | null>;
   // Opened before the enable and held across it: a store that cannot take `plugin_approved`
@@ -31,9 +32,10 @@ export type Ledger = { record(event: PluginApproved): Promise<void>; close(): vo
 /**
  * `dir` is the path Orca loaded (Homebrew's opt/ symlink); `realDir` is where it resolves, the only
  * `contentIdentity` accepted: an approval on the symlink would follow it to a later upgrade's bytes
- * (decision 122). Without it the two are the same.
+ * (decision 122). Without it the two are the same. `staged` is a release build, whose folder carries
+ * the core (decision 152); it comes from where the commit came from, never from the folder's files.
  */
-export type ApproveInput = { dir: string; realDir?: string; commit: string; dryRun: boolean };
+export type ApproveInput = { dir: string; realDir?: string; commit: string; staged: boolean; dryRun: boolean };
 
 export type CheckName = "target_is_sangsoe" | "merged_with_clean_review" | "folder_is_reviewed_build";
 export type Check = { name: CheckName; ok: boolean; detail: string };
@@ -92,10 +94,10 @@ async function checkMerged(ports: ApprovePorts, commit: string): Promise<{ check
   return { check: { name, ok: true, detail: `on main via PR #${pr.number}, reviewed by ${ev.reviewer} with 0 Act-on` }, pr };
 }
 
-async function treeHash(ports: ApprovePorts, commit: string): Promise<string | Error> {
+async function treeHash(ports: ApprovePorts, commit: string, staged: boolean): Promise<string | Error> {
   let tree: Awaited<ReturnType<ApprovePorts["fetchPluginTree"]>>;
   try {
-    tree = await ports.fetchPluginTree(SANGSOE_REPO, commit);
+    tree = await ports.fetchPluginTree(SANGSOE_REPO, commit, staged);
   } catch (e) {
     return new Error(`could not fetch ${commit}: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -108,13 +110,14 @@ async function treeHash(ports: ApprovePorts, commit: string): Promise<string | E
 
 // The folder must equal both the main commit's tree and the reviewed PR head's tree, so a squash
 // or a main merged in after review cannot slip unreviewed plugin bytes in.
-async function checkBuild(ports: ApprovePorts, here: string, commit: string, pr: MergedPr): Promise<Check> {
+async function checkBuild(ports: ApprovePorts, here: string, input: ApproveInput, pr: MergedPr): Promise<Check> {
   const name = "folder_is_reviewed_build";
+  const commit = input.commit;
   for (const [label, sha] of [
     ["main commit", commit],
     [`PR #${pr.number} head`, pr.head],
   ] as const) {
-    const h = await treeHash(ports, sha);
+    const h = await treeHash(ports, sha, input.staged);
     if (h instanceof Error) return { name, ok: false, detail: h.message };
     if (h !== here) return { name, ok: false, detail: `content ${here} differs from the ${label} ${sha} (${h})` };
   }
@@ -140,7 +143,7 @@ export async function approvePlugin(input: ApproveInput, ports: ApprovePorts): P
   if (!here) {
     result.checks.push({ name: "folder_is_reviewed_build", ok: false, detail: `orca plugin inspect failed for ${input.dir}` });
   } else if (merged.pr) {
-    result.checks.push(await checkBuild(ports, here, input.commit, merged.pr));
+    result.checks.push(await checkBuild(ports, here, input, merged.pr));
   } else {
     result.checks.push({ name: "folder_is_reviewed_build", ok: false, detail: "no reviewed head to compare with" });
   }
