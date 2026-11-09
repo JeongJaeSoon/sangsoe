@@ -148,9 +148,9 @@ const T1 = "task_000000000001";
 
 /**
  * The brief input comes the way the worker reads it: readSnapshot on the fake Orca, whose gate-list
- * returns each gate's options as the JSON text real Orca does. `unreadable` replaces that text.
+ * returns each gate's options as the JSON text real Orca does. `unreadable` and `blank-first` replace that text.
  */
-async function world(how: "options" | "no-options" | "unreadable" = "options") {
+async function world(how: "options" | "no-options" | "unreadable" | "blank-first" = "options") {
   const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001", title: "webhook retry" }]);
   const opened = await decisionOpen(w, {
     subject: "item:i012",
@@ -160,7 +160,8 @@ async function world(how: "options" | "no-options" | "unreadable" = "options") {
     callerRun: RUN,
   });
   assert.ok(opened.ok, JSON.stringify(opened));
-  if (how === "unreadable") for (const g of w.gates.values()) g.options = "exponential x3, none";
+  const text = { unreadable: "exponential x3, none", "blank-first": JSON.stringify(["  ", "none"]) }[how as string];
+  if (text) for (const g of w.gates.values()) g.options = text;
   const load = async (now: string): Promise<Result<BriefInput>> => {
     const snap = await readSnapshot(w.orca, [RUN]);
     return snap.ok ? { ok: true, value: { events: w.store.events(), orca: snap.value, now } } : snap;
@@ -184,8 +185,8 @@ test("PN4 live: 추천대로 답 is enabled when Orca's gate has options, and th
   assert.ok(!JSON.stringify(w.store.events()).includes("exponential x3"), "the options stay Orca's: the store keeps no copy");
 });
 
-for (const how of ["no-options", "unreadable"] as const) {
-  test(`PN4 live: 추천대로 답 is disabled and refused when the gate's options are ${how === "no-options" ? "empty" : "unreadable"}; nothing is written`, async () => {
+for (const how of ["no-options", "unreadable", "blank-first"] as const) {
+  test(`PN4 live: 추천대로 답 is disabled and refused when the gate's options are ${how}; nothing is written`, async () => {
     const { w, core } = await world(how);
     assert.match(await recommendButton(core), /disabled/);
     const r = await core.act({ kind: "answer", decision: "d001", choice: "recommended" });
