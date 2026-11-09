@@ -22,7 +22,7 @@ For each fact the change's safety depends on, get it as far down this list as is
 
 Step 4 is usually one small script that imports the same library the app ships and calls the exact function you're worried about. Write it in a scratch directory outside the repo, or as a test in the repo's own test folder.
 
-These steps line up with sangsoe's verification tiers (decision 85): a V1 change needs the step-4 run of the existing tests, and a V2 or V3 change needs step 5's run of the changed behavior.
+The evidence a PR needs before it lands is set by sangsoe's verification tiers (decision 85), not by this list: V1 asks for the target tests' run output, V2 adds a local or dev run of the changed behavior (step 4 against the changed code, or step 5), and V3 adds its own evidence, such as screenshots with the lead's verdict or a dev deployment check, plus human approval.
 
 ## Steps
 

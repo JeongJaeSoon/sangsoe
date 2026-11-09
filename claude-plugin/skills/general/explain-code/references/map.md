@@ -44,7 +44,7 @@ Write the text per `write-plainly`. Sections in this order:
 4. **Feature map**: area, feature, status, evidence.
 5. **Limits to know** (알아 둘 제한): constraints a planner must know (who may use it, quotas, single-tenant, manual steps), each with its source.
 
-Save it at the path the user names, or publish it as an Artifact when they name none. Do not commit it to the product repo unless asked.
+Save it at the path the user names. When they name none, write it to a Markdown file outside the repo (a scratch directory) and give its path. Do not commit it to the product repo unless asked.
 
 ## 6. Refresh
 

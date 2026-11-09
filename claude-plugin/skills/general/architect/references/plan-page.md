@@ -47,7 +47,7 @@ Write one self-contained HTML file that sets its own colors for light and dark m
 - A decision is a bordered box with its number, the question, the options and the default marked. Static text is enough: the reader answers in chat or in a comment.
 - No runtime script is required. Add one only for something the page cannot show without it.
 
-Publish it as a private Artifact when the Artifact tool is available. Otherwise give the HTML file's path.
+Write it to a scratch directory outside the repo and give its path. When the session offers a tool that publishes a page privately, you may publish it there instead and give the link.
 
 ## Hand-off
 

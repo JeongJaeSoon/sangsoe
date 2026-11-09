@@ -19,7 +19,7 @@ Skip Phase A only when the work is greenfield with no surrounding system to inte
 
 Run the **fan-out** skill in compete mode with the design-sketch task and the Phase A grounding. Pass `references/runner-prompt.md` as each runner's prompt, with the absolute paths of this `SKILL.md` and `references/rationale-template.md` so a runner can read them. Each candidate produces a design package shaped per `references/rationale-template.md`. A runner writing sketch files into the repo needs its own worktree.
 
-When the caller limits model calls (a brief's MODEL CALLS line) and the contract is one boundary inside one system, write the candidates yourself instead of starting runners, and say so in the rationale. Run the compete round when the contract crosses systems or the caller asks for it.
+When the user or the task you were given limits model calls and the contract is one boundary inside one system, write the candidates yourself instead of starting runners, and say so in the rationale. Run the compete round when the contract crosses systems or the caller asks for it.
 
 Design it twice. Require at least two structurally distinct candidates before synthesis, even when the first looks sufficient (the **exhaust-the-design-space** principle). Compare whole-shape alternatives, not point fixes inside one shape.
 

@@ -14,7 +14,7 @@ Write every response with `write-plainly`, the way you'd explain it to a colleag
 
 ## Shareable page
 
-When the explanation is a page for people outside this conversation (an Artifact or HTML page a team will read), nobody can ask a follow-up, so drop the pacing of steps 3 and 4 and write it to be read once, top to bottom, in this order:
+When the explanation is a page for people outside this conversation (an HTML page a team will read), nobody can ask a follow-up, so drop the pacing of steps 3 and 4 and write it to be read once, top to bottom, in this order:
 
 1. One or two sentences at the top that answer the whole question.
 2. The core structure as step 5's diagram series, inline SVG or mermaid, one part added per figure.
