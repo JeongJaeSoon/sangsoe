@@ -31,8 +31,8 @@ test("(1) an empty tool and an empty command are collected and run", async () =>
   assert.deepEqual(await run(["empty"], { commands: dirs.commands }), { code: 0, out: "null" });
 });
 
-test("(1) the shipped folders collect: no tools yet, the version command", async () => {
-  assert.equal((await createServer()).tools.size, 0);
+test("(1) the shipped folders collect: the shipped tools, the version command", async () => {
+  assert.deepEqual([...(await createServer()).tools.keys()], ["decision_answer", "decision_open", "item_create", "start_unit"]);
   assert.deepEqual(await run(["--version"]), { code: 0, out: `sangsoe ${VERSION}` });
 });
 
@@ -177,16 +177,19 @@ test("the server answers initialize and tools/list over stdio", async () => {
   send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
   await done;
   child.stdin.end();
-  assert.deepEqual(lines, [
-    {
-      jsonrpc: "2.0",
-      id: 1,
-      result: {
-        protocolVersion: "2025-06-18",
-        capabilities: { tools: {}, resources: {} },
-        serverInfo: { name: "sangsoe", version: VERSION },
-      },
+  assert.deepEqual(lines[0], {
+    jsonrpc: "2.0",
+    id: 1,
+    result: {
+      protocolVersion: "2025-06-18",
+      capabilities: { tools: {}, resources: {} },
+      serverInfo: { name: "sangsoe", version: VERSION },
     },
-    { jsonrpc: "2.0", id: 2, result: { tools: [] } },
-  ]);
+  });
+  const listed = lines[1] as { id: number; result: { tools: { name: string }[] } };
+  assert.equal(listed.id, 2);
+  assert.deepEqual(
+    listed.result.tools.map((t) => t.name),
+    ["decision_answer", "decision_open", "item_create", "start_unit"],
+  );
 });
