@@ -258,6 +258,20 @@ test("a stacked_on predecessor task with no PR opened fails closed", async () =>
   assert.deepEqual(landRows(h.store), ["land_failed:stack_order:task_x"]);
 });
 
+test("a PR with no task mapping fails closed while a stacked_on edge has a successor task with no PR", async () => {
+  const h = harness(routes());
+  ready(h.store);
+  opened(h.store, "acme/api#10", "task_a");
+  stackEdge(h.store, "task_a", "task_c");
+  const r = await land(input(), h.deps);
+  assert.equal(r.ok ? "" : r.refusal.code, "stack_order");
+  assert.match(r.ok ? "" : r.refusal.reason, /task_c/);
+  h.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR } });
+  assert.equal((await land(input(), h.deps)).ok, false, "a pr_opened without task maps nothing");
+  opened(h.store, "acme/api#13", "task_c");
+  assert.ok((await land(input(), h.deps)).ok, "task_c is another PR's, so nothing is stacked under this one");
+});
+
 test("a removed stacked_on edge no longer blocks", async () => {
   const h = harness(routes());
   ready(h.store);

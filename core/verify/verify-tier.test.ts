@@ -52,7 +52,7 @@ test("a file on two lists takes the higher one", () => {
 test("an unclassified path is V2", () => {
   const r = verifyTier([f("scripts/tool.zig")], [], CONFIG);
   assert.equal(r.effective, "V2");
-  assert.match(r.files[0]?.why ?? "", /unclassified|no comment parser/);
+  assert.match(r.files[0]?.why ?? "", /source change/);
 });
 
 test("a diff that could not be read is V3", () => {
@@ -75,14 +75,13 @@ test("labels that could not be read are V3", () => {
   assert.match(r.reason, /labels unreadable/);
 });
 
-test("comment-only changes are V0 where a parser exists, V2 where none does", () => {
-  const ts = "@@ -1,2 +1,2 @@\n-// old note\n+// new note\n /* untouched */\n+\n+/* one line */";
-  assert.equal(tierOf([f("core/a.ts", ts)]), "V0");
+test("a comment-only source change is V2: no parser, so a diff line cannot be told from code", () => {
+  assert.equal(tierOf([f("core/a.ts", "@@ -1 +1 @@\n-// old note\n+// new note")]), "V2");
+  assert.equal(tierOf([f("core/a.ts", "@@ -1,3 +1,4 @@\n /*\n+/* x */\n run();\n /* end */")]), "V2", "an added */ reopens code");
   assert.equal(tierOf([f("core/a.ts", "@@ -1,3 +1 @@\n-/*\n doDanger();\n-*/")]), "V2", "removing block delimiters");
   assert.equal(tierOf([f("core/a.ts", "@@ -1 +1 @@\n-  * 2;\n+  * 2000;")]), "V2", "a continuation line that starts with *");
-  assert.equal(tierOf([f("core/a.ts", "@@ -1 +1,3 @@\n+/*\n run();\n+*/")]), "V2", "commenting code out");
-  assert.equal(tierOf([f("core/a.ts", "@@ -1 +1,3 @@\n+/**\n+ * block\n+ */")]), "V2", "a multi-line block is not read");
-  assert.equal(tierOf([f("tools/a.py", "@@ -1 +1 @@\n-# old\n+# new")]), "V0");
+  assert.equal(tierOf([f("core/q.ts", "@@ -2 +2 @@\n-// DELETE FROM t\n+// DROP TABLE t")]), "V2", "// inside a template literal");
+  assert.equal(tierOf([f("tools/a.py", "@@ -1 +1 @@\n-# old\n+# new")]), "V2");
   assert.equal(tierOf([f("core/a.ts", "@@ -1 +1 @@\n-// note\n+const a = 1; // note")]), "V2", "code with a trailing comment");
   assert.equal(tierOf([f("core/a.ts", "@@ -1 +1 @@\n+/* a */ run()")]), "V2", "code after a closed block comment");
   assert.equal(tierOf([f("lib/a.zig", "@@ -1 +1 @@\n-// old\n+// new")]), "V2", "no parser for the language");

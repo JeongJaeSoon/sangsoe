@@ -9,7 +9,7 @@
 - **`land_failed.reason`.** `<code>` 또는 `<code>:<detail>`. 거부의 `code` 와 같다.
   - `pr_unreadable` · `rate_limited` · `pr_not_open:<merged|closed|draft>` · `head_moved`
   - `main_red` — 그 저장소(`payload.repo`)의 마지막 `main_red`/`main_green` 이 빨강. 어느 묶음이 쓴 줄이든 저장소당 한 상태다(`repo_level_main`). `--main-fix` 만 지나간다.
-  - `stack_order:<pred>` — 살아 있는 `stacked_on` 간선(`edge_added` 뒤에 `edge_removed` 가 없음)의 선행 중 `pr_merged` 가 없는 맨 아래 PR. 고침 안내가 그 PR 을 먼저 land 하라고 적는다(`stack_bottom`). 간선의 `pred`·`succ` 는 Orca Task id 라서 PR 과 Task 는 `pr_opened{pr, task}` 로 잇는다. 선행 Task 에 `pr_opened` 가 없으면 그 PR 의 머지를 확인할 수 없어 Task id 로 거부한다(fail closed).
+  - `stack_order:<pred>` — 살아 있는 `stacked_on` 간선(`edge_added` 뒤에 `edge_removed` 가 없음)의 선행 중 `pr_merged` 가 없는 맨 아래 PR. 고침 안내가 그 PR 을 먼저 land 하라고 적는다(`stack_bottom`). 간선의 `pred`·`succ` 는 Orca Task id 라서 PR 과 Task 는 `pr_opened{pr, task}` 로 잇는다. 선행 Task 에 `pr_opened` 가 없으면 그 PR 의 머지를 확인할 수 없어 Task id 로 거부한다(fail closed). land 하는 PR 자신에게 Task 가 붙은 `pr_opened` 가 없을 때도, 살아 있는 `stacked_on` 간선 중 후속 Task 에 PR 이 없는 것이 있으면 그 후속이 이 PR 일 수 있어 거부한다(리드가 PR 이 열리기 전에 간선을 더한 경우).
   - `review_missing` · `review_act_on:<n>` · `review_stale:<sha7>` — 판정은 `review_verdict` 로만 읽는다(결정 111). 현재 head 에 Act-on 이 남은 판정이 하나라도 있으면 거부.
   - `evidence_missing:<kind>` — 결정 0125.
   - `merge_refused` — `gh pr merge` 가 0 이 아닌 값으로 끝남(메시지를 실음).

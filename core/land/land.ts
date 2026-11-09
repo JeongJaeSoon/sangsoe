@@ -125,6 +125,14 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   if (bottom?.kind === "pr") {
     throw new Refused("stack_order", bottom.id, `${pr} is stacked on ${bottom.id}, which has not merged`, `land ${bottom.id} first; ${pr} opens once it merges`);
   }
+  if (bottom?.kind === "unmapped") {
+    throw new Refused(
+      "stack_order",
+      bottom.id,
+      `${pr} has no pr_opened with a task, and a stacked_on edge ends at task ${bottom.id}, which no PR is mapped to; it may be this PR`,
+      `record pr_opened{pr: ${pr}, task} for this PR, or the PR of task ${bottom.id}, then call land again`,
+    );
+  }
   if (bottom?.kind === "task") {
     throw new Refused(
       "stack_order",
@@ -166,7 +174,7 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   return { ...base, action: "merge_on_approval", note: [...note, "merge once approved; the lead calls land again"].join("; ") };
 }
 
-type StackNode = { kind: "pr" | "task"; id: string };
+type StackNode = { kind: "pr" | "task" | "unmapped"; id: string };
 
 /**
  * The lowest unmerged PR this one is stacked on. Edges join Orca Task ids (glossary 부가 간선),
@@ -197,6 +205,14 @@ function unmergedBelow(pr: string, events: readonly StoredEvent[]): StackNode | 
         return mapped ? { kind: "pr", id: mapped } : { kind: "task", id: p };
       });
   };
+  if (!tasksOf.has(pr)) {
+    // Without this PR's task the edges ending at it cannot be found, so any edge whose
+    // successor task has no PR might be this one.
+    for (const [k, live] of edges) {
+      const succ = k.slice(k.indexOf("\n") + 1);
+      if (live && !PR_REF.test(succ.toLowerCase()) && !prOf.has(succ)) return { kind: "unmapped", id: succ };
+    }
+  }
   const seen = new Set<string>();
   const walk = (ref: string): StackNode | null => {
     for (const p of preds(ref)) {

@@ -21,7 +21,7 @@
 | C11 | 코어 | 역할·모델이 `session_started` 에 남고 역할 줄 없는 sangsoe 세션은 🚨(R-19) | U13 | |
 | C12 | 코어 | 오너 입력만으로 상태가 바뀌는 길 0(전이표 11행) | U14 | |
 | C13 | 코어 | 비로컬 행 입력 0(필터 시험) | U2 | |
-| L1 | 랜드 | `verify_tier` 등급표 + fail closed 경우 전부 | U11 | `core/verify/verify-tier.test.ts`(17: 등급표 11 경로 · 두 목록 · 미분류 V2 · diff·설정·라벨 못 읽음 V3 · 파서 없는 주석 V2 · `refactor` 위반 V2 · 올리기·내리기(`owners`) · `protected_paths` V3 고정) |
+| L1 | 랜드 | `verify_tier` 등급표 + fail closed 경우 전부 | U11 | `core/verify/verify-tier.test.ts`(17: 등급표 11 경로 · 두 목록 · 미분류 V2 · diff·설정·라벨 못 읽음 V3 · 주석만 V2(파서 범위 없음) · `refactor` 위반 V2 · 올리기·내리기(`owners`) · `protected_paths` V3 고정) |
 | L2 | 랜드 | 증거는 head 마다, `evidence_missing` 거부, 작성자가 자기 통과를 못 씀(R-04) | U11 | `core/verify/evidence.test.ts`(5), `core/land/land.test.ts` "evidence is checked before the conditions" · "older head" · "author's own passing evidence" |
 | L3 | 랜드 | 조건 넷(못 읽으면 거짓) → 예약 / `merge_on_approval` | U11 | `core/land/land.test.ts` "four conditions hold" · "a condition false" · "decision 81's re-call" · "only the author approved" · "unreadable config" |
 | L4 | 랜드 | `main_red` 동결·`main_fix` 예외·`repo_level_main`(R-05) | U11(+U16) | `core/land/land.test.ts` "main_red freezes" · "scenario repo_level_main (land side)" |

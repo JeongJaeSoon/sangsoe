@@ -57,39 +57,15 @@ const rank = (t: Tier) => TIERS.indexOf(t);
 const max = (a: Tier, b: Tier): Tier => (rank(a) >= rank(b) ? a : b);
 const on = (globs: readonly string[], path: string) => globs.some((g) => matchesPath(g, path));
 
-const C_LIKE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|java|kt|go|rs|c|h|cc|cpp|hpp|cs|swift|scala)$/;
-const HASH = /\.(py|sh|bash|zsh|rb)$/;
-
-function isCommentLine(line: string, lang: "c" | "hash"): boolean {
-  if (lang === "hash") return line.startsWith("#");
-  // Lines inside or closing a multi-line block cannot be told apart from code without the
-  // surrounding file, so only self-contained comment lines count; anything else fails closed.
-  if (line.startsWith("//")) return true;
-  return line.startsWith("/*") && line.length >= 4 && line.indexOf("*/", 2) === line.length - 2;
-}
-
-/** true only when the language has a parser here and every changed non-blank line is a comment. */
-function commentOnly(path: string, patch: string | null): boolean | "no_parser" {
-  const lang = C_LIKE.test(path) ? "c" : HASH.test(path) ? "hash" : null;
-  if (!lang) return "no_parser";
-  if (patch === null) return false;
-  const changed = patch
-    .split("\n")
-    .filter((l) => (l.startsWith("+") || l.startsWith("-")) && !l.startsWith("+++") && !l.startsWith("---"))
-    .map((l) => l.slice(1).trim())
-    .filter((l) => l !== "");
-  return changed.length > 0 && changed.every((l) => isCommentLine(l, lang));
-}
-
 function tierOfPath(path: string, file: DiffFile, c: TierConfig): FileTier {
   if (on(c.protected_paths, path)) return { path, tier: "V3", why: "protected_paths", v3: "dev" };
   if (on(c.ui_globs, path)) return { path, tier: "V3", why: "ui_globs", v3: "ui" };
   if (on(c.v3_globs, path)) return { path, tier: "V3", why: "v3_globs", v3: "dev" };
   if (on(c.test_globs, path)) return { path, tier: "V1", why: "test_globs" };
   if (on(c.docs_globs, path)) return { path, tier: "V0", why: "docs_globs" };
-  const comments = commentOnly(path, file.patch);
-  if (comments === true) return { path, tier: "V0", why: "comment-only" };
-  if (comments === "no_parser") return { path, tier: "V2", why: "unclassified, no comment parser for this file type" };
+  // Decision 85's comment-only V0 needs a parser; a diff hunk is not enough to tell a comment
+  // from code (an added `*/` reopens code, `//` inside a template literal is data), and no
+  // file is tokenized here, so every language takes the no-parser V2.
   return { path, tier: "V2", why: file.patch === null ? "source, patch unreadable" : "source change" };
 }
 
