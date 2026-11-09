@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { handle } from "../../claude-plugin/mcp/tools/start_unit.ts";
 import {
@@ -231,6 +234,29 @@ test("lineage_invalid: a declared worktree the calling session does not run in i
   // A sibling folder sharing the prefix is not inside.
   const sibling = harness();
   assertRefused(sibling, await startUnit(ports(sibling, () => 1, "/home/dev/src/api-old"), request()), "lineage_invalid");
+});
+
+test("lineage_invalid: with a worktree nested in the checkout, only the innermost one is the caller's", async () => {
+  const recorded = JSON.parse(readFileSync(new URL("../fake-orca/scenarios/local/worktree-list.json", import.meta.url), "utf8"));
+  const nested = "/home/dev/src/api/.worktrees/lead-x";
+  const main = recorded.result.worktrees[0];
+  recorded.result.worktrees.push({ ...main, id: `repo-0001::${nested}`, path: nested, isMainWorktree: false });
+  // A lead running in the nested worktree names the main checkout, which also contains its cwd.
+  const h = harness({ replies: { "worktree-list": () => ({ code: 0, stdout: JSON.stringify(recorded), stderr: "" }) } });
+  const out = await startUnit(ports(h, () => 1, `${nested}/src`), request({ requester: orchestrator, childRole: "lead" }));
+  assertRefused(h, out, "lineage_invalid");
+});
+
+test("the worktree binding compares physical paths: a symlinked root still matches", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sangsoe-start-"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  mkdirSync(join(dir, "api", "web"), { recursive: true });
+  symlinkSync(join(dir, "api"), join(dir, "link"));
+  const recorded = JSON.parse(readFileSync(new URL("../fake-orca/scenarios/local/worktree-list.json", import.meta.url), "utf8"));
+  recorded.result.worktrees = [{ ...recorded.result.worktrees[0], id: PARENT_TREE, path: join(dir, "link") }];
+  const h = harness({ replies: { "worktree-list": () => ({ code: 0, stdout: JSON.stringify(recorded), stderr: "" }) } });
+  const out = await startUnit(ports(h, () => 1, realpathSync(join(dir, "api", "web"))), request());
+  assert.equal(out.kind, "started");
 });
 
 test("lineage_invalid: an unsettled Dispatch Orca cannot call live still gives a lead away", async () => {
