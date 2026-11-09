@@ -307,6 +307,8 @@ test("the real build commit of a checkout is its HEAD when dirty or when the fol
     assert.equal(await build?.buildCommit(), git("rev-parse", "HEAD"));
     rmSync(join(root, "orca-plugin"), { recursive: true });
     assert.equal(await build?.buildCommit(), git("rev-parse", "HEAD"));
+    git("rm", "-r", "-q", "--cached", "orca-plugin");
+    assert.equal(await build?.buildCommit(), git("rev-parse", "HEAD"), "a staged removal still names HEAD");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

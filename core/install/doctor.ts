@@ -174,9 +174,9 @@ export function realPluginBuild(root: string, exec: Exec): PluginBuild {
   return {
     dir,
     async buildCommit() {
-      // Read from the tree root so a removed folder still names its commit. Unlike approve, a
-      // dirty checkout still names HEAD: its edits are the drift to report.
-      const tracked = await exec("git", ["-C", root, "ls-files", "--error-unmatch", "--", "orca-plugin/orca-plugin.json"]);
+      // HEAD's tree, not the index or the folder, so a removal (staged or not) still names its
+      // commit. Unlike approve, a dirty checkout still names HEAD: its edits are the drift to report.
+      const tracked = await exec("git", ["-C", root, "cat-file", "-e", "HEAD:./orca-plugin/orca-plugin.json"]);
       const head = tracked.code === 0 ? await exec("git", ["-C", root, "rev-parse", "HEAD"]) : undefined;
       if (head?.code === 0) return head.stdout.trim();
       return (
