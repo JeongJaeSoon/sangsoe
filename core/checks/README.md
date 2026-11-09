@@ -14,3 +14,4 @@ SessionStart 의 시작 점검과 `sangsoe doctor` 가 같은 목록(`START_CHEC
 | `remote-hosts` | warn 한 줄 | 결정 88 ② |
 | `claude-plugin-version` | warn · `sangsoe install` | 결정 90 |
 | `orca-plugin-version` | warn · `sangsoe install` 또는 `sangsoe plugin approve` | 결정 90 |
+| `orca-plugin-content`(doctor 만, `DOCTOR_CHECKS`) | fail · `sangsoe plugin approve`, 잴 수 없으면 warn | 결정 105·112 |

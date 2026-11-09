@@ -1,30 +1,30 @@
 import { createOrcaAdapter, nodeExec, type Role, runSlots, type StartPorts, Store, startUnit } from "../../../core/index.ts";
+import type { Outcome, Refusal, ToolDef } from "../contract.ts";
 
-// Picked up by file name once the MCP server (U5) lands; the shape is its ToolDef.
 const DEFAULT_LIMIT = 4;
 const ROLES: readonly Role[] = ["orchestrator", "lead", "worker"];
 
+const invalid = (reason: string, fix: string): Outcome => ({ ok: false, refusal: { code: "invalid_input", reason, fix } });
+
 /** The handler's body with its ports passed in, so tests drive the tool with a fake Orca. */
-export async function handle(input: Record<string, unknown>, ports: StartPorts) {
+export async function handle(input: Record<string, unknown>, ports: StartPorts): Promise<Outcome> {
   const s = (k: string) => (typeof input[k] === "string" && input[k] !== "" ? (input[k] as string) : undefined);
   const list = (k: string) => (Array.isArray(input[k]) ? (input[k] as unknown[]).map(String) : undefined);
   const taskId = s("taskId");
   const task = s("task");
   const spec = s("spec");
-  if (!task && !spec) {
-    return { ok: false, refusal: { code: "invalid_input", reason: "task 도 spec 도 없다", fix: "task 에 Task id 를 주거나 spec 으로 새 Task 를 만든다" } };
-  }
+  if (!task && !spec) return invalid("neither task nor spec was given", "pass task (an existing Task id) or spec (a new Task)");
   const role = s("role");
   const childRole = s("childRole");
   if (!ROLES.includes(role as Role) || (childRole !== "lead" && childRole !== "worker")) {
-    return { ok: false, refusal: { code: "invalid_input", reason: `role "${role}" 또는 childRole "${childRole}" 이 정해진 값이 아니다`, fix: "role: orchestrator|lead|worker, childRole: lead|worker" } };
+    return invalid(`role "${role}" or childRole "${childRole}" is not an allowed value`, "role: orchestrator|lead|worker, childRole: lead|worker");
   }
   const title = s("title");
   const deps = list("deps");
   const lateAnswers = list("lateAnswers");
   // An existing Task's spec is already written; the answers would be dropped, so say so.
   if (task && lateAnswers?.length) {
-    return { ok: false, refusal: { code: "invalid_input", reason: "lateAnswers 는 새 Task 의 첫 프롬프트에만 실린다", fix: "task 없이 spec 과 lateAnswers 로 새 Task 를 만들어 시작한다" } };
+    return invalid("lateAnswers go only into a new Task's first prompt", "omit task and pass spec with lateAnswers to create and start a new Task");
   }
   const references = list("references");
   const out = await startUnit(ports, {
@@ -37,14 +37,12 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts) 
     ...(references ? { references } : {}),
   });
   if (out.kind === "refused") {
-    return {
-      ok: false,
-      refusal: {
-        code: `start_refused:${out.reason}`,
-        reason: out.detail,
-        fix: "같은 일을 다른 길로 시작하지 않는다. 보고가 위로 갔으니 답을 기다린다(결정 94)",
-      },
+    const refusal: Refusal = {
+      code: out.reason,
+      reason: out.detail,
+      fix: "do not start the same work another way; the refusal was escalated, wait for the answer (decision 94)",
     };
+    return { ok: false, refusal };
   }
   return { ok: true, value: out };
 }
@@ -54,25 +52,29 @@ export default {
   description:
     "Start one worker (or, for the orchestrator, a lead) on an item: the only way sangsoe opens a session. Refusals come back with their reason and are already escalated to whoever handed you the work.",
   inputSchema: {
-    type: "object" as const,
+    type: "object",
     properties: {
-      role: { type: "string" as const, enum: ["orchestrator", "lead", "worker"], description: "Your own role." },
-      worktreeId: { type: "string" as const, description: "Your own Orca worktree id; the new worktree is its child." },
-      taskId: { type: "string" as const, description: "Your own Task id (lead or worker)." },
-      runId: { type: "string" as const, description: "The Run you hold." },
-      childRole: { type: "string" as const, enum: ["lead", "worker"] },
-      task: { type: "string" as const, description: "An existing Task id to start. Omit to create one from spec." },
-      spec: { type: "string" as const, description: "The new Task's brief, acceptance criteria included. A /goal line in it does not take effect on a worker." },
-      title: { type: "string" as const },
-      deps: { type: "array" as const, items: { type: "string" as const } },
-      lateAnswers: { type: "array" as const, items: { type: "string" as const }, description: "Answers that arrived after the last worker ended; only with spec (a new Task), added to its first prompt." },
-      references: { type: "array" as const, items: { type: "string" as const }, description: "Ticket URLs." },
-      agent: { type: "string" as const, description: "Orca agent id, default claude." },
+      role: { type: "string", enum: ["orchestrator", "lead", "worker"], description: "Your own role." },
+      worktreeId: { type: "string", description: "Your own Orca worktree id; the new worktree is its child." },
+      taskId: { type: "string", description: "Your own Task id (lead or worker)." },
+      runId: { type: "string", description: "The Run you hold." },
+      childRole: { type: "string", enum: ["lead", "worker"] },
+      task: { type: "string", description: "An existing Task id to start. Omit to create one from spec." },
+      spec: { type: "string", description: "The new Task's brief, acceptance criteria included. A /goal line in it does not take effect on a worker." },
+      title: { type: "string" },
+      deps: { type: "array", items: { type: "string" } },
+      lateAnswers: {
+        type: "array",
+        items: { type: "string" },
+        description: "Answers that arrived after the last worker ended; only with spec (a new Task), added to its first prompt.",
+      },
+      references: { type: "array", items: { type: "string" }, description: "Ticket URLs." },
+      agent: { type: "string", description: "Orca agent id, default claude." },
     },
     required: ["role", "worktreeId", "runId", "childRole"],
     additionalProperties: false,
   },
-  async handler(input: Record<string, unknown>) {
+  async handler(input) {
     const orca = createOrcaAdapter(nodeExec(180_000));
     const store = Store.open();
     const runId = typeof input.runId === "string" ? input.runId : "";
@@ -82,4 +84,4 @@ export default {
       store.close();
     }
   },
-};
+} satisfies ToolDef;
