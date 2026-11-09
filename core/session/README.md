@@ -11,15 +11,15 @@ Claude Code 의 기록 hook 일곱(`claude-plugin/hooks/record.sh` → `sangsoe 
 |---|---|---|---|
 | SessionStart | `session_id` · `source`(startup·resume·clear·compact) · `cwd` · `agent_type` · `model`(compact 때만 옴, P9) | `session_started{session, role, model}`(entity=task, subject=`run:<Task 의 Run>`, target=`run:<쥔 Run>`) · `worker_stuck{no_role_line}` · 주입마다 `notified` | `session_started:<session>:<source>` · `worker_stuck:<task>:no_role_line` · 아래 주입 순서 |
 | UserPromptSubmit | `prompt` · `prompt_id` · `transcript_path` | `owner_action{origin: chat}`(원문은 마스킹해 `owner_text`) · 문장에 `dNNN` 이 하나면 U8 `decision_answer`(linked_by=hook) · `!` 입력(아래) | `owner_action:<session>:<prompt_id>` |
-| Stop | `transcript_path` | `turn_ended{session, context_tokens}` · 이 세션의 열린 `waiting_human` 마다 `waiting_released{answered}` · `!` 입력 | `turn_ended:<session>:<prompt_id>` · `waiting_released:<seq>` |
+| Stop | `transcript_path` | `turn_ended{session, context_tokens}` · 이 세션의 열린 `waiting_human` 마다 `waiting_released{answered, evidence: turn_ended}` · `!` 입력 | `turn_ended:<session>:<prompt_id>` · `waiting_released:<seq>` |
 | Notification | `notification_type` · `message` | `waiting_human{session, tool, excerpt}` + 소유 리드 `notify`(type `escalation`) | `waiting_human:<session>:<n>` · `notify:<task>:waiting_human:<seq>` |
-| PostToolUse | `tool_name` | 같은 도구를 기다리던 `waiting_human` 의 `waiting_released{answered}` | `waiting_released:<seq>` |
+| PostToolUse | `tool_name` | 같은 도구를 기다리던 `waiting_human` 의 `waiting_released{answered, evidence: tool:<tool>}` | `waiting_released:<seq>` |
 | PostCompact | `trigger` · transcript 의 `compact_boundary.compactMetadata.preTokens` | `compacted{session, trigger, pre_tokens}` | `compacted:<session>:<prompt_id>` |
 | SessionEnd | `reason` | 열린 `waiting_human` 마다 `waiting_released{moot, evidence: session_ended}` · `!` 입력 | `waiting_released:<seq>` |
 
-`waiting_released.by` 는 대기 뒤 같은 세션의 `owner_action` 이 있으면 `owner`, 아니면 `unknown` 이다. 오너의 말은 풀지 않는다(결정 91 ⑥).
+어느 대기를 어떻게 푸는지(`by` 포함)는 `core/owner/release.ts` 의 `recordReleases` 가 정하고, hook 은 신호만 넘긴다(구현 결정 146). 오너의 말은 풀지 않는다(결정 91 ⑥).
 
-**`!` 입력(결정 91 ⑥(1)(b), 92 (나)).** UserPromptSubmit · Stop · SessionEnd 가 transcript 끝 256 KiB 를 읽어 `<bash-input>` 사용자 줄과 그 자식(`parentUuid`) `<bash-stdout>…<bash-stderr>` 줄을 짝짓는다. 줄마다 `owner_action{origin: shell}`(`owner_action:<session>:<uuid>`). 열린 오너 항목(`cmd_hint` 가 있고 `done`·`cancelled` 전이가 없는 항목) 중 정확히 하나의 `cmd_hint` 조각을 모두 담으면: stderr 가 있으면 `evidence{owner_act:failed}`, 없고 stdout 에 URL 이 있으면 `evidence{owner_act:seen, observed: URL}`(`evidence:<uuid>:owner_act`). transcript 에 종료 코드가 없어서(P13) stdout 의 URL 이 있을 때만 잇는다(결정 91 (4)(나)). 어디에도 안 맞는 감시 명령(`gh workflow run` · `gh pr merge` · `gh release` · `sangsoe plugin approve`)은 `owner_act_unlinked{act}`(`owner_act_unlinked:<uuid>`). 형식이 다르면 행동 0. 상태는 바꾸지 않는다.
+**`!` 입력(결정 91 ⑥(1)(b), 92 (나)).** UserPromptSubmit · Stop · SessionEnd 가 transcript 끝 256 KiB 를 읽어 `<bash-input>` 사용자 줄과 그 자식(`parentUuid`) `<bash-stdout>…<bash-stderr>` 줄을 짝짓는다. 새 줄이 있으면 Orca 스냅샷을 한 번 읽고, 줄마다 마스킹한 `owner_action{origin: shell}`(`owner_action:<session>:<uuid>`)을 쓴 뒤 `ShellLine` 을 만들어 `core/owner` 의 `linkShell` · `recordShellLink` 에 넘긴다. 잇는 규칙(시각 · 저장소 · PR URL · 종료 코드 없는 줄 · 감시 명령)과 키(`evidence:owner_act:<uuid>` · `owner_act_unlinked:owner_act:<uuid>`)는 그쪽 하나다(구현 결정 134 · 146). Orca 가 답하지 않으면 아무것도 쓰지 않고 다음 hook 이 다시 읽는다. 상태는 바꾸지 않는다.
 
 ## SessionStart 주입 순서
 
