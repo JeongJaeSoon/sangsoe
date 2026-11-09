@@ -47,14 +47,22 @@ test("resource_leak only for Docker objects with no live resource record; no doc
     ev(1, "resource", { action: "created", kind: "container", owner: "x", ref: "abc123" }),
     ev(2, "resource", { action: "created", kind: "volume", owner: "x", ref: "vol_gone" }),
     ev(3, "resource", { action: "released", kind: "volume", owner: "x", ref: "vol_gone" }),
+    ev(4, "resource", { action: "created", kind: "volume", owner: "x", ref: "api" }),
+    ev(5, "resource_adopted", { kind: "volume", ref: "acme_db", basis: "working_dir" }),
   ];
   const docker = [
     { kind: "container" as const, id: "abc123def456" },
     { kind: "volume" as const, id: "vol_gone" },
     { kind: "volume" as const, id: "vol_new" },
+    { kind: "volume" as const, id: "api_cache" },
+    { kind: "volume" as const, id: "acme_db" },
   ];
   const r = judgeResource(reads({ docker, resources }), C);
-  assert.deepEqual(r.planned.map((e) => e.dedupe_key), ["resource_leak:volume:vol_gone", "resource_leak:volume:vol_new"]);
+  assert.deepEqual(r.planned.map((e) => e.dedupe_key), [
+    "resource_leak:volume:vol_gone",
+    "resource_leak:volume:vol_new",
+    "resource_leak:volume:api_cache",
+  ]);
   const none = judgeResource(reads({ docker: null }), C);
   assert.deepEqual(types(none), []);
   assert.ok(none.unseen.includes("docker"));
@@ -123,7 +131,11 @@ test("orca-monitor round over the recorded fake Orca reads without consuming mai
   };
   try {
     const r = await runMonitor("orca", deps(store, { orca: createOrcaAdapter(exec) }));
-    assert.deepEqual(r.unseen, []);
+    // The recording shows 2 of 9 Dispatches and answers every cursor with the same page: paging
+    // stops on the repeated cursor and the list stays truncated, so no Run is judged stalled.
+    assert.deepEqual(r.unseen, ["worker-list truncated"]);
+    assert.equal(calls.filter((c) => c === "orchestration worker-list").length, 2);
+    assert.ok(!r.planned.some((e) => e.type === "run_stalled"));
     const reads = ["worktree ps", "orchestration worker-list", "orchestration worker-show", "orchestration gate-list", "orchestration inbox"];
     assert.deepEqual([...new Set(calls)].sort(), [...reads].sort(), "only the read verbs, mail read through inbox");
   } finally {

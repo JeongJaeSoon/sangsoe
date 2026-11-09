@@ -206,6 +206,44 @@ test("stop cancels pending hints and the cap timer", async () => {
   assert.equal(timers.length, 0);
 });
 
+test("after stop, a hint or the end of the in-flight round starts nothing", async () => {
+  const { clock, advance, timers } = fakeClock();
+  let started = 0;
+  let signal: AbortSignal | undefined;
+  let finish: () => void = () => {};
+  const rounds = startRounds(
+    [
+      {
+        id: "m",
+        intervalMs: 1000,
+        run: (_at, s) =>
+          new Promise<void>((r) => {
+            started++;
+            signal = s;
+            finish = r;
+          }),
+      },
+    ],
+    clock,
+    { debounceMs: 100 },
+  );
+  await advance(1000);
+  rounds.hint("m");
+  let stoppedAll = false;
+  const stopping = rounds.stop().then(() => {
+    stoppedAll = true;
+  });
+  assert.equal(signal?.aborted, true, "stop aborts the round in flight");
+  rounds.hint("m");
+  assert.equal(timers.length, 0, "a hint after stop arms nothing");
+  await settle();
+  assert.equal(stoppedAll, false, "stop resolves only once the round returns");
+  finish();
+  await stopping;
+  await advance(5000);
+  assert.equal(started, 1, "the hint pending at stop does not run after the round returns");
+});
+
 test("rounds run on their interval, record gaps and errors, and stop", async () => {
   const { clock, advance, timers } = fakeClock();
   let ok = 0;
@@ -374,6 +412,37 @@ test("activate starts the three monitors once the core opens, hints orca on agen
   } finally {
     deactivate();
   }
+  await settle();
+  assert.equal(closed, 1);
+});
+
+test("deactivate aborts an in-flight monitor round and closes the core only after it returns", async () => {
+  const w = fakeWorker();
+  const { clock, advance } = fakeClock();
+  let signal: AbortSignal | undefined;
+  let finish: () => void = () => {};
+  let closed = 0;
+  activate(w.orca, {
+    clock,
+    exec: async (cmd) => ok(cmd, ""),
+    monitors: async () => ({
+      run: (_name, s) =>
+        new Promise((r) => {
+          signal = s;
+          finish = () => r({ planned: [], written: [], unseen: [], aborted: s?.aborted ?? false });
+        }),
+      close: () => void closed++,
+    }),
+  });
+  await settle();
+  await advance(60_000);
+  deactivate();
+  assert.equal(signal?.aborted, true, "stop aborts the round, so it writes nothing");
+  await settle();
+  assert.equal(closed, 0, "the store stays open while the round still holds it");
+  finish();
+  await settle();
+  await settle();
   assert.equal(closed, 1);
 });
 

@@ -27,7 +27,7 @@ export async function resourceRound(d: MonitorDeps, _signal: AbortSignal): Promi
       liveWorkers: workers.ok ? workers.value.rows.filter((w) => isUnfinished(w) && w.liveness === "live").length : null,
       lastEpisode: episodes.at(-1) ?? null,
       docker,
-      resources: d.events({ type: "resource" }),
+      resources: [...d.events({ type: "resource" }), ...d.events({ type: "resource_adopted" })].sort((a, b) => a.seq - b.seq),
     },
     d.config,
   );

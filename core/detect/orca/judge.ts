@@ -1,5 +1,7 @@
 import { dedupeKey, eventDef, type StoredEvent } from "../../contract/index.ts";
 import type { GateRow, InboxMessage, LocalRows, WorkerRow, WorkerShow, WorktreePsRow } from "../../contract/orca.ts";
+import { isOpenGate } from "../../decision/waiters.ts";
+import { settled } from "../../recover/recover.ts";
 import { type MonitorConfig, minutes, type Planned, type Reading } from "../monitor.ts";
 
 const SOURCE = "orca-monitor";
@@ -13,14 +15,16 @@ export type OrcaReads = {
   /** gate-list per Run the unfinished workers belong to. */
   gates: Record<string, GateRow[] | null>;
   inbox: InboxMessage[] | null;
-  /** sqlite rows: notified, decision_opened, decision_answered, decision_closed. */
+  /** sqlite rows of ORCA_EVENT_TYPES. */
   events: readonly StoredEvent[];
 };
 
-const FINISHED = new Set(["succeeded", "failed", "stopped", "cancelled", "canceled", "released"]);
-const OPEN_GATE = new Set(["pending", "open"]);
+export const ORCA_EVENT_TYPES = ["notified", "decision_opened", "decision_joined", "decision_answered", "decision_closed", "worker_dead"];
 
-export const isUnfinished = (w: WorkerRow) => !FINISHED.has(w.state);
+export const isUnfinished = (w: WorkerRow) => !settled(w);
+
+// Orca reports a lost terminal as `gone`; anything but live or gone (`unverifiable`, missing) is not seen.
+const DEAD = new Set(["gone", "exited"]);
 
 const key = (type: Parameters<typeof eventDef>[0], target: string, ...cond: string[]) => {
   const def = eventDef(type);
@@ -55,46 +59,60 @@ export function sessionActivity(row: WorktreePsRow, now: number): SessionActivit
   return { kind: "active", lastAt: Math.max(...seen) };
 }
 
-export function judgeOrca(r: OrcaReads, now: number, c: MonitorConfig): Reading {
-  const planned: Planned[] = [];
-  const unseen: string[] = [];
+type RunTally = { members: number; quiet: number; lastAt: number; dead: string[]; blind: boolean };
 
-  // Workers: dead and stuck, by Dispatch.
-  const live = r.workers?.rows.filter(isUnfinished) ?? [];
-  if (!r.workers) unseen.push("worker-list");
-  const dead = live.filter((w) => w.liveness === "exited");
-  const reason = dead.length >= c.hostRestartMin ? "host_restart" : "exited";
-  const runOf = (d: string) => r.shows[d]?.runId;
-  const stalled = new Map<string, { quiet: number; total: number; lastAt: number }>();
-  const tally = (w: WorkerRow, quiet: boolean, lastAt = 0) => {
-    const run = runOf(w.dispatchId);
-    if (!run) return;
-    const t = stalled.get(run) ?? { quiet: 0, total: 0, lastAt: 0 };
-    t.total += 1;
-    if (quiet) t.quiet += 1;
-    t.lastAt = Math.max(t.lastAt, lastAt);
-    stalled.set(run, t);
+function judgeWorkers(r: OrcaReads, now: number, c: MonitorConfig, planned: Planned[], unseen: string[]) {
+  if (!r.workers) {
+    unseen.push("worker-list");
+    return;
+  }
+  if (!r.ps) unseen.push("worktree ps");
+  const live = r.workers.rows.filter(isUnfinished);
+  const recordedDead = new Set(r.events.filter((e) => e.type === "worker_dead").map((e) => e.entity_id));
+  const dead = live.filter((w) => w.liveness !== undefined && DEAD.has(w.liveness));
+  // "Many at once" counts only deaths first seen in this round.
+  const fresh = dead.filter((w) => !recordedDead.has(w.dispatchId));
+  const reason = fresh.length >= c.hostRestartMin ? "host_restart" : "terminal_gone";
+
+  const runs = new Map<string, RunTally>();
+  let membersUnknown = r.workers.truncated;
+  const tally = (w: WorkerRow, t: { quiet: boolean; lastAt?: number; dead?: boolean; blind?: boolean }) => {
+    const run = r.shows[w.dispatchId]?.runId;
+    if (!run) {
+      membersUnknown = true;
+      unseen.push(`worker-show ${w.dispatchId}`);
+      return;
+    }
+    const x = runs.get(run) ?? { members: 0, quiet: 0, lastAt: 0, dead: [], blind: false };
+    x.members += 1;
+    if (t.quiet) x.quiet += 1;
+    if (t.dead) x.dead.push(w.dispatchId);
+    if (t.blind) x.blind = true;
+    x.lastAt = Math.max(x.lastAt, t.lastAt ?? 0);
+    runs.set(run, x);
   };
+
   for (const w of dead) {
-    planned.push({
-      type: "worker_dead",
-      source: SOURCE,
-      payload: { reason },
-      entity: "dispatch",
-      entity_id: w.dispatchId,
-      target: w.taskId,
-      dedupe_key: key("worker_dead", w.dispatchId),
-    });
-    tally(w, true);
+    if (!recordedDead.has(w.dispatchId)) {
+      planned.push({
+        type: "worker_dead",
+        source: SOURCE,
+        payload: { reason },
+        entity: "dispatch",
+        entity_id: w.dispatchId,
+        target: w.taskId,
+        dedupe_key: key("worker_dead", w.dispatchId),
+      });
+    }
+    tally(w, { quiet: true, dead: true });
   }
 
   const psByWorkspace = new Map((r.ps?.rows ?? []).map((row) => [row.worktreeId, row]));
-  if (!r.ps) unseen.push("worktree ps");
-  for (const w of live.filter((x) => x.liveness === "live")) {
-    const row = w.workspace ? psByWorkspace.get(w.workspace) : undefined;
+  for (const w of live.filter((x) => !dead.includes(x))) {
+    const row = w.liveness === "live" && w.workspace ? psByWorkspace.get(w.workspace) : undefined;
     if (!row) {
-      if (r.ps) unseen.push(`no ps row for ${w.dispatchId}`);
-      tally(w, false);
+      if (r.ps || w.liveness !== "live") unseen.push(`${w.dispatchId}: liveness ${w.liveness ?? "missing"}, no ps row`);
+      tally(w, { quiet: false, blind: true });
       continue;
     }
     const a = sessionActivity(row, now);
@@ -111,27 +129,30 @@ export function judgeOrca(r: OrcaReads, now: number, c: MonitorConfig): Reading 
         dedupe_key: key("worker_stuck", w.dispatchId, String(a.lastAt)),
       });
     }
-    tally(w, quiet, a.kind === "active" ? a.lastAt : 0);
+    tally(w, { quiet, lastAt: a.kind === "active" ? a.lastAt : 0, blind: a.kind === "unseen" });
   }
 
-  // A Run all of whose unfinished workers are dead or stuck; the key re-arms on new activity.
-  for (const [run, t] of stalled) {
-    if (t.total > 0 && t.quiet === t.total) {
-      planned.push({
-        type: "run_stalled",
-        source: SOURCE,
-        payload: { run },
-        dedupe_key: key("run_stalled", run, t.lastAt > 0 ? String(t.lastAt) : "dead"),
-      });
-    }
+  // A Run all of whose unfinished workers are dead or stuck. Any member not seen (no show, a blind
+  // session, a truncated list) means the Run's membership is unknown: zero action.
+  if (membersUnknown) {
+    if (r.workers.truncated) unseen.push("worker-list truncated");
+    return;
   }
+  for (const [run, t] of runs) {
+    if (t.blind || t.members === 0 || t.quiet !== t.members) continue;
+    const episode = t.lastAt > 0 ? String(t.lastAt) : `dead-${[...t.dead].sort().join(",")}`;
+    planned.push({ type: "run_stalled", source: SOURCE, payload: { run }, dedupe_key: key("run_stalled", run, episode) });
+  }
+}
 
-  // Gates: opened through sangsoe (decision_opened) or not.
-  const opened = new Map<string, StoredEvent>();
+function judgeGates(r: OrcaReads, now: number, c: MonitorConfig, planned: Planned[], unseen: string[]) {
+  const openedAt = new Map<string, number>();
+  const gateDecision = new Map<string, string>();
   const closed = new Set<string>();
   for (const e of r.events) {
     const p = e.payload as { gate?: string; decision?: string };
-    if (e.type === "decision_opened" && p.gate) opened.set(p.gate, e);
+    if (e.type === "decision_opened" && p.decision) openedAt.set(p.decision, Date.parse(e.ts));
+    if (e.type === "decision_joined" && p.gate && p.decision) gateDecision.set(p.gate, p.decision);
     if ((e.type === "decision_answered" || e.type === "decision_closed") && p.decision) closed.add(p.decision);
   }
   for (const [run, gates] of Object.entries(r.gates)) {
@@ -139,9 +160,12 @@ export function judgeOrca(r: OrcaReads, now: number, c: MonitorConfig): Reading 
       unseen.push(`gate-list ${run}`);
       continue;
     }
-    for (const g of gates.filter((x) => OPEN_GATE.has(x.status))) {
-      const o = opened.get(g.id);
-      if (!o) {
+    for (const g of gates.filter(isOpenGate)) {
+      // decision_open creates the gate before it records decision_joined; a question that starts
+      // with a decision number sangsoe issued is its own gate even before that row lands.
+      const prefix = /^(d\d+):/.exec(g.question ?? "")?.[1];
+      const decision = gateDecision.get(g.id) ?? (prefix && openedAt.has(prefix) ? prefix : undefined);
+      if (!decision) {
         planned.push({
           type: "decision_untracked",
           source: SOURCE,
@@ -151,8 +175,8 @@ export function judgeOrca(r: OrcaReads, now: number, c: MonitorConfig): Reading 
         });
         continue;
       }
-      const decision = (o.payload as { decision: string }).decision;
-      if (closed.has(decision) || now - Date.parse(o.ts) < minutes(c.decisionWaitMinutes)) continue;
+      const at = openedAt.get(decision);
+      if (closed.has(decision) || at === undefined || now - at < minutes(c.decisionWaitMinutes)) continue;
       planned.push({
         type: "waiting_decision",
         source: SOURCE,
@@ -162,26 +186,35 @@ export function judgeOrca(r: OrcaReads, now: number, c: MonitorConfig): Reading 
       });
     }
   }
+}
 
-  // Wake-ups: a `notified` message still unhandled in the inbox after wakeMinutes. A message the
-  // inbox page does not show is not seen, so nothing is written for it.
-  const inbox = new Map((r.inbox ?? []).map((m) => [m.id, m]));
-  if (!r.inbox) unseen.push("inbox");
+// A `notified` message still unhandled in the inbox after wakeMinutes. A message the inbox page
+// does not show is not seen, so nothing is written for it.
+function judgeWakes(r: OrcaReads, now: number, c: MonitorConfig, planned: Planned[], unseen: string[]) {
+  if (!r.inbox) {
+    unseen.push("inbox");
+    return;
+  }
+  const inbox = new Map(r.inbox.map((m) => [m.id, m]));
   for (const e of r.events.filter((x) => x.type === "notified")) {
     const msg = (e.payload as { msg_id: string }).msg_id;
-    if (now - Date.parse(e.ts) < minutes(c.wakeMinutes) || !r.inbox) continue;
-    const m = inbox.get(msg);
-    if (!m) continue;
-    if (m.handled === false) {
-      planned.push({
-        type: "wake_unconfirmed",
-        source: SOURCE,
-        payload: { msg_id: msg },
-        ...(e.target ? { target: e.target } : {}),
-        dedupe_key: key("wake_unconfirmed", msg),
-      });
-    }
+    if (now - Date.parse(e.ts) < minutes(c.wakeMinutes)) continue;
+    if (inbox.get(msg)?.handled !== false) continue;
+    planned.push({
+      type: "wake_unconfirmed",
+      source: SOURCE,
+      payload: { msg_id: msg },
+      ...(e.target ? { target: e.target } : {}),
+      dedupe_key: key("wake_unconfirmed", msg),
+    });
   }
+}
 
+export function judgeOrca(r: OrcaReads, now: number, c: MonitorConfig): Reading {
+  const planned: Planned[] = [];
+  const unseen: string[] = [];
+  judgeWorkers(r, now, c, planned, unseen);
+  judgeGates(r, now, c, planned, unseen);
+  judgeWakes(r, now, c, planned, unseen);
   return { planned, unseen };
 }

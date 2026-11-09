@@ -74,9 +74,13 @@ export default function activate(
   const rounds = startRounds([probeRound], clock);
   stopRounds = () => {
     stopped = true;
-    rounds.stop();
-    monitorRounds?.stop();
-    runner?.close();
+    void rounds.stop();
+    const m = monitorRounds;
+    const open = runner;
+    monitorRounds = null;
+    runner = null;
+    // A round still in flight holds the store: close it only after that round has returned.
+    void (m?.stop() ?? Promise.resolve()).then(() => open?.close());
   };
 
   void deps.monitors?.().then((r) => {

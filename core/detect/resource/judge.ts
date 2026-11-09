@@ -39,15 +39,21 @@ export function withDiagnostics(sample: LoadSample, diagnostics: unknown): LoadS
   return { ...sample, memFreePct: (avail / total) * 100 };
 }
 
-/** Docker shows short or full ids; a record may hold either, so a prefix match either way counts. */
+/**
+ * A Docker object sangsoe created or adopted and has not removed since. Container ids come short
+ * or full, so they match by prefix either way; a volume is a name and matches exactly.
+ */
 const recorded = (resources: readonly StoredEvent[]) => {
-  const last = new Map<string, { kind: string; ref: string; created: boolean }>();
+  const last = new Map<string, { kind: string; ref: string; held: boolean }>();
   for (const e of resources) {
-    const p = e.payload as { action: string; kind: string; ref: string };
-    if (p.ref) last.set(`${p.kind}\n${p.ref}`, { kind: p.kind, ref: p.ref, created: p.action === "created" });
+    const p = e.payload as { action?: string; kind: string; ref: string };
+    const held = e.type === "resource_adopted" || p.action === "created";
+    if (p.ref) last.set(`${p.kind}\n${p.ref}`, { kind: p.kind, ref: p.ref, held });
   }
-  const held = [...last.values()].filter((x) => x.created);
-  return (o: DockerObject) => held.some((x) => x.kind === o.kind && (o.id.startsWith(x.ref) || x.ref.startsWith(o.id)));
+  const held = [...last.values()].filter((x) => x.held);
+  const same = (o: DockerObject, ref: string) =>
+    o.kind === "container" ? o.id.startsWith(ref) || ref.startsWith(o.id) : o.id === ref;
+  return (o: DockerObject) => held.some((x) => x.kind === o.kind && same(o, x.ref));
 };
 
 export function judgeResource(r: ResourceReads, c: MonitorConfig): Reading {

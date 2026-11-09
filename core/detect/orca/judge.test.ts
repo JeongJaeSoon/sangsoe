@@ -85,27 +85,64 @@ test("a missing or future time field, a waiting agent and a resting one are zero
   assert.ok(blind.unseen.includes("worktree ps"));
 });
 
-test("worker_dead for an unfinished Dispatch whose terminal exited; host_restart when many die at once", () => {
+test("worker_dead for an unfinished Dispatch whose terminal is gone; host_restart when many die in one round", () => {
   const one = judgeOrca(
-    reads({ workers: rows([worker("1", { liveness: "exited" }), worker("2", { state: "succeeded", liveness: "exited" }), worker("3", { liveness: "unverifiable" })]) }),
+    reads({
+      workers: rows([
+        worker("1", { liveness: "gone" }),
+        worker("2", { state: "settled", liveness: "gone", terminalState: "released" }),
+        worker("3", { liveness: "unverifiable" }),
+      ]),
+      shows: { ctx_1: show("1"), ctx_3: show("3") },
+    }),
     NOW,
     C,
   );
-  assert.deepEqual(one.planned.map((e) => [e.type, e.entity_id, (e.payload as { reason: string }).reason]), [["worker_dead", "ctx_1", "exited"]]);
-  const many = judgeOrca(reads({ workers: rows(["1", "2", "3"].map((n) => worker(n, { liveness: "exited" }))) }), NOW, C);
-  assert.deepEqual(new Set(many.planned.map((e) => (e.payload as { reason: string }).reason)), new Set(["host_restart"]));
+  assert.deepEqual(one.planned.map((e) => [e.type, e.entity_id, (e.payload as { reason: string }).reason]), [["worker_dead", "ctx_1", "terminal_gone"]]);
+  assert.ok(one.unseen.some((u) => u.startsWith("ctx_3")), "unverifiable liveness is not seen, not dead");
+  const three = rows(["1", "2", "3"].map((n) => worker(n, { liveness: "gone" })));
+  const many = judgeOrca(reads({ workers: three }), NOW, C);
+  assert.deepEqual(new Set(many.planned.filter((e) => e.type === "worker_dead").map((e) => (e.payload as { reason: string }).reason)), new Set(["host_restart"]));
+  // Two deaths already recorded rounds ago plus one new one are not "many at once".
+  const old = ["1", "2"].map((n) => ({ ...ev("worker_dead", { reason: "terminal_gone" }, ago(300)), entity_id: `ctx_${n}` }) as StoredEvent);
+  const later = judgeOrca(reads({ workers: three, events: old }), NOW, C);
+  assert.deepEqual(later.planned.filter((e) => e.type === "worker_dead").map((e) => [e.entity_id, (e.payload as { reason: string }).reason]), [["ctx_3", "terminal_gone"]]);
 });
 
-test("run_stalled only when every unfinished worker of the Run is dead or stuck", () => {
+test("a settled worker whose terminal lingers is never judged stuck", () => {
+  const quiet = ps("ws_1", { lastOutputAt: ago(45), agents: [agent({})] });
+  const r = judgeOrca(reads({ ps: rows([quiet]), workers: rows([worker("1", { state: "settled" })]) }), NOW, C);
+  assert.deepEqual(types(r), []);
+});
+
+test("run_stalled only when every unfinished worker of the Run is dead or stuck, and every one was seen", () => {
   const quiet = ps("ws_1", { lastOutputAt: ago(45), agents: [agent({})] });
   const busy = ps("ws_2", { lastOutputAt: ago(1), agents: [agent({})] });
   const w = rows([worker("1"), worker("2")]);
   const shows = { ctx_1: show("1"), ctx_2: show("2") };
   assert.deepEqual(types(judgeOrca(reads({ ps: rows([quiet, busy]), workers: w, shows }), NOW, C)), ["worker_stuck"]);
+  const blindSibling = rows([worker("1"), worker("2", { liveness: "unverifiable" })]);
+  assert.deepEqual(types(judgeOrca(reads({ ps: rows([quiet]), workers: blindSibling, shows }), NOW, C)), ["worker_stuck"]);
+  const noShow = judgeOrca(reads({ ps: rows([quiet, busy]), workers: w, shows: { ctx_1: show("1"), ctx_2: null } }), NOW, C);
+  assert.deepEqual(types(noShow), ["worker_stuck"]);
+  assert.ok(noShow.unseen.includes("worker-show ctx_2"));
+  const cut = judgeOrca(reads({ ps: rows([quiet]), workers: { ...rows([worker("1")]), truncated: true }, shows: { ctx_1: show("1") } }), NOW, C);
+  assert.deepEqual(types(cut), ["worker_stuck"]);
+});
+
+test("run_stalled of a Run whose workers all died re-arms when a new set dies", () => {
+  const dead = (ns: string[]) => judgeOrca(reads({ workers: rows(ns.map((n) => worker(n, { liveness: "gone" }))), shows: Object.fromEntries(ns.map((n) => [`ctx_${n}`, show(n)])) }), NOW, C);
+  const a = dead(["1"]).planned.find((e) => e.type === "run_stalled")?.dedupe_key;
+  const b = dead(["2"]).planned.find((e) => e.type === "run_stalled")?.dedupe_key;
+  assert.ok(a && b && a !== b);
 });
 
 test("decision_untracked for an open gate sangsoe did not open; waiting_decision for an old open one", () => {
-  const events = [ev("decision_opened", { decision: "d001", decision_key: "k", gate: "gate_t" }, ago(60))];
+  // The real writers: decision_opened has no gate; decision_joined ties the gate to the decision.
+  const events = [
+    ev("decision_opened", { decision: "d001", decision_key: "k" }, ago(60)),
+    ev("decision_joined", { decision: "d001", waiter: "task_1", gate: "gate_t", run: "run_a" }, ago(60)),
+  ];
   const gates = {
     run_a: [
       { id: "gate_t", taskId: "task_1", status: "pending" },
@@ -123,6 +160,9 @@ test("decision_untracked for an open gate sangsoe did not open; waiting_decision
   );
   const answered = [...events, ev("decision_answered", { decision: "d001" }, ago(5))];
   assert.deepEqual(types(judgeOrca(reads({ gates, events: answered }), NOW, C)), ["decision_untracked"]);
+  // decision_open creates the gate before decision_joined lands: its `dNNN:` question marks it as sangsoe's.
+  const racing = { run_a: [{ id: "gate_new", taskId: "task_1", status: "pending", question: "d001: which way?" }] };
+  assert.deepEqual(types(judgeOrca(reads({ gates: racing, events: [events[0] as StoredEvent] }), NOW, C)), ["waiting_decision"]);
 });
 
 test("wake_unconfirmed reads handled state from inbox and never consumes it; unseen messages are zero action", () => {

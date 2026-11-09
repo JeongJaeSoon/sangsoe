@@ -55,6 +55,8 @@ export function startRounds(rounds: readonly Round[], clock: Clock = nodeClock, 
   const stats = new Map<string, RoundStats>();
   const hints = new Map<string, () => void>();
   const cancels: (() => void)[] = [];
+  const inFlight = new Set<Promise<void>>();
+  let stopped = false;
 
   for (const r of rounds) {
     const s: RoundStats = {
@@ -73,8 +75,10 @@ export function startRounds(rounds: readonly Round[], clock: Clock = nodeClock, 
     let pending = false;
     let cancelDebounce: (() => void) | null = null;
     let cancelCap: (() => void) | null = null;
+    let current: AbortController | null = null;
 
     const fire = (trigger: Trigger) => {
+      if (stopped) return;
       if (busy) {
         if (trigger === "hint") pending = true;
         return;
@@ -83,6 +87,7 @@ export function startRounds(rounds: readonly Round[], clock: Clock = nodeClock, 
       s.runs += 1;
       s.lastTrigger = trigger;
       const ctl = new AbortController();
+      current = ctl;
       if (r.capMs !== undefined) {
         cancelCap = clock.after(r.capMs, () => {
           cancelCap = null;
@@ -90,25 +95,28 @@ export function startRounds(rounds: readonly Round[], clock: Clock = nodeClock, 
           ctl.abort(new Error(`round ${r.id} passed its ${r.capMs} ms cap`));
         });
       }
-      Promise.resolve()
+      const done: Promise<void> = Promise.resolve()
         .then(() => r.run(clock.now(), ctl.signal))
         .catch((e: unknown) => {
           s.errors += 1;
           s.lastError = e instanceof Error ? e.message : String(e);
         })
         .finally(() => {
+          inFlight.delete(done);
           cancelCap?.();
           cancelCap = null;
+          current = null;
           busy = false;
           if (pending) {
             pending = false;
             hint();
           }
         });
+      inFlight.add(done);
     };
 
     const hint = () => {
-      if (cancelDebounce) return;
+      if (stopped || cancelDebounce) return;
       cancelDebounce = clock.after(debounceMs, () => {
         cancelDebounce = null;
         fire("hint");
@@ -132,6 +140,7 @@ export function startRounds(rounds: readonly Round[], clock: Clock = nodeClock, 
         cancelCap?.();
         cancelCap = null;
         pending = false;
+        current?.abort(new Error(`round ${r.id} stopped`));
       },
     );
   }
@@ -144,8 +153,11 @@ export function startRounds(rounds: readonly Round[], clock: Clock = nodeClock, 
       h?.();
       return h !== undefined;
     },
-    stop: () => {
+    /** Aborts any round in flight; resolves once every one has returned, so its deps can be closed. */
+    stop: async (): Promise<void> => {
+      stopped = true;
       for (const c of cancels) c();
+      await Promise.all([...inFlight]);
     },
   };
 }
