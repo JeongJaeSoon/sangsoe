@@ -248,12 +248,16 @@ function judgmentMentions(): Mention[] {
     const flag = (name: string, why: string) => bad.push({ file, name, why });
     for (const m of text.matchAll(/resource `([^`]+)`/g)) if (!resourceCode.has(m[1] ?? "")) flag(m[1] ?? "", "not a resource");
     for (const m of text.matchAll(/Orca `([a-z-]+)/g)) if (!orcaSubcommands.has(m[1] ?? "")) flag(m[1] ?? "", "not an Orca subcommand");
+    for (const m of text.matchAll(/`([a-z_]+)` tool\b|\btool `([a-z_]+)`/g)) {
+      const name = m[1] ?? m[2] ?? "";
+      if (!toolCode.has(name)) flag(name, "called a tool, not a tool");
+    }
     for (const name of NOT_BUILT) if (!toolCode.has(name) && text.includes(`\`${name}\``)) flag(name, "assumed by decision 160, not built");
     // A table column headed "tool": each name in it is a tool, an Orca subcommand or a skill.
     const lines = text.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const col = cells(lines[i] ?? "").findIndex((c) => /\btool\b/.test(c));
-      if (col < 0 || !/^\|[-| ]+\|$/.test(lines[i + 1] ?? "")) continue;
+      if (col < 0 || !/^\|[-|: ]+\|$/.test(lines[i + 1] ?? "")) continue;
       for (let j = i + 2; cells(lines[j] ?? "").length > 0; j++) {
         const cell = cells(lines[j] ?? "")[col] ?? "";
         for (const m of cell.matchAll(/(Orca )?`([^`]+)`( skill)?/g)) {
@@ -285,7 +289,9 @@ test("the judgment-layer check catches each way a name can be missing", () => {
       [
         "timeline: not a resource",
         "task-close: not an Orca subcommand",
+        "item_ready: called a tool, not a tool",
         "item_transition: assumed by decision 160, not built",
+        "ask_due: in a tool column, not a tool",
         "item_transition: in a tool column, not a tool",
         "nope: not a skill",
         "item_snooze: a word no code says",

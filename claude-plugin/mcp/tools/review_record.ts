@@ -19,7 +19,7 @@ async function recorderRefusal(exec: Exec, repo: string, pr: number, head: strin
     return refuse(
       "recorder_is_author",
       `this session's checkout holds ${repo}#${pr}'s head (${branch} ${sha}): the session that wrote the PR cannot record its verdict`,
-      "send the reviewed head, the reviewer and the evidence to your lead, who records it",
+      "the PR's writer sends the reviewed head, the reviewer and the evidence to its lead; a lead calls from a worktree not on the PR's branch",
     );
   }
   return undefined;

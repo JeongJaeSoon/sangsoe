@@ -38,6 +38,23 @@ test("no timing input writes no row and the item is ready", async () => {
   assert.deepEqual([rows, report.readiness], [[], "ready"]);
 });
 
+test("an empty trigger is refused before the Task exists; verify and timing share one row", async () => {
+  const fake = createFakeOrca({ replies: { "orchestration-task-create": { ok: true, result: { taskId: "task_7" } } } });
+  const store = Store.open({ path: ":memory:" });
+  const ports = { orca: createOrcaAdapter(fake.exec), store };
+  for (const bad of [{ hold: true, review_trigger: "" }, { trigger: "" }]) {
+    const r = await itemCreate({ ...base, ...bad }, ports);
+    assert.equal(r.ok ? "" : r.refusal.code, "invalid_input", JSON.stringify(bad));
+  }
+  assert.deepEqual([fake.calls.length, store.events().length], [0, 0], "no Task, no row");
+  const verify = { kind: "run_ok", repo: "acme/api" };
+  assert.ok((await itemCreate({ ...base, verify, trigger: "2026-11-17" }, ports)).ok);
+  assert.deepEqual(
+    store.events().filter((e) => e.type === "item_extra_set").map((e) => e.payload),
+    [{ task: "task_7", verify, trigger: "2026-11-17" }],
+  );
+});
+
 test("a timing field of the wrong type is refused before Orca is called", async () => {
   const server = await createServer();
   for (const bad of [{ hold: "yes" }, { exec_by: "reviewer" }, { trigger: 20261117 }]) {
