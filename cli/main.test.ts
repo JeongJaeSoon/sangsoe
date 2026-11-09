@@ -6,12 +6,12 @@ import { run } from "./main.ts";
 
 const pkgVersion: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
-test("--version prints the package.json version", () => {
-  assert.deepEqual(run(["--version"]), { code: 0, out: `sangsoe ${pkgVersion}` });
+test("--version prints the package.json version", async () => {
+  assert.deepEqual(await run(["--version"]), { code: 0, out: `sangsoe ${pkgVersion}` });
 });
 
-test("an unknown command exits 2 with usage", () => {
-  const r = run(["nope"]);
+test("an unknown command exits 2 with usage", async () => {
+  const r = await run(["nope"]);
   assert.equal(r.code, 2);
   assert.match(r.out, /^usage:/);
 });
@@ -24,18 +24,19 @@ const touchless = (): Host => ({
   env: {},
   nodeVersion: "26.0.0",
 });
+const noChecks = () => assert.fail("must not build the start-check context");
 
 for (const argv of [["install", "--help"], ["uninstall", "-h"], ["doctor", "--help"], ["--help"]]) {
-  test(`${argv.join(" ")} prints usage and touches nothing`, () => {
-    const r = run(argv, touchless());
+  test(`${argv.join(" ")} prints usage and touches nothing`, async () => {
+    const r = await run(argv, touchless(), noChecks);
     assert.equal(r.code, 0);
     assert.match(r.out, /^usage:/);
   });
 }
 
 for (const argv of [["install", "--bogus"], ["uninstall", "now"], ["doctor", "--online"]]) {
-  test(`${argv.join(" ")} exits 2 and touches nothing`, () => {
-    const r = run(argv, touchless());
+  test(`${argv.join(" ")} exits 2 and touches nothing`, async () => {
+    const r = await run(argv, touchless(), noChecks);
     assert.equal(r.code, 2);
   });
 }
