@@ -23,7 +23,7 @@
 | — | `orca-plugin/` | X | ② Orca plugin | 칸 뿌리(매니페스트 `orca-plugin.json` 자리) |
 | — | `claude-plugin/` | 섞임 | ③ Claude Code plugin | 칸 뿌리(매니페스트 `.claude-plugin/plugin.json` 자리) |
 
-① Orca CLI 내장 기능에는 디렉터리가 없다: 만들지 않고 `core/orca/` 가 부른다. 저장소 밖에 두는 것: sqlite 파일(`~/.local/share/sangsoe/`), 설정(`~/.config/sangsoe/`), Homebrew formula(별도 탭 저장소). 그 밖의 폴더: `test/`(저장소 전체에 걸친 시험), `docs/`(설계 사본과 이 문서), `.github/workflows/`(CI).
+① Orca CLI 내장 기능에는 디렉터리가 없다: 만들지 않고 `core/orca/` 가 부른다. 저장소 밖에 두는 것: sqlite 파일(`~/.local/share/sangsoe/`), 설정(`~/.config/sangsoe/`), Homebrew formula(별도 탭 저장소). 그 밖의 폴더: `test/`(저장소 전체에 걸친 시험), `docs/`(설계 사본과 이 문서), `.github/workflows/`(CI 와 릴리스), `.claude-plugin/`(Claude Code 마켓플레이스 파일, 아래 "설치와 릴리스").
 
 ## 경계 규칙
 
@@ -83,3 +83,15 @@ runChecks(START_CHECKS, ctx) → startReport(results) | doctorReport(results)
 - **요청 id.** 첫 호출에는 id 를 만들지 않는다. Orca 가 알려 준 id 를 결과에 싣고, 응답을 잃으면 `recoverWrite` 가 `request-show` 뒤에만 같은 id 로 다시 보낸다(결정 60, 결정 103).
 - **가짜 Orca.** `test/fake-orca/` 의 `createFakeOrca({ scenario, replies })` 가 `Exec` 을 준다. 이 Mac 에서 읽기 전용으로 녹화한 JSON 을 일반 이름으로 바꿔 `scenarios/local/` 에 두었고, 다른 시나리오 폴더는 바뀌는 파일만 갖는다. `ORCA_COMMANDS` 밖의 명령은 거부한다.
 - **고르지 않은 꼴.** 명령 이름으로 부르는 범용 함수 하나(`call("worktree list", …)`): 겉면은 작지만 부르는 쪽이 argv 와 결과 모양을 알아야 한다. 메서드마다 타입을 가진 인터페이스를 고르고, 안에서는 같은 표 하나로 argv 를 만든다.
+
+## 설치와 릴리스
+
+최종 릴리스가 그대로 쓰는 계약이다(결정 90·108·109).
+
+- **릴리스 자산.** 태그 `v<package.json 버전>` 을 push 하면 `.github/workflows/release.yml` 이 검사·빌드 뒤 `npm pack` 으로 `sangsoe-<버전>.tar.gz`(+`.sha256`)를 만들어 GitHub 릴리스에 올린다. 압축을 풀면 `package/` 아래 `package.json`·`dist/`·`.claude-plugin/marketplace.json`·`claude-plugin/`·`orca-plugin/`·`README.md` 가 있다. 담는 목록은 `package.json` 의 `files` 하나다. 버전에 `-` 가 있으면 사전 릴리스다.
+- **formula.** 탭 저장소의 `Formula/sangsoe.rb`: `url`(릴리스 자산)·`sha256`·`depends_on "node"`·`libexec.install Dir["*"], ".claude-plugin"`(`Dir["*"]` 는 점 폴더를 뺀다)·`bin/sangsoe` sh 래퍼(`SANGSOE_ROOT=<opt_libexec>` 를 두고 브루의 `node` 로 `dist/cli/main.js` 실행)·`test do`(`--version` 과 `doctor --offline`). `post_install` 은 없다.
+- **`sangsoe install`(멱등).** 상태를 읽고 고른다: 마켓플레이스 `sangsoe` 가 없으면 `claude plugin marketplace add <트리> --scope user`, 있으면 `update`, 다른 경로를 가리키면 `remove` 뒤 `add` → plugin `sangsoe@sangsoe` 가 없으면 `claude plugin install … --scope user`, 있으면 `update` → `orca-plugin/orca-plugin.json` 이 트리에 있으면 `orca plugin dev load <트리>/orca-plugin --json`(종료 코드 3 은 승인 대기, 지문을 보여 주고 `sangsoe plugin approve` 를 안내), 없으면 한 줄로 건너뛴다 → `doctor`. `<트리>` 는 `$(brew --prefix)/opt/sangsoe/libexec` 이라 `brew upgrade` 뒤에도 같다.
+- **`sangsoe uninstall`.** 있는 것만 지운다: `claude plugin uninstall sangsoe@sangsoe --scope user --keep-data` · `claude plugin marketplace remove sangsoe --scope user` · `orca plugin list --json` 에 sangsoe 개발 plugin 이 있으면 `orca plugin dev unload <키>`. 목록을 읽지 못하면 없는 것으로 치지 않고 종료 코드 1 이다. sqlite·설정은 남긴다.
+- **`sangsoe doctor [--offline]`.** 항목마다 `ok` · `FAIL … — fix: <명령>` · `not yet`(아직 없는 부분). `FAIL` 이 하나라도 있으면 종료 코드 1. `--offline` 은 트리(매니페스트 버전 일치·Node 하한)만 본다.
+
+고른 꼴과 버린 꼴: (A, 고름) `tsc` 출력 + `npm pack` + 래퍼가 트리 경로를 환경 변수로 건넴. 선언 하나(`files`)가 자산을 정하고 시험이 그것을 읽는다. (B) 진입점별 esbuild 번들 + `packaging/` 의 묶음 스크립트 + 실행 경로의 Cellar→opt 변환. 번들은 런타임 의존이 없는 지금 얻는 것이 없고, 파일을 실행 중에 찾는 라우터·MCP 수집기를 깨며, 경로 변환은 브루 내부 배치에 기대므로 버렸다.
