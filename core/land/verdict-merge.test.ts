@@ -390,6 +390,7 @@ test("parsePrGate fails closed: more pages, an unknown kind, a missing field, no
     rollup({ contexts: { pageInfo: { hasNextPage: true }, nodes: [] } }),
     rollup({ contexts: { pageInfo: { hasNextPage: false }, nodes: [{ __typename: "Mystery", name: "x" }] } }),
     rollup({ contexts: { pageInfo: { hasNextPage: false }, nodes: [{ __typename: "CheckRun", name: "x", status: "COMPLETED", conclusion: "SUCCESS" }] } }),
+    rollup().replace(`"oid":"${HEAD}"`, `"oid":"${OLD}"`),
     JSON.stringify({ data: { repository: { pullRequest: null } } }),
     "not json",
   ];
