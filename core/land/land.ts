@@ -7,7 +7,6 @@ import { requiredEvidence, type Tier, type TierConfig, verifyTier } from "../ver
 import {
   approvedAndGreen,
   type MergeMethod,
-  mergeMethod,
   type PrGate,
   type Pull,
   patchId,
@@ -263,7 +262,9 @@ async function verdictGate(deps: LandDeps, a: { repo: string; number: number; pr
   if (red) throw new Refused("checks_red", red.name, `${red.name} failed at ${short(a.head)}`, "fix it, push, and have the new head reviewed");
   const pending = counted.find((c) => c.state === "pending");
   if (pending) throw new Refused("checks_pending", pending.name, `${pending.name} has not finished at ${short(a.head)}`, "wait for it, then land again");
-  return must(await mergeMethod(deps.gh, a.repo), "merge_method_unreadable", "allow a merge method in the repo's settings");
+  const method = gate.methods[0];
+  if (!method) throw new Refused("merge_method_unreadable", "", `${a.repo} allows no merge method`, "allow a merge method in the repo's settings");
+  return method;
 }
 
 type StackNode = { kind: "pr" | "task" | "unmapped"; id: string };

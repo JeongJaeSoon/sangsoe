@@ -114,15 +114,20 @@ export async function approvedAndGreen(
 }
 
 export type CheckState = "pass" | "pending" | "fail";
+export type MergeMethod = "squash" | "merge" | "rebase";
 export type PrGate = {
   headSha: string;
   unresolvedThreads: number;
   checks: { name: string; required: boolean; state: CheckState }[];
+  /** The repo's allowed methods in the order land prefers them. */
+  methods: MergeMethod[];
 };
 
-// One page each; a second page is unreadable rather than half-read.
+// One page each; a second page is unreadable rather than half-read. The merge methods come from
+// here, not REST `repos/<r>`: that answers null for them when the owner is spelled lowercase.
 const GATE_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
+    squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed
     pullRequest(number: $number) {
       headRefOid
       reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
@@ -153,7 +158,15 @@ export function parsePrGate(stdout: string): Read<PrGate> {
     return no("not JSON");
   }
   // biome-ignore lint/suspicious/noExplicitAny: walked field by field below, each one checked
-  const pull = (doc as any)?.data?.repository?.pullRequest;
+  const repository = (doc as any)?.data?.repository;
+  const allowed: [MergeMethod, unknown][] = [
+    ["squash", repository?.squashMergeAllowed],
+    ["merge", repository?.mergeCommitAllowed],
+    ["rebase", repository?.rebaseMergeAllowed],
+  ];
+  if (!allowed.every(([, v]) => typeof v === "boolean")) return no("merge methods unreadable");
+  const methods = allowed.filter(([, v]) => v === true).map(([m]) => m);
+  const pull = repository.pullRequest;
   if (typeof pull?.headRefOid !== "string") return no("no head");
   const threads = pull.reviewThreads;
   if (!Array.isArray(threads?.nodes) || threads.pageInfo?.hasNextPage !== false) return no("review threads unreadable or paged");
@@ -178,7 +191,7 @@ export function parsePrGate(stdout: string): Read<PrGate> {
     }
   }
   const unresolvedThreads = threads.nodes.filter((t: { isResolved: boolean }) => !t.isResolved).length;
-  return { kind: "ok", data: { headSha: pull.headRefOid, unresolvedThreads, checks } };
+  return { kind: "ok", data: { headSha: pull.headRefOid, unresolvedThreads, checks, methods } };
 }
 
 export function readPrGate(exec: Exec): (a: { repo: string; pr: number }) => Promise<Read<PrGate>> {
@@ -188,19 +201,6 @@ export function readPrGate(exec: Exec): (a: { repo: string; pr: number }) => Pro
     if (r.code !== 0) return { kind: "unreadable", why: `PR gate: gh exited ${r.code ?? r.failure}: ${r.stderr.trim().slice(0, 200)}` };
     return parsePrGate(r.stdout);
   };
-}
-
-export type MergeMethod = "squash" | "merge" | "rebase";
-type RepoMeta = { allow_squash_merge?: boolean; allow_merge_commit?: boolean; allow_rebase_merge?: boolean };
-
-/** The repo's first allowed method of squash, merge, rebase; unreadable when none is. */
-export async function mergeMethod(gh: GhClient, repo: string): Promise<Read<MergeMethod>> {
-  const r = lift<RepoMeta>(await gh.get(`repos/${repo}`), repo);
-  if (r.kind !== "ok") return r;
-  if (r.data.allow_squash_merge === true) return { kind: "ok", data: "squash" };
-  if (r.data.allow_merge_commit === true) return { kind: "ok", data: "merge" };
-  if (r.data.allow_rebase_merge === true) return { kind: "ok", data: "rebase" };
-  return { kind: "unreadable", why: `${repo}: no merge method allowed` };
 }
 
 type Compare = { status?: string; files?: PrFile[] };

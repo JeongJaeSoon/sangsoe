@@ -36,12 +36,12 @@ const GREEN: PrGate = {
     { name: "unit", required: false, state: "pass" },
     { name: "lint", required: false, state: "pass" },
   ],
+  methods: ["squash", "merge", "rebase"],
 };
 
 type World = {
   files?: unknown[];
   pull?: Record<string, unknown>;
-  repoMeta?: GhResponse<unknown>;
   gate?: PrGate | "unreadable" | "absent";
   optIn?: boolean;
   protectedPaths?: string[];
@@ -65,7 +65,6 @@ function harness(w: World = {}) {
     [`repos/${REPO}/rules/branches/main`]: ok(NO_RULES),
     [`repos/${REPO}/branches/main/protection`]: { kind: "error", status: 403, message: "Resource not accessible by integration" },
     [`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`]: ok([]),
-    [`repos/${REPO}`]: w.repoMeta ?? ok({ allow_squash_merge: true, allow_merge_commit: true, allow_rebase_merge: true }),
   };
   const paths: string[] = [];
   const gh: GhClient = {
@@ -157,7 +156,6 @@ test("opted out: the same PR is merge_on_approval as today, and the gate is neve
   const r = await land(input(), h.deps);
   assert.equal(refusal(r), "ok:merge_on_approval");
   assert.deepEqual([h.mergesNow, h.merges, h.gateReads], [[], [], []]);
-  assert.ok(!h.paths.includes(`repos/${REPO}`), "the merge method was not read");
   assert.deepEqual(landRows(h.store), ["land_requested:merge_on_approval"]);
 });
 
@@ -274,17 +272,15 @@ test("protected paths and V3 stay the owner's: merge_on_approval, as today", asy
   assert.deepEqual([prot.mergesNow, v3.mergesNow, prot.gateReads, v3.gateReads], [[], [], [], []]);
 });
 
-test("the merge method is the repo's first allowed of squash, merge, rebase; none or unreadable refuses", async () => {
-  const rebase = harness({ repoMeta: ok({ allow_squash_merge: false, allow_merge_commit: false, allow_rebase_merge: true }) });
+test("the merge method is the repo's first allowed of squash, merge, rebase; none refuses", async () => {
+  const rebase = harness({ gate: { ...GREEN, methods: ["rebase"] } });
   ready(rebase.store);
   await land(input(), rebase.deps);
   assert.deepEqual(rebase.mergesNow, [{ repo: REPO, pr: 12, head: HEAD, method: "rebase" }]);
-  for (const repoMeta of [ok({ allow_squash_merge: false, allow_merge_commit: false, allow_rebase_merge: false }), ok({}), { kind: "error", status: 500, message: "boom" } as GhResponse<unknown>]) {
-    const h = harness({ repoMeta });
-    ready(h.store);
-    assert.equal(refusal(await land(input(), h.deps)), "merge_method_unreadable");
-    assert.deepEqual(h.mergesNow, []);
-  }
+  const none = harness({ gate: { ...GREEN, methods: [] } });
+  ready(none.store);
+  assert.equal(refusal(await land(input(), none.deps)), "merge_method_unreadable");
+  assert.deepEqual(none.mergesNow, []);
 });
 
 test("GitHub refusing the plain merge is land_failed{merge_refused}", async () => {
@@ -330,10 +326,13 @@ test("argv: the scheduled merge decision 81 makes is unchanged", async () => {
   assert.deepEqual(f.calls, [["gh", "pr", "merge", "12", "--repo", REPO, "--auto", "--squash", "--match-head-commit", HEAD]]);
 });
 
-const rollup = (o: { threads?: unknown; contexts?: unknown; head?: string } = {}) =>
+const rollup = (o: { threads?: unknown; contexts?: unknown; head?: string; squash?: unknown } = {}) =>
   JSON.stringify({
     data: {
       repository: {
+        squashMergeAllowed: "squash" in o ? o.squash : false,
+        mergeCommitAllowed: true,
+        rebaseMergeAllowed: true,
         pullRequest: {
           headRefOid: o.head ?? HEAD,
           reviewThreads: o.threads ?? { pageInfo: { hasNextPage: false }, nodes: [{ isResolved: true }, { isResolved: false }] },
@@ -379,12 +378,14 @@ test("parsePrGate: head, unresolved threads and each check's required flag and s
         { name: "ci/legacy", required: false, state: "pending" },
         { name: "ci/ok", required: true, state: "pass" },
       ],
+      methods: ["merge", "rebase"],
     },
   });
 });
 
 test("parsePrGate fails closed: more pages, an unknown kind, a missing field, not JSON", () => {
   const bad = [
+    rollup({ squash: null }),
     rollup({ threads: { pageInfo: { hasNextPage: true }, nodes: [] } }),
     rollup({ contexts: { pageInfo: { hasNextPage: true }, nodes: [] } }),
     rollup({ contexts: { pageInfo: { hasNextPage: false }, nodes: [{ __typename: "Mystery", name: "x" }] } }),
@@ -397,9 +398,16 @@ test("parsePrGate fails closed: more pages, an unknown kind, a missing field, no
 
 test("parsePrGate: a commit with no rollup has no checks", () => {
   const s = JSON.stringify({
-    data: { repository: { pullRequest: { headRefOid: HEAD, reviewThreads: { pageInfo: { hasNextPage: false }, nodes: [] }, commits: { nodes: [{ commit: { oid: HEAD, statusCheckRollup: null } }] } } } },
+    data: {
+      repository: {
+        squashMergeAllowed: true,
+        mergeCommitAllowed: false,
+        rebaseMergeAllowed: false,
+        pullRequest: { headRefOid: HEAD, reviewThreads: { pageInfo: { hasNextPage: false }, nodes: [] }, commits: { nodes: [{ commit: { oid: HEAD, statusCheckRollup: null } }] } },
+      },
+    },
   });
-  assert.deepEqual(parsePrGate(s), { kind: "ok", data: { headSha: HEAD, unresolvedThreads: 0, checks: [] } });
+  assert.deepEqual(parsePrGate(s), { kind: "ok", data: { headSha: HEAD, unresolvedThreads: 0, checks: [], methods: ["squash"] } });
 });
 
 test("readPrGate passes owner, name and number as GraphQL variables", async () => {

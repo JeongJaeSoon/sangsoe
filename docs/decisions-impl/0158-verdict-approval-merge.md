@@ -13,7 +13,9 @@
 | 증거 | 결정 85 의 증거 점검(조건 넷 앞, 그대로) | `evidence_missing` |
 | 머지 가능 상태 | REST `pulls/<N>` 의 `mergeable_state` | `clean`·`has_hooks` 가 아니다(계산 중인 `unknown` 포함) → `not_mergeable:<state>` |
 | head·리뷰 스레드·검사 | GraphQL 한 번: `headRefOid`, `reviewThreads`, 마지막 커밋의 `statusCheckRollup.contexts` 와 각 `isRequired` | 읽지 못함·다음 쪽이 있음·모르는 종류 → `gate_unreadable` · head 가 다르다 → `head_moved` · 풀리지 않은 스레드 → `threads_unresolved:<n>` · 검사가 없다 → `checks_missing` · 빨강 → `checks_red:<name>` · 진행 중 → `checks_pending:<name>` |
-| 머지 방식 | REST `repos/<r>` 의 `allow_squash_merge`·`allow_merge_commit`·`allow_rebase_merge` | 읽지 못함·허용된 것이 없다 → `merge_method_unreadable`. squash, merge, rebase 순으로 처음 허용된 것 |
+| 머지 방식 | 같은 GraphQL 의 `squashMergeAllowed`·`mergeCommitAllowed`·`rebaseMergeAllowed` | 읽지 못함 → `gate_unreadable` · 허용된 것이 없다 → `merge_method_unreadable`. squash, merge, rebase 순으로 처음 허용된 것 |
+
+머지 방식을 REST `repos/<r>` 의 `allow_*_merge` 로 읽지 않는 이유: land 는 저장소 이름을 소문자로 다루는데, 소유자를 소문자로 쓴 `repos/<r>` 는 이 세 칸을 `null` 로 돌려준다(실측). GraphQL 은 대소문자와 무관하게 값을 준다.
 
 **어느 출처가 승인으로 세는가.** `review_verdict` 에는 출처 칸이 없다. 그래서 행이 이미 가진 칸으로 정한다: 계약이 허용하는 유일한 작성자 `sangsoe review record`(`source`)가 썼고, 기록자(`actor`)가 판정의 리뷰어와 같고, 판정이 지금의 작성자에 대한 것이며, 리뷰어가 작성자가 아니다. 이 중 하나라도 읽지 못하거나 맞지 않으면 세지 않는다.
 
