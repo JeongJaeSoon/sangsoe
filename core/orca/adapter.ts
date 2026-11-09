@@ -192,7 +192,16 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     runCreate: (a, o) => run("runCreate", { flags: { objective: a.objective } }, o),
     runUse: (a, o) => run("runUse", { flags: { id: a.id } }, o),
     runCurrent: () => shaped("runCurrent", isObject),
-    runShow: (a) => shaped("runShow", isObject, { flags: { id: a.id } }),
+    runShow: async (a) => {
+      const r = await shaped<Json>("runShow", has("run", has("id", (x) => typeof x === "string")), { flags: { id: a.id, full: true } });
+      if (!r.ok) return r;
+      const run = r.value.run as Json;
+      const handle = run.coordinator_handle;
+      return {
+        ok: true,
+        value: { runId: run.id as string, objective: String(run.objective ?? ""), ...(typeof handle === "string" && handle ? { coordinatorHandle: handle } : {}) },
+      };
+    },
 
     gateCreate: (a, o) =>
       run("gateCreate", { flags: { task: a.task, question: a.question, options: jsonArray(a.options) } }, o),
