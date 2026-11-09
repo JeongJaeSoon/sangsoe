@@ -13,6 +13,8 @@ export type MonitorRunner = {
     name: string,
     signal?: AbortSignal,
   ): Promise<{ planned: unknown[]; written: unknown[]; unseen: string[]; aborted: boolean }>;
+  /** The timer-stall check; absent in a core older than the queue-monitor. */
+  stall?(): Promise<unknown>;
   close(): void;
 };
 

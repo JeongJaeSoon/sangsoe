@@ -27,7 +27,7 @@ export async function monitor(
 
 export default {
   name: "monitor",
-  summary: "run one monitor round (orca, resource, chat, pr); --dry-run prints the events and Orca writes it would make",
+  summary: "run one monitor round (orca, resource, chat, pr, queue); --dry-run prints the events and Orca writes it would make",
   usage: USAGE,
   maxPositionals: 2,
   options: { "dry-run": { type: "boolean" }, db: { type: "string" }, home: { type: "string" } },

@@ -10,7 +10,8 @@ test("sangsoe monitor run <name> runs one round of the named monitor, dry run pa
   const fake = (o: { dryRun: boolean; dbPath?: string }): MonitorRunner => {
     opened.push(o);
     return {
-      run: async (name) => ({ monitor: name, planned: [], written: [], unseen: [], aborted: false, acts: [] }),
+      run: async (name) => ({ monitor: name, planned: [], written: [], unseen: [], calls: [], aborted: false, acts: [] }),
+      stall: async () => ({ planned: [], written: [], calls: [] }),
       close: () => void closed++,
     };
   };
@@ -24,7 +25,7 @@ test("an unknown monitor or verb is refused before anything opens", async () => 
   const never = (): MonitorRunner => {
     throw new Error("opened");
   };
-  for (const args of [["run", "queue"], ["start", "orca"], ["run"]]) {
+  for (const args of [["run", "reaper"], ["start", "orca"], ["run"]]) {
     const r = await monitor(args, {}, never);
     assert.equal(!r.ok && r.refusal.code, "invalid_input", args.join(" "));
   }

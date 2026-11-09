@@ -6,11 +6,13 @@ import { loadPanelCore, loadRunners, type MonitorRunner, type PanelCore, type Ru
 import { chatMonitor } from "./monitors/chat.ts";
 import { orcaMonitor } from "./monitors/orca.ts";
 import { prMonitor } from "./monitors/pr.ts";
+import { queueMonitor } from "./monitors/queue.ts";
 import { resourceMonitor } from "./monitors/resource.ts";
 import { type LastRound, monitorRound } from "./monitors/spec.ts";
 import { panelHandlers } from "./panel/requests.ts";
 import { ownKey, probeExec, probeSqlite } from "./probe.ts";
 import { type LastReap, REAPER_HINTS, REAPER_ID, reaperRound } from "./reaper/round.ts";
+import { stallWatch } from "./stall.ts";
 import { type Clock, nodeClock, type Round, startRounds } from "./timer.ts";
 
 // The few host members this worker uses; `orca plugin types` cannot write the full typings on
@@ -33,7 +35,7 @@ export type WorkerDeps = {
 };
 
 export const EVENTS = ["workspace.created", "workspace.removed", "workspace.changed", "agent.status.changed"] as const;
-export const MONITORS = [orcaMonitor, resourceMonitor, chatMonitor, prMonitor];
+export const MONITORS = [orcaMonitor, resourceMonitor, chatMonitor, prMonitor, queueMonitor];
 // Which Orca event asks which monitor for an early round (a hint; decision 83).
 const HINTS: Partial<Record<(typeof EVENTS)[number], string>> = { "agent.status.changed": orcaMonitor.name };
 const STATUS_ID = "summary";
@@ -55,6 +57,7 @@ export default function activate(
   const lastRounds = new Map<string, LastRound>();
   const lastReap: { value: LastReap | null } = { value: null };
   let monitorState = deps.runners ? "loading" : "off";
+  let stall: ReturnType<typeof stallWatch> | null = null;
   for (const e of EVENTS) {
     events[e] = { count: 0, lastAt: null };
     orca.events.on(e, () => {
@@ -65,6 +68,7 @@ export default function activate(
       }
       const target = HINTS[e];
       if (target) monitorRounds?.hint(target);
+      stall?.poke();
     });
   }
 
@@ -84,7 +88,11 @@ export default function activate(
     },
   };
   const rounds = startRounds([statusRound], clock);
-  orca.panels.handle("panel.brief", panel["panel.brief"]);
+  // A panel refresh is one of the two things that run the stall check (decision 83).
+  orca.panels.handle("panel.brief", (input) => {
+    stall?.poke();
+    return panel["panel.brief"](input);
+  });
   orca.panels.handle("panel.act", panel["panel.act"]);
   stopRounds = () => {
     stopped = true;
@@ -93,6 +101,7 @@ export default function activate(
     const open = runner;
     monitorRounds = null;
     runner = null;
+    stall = null;
     // A round still in flight holds the store: close it only after that round has returned.
     void (m?.stop() ?? Promise.resolve()).then(() => {
       open?.monitors.close();
@@ -113,6 +122,8 @@ export default function activate(
     }
     runner = r;
     monitorState = "running";
+    const check = r.monitors.stall?.bind(r.monitors);
+    if (check) stall = stallWatch(check, clock);
     // A monitor that wrote a finishing or pressure event asks REAPER for an early round.
     const hinting: MonitorRunner = {
       run: async (name, signal) => {
@@ -140,16 +151,20 @@ export default function activate(
   orca.commands.register("sangsoe.open", openPanel);
   orca.panels.handle("probe.open", openPanel);
 
-  orca.panels.handle("probe.report", () => ({
+  orca.panels.handle("probe.report", () => {
+    stall?.poke();
+    return report();
+  });
+  const report = () => ({
     startedAt,
     node: process.version,
     sqlite: process.versions.sqlite ?? null,
     path: process.env.PATH ?? null,
     rounds: rounds.stats(),
-    monitors: { state: monitorState, rounds: monitorRounds?.stats() ?? {}, last: Object.fromEntries(lastRounds) },
+    monitors: { state: monitorState, rounds: monitorRounds?.stats() ?? {}, last: Object.fromEntries(lastRounds), stall: stall?.state() ?? null },
     reaper: lastReap.value,
     events,
-  }));
+  });
   orca.panels.handle("probe.t1", async (input) => {
     const path = (input as { dbPath?: unknown } | null)?.dbPath;
     if (typeof path !== "string" || path === "") return { ok: false, error: "dbPath required" };
