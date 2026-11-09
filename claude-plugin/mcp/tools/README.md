@@ -45,7 +45,7 @@ export default {
 | `decision_open` | 결정 열기(같은 결정 키는 거부하고 기존 dNNN 반환) | `{key, question, waiters}` | U8 |
 | `decision_answer` | 결정 답·게이트 풀기·대기자 깨움 | `{decision, answer, source}` | U8 |
 | `notify` | 판단이 필요한 신호로 세션 한 번 깨우기 | `{item, kind, body}` | U8 |
-| `land` | land 판정 함수 호출(머지 예약 또는 "승인되면 머지") | `{pr, head_sha}` | U11 |
+| `land` | land 판정 함수 호출(머지 예약 또는 "승인되면 머지"). 이름·입력 확정, CLI `sangsoe land` 와 같은 결과 | `{pr, repo?, head_sha?, dry_run?, main_fix?}` | U11 |
 | `handoff_save` | 판단 상태 넷을 Orca `handoff` 메시지로 남기기 | `{next, waiting, open_questions, reply_to}` | U13 |
 | `review_ask_record` | 리뷰 의뢰를 `review_ask_sent` 로 남기기 | `{pr, reviewer, channel}` | U13 |
 
