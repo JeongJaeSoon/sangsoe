@@ -22,6 +22,7 @@
 | 실행 | `orca-plugin/reaper/` | X | ② Orca plugin | REAPER 라운드 타이머 |
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |
 | 실행 | `claude-plugin/mcp/` | X | ③ Claude Code plugin | MCP 서버(에이전트의 입구) |
+| 실행 | `claude-plugin/mcp/tools/` | X | ③ Claude Code plugin | MCP tool 하나 = 파일 하나 |
 | 판단 | `claude-plugin/skills/` | O | ③ Claude Code plugin | 판단 절차 skill |
 | 판단 | `claude-plugin/skills/general/` | O | ③ Claude Code plugin | 일반 작업 skill(결정 95) |
 | 판단 | `claude-plugin/agents/` | O | ③ Claude Code plugin | 오케스트레이터 · 리드 · 워커 정의 |
@@ -59,6 +60,19 @@
 - 버린 꼴: 최상위를 `token-free/`·`token-using/` 으로 가르는 안. 토큰 구분은 가장 잘 보이지만 한 plugin(③)이 두 뿌리로 찢어져 매니페스트가 가리킬 폴더가 둘이 된다.
 
 결정 번호와 이유는 `decisions-impl/`(결정 96–101).
+
+## 어댑터 등록 계약 (MCP tool · CLI 명령)
+
+같은 코어 함수를 두 입구가 감싼다. 입구마다 항목 하나가 파일 하나이고, 입구는 시작할 때 자기 폴더를 읽어 모은다. 그래서 단위는 파일 하나를 더하고 공유 목록을 고치지 않는다(결정 110).
+
+| 입구 | 파일 | default export | 호출자 |
+|---|---|---|---|
+| MCP 서버 `claude-plugin/mcp/server.ts`(stdio) | `claude-plugin/mcp/tools/<name>.ts`, `resources/<name>.ts` | `ToolDef`·`ResourceDef`(`claude-plugin/mcp/contract.ts`) | 에이전트 전부 |
+| CLI 라우터 `cli/main.ts` | `cli/commands/<name>.ts`(두 낱말 이름은 `-` 로: `plugin approve` → `plugin-approve.ts`) | `CommandDef`(`cli/contract.ts`) | 셸 호출자 여섯 행 |
+
+- 결과는 `Outcome` 하나: `{ ok: true, value }` 또는 `{ ok: false, refusal: { code, reason, fix } }`. MCP 는 `isError` 와 JSON 본문으로, CLI 는 종료 코드(0 성공 · 1 거부 · 2 사용법 오류)와 `--json` 출력으로 낸다. 사람에게 보고만 하는 CLI 명령(`install`·`uninstall`·`doctor`·`plugin approve`)은 `Report`(`{ code, lines }`)를 돌려준다. 명령은 호스트(`Host`)를 인자로 받아 시험이 가짜를 넣는다.
+- 모르는 명령·인자·tool·입력 칸은 코어 함수에 닿기 전에 입구가 거부하고 맞는 형태(사용법 줄, 입력 칸 목록)를 보인다. `--help` 도 아무것도 부르지 않는다.
+- `test/boundaries/both-entrances.ts` 의 `expectSameViaBothEntrances` 가 한 호출을 두 입구로 보내 `Outcome` 이 같은지 본다.
 
 ## 코어 계약 (U1)
 
