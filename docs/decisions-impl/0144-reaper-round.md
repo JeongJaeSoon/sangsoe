@@ -31,7 +31,7 @@
 
 **Docker(결정 82 R6).** 주인 카드의 `reap_done` 이 있는(이번 라운드든 앞 라운드든) 기록된 id 만, 정지한 컨테이너 → 볼륨 → 네트워크 → 이미지 순으로 하나씩. `docker version` 이 서버를 답하지 않으면 건너뛰고 `docker_skipped=true`. `inspect` 로 없는 id 는 REAPER 가 `resource{released}`(source `reaper`)로 기록을 닫는다. 도는 컨테이너와 `rm` 이 거부된 id(쓰는 중, 다른 이미지의 base)는 `reap_blocked{in_use}` 로 사람에게 넘기고, 그것도 기록을 닫는다. 그래서 어떤 id 도 두 번 시도하지 않는다: 같은 이름이 나중에 다른 카드의 것이 되어도 앞 주인의 기록으로 지우지 않는다. `-f`·`prune`·`down -v`·라벨이나 이름으로 고르기는 없다.
 
-**기록의 주인.** 한 Docker 이름의 기록은 seq 순으로 접는다: `created` 가 잡고, `released`·`reap_done`·`reap_blocked{in_use}` 가 놓는다. 다른 주인이 잡고 있는 이름의 `created` 는 `resource_record` 가 `held_by_other` 로 거부한다(조용히 합치면 앞 주인의 정리가 뒤 주인의 것을 지운다). `dedupe_key` 에 놓인 횟수(`g<n>`)를 넣어, 놓인 이름을 다시 기록하면 새 행이 된다.
+**기록의 주인.** 한 Docker 이름의 기록은 seq 순으로 접는다: `created` 가 잡고, `released`·`reap_done`·`reap_blocked{in_use}` 가 놓는다. 다른 주인이 잡고 있는 이름의 `created` 는 `resource_record` 가 `held_by_other` 로 거부하고, 그 이름을 `reap_blocked{in_use}` 로 사람에게 넘긴다: 기록하는 때면 물건은 이미 두 주인이 함께 쓰고 있으니 어느 쪽의 정리도 지워서는 안 된다. 읽기와 쓰기 사이에 다른 쪽이 먼저 기록한 경우도 같다. `released` 는 잡은 주인만 쓴다. `inspect` 가 Docker 의 "No such" 답 없이 실패하면(시간 초과, 데몬 오류) 기록을 닫지 않고 "모름"으로 센다. `dedupe_key` 에 놓인 횟수(`g<n>`)를 넣어, 놓인 이름을 다시 기록하면 새 행이 된다.
 
 **터미널은 닫지 않는다.** REAPER 는 `worker-release`·`terminal` 을 부르지 않는다(Orca 의 자동 해제와 리드의 몫, 결정 74 O-12).
 

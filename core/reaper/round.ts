@@ -9,7 +9,7 @@ import { preDelete } from "./checks.ts";
 import type { ReaperConfig } from "./config.ts";
 import { dockerUp, sweepDocker } from "./docker.ts";
 import { branchOf, type Finished, judgeFinished, repoOf } from "./finished.ts";
-import { dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
+import { blockedKey, dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
 
 /** The only Orca calls REAPER has: three reads and the one removal. No terminal call exists here. */
 export type ReaperOrca = Pick<OrcaAdapter, "worktreeList" | "worktreePs" | "workerList" | "worktreeRm">;
@@ -355,9 +355,10 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
             type: "reap_blocked",
             source: SOURCE,
             payload: { kind: x.kind, ref: x.ref, reason: "in_use" },
-            dedupe_key: key("reap_blocked", x.kind, x.ref, "in_use", gen),
+            dedupe_key: blockedKey(x.kind, x.ref, h.gen),
           });
-        } else write(goneRow(h));
+        } else if (x.result === "gone") write(goneRow(h));
+        else r.unknown.push(`${x.kind}:${x.ref}: inspect failed`);
       }
     }
   }

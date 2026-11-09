@@ -7,7 +7,7 @@ import { DOCKER_KINDS, type DockerKind, type DockerRef, isDockerKind } from "./d
 export type ResourceInput = { kind: string; ref: string; owner: string; action?: "created" | "released" };
 export type ResourceRecorded = { kind: string; ref: string; owner: string; action: string; seq: number; inserted: boolean };
 
-type Appender = { append(e: NewEvent<"resource">): Appended; events(f?: EventFilter): StoredEvent[] };
+type Appender = { append(e: NewEvent<"resource"> | NewEvent<"reap_blocked">): Appended; events(f?: EventFilter): StoredEvent[] };
 
 const refusal = (reason: string, fix: string, code = "invalid_input") => ({ ok: false, refusal: { code, reason, fix } }) as const;
 
@@ -70,24 +70,50 @@ export function recordResource(store: Appender, input: ResourceInput): Result<Re
     if (typeof v !== "string" || v.trim() === "") return refusal(`${name} is empty`, `pass the Docker id as ref and the Task or worktree id as owner`);
   }
   if (action !== "created" && action !== "released") return refusal(`action ${action}`, "action is created or released");
-  const hold = dockerHolds(holdEvents((f) => store.events(f))).get(`${kind}\n${ref}`);
-  if (hold?.held && hold.owner !== owner) {
-    return refusal(
-      `${kind} ${ref} is already recorded for another owner`,
-      "use a name of your own (another compose project name), or have that owner release it first",
-      "held_by_other",
-    );
+  const holdOf = () => dockerHolds(holdEvents((f) => store.events(f))).get(`${kind}\n${ref}`);
+  const hold = holdOf();
+  if (action === "released" && (!hold?.held || hold.owner !== owner)) {
+    return refusal(`${kind} ${ref} is not held by ${owner}`, "only the owner that recorded it releases it");
   }
-  if (action === "released" && !hold?.held) return refusal(`${kind} ${ref} is not held`, "record it as created first");
-  const gen = hold?.gen ?? 0;
+  if (hold?.held && hold.owner !== owner) return contested(store, hold);
   const a = store.append({
     type: "resource",
     source: "resource_record",
     payload: { action, kind, owner, ref },
-    dedupe_key: resourceKey(kind, ref, action, gen),
+    dedupe_key: resourceKey(kind, ref, action, hold?.gen ?? 0),
   });
+  if (!a.inserted && action === "created") {
+    // Another writer recorded the same name between the read and the append.
+    const now = holdOf();
+    if (now?.held && now.owner !== owner) return contested(store, now);
+  }
   return { ok: true, value: { kind, ref, owner, action, seq: a.seq, inserted: a.inserted } };
 }
+
+/**
+ * A second owner claims a name the first still holds: the object is by then shared, so neither
+ * owner's sweep may take it. The hold is ended as in use, which hands the name to a person, and the
+ * second owner is refused.
+ */
+function contested(store: Appender, h: Hold): Result<never> {
+  store.append({
+    type: "reap_blocked",
+    source: "resource_record",
+    payload: { kind: h.kind, ref: h.ref, reason: "in_use" },
+    dedupe_key: blockedKey(h.kind, h.ref, h.gen),
+  });
+  return refusal(
+    `${h.kind} ${h.ref} is already recorded for another owner; it is now left for a person, not swept`,
+    "use a name of your own (another compose project name)",
+    "held_by_other",
+  );
+}
+
+export const blockedKey = (kind: string, ref: string, gen: number) => {
+  const def = eventDef("reap_blocked");
+  if (!def) throw new Error("no event type reap_blocked");
+  return dedupeKey(def, kind, ref, "in_use", `g${gen}`);
+};
 
 /** REAPER's own close of a hold: the recorded name no longer exists in Docker. */
 export function goneRow(h: Hold): NewEvent<"resource"> {
@@ -99,7 +125,7 @@ export function goneRow(h: Hold): NewEvent<"resource"> {
   };
 }
 
-/** Opens the store on first use, so a refused record never touches it. */
+/** Opens the store on first use, so an invalid record never touches it. */
 export function lazyStore(open: () => Store = () => Store.open()): Appender & { close(): void } {
   let store: Store | null = null;
   const get = () => {

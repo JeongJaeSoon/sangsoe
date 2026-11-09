@@ -169,6 +169,8 @@ export class FakeGh implements GhClient {
 /** Docker as REAPER may run it; any other form fails the test. */
 export class FakeDocker {
   daemon = true;
+  /** inspect fails with an error that is not "No such ...". */
+  inspectError = false;
   /** id → running (containers) or present (others). */
   objects = new Map<string, { kind: string; running?: boolean; inUse?: boolean }>();
   calls: string[] = [];
@@ -185,7 +187,8 @@ export class FakeDocker {
     const id = rest.at(-1) ?? "";
     const o = this.objects.get(id);
     if (verb === "inspect") {
-      if (!o || o.kind !== kind) return r(1);
+      if (this.inspectError) return r(1);
+      if (!o || o.kind !== kind) return { code: 1, stdout: "", stderr: `Error: No such ${kind}: ${id}` };
       return r(0, kind === "container" ? String(o.running === true) : "[]");
     }
     if (verb === "rm") {

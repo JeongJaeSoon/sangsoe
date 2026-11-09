@@ -231,17 +231,44 @@ test("reap_docker_order: a recorded id already gone closes its record and is not
   assert.ok(again.ok && again.value.inserted, "a released name can be recorded again by a new owner");
 });
 
-test("resource_record: a name another owner still holds is refused, not merged", () => {
+test("resource_record: the same owner recording twice is one row; release frees the name", () => {
   const w = world();
-  assert.ok(recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-a" }).ok);
-  const other = recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-b" });
-  assert.equal(other.ok, false);
-  assert.equal(!other.ok && other.refusal.code, "held_by_other");
-  const same = recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-a" });
-  assert.ok(same.ok && !same.value.inserted, "the same owner recording twice is one row");
-  assert.ok(recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-a", action: "released" }).ok);
-  assert.ok(recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-b" }).ok, "free after release");
+  assert.ok(recordResource(w.store, { kind: "volume", ref: "own_data", owner: "inst-a" }).ok);
+  const same = recordResource(w.store, { kind: "volume", ref: "own_data", owner: "inst-a" });
+  assert.ok(same.ok && !same.value.inserted);
+  const stranger = recordResource(w.store, { kind: "volume", ref: "own_data", owner: "inst-b", action: "released" });
+  assert.equal(stranger.ok, false, "only the holder releases");
+  assert.ok(recordResource(w.store, { kind: "volume", ref: "own_data", owner: "inst-a", action: "released" }).ok);
+  assert.ok(recordResource(w.store, { kind: "volume", ref: "own_data", owner: "inst-b" }).ok, "free after release");
   assert.equal(w.types("resource").length, 3);
+});
+
+test("reap_docker_order: a name a second owner also claims is refused and never swept", async () => {
+  const w = world();
+  finishedCard(w, "first");
+  w.docker.objects.set("shared_data", { kind: "volume" });
+  assert.ok(recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-first" }).ok);
+  const other = recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-second" });
+  assert.equal(!other.ok && other.refusal.code, "held_by_other");
+  assert.deepEqual(w.types("reap_blocked"), [{ kind: "volume", ref: "shared_data", reason: "in_use" }]);
+  await rounds(w, 4);
+  assert.equal(rms(w).length, 1, "the first owner's card goes");
+  assert.ok(!w.docker.calls.some((c) => c.startsWith("volume")), "the shared volume is not touched");
+  assert.ok(w.docker.objects.has("shared_data"));
+});
+
+test("reap_docker_order: an inspect that fails without a not-found answer keeps the record", async () => {
+  const w = world();
+  finishedCard(w, "flaky");
+  w.docker.objects.set("flaky_data", { kind: "volume" });
+  recordResource(w.store, { kind: "volume", ref: "flaky_data", owner: "inst-flaky" });
+  w.docker.inspectError = true;
+  const r = await rounds(w, 3);
+  assert.ok(r.unknown.includes("volume:flaky_data: inspect failed"));
+  assert.equal(w.types("resource").length, 1, "no released row");
+  w.docker.inspectError = false;
+  await rounds(w, 1);
+  assert.ok(!w.docker.objects.has("flaky_data"), "swept once Docker answers");
 });
 
 test("reap_two_rounds_grace: a card on no branch is never judged finished from someone else's PR", async () => {

@@ -5,7 +5,7 @@ export type DockerKind = (typeof DOCKER_KINDS)[number];
 export const isDockerKind = (k: string): k is DockerKind => (DOCKER_KINDS as readonly string[]).includes(k);
 
 export type DockerRef = { kind: DockerKind; ref: string };
-export type DockerOutcome = { kind: DockerKind; ref: string; result: "removed" | "gone" | "in_use" };
+export type DockerOutcome = { kind: DockerKind; ref: string; result: "removed" | "gone" | "in_use" | "unknown" };
 
 /** Whether `docker` has a daemon to answer; with none the Docker step is skipped (decision 82 R6). */
 export async function dockerUp(exec: Exec): Promise<boolean> {
@@ -25,7 +25,8 @@ export async function sweepDocker(exec: Exec, refs: readonly DockerRef[]): Promi
       const args = kind === "container" ? ["--format", "{{.State.Running}}", ref] : [ref];
       const seen = await exec("docker", [kind, "inspect", ...args]);
       if (seen.code !== 0) {
-        out.push({ kind, ref, result: "gone" });
+        // Only Docker's own not-found answer closes the record; a timeout or daemon error is asked again.
+        out.push({ kind, ref, result: /no such/i.test(seen.stderr) ? "gone" : "unknown" });
         continue;
       }
       if (kind === "container" && seen.stdout.trim() !== "false") {
