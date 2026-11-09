@@ -1,6 +1,21 @@
 // The only module other slots may import from the core; see docs/architecture.md.
 export * from "./contract/index.ts";
 export * from "./store/checks.ts";
+export {
+  evaluate,
+  GATES,
+  type HookInput,
+  hookOutput,
+  type Merged as GateMerged,
+  mergeVerdicts,
+  parseHookInput,
+  roleOf,
+  START_TOOL_ID,
+} from "./gates/index.ts";
+export type { Facts as GateFacts, Gate, Verdict as GateVerdict, Role as SessionRole } from "./gates/types.ts";
+export { firstPrompt, hostFacts, openPrs } from "./gates/facts.ts";
+export { deniedDir, recordDenial } from "./gates/record.ts";
+export { type ReplayCounts, type ReplayRow, replay } from "./gates/replay.ts";
 export * from "./store/store.ts";
 export { decision } from "./store/views/decision.ts";
 export { item_timeline } from "./store/views/item_timeline.ts";
