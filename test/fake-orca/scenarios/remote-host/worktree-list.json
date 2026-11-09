@@ -1,0 +1,61 @@
+{
+  "ok": true,
+  "result": {
+    "worktrees": [
+      {
+        "id": "repo-0001::/home/dev/src/api",
+        "repoId": "repo-0001",
+        "hostId": "local",
+        "path": "/home/dev/src/api",
+        "branch": "refs/heads/main",
+        "isMainWorktree": true,
+        "isArchived": false,
+        "displayName": "main",
+        "parentWorktreeId": null,
+        "childWorktreeIds": [],
+        "lastActivityAt": 1790229501380
+      },
+      {
+        "id": "repo-0001::/srv/build/api",
+        "repoId": "repo-0001",
+        "hostId": "ssh-0000000000001-aaaaaa",
+        "path": "/srv/build/api",
+        "branch": "refs/heads/main",
+        "isMainWorktree": true,
+        "isArchived": false,
+        "displayName": "main",
+        "parentWorktreeId": null,
+        "childWorktreeIds": [],
+        "lastActivityAt": 1790229501380
+      },
+      {
+        "id": "repo-0001::/srv/build/api-old",
+        "repoId": "repo-0001",
+        "hostId": "",
+        "path": "/srv/build/api-old",
+        "branch": "refs/heads/old",
+        "isMainWorktree": false,
+        "isArchived": false,
+        "displayName": "old",
+        "parentWorktreeId": null,
+        "childWorktreeIds": [],
+        "lastActivityAt": 1790229501380
+      },
+      {
+        "id": "repo-0001::/srv/build/api-nohost",
+        "repoId": "repo-0001",
+        "path": "/srv/build/api-nohost",
+        "branch": "refs/heads/nohost",
+        "isMainWorktree": false,
+        "isArchived": false,
+        "displayName": "nohost",
+        "parentWorktreeId": null,
+        "childWorktreeIds": [],
+        "lastActivityAt": 1790229501380
+      }
+    ],
+    "hostScope": { "hostIds": ["local", "ssh-0000000000001-aaaaaa"], "omittedHostIds": ["ssh-0000000000002-bbbbbb"] },
+    "totalCount": 4,
+    "truncated": false
+  }
+}

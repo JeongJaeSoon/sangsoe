@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "result": {
+    "plugins": [
+      {
+        "pluginKey": "acme.activity-panel",
+        "consentFingerprint": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "name": "Activity Panel",
+        "version": "1.0.0",
+        "publisher": "acme",
+        "execution": "trusted-worker",
+        "types": ["panel", "worker"],
+        "status": "running",
+        "needsReconsent": false,
+        "isDev": false,
+        "official": false,
+        "bundled": false
+      },
+      {
+        "pluginKey": "local.sangsoe",
+        "consentFingerprint": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
+        "name": "sangsoe",
+        "version": "0.1.0",
+        "publisher": "local",
+        "execution": "trusted-worker",
+        "types": ["panel", "worker"],
+        "status": "running",
+        "needsReconsent": false,
+        "isDev": true,
+        "official": false,
+        "bundled": false
+      }
+    ]
+  }
+}

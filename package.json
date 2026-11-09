@@ -1,12 +1,22 @@
 {
   "name": "sangsoe",
-  "version": "0.0.0",
+  "version": "0.1.0-rc.2",
   "description": "Orchestration for Claude Code sessions on Orca",
   "private": true,
   "type": "module",
   "bin": {
     "sangsoe": "dist/cli/main.js"
   },
+  "files": [
+    "dist/",
+    "!dist/**/*.test.*",
+    ".claude-plugin/",
+    "claude-plugin/",
+    "!claude-plugin/agents/README.md",
+    "orca-plugin/",
+    "build-info.json",
+    "!**/*.test.ts"
+  ],
   "engines": {
     "node": ">=24.2"
   },

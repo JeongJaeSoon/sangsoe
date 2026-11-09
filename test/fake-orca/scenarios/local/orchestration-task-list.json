@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "result": {
+    "tasks": [
+      { "id": "task_000000000001", "status": "dispatched", "title": "feature-a: add the export endpoint", "dispatchId": "ctx_000000000001", "assignee": "term_00000000-0000-4000-8000-000000000001" },
+      { "id": "task_000000000002", "status": "completed", "title": "feature-b: fix the date parser" },
+      { "id": "task_000000000003", "status": "pending", "title": "feature-c: document the export endpoint" }
+    ],
+    "runId": "run_000000000001"
+  }
+}
