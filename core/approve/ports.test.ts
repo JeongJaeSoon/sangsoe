@@ -31,6 +31,33 @@ test("a release tree reads the commit from build-info.json beside the folder", a
   }
 });
 
+test("a broken build-info.json gives no commit instead of throwing", async () => {
+  const t = tree();
+  try {
+    writeFileSync(join(t.root, "build-info.json"), '{"commit":');
+    assert.equal(await resolveCommit(t.plugin), null);
+    rmSync(join(t.root, "build-info.json"));
+    mkdirSync(join(t.root, "build-info.json"));
+    assert.equal(await resolveCommit(t.plugin), null);
+  } finally {
+    t.done();
+  }
+});
+
+test("a tracked checkout ignores a stale build-info.json beside it", async () => {
+  const t = tree();
+  try {
+    git(t.root, "init", "-q");
+    writeFileSync(join(t.root, ".gitignore"), "build-info.json\n");
+    git(t.root, "add", ".");
+    git(t.root, "commit", "-q", "-m", "x");
+    writeFileSync(join(t.root, "build-info.json"), JSON.stringify({ commit: SHA }));
+    assert.equal(await resolveCommit(t.plugin), git(t.root, "rev-parse", "HEAD"));
+  } finally {
+    t.done();
+  }
+});
+
 test("a git repo that only contains the folder, ignored, gives no commit", async () => {
   const t = tree();
   try {
@@ -39,6 +66,8 @@ test("a git repo that only contains the folder, ignored, gives no commit", async
     git(t.root, "add", ".gitignore");
     git(t.root, "commit", "-q", "-m", "x");
     assert.equal(await resolveCommit(t.plugin), null);
+    writeFileSync(join(t.root, "build-info.json"), JSON.stringify({ commit: SHA }));
+    assert.equal(await resolveCommit(t.plugin), SHA, "a Homebrew tree still reads its build-info.json");
   } finally {
     t.done();
   }
