@@ -39,6 +39,28 @@ test("the PreToolUse hook is one blocking command hook over every tool", () => {
   );
 });
 
+test("the seven recording hooks run record.sh with their event and never block", () => {
+  const expected: Record<string, string> = {
+    SessionStart: "session-start",
+    UserPromptSubmit: "user-prompt-submit",
+    Stop: "stop",
+    Notification: "notification",
+    PostToolUse: "post-tool-use",
+    PostCompact: "post-compact",
+    SessionEnd: "session-end",
+  };
+  for (const [event, arg] of Object.entries(expected)) {
+    const group = hooks.hooks[event] ?? [];
+    assert.equal(group.length, 1, event);
+    assert.deepEqual(
+      group[0]?.hooks.map((h) => [h.type, h.command, h.onFailure]),
+      [["command", `sh "\${CLAUDE_PLUGIN_ROOT}/hooks/record.sh" ${arg}`, undefined]],
+      event,
+    );
+  }
+  assert.match(readFileSync(at("hooks/record.sh"), "utf8"), /\/\.\.\/dist\/cli\/main\.js/);
+});
+
 test("the entry script and the MCP registration point at files the build produces", () => {
   const entry = readFileSync(at("hooks/pre-tool-use.sh"), "utf8");
   assert.match(entry, /\/\.\.\/dist\/cli\/main\.js/);
