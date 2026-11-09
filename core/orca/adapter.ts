@@ -172,7 +172,7 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
         { flags: { spec: a.spec, "task-title": a.title, deps: jsonArray(a.deps), parent: a.parent, run: a.run } },
         o,
       ),
-    taskList: (a) => field("taskList", "tasks", rowsWith({ id: "string", status: "string" }), { flags: { run: a.run, status: a.status, ready: a.ready } }),
+    taskList: (a) => field("taskList", "tasks", rowsWith({ id: "string", status: "string" }), { flags: { run: a.run, status: a.status, ready: a.ready, full: a.full } }),
     taskUpdate: (a, o) => run("taskUpdate", { flags: { id: a.id, status: a.status, result: a.result, run: a.run } }, o),
 
     runCreate: (a, o) => run("runCreate", { flags: { objective: a.objective } }, o),

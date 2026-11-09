@@ -4,7 +4,7 @@ import { createFakeOrca, type FakeReply } from "../fake-orca/index.ts";
 // A stateful fake Orca for the decision loop: gates, tasks and sends change as the core calls them,
 // so a second call sees what the first one did (the static recordings cannot show that).
 
-export type WorldTask = { id: string; run: string; status: string; dispatchId?: string; title?: string };
+export type WorldTask = { id: string; run: string; status: string; dispatchId?: string; title?: string; result?: string };
 export type WorldGate = { id: string; taskId: string; status: string; question: string; resolution?: string };
 export type WorldSend = { to: string; subject: string; body: string; type: string };
 
@@ -40,8 +40,13 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
     "orchestration-run-current": () => ok({ runId: o.currentRun ?? null }),
     "orchestration-task-list": (args: readonly string[]) => {
       const run = flag(args, "run");
+      // Like Orca, `result` (where a cancel shows) comes only with --full.
+      const full = args.includes("--full");
       const rows = [...taskMap.values()].filter((t) => t.run === run);
-      return ok({ tasks: rows.map(({ run: _r, ...t }) => ({ ...t, title: t.title ?? t.id })), runId: run });
+      return ok({
+        tasks: rows.map(({ run: _r, result, ...t }) => ({ ...t, title: t.title ?? t.id, ...(full && result ? { result } : {}) })),
+        runId: run,
+      });
     },
     "orchestration-task-create": (args: readonly string[]) => {
       const id = `task_9${String(++n).padStart(11, "0")}`;

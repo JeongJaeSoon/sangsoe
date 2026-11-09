@@ -56,10 +56,13 @@ test("both entrances refuse the same malformed decision the same way", async () 
   });
 });
 
-test("decision_answer without a run reads this session's Run from Orca", async () => {
+test("decision_open and decision_answer without a run read this session's Run from Orca", async () => {
   const none = await decisionAnswerFrom({ decision: "d001", answer: "a", owner_action: 1 }, createWorld([]));
   assert.ok(!none.ok);
   assert.equal(none.refusal.code, "no_run");
+  const noneOpen = await decisionOpenFrom({ subject: "item:i012", question: "Which?", waiters: [{ task: T1, run: RUN }] }, createWorld([]));
+  assert.ok(!noneOpen.ok);
+  assert.equal(noneOpen.refusal.code, "no_run");
 
   const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }], { currentRun: RUN });
   const opened = await decisionOpenFrom({ subject: "item:i012", question: "Which?", options: ["a", "b"], waiters: [{ task: T1, run: RUN }] }, w);
@@ -67,7 +70,7 @@ test("decision_answer without a run reads this session's Run from Orca", async (
   const said = ownerSays(w.store, "d001 a");
   const r = await decisionAnswerFrom({ decision: "d001", answer: "a", owner_action: said }, w);
   assert.ok(r.ok, JSON.stringify(r));
-  assert.equal(w.calls("orchestration run-current").length, 1);
+  assert.equal(w.calls("orchestration run-current").length, 2);
   assert.deepEqual(r.value.resolved, ["gate_000000000001"]);
   assert.equal(w.store.events({ type: "decision_answered" })[0]?.payload.linked_by, "orchestrator");
 });

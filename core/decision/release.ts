@@ -15,14 +15,17 @@ export interface ReleaseInput {
   readonly resolution: string;
   readonly keyFor: (task: string) => NotifiedKey;
   readonly subject: string;
+  /** What the Run holding a foreign gate calls to resolve it: the same operation, resumed there. */
+  readonly resumeWith: "decision_answer" | "decision_moot";
 }
 
 /**
- * Frees every waiter of a closed decision: resolves the open gates bound to the caller's Run and tells
- * each waiter once (decision 84③: resolve alone is not trusted to wake anyone). A gate in another Run
- * cannot be resolved from here (decision 77 라), so that Run gets one message and resolves it with the
- * same function. A closed Task's gate is left alone; its Run is told instead (decision 91④(ii)). A Task
- * with no worker yet is not told: the start procedure puts the answer in the first prompt (91④(i)).
+ * Frees every waiter of a closed decision. Gates bound to the caller's Run are resolved here; a gate in
+ * another Run cannot be (decision 77 라), so that Run gets one message and resumes the same operation.
+ * Each waiter whose gate is no longer open is told once (decision 84③: resolve alone is not trusted to
+ * wake anyone): its worker by Dispatch, or its Run when the Task is closed (decision 91④(ii)), whichever
+ * Run the waiter sits in. A Task with no worker yet is not told: the start procedure puts the answer in
+ * the first prompt (91④(i)). A failed Orca read stops the call; calling again resumes it.
  */
 export async function release(deps: CoreDeps, state: DecisionState, input: ReleaseInput): Promise<Result<Released>> {
   const d = state.row.decision;
@@ -32,44 +35,45 @@ export async function release(deps: CoreDeps, state: DecisionState, input: Relea
   const handedOff: string[] = [];
   for (const w of state.waiters) {
     if (!w.run || !w.gate) continue;
-    const gate = await reads.gate(w.run, w.gate);
     const task = await reads.task(w.run, w.task);
-    const closed = task !== undefined && isClosedTask(task);
-    const open = gate !== undefined && isOpenGate(gate) && !closed;
+    if (!task.ok) return task;
+    const gate = await reads.gate(w.run, w.gate);
+    if (!gate.ok) return gate;
+    const closed = task.value !== undefined && isClosedTask(task.value);
+    let open = !closed && gate.value !== undefined && isOpenGate(gate.value);
 
-    if (w.run !== input.callerRun) {
-      if (!open) continue;
+    if (open && w.run === input.callerRun) {
+      const r = await deps.orca.gateResolve({ id: w.gate, resolution: input.resolution });
+      if (!r.ok) return refuse("orca_error", `gate-resolve ${w.gate}: ${r.error.code}`, "call again; the decision is already closed");
+      resolved.push(w.gate);
+      open = false;
+    } else if (open) {
       const key = input.keyFor(w.task);
       const r = await notify(deps, {
         key: { target: key.target, dedupe_key: `${key.dedupe_key}:resolve` },
         to: "lead",
         chain: { leadRun: w.run },
         subject: `${d}: resolve gate ${w.gate}`,
-        body: `${input.resolution}\nThe gate ${w.gate} on ${w.task} is bound to your Run: call decision_answer for ${d} there.`,
+        body: `${input.resolution}\nThe gate ${w.gate} on ${w.task} is bound to your Run: call ${input.resumeWith} for ${d} there.`,
         msgType: "handoff",
-        source: "decision_answer",
+        source: input.resumeWith,
       });
       if (!r.ok) return r;
       if (r.value.status === "sent") handedOff.push(w.task);
       continue;
     }
 
-    if (open) {
-      const r = await deps.orca.gateResolve({ id: w.gate, resolution: input.resolution });
-      if (!r.ok) return refuse("orca_error", `gate-resolve ${w.gate}: ${r.error.code}`, "call again; the decision is already closed");
-      resolved.push(w.gate);
-    }
-    if (w.carrier || !task) continue;
-    const chain = closed ? { leadRun: w.run } : task.dispatchId ? { dispatch: task.dispatchId, leadRun: w.run } : undefined;
-    if (!chain) continue;
+    if (open || w.carrier || !task.value) continue;
+    const dispatch = task.value.dispatchId;
+    if (!closed && !dispatch) continue;
     const r = await notify(deps, {
       key: input.keyFor(w.task),
       to: closed ? "lead" : "worker",
-      chain,
+      chain: closed || !dispatch ? { leadRun: w.run } : { dispatch, leadRun: w.run },
       subject: input.subject,
       body: input.resolution,
       msgType: "decision_gate",
-      source: "decision_answer",
+      source: input.resumeWith,
     });
     if (!r.ok) return r;
     if (r.value.status === "sent") notified.push(w.task);

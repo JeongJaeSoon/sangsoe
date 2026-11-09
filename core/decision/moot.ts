@@ -37,8 +37,13 @@ export async function decisionMoot(deps: CoreDeps, input: DecisionMootInput): Pr
     const reads = orcaReads(deps.orca);
     let allClosed = waiters.length > 0;
     for (const w of waiters) {
-      const task = w.run ? await reads.task(w.run, w.task) : undefined;
-      if (!task || !isClosedTask(task)) allClosed = false;
+      if (!w.run) {
+        allClosed = false;
+        continue;
+      }
+      const task = await reads.task(w.run, w.task);
+      if (!task.ok) return task;
+      if (!task.value || !isClosedTask(task.value)) allClosed = false;
     }
     if (!allClosed) return refuse("not_moot", `a waiter of ${d} is still open`, "leave the decision open");
   }
@@ -61,6 +66,7 @@ export async function decisionMoot(deps: CoreDeps, input: DecisionMootInput): Pr
     resolution: `MOOT ${d}: ${evidence}`,
     keyFor: (task) => mootNotifiedKey(d, task),
     subject: `${d} is moot`,
+    resumeWith: "decision_moot",
   });
   return r.ok ? done({ status: "moot", decision: d, ...r.value }) : r;
 }

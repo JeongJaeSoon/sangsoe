@@ -51,16 +51,39 @@ test("notify refuses a send that skips the worker, then allows it once the worke
   assert.equal(w.sends.length, 0);
 
   assert.ok((await notify(w, { ...base, key, to: "worker", chain })).ok);
-  const lead = await notify(w, { ...base, key, to: "lead", chain });
+  const quiet = await notify(w, { ...base, key, to: "lead", chain });
+  assert.ok(quiet.ok);
+  assert.equal(quiet.value.status, "already", "a delivered condition goes up only when escalated");
+  const jump = await notify(w, { ...base, key, to: "orchestrator", chain, escalate: true });
+  assert.ok(!jump.ok);
+  assert.equal(jump.refusal.code, "out_of_order");
+  const lead = await notify(w, { ...base, key, to: "lead", chain, escalate: true });
   assert.ok(lead.ok);
+  assert.equal(lead.value.status, "sent");
   assert.equal(lead.value.address, "run:run_000000000001");
-  const orch = await notify(w, { ...base, key, to: "orchestrator", chain });
+  const orch = await notify(w, { ...base, key, to: "orchestrator", chain, escalate: true });
   assert.ok(orch.ok);
   assert.equal(orch.value.address, "run:run_000000000009");
   assert.deepEqual(
     w.store.events({ type: "notified" }).map((e) => e.dedupe_key),
     ["notify:task_000000000001:d001", "notify:task_000000000001:d001:lead", "notify:task_000000000001:d001:orchestrator"],
   );
+  assert.equal(w.sends.length, 3);
+});
+
+test("a worker that died after being told does not let an escalation skip the lead", async () => {
+  const w = createWorld([]);
+  const key = answerNotifiedKey("d001", "task_000000000001");
+  const full = { dispatch: "ctx_000000000001", leadRun: "run_000000000001", orchestratorRun: "run_000000000009" };
+  assert.ok((await notify(w, { ...base, key, to: "worker", chain: full })).ok);
+  const later = { leadRun: "run_000000000001", orchestratorRun: "run_000000000009" };
+  const skip = await notify(w, { ...base, key, to: "orchestrator", chain: later, escalate: true });
+  assert.ok(!skip.ok);
+  assert.equal(skip.refusal.code, "out_of_order");
+  const again = await notify(w, { ...base, key, to: "lead", chain: later });
+  assert.ok(again.ok);
+  assert.equal(again.value.status, "already", "the answer reached the Task once; a re-delivery is not sent");
+  assert.equal(w.sends.length, 1);
 });
 
 test("with no worker in the chain the owning lead is first and takes the base key", async () => {

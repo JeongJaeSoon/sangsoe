@@ -13,7 +13,7 @@ export default {
       options: { type: "array", items: { type: "string" } },
       waiters: {
         type: "array",
-        description: "Tasks that wait on the answer and the Run each sits in",
+        description: "Tasks that wait on the answer and the Run each sits in; every one must sit in this session's Run",
         items: {
           type: "object",
           properties: { task: { type: "string" }, run: { type: "string" } },
@@ -22,6 +22,7 @@ export default {
         },
       },
       carrier_run: { type: "string", description: "The orchestrator Run, used when no Task waits" },
+      run: { type: "string", description: "This session's Run; read from Orca when left out" },
     },
     required: ["subject", "question"],
     additionalProperties: false,

@@ -25,7 +25,7 @@ export default {
   name: "decision",
   summary: "open a decision (re-ask gate) or link an answer to one",
   usage:
-    "add --subject <item:iNNN|scope:x> --question <text> [--option <o>]... [--waiter <task>@<run>]... [--carrier-run <run>]\n" +
+    "add --subject <item:iNNN|scope:x> --question <text> [--option <o>]... [--waiter <task>@<run>]... [--carrier-run <run>] [--run <run>]\n" +
     "       | answer --decision <dNNN> --answer <text> --owner-action <seq> [--linked-by <how>] [--run <run>]",
   options: {
     subject: { type: "string" },
@@ -52,6 +52,7 @@ export default {
           options: list(values.option),
           waiters: w,
           carrier_run: values["carrier-run"],
+          run: values.run,
         },
         defaultDeps,
       );

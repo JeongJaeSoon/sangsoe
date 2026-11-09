@@ -136,6 +136,8 @@ export type TaskRow = {
   title: string;
   dispatchId?: string;
   assignee?: string;
+  /** Only with `task-list --full`: `cancelled` on a `failed` Task is a cancellation (appendix #schema). */
+  result?: string;
 };
 
 export type GateRow = {
@@ -225,7 +227,8 @@ export interface OrcaAdapter {
     a: { spec: string; title?: string; deps?: string[]; parent?: string; run?: string },
     o?: WriteOptions,
   ): Promise<OrcaResult<Receipt>>;
-  taskList(a: { run: string; status?: string; ready?: boolean }): Promise<OrcaResult<TaskRow[]>>;
+  /** `full` adds each Task's spec and result; the result separates cancelled from failed. */
+  taskList(a: { run: string; status?: string; ready?: boolean; full?: boolean }): Promise<OrcaResult<TaskRow[]>>;
   taskUpdate(
     a: { id: string; status: string; result?: string; run?: string },
     o?: WriteOptions,

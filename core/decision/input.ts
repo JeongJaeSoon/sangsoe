@@ -13,7 +13,8 @@ const bad = (field: string, want: string) => refuse("bad_input", `${field}: expe
 const text = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
 const LINKED_BY = ["hook", "button", "orchestrator", "observed"] as const;
 
-export function parseDecisionOpen(raw: Raw): Result<DecisionOpenInput> {
+/** Everything but the caller's Run, which may have to be read from Orca. */
+export function parseDecisionOpen(raw: Raw): Result<Omit<DecisionOpenInput, "callerRun"> & { run?: string }> {
   if (!text(raw.subject) || !/^(item:i\d{3,}|scope:\S+)$/.test(raw.subject)) return bad("subject", "item:iNNN or scope:<group>");
   if (!text(raw.question)) return bad("question", "a non-empty string");
   const options = raw.options ?? [];
@@ -26,12 +27,14 @@ export function parseDecisionOpen(raw: Raw): Result<DecisionOpenInput> {
     return bad("waiters", "an array of { task, run }");
   }
   if (raw.carrier_run !== undefined && !text(raw.carrier_run)) return bad("carrier_run", "a Run id");
+  if (raw.run !== undefined && !text(raw.run)) return bad("run", "a Run id");
   return done({
     subject: raw.subject,
     question: raw.question,
     options,
     waiters: waiters.map((w) => ({ task: String((w as Raw).task), run: String((w as Raw).run) })),
     ...(raw.carrier_run !== undefined ? { carrierRun: raw.carrier_run } : {}),
+    ...(raw.run !== undefined ? { run: raw.run } : {}),
   });
 }
 
@@ -67,7 +70,11 @@ async function withDeps<T>(source: DepsSource, fn: (deps: CoreDeps) => Promise<T
 export async function decisionOpenFrom(raw: Raw, deps: DepsSource): Promise<Result<DecisionOpened>> {
   const input = parseDecisionOpen(raw);
   if (!input.ok) return input;
-  return withDeps(deps, (d) => decisionOpen(d, input.value));
+  return withDeps(deps, async (d) => {
+    const { run, ...rest } = input.value;
+    const callerRun = await callerRunOf(d, run);
+    return callerRun.ok ? decisionOpen(d, { ...rest, callerRun: callerRun.value }) : callerRun;
+  });
 }
 
 export async function decisionAnswerFrom(raw: Raw, deps: DepsSource): Promise<Result<DecisionAnswered>> {
@@ -75,12 +82,14 @@ export async function decisionAnswerFrom(raw: Raw, deps: DepsSource): Promise<Re
   if (!input.ok) return input;
   return withDeps(deps, async (d) => {
     const { run, ...rest } = input.value;
-    let callerRun = run;
-    if (callerRun === undefined) {
-      const current = await d.orca.runCurrent();
-      callerRun = current.ok && text(current.value.runId) ? current.value.runId : undefined;
-      if (!callerRun) return refuse("no_run", "this session holds no Run", "pass run, or run-use the Run first");
-    }
-    return decisionAnswer(d, { ...rest, callerRun });
+    const callerRun = await callerRunOf(d, run);
+    return callerRun.ok ? decisionAnswer(d, { ...rest, callerRun: callerRun.value }) : callerRun;
   });
+}
+
+async function callerRunOf(deps: CoreDeps, run: string | undefined): Promise<Result<string>> {
+  if (run !== undefined) return done(run);
+  const current = await deps.orca.runCurrent();
+  const id = current.ok ? current.value.runId : null;
+  return text(id) ? done(id) : refuse("no_run", "this session holds no Run", "pass run, or run-use the Run first");
 }

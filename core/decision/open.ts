@@ -1,7 +1,7 @@
 import { receiptId } from "../notify/receipt.ts";
 import { type CoreDeps, done, type Result, refuse } from "../notify/result.ts";
 import { decisionKey } from "./key.ts";
-import { type DecisionState, isOpenGate, readDecisionByKey } from "./waiters.ts";
+import { type DecisionState, isOpenGate, readDecision, readDecisionByKey } from "./waiters.ts";
 
 export interface DecisionOpenInput {
   /** `item:iNNN`, else `scope:<group>`. */
@@ -13,6 +13,8 @@ export interface DecisionOpenInput {
   readonly waiters: readonly { readonly task: string; readonly run: string }[];
   /** The orchestrator Run, where a decision with no waiter gets its carrier Task. */
   readonly carrierRun?: string;
+  /** The Run this session holds. gate-create and task-create bind to it, so every waiter must sit in it. */
+  readonly callerRun: string;
 }
 
 export type DecisionOpened =
@@ -36,6 +38,12 @@ export async function decisionOpen(deps: CoreDeps, input: DecisionOpenInput): Pr
   const { store, orca } = deps;
   if (input.waiters.length === 0 && !input.carrierRun) {
     return refuse("no_waiter", "a decision needs a waiter Task or the orchestrator Run", "pass waiters, or carrierRun");
+  }
+  const foreign = [...input.waiters.map((w) => w.run), ...(input.carrierRun ? [input.carrierRun] : [])].find(
+    (run) => run !== input.callerRun,
+  );
+  if (foreign) {
+    return refuse("cross_run_waiter", `${foreign} is not this session's Run ${input.callerRun}`, "open the decision from each waiter's own Run");
   }
   const key = decisionKey(input.subject, input.options);
   let state = readDecisionByKey(store, key);
@@ -77,19 +85,27 @@ export async function decisionOpen(deps: CoreDeps, input: DecisionOpenInput): Pr
     let gate = listed.value.find(
       (g) => isOpenGate(g) && (g.taskId ?? w.task) === w.task && g.question?.startsWith(`${d}:`),
     )?.id;
+    let created = false;
     if (!gate) {
-      const created = await orca.gateCreate({ task: w.task, question: `${d}: ${input.question}`, options: [...input.options] });
-      if (!created.ok) return refuse("orca_error", `gate-create ${w.task}: ${created.error.code}`, "retry; the decision stays open");
-      gate = receiptId(created.value, "gate");
+      const r = await orca.gateCreate({ task: w.task, question: `${d}: ${input.question}`, options: [...input.options] });
+      if (!r.ok) return refuse("orca_error", `gate-create ${w.task}: ${r.error.code}`, "retry; the decision stays open");
+      gate = receiptId(r.value, "gate");
       if (!gate) return refuse("receipt_without_id", `gate-create ${w.task} returned no gate id`, "read gate-list and retry");
+      created = true;
     }
-    store.append({
+    const joined = store.append({
       type: "decision_joined",
       source: SOURCE,
       dedupe_key: `decision_joined:${d}:${encodeURIComponent(w.task)}`,
       payload: { decision: d, waiter: w.task, gate, run: w.run },
     });
-    gates.push(gate);
+    // A concurrent open joined this waiter first: its gate is the one recorded, so close the one made here.
+    const recorded = joined.inserted ? gate : readDecision(store, d)?.waiters.find((x) => x.task === w.task)?.gate;
+    if (created && recorded && recorded !== gate) {
+      const r = await orca.gateResolve({ id: gate, resolution: `${d}: duplicate gate, see ${recorded}` });
+      if (!r.ok) return refuse("orca_error", `gate-resolve ${gate}: ${r.error.code}`, "retry; the duplicate gate stays open");
+    }
+    gates.push(recorded ?? gate);
   }
   return done({ status: opened ? "opened" : "joined", decision: d, gates });
 }
