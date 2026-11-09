@@ -5,6 +5,7 @@ import {
   DEFAULT_RESTART_RULES,
   handoffSave,
   mask,
+  ownerMarks,
   recordHook,
   restart_due,
   reviewAskRecord,
@@ -127,7 +128,8 @@ test("waiting_human_released (hook side): the owner's words mark, the session mo
   await hook(w, "post-tool-use", { session_id: "s1", tool_name: "Bash" });
   await hook(w, "stop", { session_id: "s1", prompt_id: "p1" });
   const rel = w.store.events({ type: "waiting_released" });
-  assert.deepEqual(rel.map((e) => e.payload), [{ ref: String(waits[0]?.seq), outcome: "answered", by: "owner", evidence: "post_tool_use:Bash" }]);
+  assert.deepEqual(rel.map((e) => e.payload), [{ ref: String(waits[0]?.seq), outcome: "answered", by: "owner", evidence: "tool:Bash" }]);
+  assert.deepEqual(rel.map((e) => e.entity_id), [TASK], "the release stays on the item's timeline");
 
   await hook(w, "notification", { session_id: "s1", notification_type: "idle_prompt", message: "Claude is waiting for your input" });
   await hook(w, "session-end", { session_id: "s1", reason: "clear" });
@@ -137,10 +139,22 @@ test("waiting_human_released (hook side): the owner's words mark, the session mo
   assert.equal(w.store.events({ type: "waiting_human" }).length, 2, "a notification that is no wait writes nothing");
 });
 
-test("owner_ran_command_marks_verifying (input side): a `!` line marks one hinted item, never moves its state", async () => {
-  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+const ITEM = "task_000000000002";
+const T0 = "2026-11-10T09:00:00.000Z";
+const HINT = "gh workflow run promote-to-production.yml";
+
+/** An orchestrator session and one open 🟢 owner item in its Run, made at T0, verified by a run in acme/api. */
+async function ownerItemWorld(hint = HINT): Promise<SessionWorld> {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch", clock: () => T0 });
   await hook(w, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
-  w.store.append({ type: "item_extra_set", source: "t", payload: { task: "task_item", exec_by: "owner", cmd_hint: "gh workflow run promote-to-production.yml -R acme/api" } });
+  w.runTasks.set("run_orch", [{ id: ITEM, status: "ready", title: "promote" }]);
+  w.store.append({ type: "item_created", source: "t", payload: { task: ITEM, alias: "i001", who: "owner", done_when: "prod", owner_action: 0 }, entity: "task", entity_id: ITEM });
+  w.store.append({ type: "item_extra_set", source: "t", payload: { task: ITEM, exec_by: "owner", cmd_hint: hint, verify: { kind: "run_ok", repo: "acme/api" } }, entity: "task", entity_id: ITEM });
+  return w;
+}
+
+test("owner_ran_command_marks_verifying (input side): a `!` line marks one hinted item, never moves its state", async () => {
+  const w = await ownerItemWorld(`${HINT} -R acme/api`);
   const t = transcript(w.dir, [
     ...bang("u1", "gh workflow run promote-to-production.yml -R acme/api --ref main", "https://github.com/acme/api/actions/runs/42"),
     ...bang("u2", "gh workflow run promote-to-production.yml -R acme/api", "", "HTTP 403: forbidden"),
@@ -154,12 +168,77 @@ test("owner_ran_command_marks_verifying (input side): a `!` line marks one hinte
   const shell = w.store.events({ type: "owner_action" }).filter((e) => e.payload.origin === "shell");
   assert.deepEqual(shell.map((e) => e.payload.cc_message), ["u1", "u2", "u3", "u4"], "each line once; an input without its output waits");
   const ev = w.store.events({ type: "evidence" });
-  assert.deepEqual(ev.map((e) => [e.payload.kind, e.entity_id, e.payload.observed]), [
-    ["owner_act:seen", "task_item", "https://github.com/acme/api/actions/runs/42"],
-    ["owner_act:failed", "task_item", "HTTP 403: forbidden"],
+  assert.deepEqual(ev.map((e) => [e.payload.kind, e.entity_id, e.payload.observed, e.dedupe_key]), [
+    ["owner_act:seen", ITEM, "https://github.com/acme/api/actions/runs/42 gh workflow run promote-to-production.yml -R acme/api --ref main", "evidence:owner_act:u1"],
+    ["owner_act:failed", ITEM, "exit ?: HTTP 403: forbidden", "evidence:owner_act:u2"],
   ]);
-  assert.deepEqual(w.store.events({ type: "owner_act_unlinked" }).map((e) => [e.payload.act, e.dedupe_key]), [["gh workflow run other.yml -R acme/api", "owner_act_unlinked:u3"]]);
+  assert.deepEqual(w.store.events({ type: "owner_act_unlinked" }).map((e) => [e.payload.act, e.dedupe_key]), [["gh workflow run other.yml -R acme/api", "owner_act_unlinked:owner_act:u3"]]);
+  assert.equal(ownerMarks(view(w), { waitMinutes: 30 }).get(ITEM)?.mark, "verifying");
   assert.equal(w.store.events({ type: "item_transition" }).length, 0, "owner input alone never changes state");
+});
+
+const view = (w: SessionWorld) => ({ events: w.store.events(), orca: { tasks: [], gates: [] }, now: T0 });
+
+test("the hook links by core/owner's rules: times not strings, the whole watch word, the item's repo, the expected URL, masked text", async () => {
+  const w = await ownerItemWorld();
+  // Built at run time so no secret scanner sees a token-shaped literal.
+  const secret = ["ghp", "Zz9".repeat(12)].join("_");
+  const t = transcript(w.dir, [
+    // 08:30Z, before the item: string-greater than T0 but earlier in time (guard (가)).
+    ...bang("a1", `${HINT} -R acme/api`, "https://github.com/acme/api/actions/runs/1", "", "2026-11-10T09:30:00+01:00"),
+    ...bang("a2", "gh releases list", "v1.0.0"),
+    ...bang("a3", `${HINT} -R acme/web`, "https://github.com/acme/web/actions/runs/2"),
+    ...bang("a4", `${HINT} -R acme/api`, "see https://example.com/docs"),
+    ...bang("a5", `${HINT} -R acme/api`, "", `HTTP 401: bad credentials ${secret}`),
+    ...bang("a6", `gh pr merge 9 --body ${secret}`, ""),
+  ]);
+  await hook(w, "stop", { session_id: "o1", prompt_id: "p1", transcript_path: t });
+
+  assert.ok(!w.store.events({ type: "owner_act_unlinked" }).some((e) => String(e.payload.act).startsWith("gh releases")), "`gh releases` is not the watched `gh release`");
+  assert.deepEqual(
+    w.store.events({ type: "evidence" }).map((e) => [e.dedupe_key, e.payload.kind]),
+    [["evidence:owner_act:a5", "owner_act:failed"]],
+    "a1 is older than the item, a3 is another repo, a4's URL is not the run the verify expects",
+  );
+  assert.deepEqual(
+    w.store.events({ type: "owner_act_unlinked" }).map((e) => e.dedupe_key),
+    ["owner_act_unlinked:owner_act:a1", "owner_act_unlinked:owner_act:a3", "owner_act_unlinked:owner_act:a6"],
+  );
+  assert.ok(!JSON.stringify(w.store.events()).includes(secret), "observed and act are stored masked");
+});
+
+test("rows the U13 hook wrote under the old keys are still read, and the same line is not linked twice", async () => {
+  const w = await ownerItemWorld(`${HINT} -R acme/api`);
+  const act = (uuid: string, command: string) =>
+    w.store.appendOwnerAction(
+      { type: "owner_action", source: "owner_input", entity: "task", entity_id: TASK, dedupe_key: `owner_action:o1:${uuid}`, payload: { origin: "shell", summary: command, hash: "h", cc_session: "o1", cc_message: uuid } },
+      command,
+    ).seq;
+  const a = act("u1", `${HINT} -R acme/api`);
+  w.store.append({ type: "evidence", source: "owner_input", entity: "task", entity_id: ITEM, subject: `owner_action:${a}`, dedupe_key: "evidence:u1:owner_act", payload: { kind: "owner_act:seen", observed: "https://github.com/acme/api/actions/runs/42" } });
+  const b = act("u3", "gh workflow run other.yml -R acme/api");
+  w.store.append({ type: "owner_act_unlinked", source: "owner_input", subject: `owner_action:${b}`, dedupe_key: "owner_act_unlinked:u3", payload: { act: "gh workflow run other.yml -R acme/api" } });
+
+  const t = transcript(w.dir, [
+    ...bang("u1", `${HINT} -R acme/api`, "https://github.com/acme/api/actions/runs/42"),
+    ...bang("u3", "gh workflow run other.yml -R acme/api", ""),
+  ]);
+  await hook(w, "stop", { session_id: "o1", prompt_id: "p1", transcript_path: t });
+  assert.deepEqual(w.store.events({ type: "evidence" }).map((e) => e.dedupe_key), ["evidence:u1:owner_act"]);
+  assert.deepEqual(w.store.events({ type: "owner_act_unlinked" }).map((e) => e.dedupe_key), ["owner_act_unlinked:u3"]);
+  const m = ownerMarks(view(w), { waitMinutes: 30 }).get(ITEM);
+  assert.deepEqual([m?.mark, m?.run], ["verifying", "42"]);
+});
+
+test("Orca unreadable: the hook writes nothing for a new `!` line and reads it again next time", async () => {
+  const w = await ownerItemWorld(`${HINT} -R acme/api`);
+  const t = transcript(w.dir, bang("u1", `${HINT} -R acme/api`, "https://github.com/acme/api/actions/runs/42"));
+  w.failTaskList = true;
+  await hook(w, "stop", { session_id: "o1", prompt_id: "p1", transcript_path: t });
+  assert.equal(w.store.events({ type: "owner_action" }).filter((e) => e.payload.origin === "shell").length, 0);
+  w.failTaskList = false;
+  await hook(w, "stop", { session_id: "o1", prompt_id: "p2", transcript_path: t });
+  assert.deepEqual(w.store.events({ type: "evidence" }).map((e) => e.payload.kind), ["owner_act:seen"]);
 });
 
 test("PostCompact writes compacted with the transcript's preTokens, and restart_due reads the four rules", async () => {

@@ -25,6 +25,10 @@ export interface SessionWorld extends CoreDeps {
   spec: string | undefined;
   heldRun: string | null;
   dispatched: boolean;
+  /** Extra Tasks task-list answers for a Run, beside the dispatched one. */
+  readonly runTasks: Map<string, { id: string; status: string; title: string }[]>;
+  /** task-list answers an error while set. */
+  failTaskList: boolean;
   calls(): string[][];
 }
 
@@ -34,18 +38,21 @@ const flag = (args: readonly string[], name: string) => {
   return i >= 0 ? args[i + 1] : undefined;
 };
 
-export function createSessionWorld(o: { spec?: string; heldRun?: string | null; dispatched?: boolean } = {}): SessionWorld {
+export function createSessionWorld(o: { spec?: string; heldRun?: string | null; dispatched?: boolean; clock?: () => string } = {}): SessionWorld {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "sangsoe-session-")));
   const sends: Sent[] = [];
   const mail: Mail[] = [];
+  const runTasks = new Map<string, { id: string; status: string; title: string }[]>();
   let n = 0;
   const w = {
     dir,
     sends,
     mail,
+    runTasks,
     spec: "spec" in o ? o.spec : "sangsoe-role: worker\nbrief",
     heldRun: o.heldRun ?? null,
     dispatched: o.dispatched ?? true,
+    failTaskList: false,
   };
   const replies: Record<string, FakeReply> = {
     "worktree-list": () =>
@@ -58,8 +65,13 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
     "orchestration-worker-list": () =>
       ok({ workers: w.dispatched ? [{ dispatchId: DISPATCH, taskId: TASK, state: "running", workspace: WORKTREE, host: "local" }] : [] }),
     "orchestration-worker-show": () => ok({ dispatchId: DISPATCH, taskId: TASK, runId: TASK_RUN, state: "running" }),
-    "orchestration-task-list": (args: readonly string[]) =>
-      ok({ tasks: flag(args, "run") === TASK_RUN ? [{ id: TASK, status: "dispatched", title: TASK, ...(w.spec === undefined ? {} : { spec: w.spec }) }] : [] }),
+    "orchestration-task-list": (args: readonly string[]) => {
+      if (w.failTaskList) return { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "runtime_unavailable", message: "down" } }), stderr: "" };
+      const run = flag(args, "run") ?? "";
+      const own = run === TASK_RUN ? [{ id: TASK, status: "dispatched", title: TASK, ...(w.spec === undefined ? {} : { spec: w.spec }) }] : [];
+      return ok({ tasks: [...own, ...(runTasks.get(run) ?? [])] });
+    },
+    "orchestration-gate-list": () => ok({ gates: [] }),
     "orchestration-run-current": () => ok({ runId: w.heldRun }),
     "orchestration-inbox": () => ok({ messages: mail.map((m) => ({ ...m, from: "x", to: "y", subject: m.type, handled: false })) }),
     "orchestration-send": (args: readonly string[]) => {
@@ -68,7 +80,7 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
     },
   };
   const fake = createFakeOrca({ replies });
-  const store = Store.open({ path: ":memory:" });
+  const store = Store.open({ path: ":memory:", ...(o.clock ? { clock: o.clock } : {}) });
   return Object.assign(w, {
     store,
     orca: createOrcaAdapter(fake.exec),
