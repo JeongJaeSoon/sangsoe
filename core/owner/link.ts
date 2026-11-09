@@ -61,7 +61,7 @@ function candidates(input: ViewInput, facts: readonly OwnerItemFacts[], line: Sh
   const repo = lineRepo(line);
   return facts.flatMap((f) => {
     const m = marks.get(f.task);
-    if (f.state !== "ready" || !isOwnerItem(f) || !m || (m.createdAt !== null && Date.parse(m.createdAt) > Date.parse(line.ts))) return [];
+    if (f.state !== "ready" || !isOwnerItem(f) || !m || (m.createdAt !== null && !(Date.parse(line.ts) >= Date.parse(m.createdAt)))) return [];
     // An item that names a repo links only a line whose repo is known and the same.
     const want = verifyRepo(m.verify);
     if (want && want !== repo) return [];

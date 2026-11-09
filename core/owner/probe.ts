@@ -54,8 +54,8 @@ export async function readProbe(spec: VerifySpec, ports: ProbePorts, ctx: { run?
       return c === "success" ? { kind: "true", observed: `run ${spec.run} success` } : { kind: "false", observed: `run ${spec.run} ${c}` };
     }
     case "pr_found": {
-      // Only a PR opened since the owner's line counts: an older match is not this run's effect (guard (마)).
-      if (!ctx.since) return { kind: "unreadable", why: "no mark time to bound the search" };
+      // Only a PR opened since the item counts: an older match is not this item's effect (guards (가)·(마)).
+      if (!ctx.since) return { kind: "unreadable", why: "no item time to bound the search" };
       const since = new Date(Date.parse(ctx.since)).toISOString().replace(/\.\d{3}Z$/, "Z");
       const q = encodeURIComponent(`repo:${spec.repo} is:pr created:>=${since} ${spec.search}`);
       const r = await gh<{ total_count?: number; items?: { html_url?: string }[] }>(ports, `search/issues?q=${q}&per_page=1`);
@@ -88,7 +88,7 @@ export interface ProbeTarget {
   readonly spec: VerifySpec;
   /** 🟢 and the owner's: a true probe also suggests closing it. */
   readonly open: boolean;
-  /** When the current mark went on; bounds pr_found. */
+  /** When the item was created; bounds pr_found. */
   readonly since?: string;
 }
 
@@ -106,7 +106,8 @@ export function probeTargets(input: ViewInput, facts: readonly OwnerItemFacts[],
     if (!m || !spec || m.verified || !isOwnerItem(f) || f.state === "cancelled") continue;
     if (f.state === "done" && (!f.closedAt || Date.parse(f.closedAt) < graceStart)) continue;
     if (MARKED_ONLY.has(spec.kind) && m.mark !== "verifying" && m.mark !== "unverified") continue;
-    out.push({ task: f.task, spec, open: f.state === "ready", ...(m.markedAt ? { since: m.markedAt } : {}) });
+    // The hook writes the mark at the next turn, minutes after the line ran; the item's creation is guard (가)'s bound.
+    out.push({ task: f.task, spec, open: f.state === "ready", ...(m.createdAt ? { since: m.createdAt } : {}) });
   }
   return out;
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MARKED_ONLY, ownerTodoFrom, probeRound, probeTargets, readProbe, VERIFY_KINDS } from "../../core/index.ts";
-import { ownerWorld, RUN } from "./world.ts";
+import { linkShell, MARKED_ONLY, ownerTodoFrom, probeRound, probeTargets, readProbe, recordShellLink, VERIFY_KINDS } from "../../core/index.ts";
+import { later, ownerWorld, RUN, T0 } from "./world.ts";
 
 const T = "task_000000000001";
 
@@ -35,6 +35,18 @@ test("each kind reads through its port and reports what it observed", async () =
   assert.equal((await readProbe(found, ports)).kind, "unreadable", "an unbounded search could count yesterday's PR");
   assert.equal((await readProbe({ kind: "run_ok", repo: "acme/api" }, ports)).kind, "unreadable", "no run id before the owner's line");
   assert.equal((await readProbe({ kind: "pr_merged", pr: "acme/api#1" }, ports)).kind, "unreadable", "a gh error is not false");
+});
+
+test("pr_found is bounded by the item's creation, not by when the hook wrote the mark", async () => {
+  const w = ownerWorld();
+  w.item(T, { verify: { kind: "pr_found", repo: "acme/api", search: "promote" }, cmdHint: "gh workflow run promote.yml" });
+  w.at(later(T0, 5));
+  const line = { uuid: "u1", command: "gh workflow run promote.yml -R acme/api", exitCode: 0, stdout: "", stderr: "", repo: "acme/api", ts: later(T0, 1) };
+  recordShellLink(w.store, line, linkShell(w.input(), w.facts(), line));
+  assert.deepEqual(
+    probeTargets(w.input(), w.facts()).map((t) => t.since),
+    [T0],
+  );
 });
 
 test("gh_budget below 10%: gh probes are skipped and nothing is written; Orca probes still run", async () => {

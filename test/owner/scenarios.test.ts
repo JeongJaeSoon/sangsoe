@@ -198,6 +198,7 @@ test("link guards: whole PR number, stderr without an exit code, times not strin
   t.at(later(T0, 5));
   t.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });
   assert.equal(bang(t, { ts: "2026-11-10T18:03:00+09:00" }).kind, "unlinked", "09:03Z is before the item");
+  assert.equal(bang(t, { ts: "not a time" }).kind, "unlinked", "an unreadable time does not pass guard (가)");
 
   const r = ownerWorld();
   r.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });
