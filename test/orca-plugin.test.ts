@@ -8,7 +8,9 @@ import { pathToFileURL } from "node:url";
 import { coreUrl, type PanelCore } from "../orca-plugin/core-link.ts";
 import activate, { deactivate, EVENTS, type OrcaWorker } from "../orca-plugin/main.ts";
 import { type ExecProbe, meetsSqliteFloor, ownKey, probeExec, probeSqlite } from "../orca-plugin/probe.ts";
+import { REAPER_INTERVAL_MS } from "../orca-plugin/reaper/round.ts";
 import { type Clock, startRounds } from "../orca-plugin/timer.ts";
+import { DEFAULT_MONITOR_CONFIG } from "../core/index.ts";
 
 const root = new URL("..", import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL("orca-plugin/orca-plugin.json", root), "utf8"));
@@ -442,6 +444,10 @@ const idleReaper = {
   run: async () => ({ round: 1, roots_ok: false, candidates: [], reaped: [] }),
   close: () => {},
 };
+
+test("the stall detector's REAPER interval is the interval REAPER's round runs at", () => {
+  assert.equal(DEFAULT_MONITOR_CONFIG.reaperIntervalMinutes * 60_000, REAPER_INTERVAL_MS);
+});
 
 test("REAPER runs on the same rounds: every 10 minutes, early on a monitor's pr_merged, with its trigger", async () => {
   const w = fakeWorker();

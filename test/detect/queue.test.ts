@@ -496,7 +496,7 @@ test("stallCheck writes each stall once and tells the orchestrator once; without
   reap(w.store, "timer", true, 1);
   const dry = await stallCheck(deps(w.store, w.orca, { now: t0 + 46 * MIN, dry: true }));
   assert.deepEqual(dry.written, []);
-  assert.deepEqual(dry.calls, [`would tell orchestrator run:${ORCH_RUN}: no timer round for 46 min (period 15 min)`]);
+  assert.deepEqual(dry.calls, [`would tell orchestrator run:${ORCH_RUN}: no timer round for 46 min (period 10 min)`]);
   const first = await stallCheck(deps(w.store, w.orca, { now: t0 + 46 * MIN }));
   assert.deepEqual(first.written.map((e) => e.inserted), [true]);
   const again = await stallCheck(deps(w.store, w.orca, { now: t0 + 50 * MIN }));

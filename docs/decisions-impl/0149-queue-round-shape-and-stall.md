@@ -6,6 +6,6 @@
 
 **`job_drift`.** `sangsoe doctor` 의 `orca-plugin-version` 점검과 같은 함수(`orcaPluginDrift`)로 설치된 Orca plugin 을 브루 트리(코어 `VERSION`, 켜져 있음, 재승인 대기 없음)와 맞춘다. 어긋남 하나(`expected`·`actual` 쌍)당 한 줄. 내용 해시 비교는 트리를 내려받아야 하므로 `doctor` 에만 남긴다. `plugin list` 를 못 읽으면 행동 0.
 
-**`timer_stalled`.** REAPER 가 쓰는 `reap_round` 행만 읽는다(결정 83). 마지막 `trigger=timer` 행이 간격(`reaperIntervalMinutes`, 기본 15)의 세 배보다 오래되면 그 행의 seq 에, `roots_ok=false` 가 연속 3회면 그 연속의 첫 행 seq 에 키를 묶어 멈춤 하나당 한 줄이다. 행이 하나도 없으면 모름이라 쓰지 않는다. 판정은 타이머 라운드가 아니라 `orca-plugin/stall.ts` 가 Orca 이벤트와 패널 `probe.report` 에서 부르고(한 번에 하나, 1분에 한 번까지), 오케스트레이터에게 `notify:reaper:stalled:<seq>` 로 한 번 알린다.
+**`timer_stalled`.** REAPER 가 쓰는 `reap_round` 행만 읽는다(결정 83). 마지막 `trigger=timer` 행이 간격(`reaperIntervalMinutes`, 기본 10: REAPER 라운드 간격, 결정 155)의 세 배보다 오래되면 그 행의 seq 에, `roots_ok=false` 가 연속 3회면 그 연속의 첫 행 seq 에 키를 묶어 멈춤 하나당 한 줄이다. 행이 하나도 없으면 모름이라 쓰지 않는다. 판정은 타이머 라운드가 아니라 `orca-plugin/stall.ts` 가 Orca 이벤트와 패널 `probe.report` 에서 부르고(한 번에 하나, 1분에 한 번까지), 오케스트레이터에게 `notify:reaper:stalled:<seq>` 로 한 번 알린다.
 
 **모르는 칸.** worker 가 오케스트레이터 Run 을 아는 길이 없어 `MonitorConfig.orchestratorRun` 이 비면 `timer_stalled`·멈춘 전달은 event 만 쓴다. 화면 20줄 발췌(결정 91①)는 Orca 어댑터에 `terminal read` 가 없어 싣지 않고 `unseen` 에 이름을 남긴다. REAPER 간격 기본값은 U18 의 실제 간격이 정해지면 맞춘다.
