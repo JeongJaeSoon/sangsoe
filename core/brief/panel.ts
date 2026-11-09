@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
 import type { OwnerTodoRow, ViewInput } from "../contract/index.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
 import { type DecisionAnswered, decisionAnswer } from "../decision/answer.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
+import { hashOf, mask, summarize } from "../session/mask.ts";
 import { Store } from "../store/store.ts";
 import { type BuildOptions, buildBrief, buildGroup, buildItem } from "./build.ts";
 import { type ItemFacts, itemFacts } from "./item_status.ts";
@@ -99,8 +99,6 @@ export interface PanelCore {
   act(a: PanelAct): Promise<Result<PanelActed>>;
 }
 
-const hash = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 16);
-
 export function panelCore(ports: PanelPorts): PanelCore {
   const load = ports.load ?? ((now: string) => loadBriefInput({ now, orca: ports.orca }));
 
@@ -113,15 +111,17 @@ export function panelCore(ports: PanelPorts): PanelCore {
       if (text === "—") return refuse("no_recommendation", `${d} has no recommended answer`, "use 다른 답");
     }
     if (text === "") return refuse("bad_input", "answer: expected text", "type the answer");
+    // Masked before anything is stored or sent (decision 34): the answer travels in the handoff too.
+    const answerText = mask(text);
+    const said = `${d} ${answerText}`;
     return ports.withStore(async (store) => {
-      const said = `${d} ${text}`;
       const action = store.appendOwnerAction(
-        { type: "owner_action", source: "plugin:panel", payload: { origin: "button", summary: said, hash: hash(said) } },
+        { type: "owner_action", source: "plugin:panel", payload: { origin: "button", summary: summarize(said), hash: hashOf(said) } },
         said,
       );
       return decisionAnswer(
         { store, orca: ports.orca },
-        { decision: d, answer: text, ownerAction: action.seq, linkedBy: "button", callerRun: PANEL_RUN },
+        { decision: d, answer: answerText, ownerAction: action.seq, linkedBy: "button", callerRun: PANEL_RUN },
       );
     });
   }

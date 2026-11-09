@@ -30,31 +30,47 @@ function target(raw: unknown): { group?: string; item?: string } {
 /** Status bar text when the core cannot answer: no number is guessed. */
 export const STATUS_UNKNOWN: StatusItem = { text: "sangsoe ?", tone: "neutral", tooltip: "sangsoe: 현황을 읽지 못함" };
 
+const thrown = (e: unknown): Reply => refuse("core_error", e instanceof Error ? e.message : String(e), "reopen the panel; run sangsoe doctor if it repeats");
+
 export function panelHandlers(load: () => Promise<PanelCore | string>) {
   let loaded: Promise<PanelCore | string> | null = null;
   const core = async (): Promise<PanelCore | Reply> => {
     loaded ??= load();
     const c = await loaded;
-    return typeof c === "string" ? refuse("core_unavailable", c, "run sangsoe doctor") : c;
+    if (typeof c !== "string") return c;
+    loaded = null; // the next request tries again, e.g. after the build that was missing lands
+    return refuse("core_unavailable", c, "run sangsoe doctor");
   };
   const isCore = (c: PanelCore | Reply): c is PanelCore => !("ok" in c);
   return {
     "panel.brief": async (input: unknown): Promise<Reply> => {
-      const c = await core();
-      return isCore(c) ? c.brief(target(input)) : c;
+      try {
+        const c = await core();
+        return isCore(c) ? await c.brief(target(input)) : c;
+      } catch (e) {
+        return thrown(e);
+      }
     },
     "panel.act": async (input: unknown): Promise<Reply> => {
       const a = parseAct(input);
       if (!a) return refuse("bad_input", "not a panel act", "press a button on the panel");
-      const c = await core();
-      return isCore(c) ? c.act(a) : c;
+      try {
+        const c = await core();
+        return isCore(c) ? await c.act(a) : c;
+      } catch (e) {
+        return thrown(e);
+      }
     },
     /** One status bar reading; the caller pushes it to statusBar.update. */
     status: async (): Promise<StatusItem> => {
-      const c = await core();
-      if (!isCore(c)) return { ...STATUS_UNKNOWN, tooltip: `sangsoe: ${c.ok ? "" : c.refusal.reason}`.slice(0, 256) };
-      const r = await c.statusBar();
-      return r.ok ? r.value : { ...STATUS_UNKNOWN, tooltip: `sangsoe: ${r.refusal.reason}`.slice(0, 256) };
+      let r: Reply;
+      try {
+        const c = await core();
+        r = isCore(c) ? await c.statusBar() : c;
+      } catch (e) {
+        r = thrown(e);
+      }
+      return r.ok ? (r.value as StatusItem) : { ...STATUS_UNKNOWN, tooltip: `sangsoe: ${r.refusal.reason}`.slice(0, 256) };
     },
   };
 }

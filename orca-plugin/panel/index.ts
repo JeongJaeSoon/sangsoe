@@ -19,25 +19,33 @@ function mount(): void {
 
   let stack: Target[] = [];
   let note = "";
+  let busy = false;
 
+  const esc = (text: string) => text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const failed = (e: unknown) => ({ ok: false as const, refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" } });
   const say = (text: string, bad = false) => {
-    note = text ? `<p class="msg${bad ? " bad" : ""}" role="status">${text.replace(/[&<>]/g, (c) => `&#${c.charCodeAt(0)};`)}</p>` : "";
+    note = text ? `<p class="msg${bad ? " bad" : ""}" role="status">${esc(text)}</p>` : "";
   };
   const draw = async () => {
-    const r = (await orca.plugin.request("panel.brief", current(stack)).catch((e: unknown) => ({
-      ok: false,
-      refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" },
-    }))) as Reply<PanelView>;
+    const r = (await orca.plugin.request("panel.brief", current(stack)).catch(failed)) as Reply<PanelView>;
     if (!r.ok) {
-      root.innerHTML = `${note}<p class="msg bad">${r.refusal.code}: ${r.refusal.reason}</p>`;
+      root.innerHTML = `${note}<p class="msg bad">${esc(`${r.refusal.code}: ${r.refusal.reason}`)}</p>`;
       return;
     }
     root.innerHTML = note + renderStage(r.value, trail(stack));
   };
+  // One act at a time: a second click while the first is in flight would answer the decision twice.
   const act = async (a: Act) => {
-    const r = (await orca.plugin.request("panel.act", a)) as Reply<{ status: string }>;
-    say(r.ok ? `${"decision" in a ? a.decision : a.item}: ${r.value.status}` : `${r.refusal.reason} — ${r.refusal.fix}`, !r.ok);
-    await draw();
+    if (busy) return;
+    busy = true;
+    for (const b of root.querySelectorAll<HTMLButtonElement>("button")) b.disabled = true;
+    try {
+      const r = (await orca.plugin.request("panel.act", a).catch(failed)) as Reply<{ status: string }>;
+      say(r.ok ? `${"decision" in a ? a.decision : a.item}: ${r.value.status}` : `${r.refusal.reason} — ${r.refusal.fix}`, !r.ok);
+      await draw();
+    } finally {
+      busy = false;
+    }
   };
 
   root.addEventListener("click", (ev) => {

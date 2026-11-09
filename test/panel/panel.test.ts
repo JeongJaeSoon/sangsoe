@@ -10,13 +10,16 @@ import {
   panelCore,
   panelView,
   renderMarkdown,
+  type Result,
+  readSnapshot,
   renderTodo,
   replayJsonl,
   STATUS_TEXT_MAX,
   statusBarItem,
   type Table,
 } from "../../core/index.ts";
-import { parseAct } from "../../orca-plugin/panel/requests.ts";
+import type { PanelCore } from "../../orca-plugin/core-link.ts";
+import { panelHandlers, parseAct, STATUS_UNKNOWN } from "../../orca-plugin/panel/requests.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
 import { back, current, down, drawnRowIds, type PanelView, renderStage, trail } from "../../orca-plugin/panel/view.ts";
 import { createWorld } from "../decision/world.ts";
@@ -80,7 +83,6 @@ test("buttons follow owner_todo's kind: decisions answer, owner items take 완�
   assert.deepEqual(of("i032"), [], "a waiting session closes on observed facts, not a button");
   assert.deepEqual(of("d011"), [], "an undelivered answer is redelivered by the start procedure");
   assert.equal(one.todo.find((r) => r.ref === "i035")?.kind, "owner_item");
-  assert.doesNotMatch(html, /background:/, "no row is painted (decision 92①)");
 });
 
 test("the DAG is inline SVG with one path per edge and numbered critical path nodes", () => {
@@ -142,7 +144,12 @@ test("parseAct lets through the three button acts only", () => {
 const RUN = "run_000000000001";
 const T1 = "task_000000000001";
 
-async function world() {
+/**
+ * live: the brief input comes the way the worker reads it, through readSnapshot on the fake Orca.
+ * Otherwise the snapshot carries the gate's options, as a `--orca` snapshot file can; readSnapshot
+ * does not fill them yet, so live there is no recommended answer.
+ */
+async function world(how: "live" | "with-options") {
   const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001", title: "webhook retry" }]);
   const opened = await decisionOpen(w, {
     subject: "item:i012",
@@ -152,17 +159,29 @@ async function world() {
     callerRun: RUN,
   });
   assert.ok(opened.ok, JSON.stringify(opened));
-  const load = async (now: string) => {
-    const gates = [...w.gates.values()].map((g) => ({ id: g.id, taskId: g.taskId, open: g.status === "pending", question: g.question, options: ["exponential x3", "none"] }));
-    const value: BriefInput = { events: w.store.events(), orca: { tasks: [{ id: T1, runId: RUN, status: "dispatched", deps: [] }], gates }, now };
-    return { ok: true as const, value };
+  const load = async (now: string): Promise<Result<BriefInput>> => {
+    const snap = await readSnapshot(w.orca, [RUN]);
+    if (!snap.ok) return snap;
+    const orca = how === "live" ? snap.value : { ...snap.value, gates: snap.value.gates.map((g) => ({ ...g, options: ["exponential x3", "none"] })) };
+    return { ok: true, value: { events: w.store.events(), orca, now } };
   };
   const core = panelCore({ orca: w.orca, withStore: (fn) => fn(w.store), now: () => NOW, load });
   return { w, core };
 }
 
+test("PN4 live: 추천대로 답 is refused while Orca's gates carry no options; nothing is written", async () => {
+  const { w, core } = await world("live");
+  const r = await core.act({ kind: "answer", decision: "d001", choice: "recommended" });
+  assert.deepEqual(r.ok ? null : r.refusal.code, "no_recommendation");
+  assert.equal(w.store.events({ type: "owner_action" }).length, 0);
+  const b = await core.brief({});
+  assert.ok(b.ok, JSON.stringify(b));
+  const html = renderStage(b.value as unknown as PanelView);
+  assert.match(html, /<button[^>]*disabled[^>]*>추천대로 답/);
+});
+
 test("PN4: 추천대로 답 → owner_action{button} → decisionAnswer, the same function the CLI and MCP call", async () => {
-  const { w, core } = await world();
+  const { w, core } = await world("with-options");
   const r = await core.act({ kind: "answer", decision: "d001", choice: "recommended" });
   assert.ok(r.ok, JSON.stringify(r));
   const action = w.store.events({ type: "owner_action" });
@@ -175,12 +194,48 @@ test("PN4: 추천대로 답 → owner_action{button} → decisionAnswer, the sam
   assert.equal(w.sends[0]?.to, `run:${RUN}`);
 });
 
-test("PN4: 다른 답 sends the typed words; 완료 refuses until ownerDone is in the build", async () => {
-  const { w, core } = await world();
+test("PN4 live: 다른 답 sends the typed words; 완료 refuses until ownerDone is in the build", async () => {
+  const { w, core } = await world("live");
   const r = await core.act({ kind: "answer", decision: "d001", text: "linear x5" });
   assert.ok(r.ok, JSON.stringify(r));
   assert.equal(w.store.events({ type: "decision_answered" })[0]?.payload.answer, "linear x5");
+  assert.equal(w.sends[0]?.to, `run:${RUN}`);
   const d = await core.act({ kind: "done", item: "i035" });
   assert.deepEqual(d.ok ? null : d.refusal.code, "not_available");
   assert.equal(w.store.events({ type: "owner_action" }).length, 1, "a refused 완료 records nothing");
+});
+
+test("다른 답 is masked before it is stored or handed to the Run", async () => {
+  const { w, core } = await world("live");
+  const secret = `ghp_${"a1B2c3D4e5".repeat(4)}`;
+  const r = await core.act({ kind: "answer", decision: "d001", text: `use ${secret}` });
+  assert.ok(r.ok, JSON.stringify(r));
+  const seen = JSON.stringify([w.store.events(), w.sends]);
+  assert.ok(!seen.includes(secret), "the token reached the store or a send");
+  assert.match(String(w.store.events({ type: "decision_answered" })[0]?.payload.answer), /^use /);
+});
+
+test("a core that throws becomes a refusal and status falls back to 'sangsoe ?'", async () => {
+  const boom = async () => {
+    throw new Error("disk gone");
+  };
+  const h = panelHandlers(async () => ({ brief: boom, act: boom, statusBar: boom }) as unknown as PanelCore);
+  assert.deepEqual(await h["panel.brief"]({}), { ok: false, refusal: { code: "core_error", reason: "disk gone", fix: "reopen the panel; run sangsoe doctor if it repeats" } });
+  const a = await h["panel.act"]({ kind: "done", item: "i035" });
+  assert.equal(a.ok ? null : a.refusal.code, "core_error");
+  const s = await h.status();
+  assert.equal(s.text, STATUS_UNKNOWN.text);
+
+  let tries = 0;
+  const later = panelHandlers(async () => (++tries === 1 ? "no build yet" : ({ statusBar: async () => ({ ok: true, value: { text: "🚧0 · 결정0 · 🔄0", tone: "neutral", tooltip: "" } }) } as unknown as PanelCore)));
+  assert.equal((await later.status()).text, STATUS_UNKNOWN.text);
+  assert.equal((await later.status()).text, "🚧0 · 결정0 · 🔄0", "a failed load is tried again");
+});
+
+test("no row is painted by its state (decision 92①): only lead rows and hover shade", () => {
+  assert.doesNotMatch(STYLE, /tr\.own|--bad-soft|background:\s*var\(--bad/);
+  const shaded = [...STYLE.matchAll(/([^{}]*)\{[^}]*background:\s*var\(--paper/g)]
+    .map((m) => (m[1] ?? "").trim())
+    .filter((sel) => /\b(tr|td)[^\s]*$/.test(sel));
+  for (const sel of shaded) assert.match(sel, /tr\.lead|tr:hover/, sel);
 });
