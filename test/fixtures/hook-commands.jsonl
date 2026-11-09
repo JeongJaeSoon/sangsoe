@@ -61,6 +61,16 @@
 {"expect":"pass","note":"tmux command in a directory named claude","tool_name":"Bash","tool_input":{"command":"tmux new -d -s t 'cd ~/src/claude && npm test'"}}
 {"expect":"pass","note":"screen reattach to a session named claude","tool_name":"Bash","tool_input":{"command":"screen -r claude"}}
 {"expect":"pass","note":"at job then a foreground claude","tool_name":"Bash","tool_input":{"command":"echo 'make backup' | at now + 1 hour; claude -p 'summarize'"}}
+{"expect":"deny","gate":"start","note":"tmux keys typing claude after Enter","tool_name":"Bash","tool_input":{"command":"tmux send-keys -t w 'cd /work/acme' Enter 'claude' Enter"}}
+{"expect":"deny","gate":"start","note":"tmux keys typing claude after C-m","tool_name":"Bash","tool_input":{"command":"tmux send-keys -t w 'cd /work/acme' C-m claude C-m"}}
+{"expect":"deny","gate":"start","note":"tmux session then keys in one call","tool_name":"Bash","tool_input":{"command":"tmux new-session -d -s w \\; send-keys -t w claude Enter"}}
+{"expect":"deny","gate":"start","note":"tmux split with an old percentage flag","tool_name":"Bash","tool_input":{"command":"tmux splitw -h -p 30 claude"}}
+{"expect":"deny","gate":"start","note":"screen stuff after a flag","tool_name":"Bash","tool_input":{"command":"screen -X -S w stuff 'claude -p x\n'"}}
+{"expect":"deny","gate":"start","note":"at job while a claude version check runs","tool_name":"Bash","tool_input":{"command":"claude --version; echo 'claude -p x' | at now"}}
+{"expect":"pass","note":"case arm named claude in a background job","tool_name":"Bash","tool_input":{"command":"case $agent in codex) echo c;; claude) echo d;; esac &"}}
+{"expect":"pass","note":"substitution under nohup runs in the foreground","tool_name":"Bash","tool_input":{"command":"nohup make TAG=$(claude -p tag) > build.log"}}
+{"expect":"pass","note":"worker_done heredoc body after another heredoc","tool_name":"Bash","tool_input":{"command":"cat > notes.md <<'EOF'\nnotes\nEOF\norca orchestration send --type worker_done --subject ready --body \"$(cat <<'EOF'\nREADY-WAIT: land-after\nEOF\n)\" --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
+{"expect":"pass","note":"worker_done heredoc with a dashed delimiter after text","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject ready --body \"Done.\n$(cat <<'END-OF'\nREADY-WAIT: land-after\nEND-OF\n)\" --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
 {"expect":"pass","note":"pipeline with claude in the foreground","tool_name":"Bash","tool_input":{"command":"git diff | claude -p 'review this diff' | tee review.md"}}
 {"expect":"pass","note":"background job after a foreground claude","tool_name":"Bash","tool_input":{"command":"claude -p 'summarize' < a.md > b.md; npm run build &"}}
 {"expect":"deny","gate":"report-address","note":"send to a terminal handle","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to term_ab12cd --type escalation --subject x --body y"}}
