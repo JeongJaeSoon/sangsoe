@@ -54,11 +54,18 @@ export const decision: DecisionView = (input) => {
     }
   }
   const openGates = new Set(input.orca.gates.filter((g) => g.open).map((g) => g.id));
+  // Same reading as core/decision/waiters.ts isClosedTask; Orca writes a cancellation as failed+cancelled.
+  const closedTasks = new Set(
+    input.orca.tasks.filter((t) => t.status === "completed" || (t.status === "failed" && t.result === "cancelled")).map((t) => t.id),
+  );
   // Decision 91④: decision_answer closes the row right after the answer, so "answered" here includes
-  // closed-by-answer. A waiter has the answer once its gate is resolved, or once it was told under the
-  // answer's notified key (a closed Task's gate stays open on purpose; a new worker's first prompt).
+  // closed-by-answer. A waiter has the answer once its gate is resolved. Only a closed Task's gate stays
+  // open on purpose (91④(ii)); for it, the Run told under the answer's notified key is the delivery. A
+  // live Task's key (SessionStart's injection) does not resolve its gate, so it stays undelivered.
   const pending = (r: Mutable, w: { task: string; gate: string | null }) =>
-    w.gate !== null && openGates.has(w.gate) && !told.has(answerNotifiedKey(r.decision, w.task).dedupe_key);
+    w.gate !== null &&
+    openGates.has(w.gate) &&
+    !(closedTasks.has(w.task) && told.has(answerNotifiedKey(r.decision, w.task).dedupe_key));
   return [...rows.values()].map((r) => ({
     ...r,
     undelivered: (r.state === "answered" || r.closedReason === "answered") && r.waiters.some((w) => pending(r, w)),
