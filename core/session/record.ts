@@ -59,7 +59,11 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
 }
 
 /** Decision 91①: the session moving again, or ending, releases its waits; core/owner decides which. */
-const released = (store: Store, signal: ReleaseSignal, source: string) => recordReleases(store, { events: store.events() }, signal, source);
+const released = (store: Store, signal: ReleaseSignal, source: string) => {
+  // Every tool call lands here: read only the rows a release looks at, in log order.
+  const events = ["waiting_human", "waiting_released", "owner_action"].flatMap((type) => store.events({ type })).sort((a, b) => a.seq - b.seq);
+  return recordReleases(store, { events }, signal, source);
+};
 
 // Orca's own prompts to a dispatched session (the brief, wrapped) are not the owner's words.
 const ORCA_PROMPT = /^(Please carry out this task from my Orca coordinator|You are working inside Orca, a multi-agent IDE\.)/;

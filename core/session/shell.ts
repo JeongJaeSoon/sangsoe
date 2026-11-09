@@ -23,7 +23,9 @@ export async function recordShellInputs(deps: CoreDeps, row: SessionRow, session
   const fresh = inputs.map((s) => ({ s, key: dedupeKey(EVENTS.owner_action, session, s.uuid) })).filter((x) => !seen.has(x.key));
   if (fresh.length === 0) return 0;
   const current = await deps.orca.runCurrent();
-  const snap = await readSnapshot(deps.orca, briefRuns(events, current.ok ? current.value.runId : null));
+  // An unanswered run-current would drop the Run that holds the owner items and link nothing for good.
+  if (!current.ok) return 0;
+  const snap = await readSnapshot(deps.orca, briefRuns(events, current.value.runId));
   if (!snap.ok) return 0;
   // Rows this loop writes are input and marks, never state, so one fold serves every line.
   const input = { events, orca: snap.value, now: new Date().toISOString() };

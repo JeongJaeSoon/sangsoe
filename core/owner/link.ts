@@ -90,7 +90,8 @@ export function linkShell(input: ViewInput, facts: readonly OwnerItemFacts[], li
   const one = hits.length === 1 ? hits[0] : undefined;
   if (!one) return watched(line.command, cfg) ? { kind: "unlinked" } : { kind: "ignored", why: hits.length > 1 ? "ambiguous_unwatched" : "not_watched" };
   const urls = line.stdout.match(URLS) ?? [];
-  const observed = [...urls, line.command].join(" ").slice(0, 500);
+  // Cut only after masking (recordShellLink): a cut first can leave a token too short to match.
+  const observed = [...urls, line.command].join(" ");
   const stderr = line.stderr.trim();
   if (line.exitCode === null && stderr === "") {
     // Guard (나): with no exit code, only stdout naming what the verify expects links.
@@ -100,7 +101,7 @@ export function linkShell(input: ViewInput, facts: readonly OwnerItemFacts[], li
   }
   if (line.exitCode !== 0 || stderr !== "") {
     const first = stderr.split("\n")[0] ?? "";
-    return { kind: "failed", task: one.task, observed: `exit ${line.exitCode ?? "?"}${first ? `: ${first}` : ""}`.slice(0, 500) };
+    return { kind: "failed", task: one.task, observed: `exit ${line.exitCode ?? "?"}${first ? `: ${first}` : ""}` };
   }
   return { kind: "seen", task: one.task, observed };
 }
@@ -126,7 +127,7 @@ export function recordShellLink(store: Pick<Store, "append">, line: ShellLine, l
   return store.append({
     type: "evidence",
     source,
-    payload: { kind: `owner_act:${link.kind}`, observed: mask(link.observed), ...(line.exitCode !== null ? { exit_code: line.exitCode } : {}) },
+    payload: { kind: `owner_act:${link.kind}`, observed: mask(link.observed).slice(0, 500), ...(line.exitCode !== null ? { exit_code: line.exitCode } : {}) },
     entity: "task",
     entity_id: link.task,
     ...subject,
