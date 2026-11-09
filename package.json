@@ -14,7 +14,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome lint .",
-    "test": "node --test \"core/**/*.test.ts\" \"cli/**/*.test.ts\" \"test/**/*.test.ts\""
+    "test": "node --test \"{core,cli,orca-plugin,claude-plugin,test}/**/*.test.ts\""
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",

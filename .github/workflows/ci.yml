@@ -41,7 +41,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # The declared minimum (package.json engines), so an API newer than it fails here.
+          node-version: 24.2.0
           cache: npm
       - run: npm ci
       - run: npm test
