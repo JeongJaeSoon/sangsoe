@@ -92,6 +92,9 @@
 {"expect":"deny","gate":"delegate","note":"orchestrator edits code","agent_type":"sangsoe:orchestrator","tool_name":"Edit","tool_input":{"file_path":"/work/acme/src/app.ts","old_string":"a","new_string":"b"}}
 {"expect":"deny","gate":"delegate","note":"orchestrator runs tests","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"npm test"}}
 {"expect":"deny","gate":"delegate","note":"orchestrator chains coordination with work","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca worktree list && docker compose up -d"}}
+{"expect":"deny","gate":"delegate","note":"orchestrator reads another server's resource","agent_type":"sangsoe:orchestrator","tool_name":"ReadMcpResourceTool","tool_input":{"server":"plugin:other:docs","uri":"docs://handbook"}}
+{"expect":"pass","note":"orchestrator reads the brief resource (decision 89)","agent_type":"sangsoe:orchestrator","tool_name":"ReadMcpResourceTool","tool_input":{"server":"plugin:sangsoe:sangsoe","uri":"sangsoe://brief"}}
+{"expect":"pass","note":"orchestrator lists sangsoe's resources","agent_type":"sangsoe:orchestrator","tool_name":"ListMcpResourcesTool","tool_input":{"server":"plugin:sangsoe:sangsoe"}}
 {"expect":"deny","gate":"self-land","note":"worker merges directly","agent_type":"sangsoe:worker","tool_name":"Bash","tool_input":{"command":"gh pr merge 12 --squash"}}
 {"expect":"deny","gate":"self-land","note":"worker_done over an open PR","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject done --body 'merged nothing' --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
 {"expect":"pass","note":"worker's own done message","tool_name":"Bash","tool_input":{"command":"orca orchestration send --from term_03526424 --type worker_done --subject ok --body 'all landed' --task-id task_1 --dispatch-id ctx_1 --outcome succeeded"}}

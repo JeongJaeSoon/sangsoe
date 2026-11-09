@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { evaluate, type Facts } from "../core/gates/index.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
@@ -65,6 +66,25 @@ test("agent bodies reach sangsoe through MCP, never through a shell command", ()
     assert.doesNotMatch(text, CLI_CALL, `${f} names a sangsoe CLI command`);
     assert.doesNotMatch(text, /!`/, `${f} injects shell output`);
   }
+});
+
+test("the delegate gate lets the orchestrator read each sangsoe resource its agent text names", () => {
+  const servers = Object.keys((JSON.parse(read("claude-plugin/.mcp.json")) as { mcpServers: object }).mcpServers);
+  const named = [...read("claude-plugin/agents/orchestrator.md").matchAll(/resource `([a-z_]+)`/g)].map((m) => m[1] ?? "");
+  assert.ok(named.length > 0, "orchestrator.md names no resource");
+  const role: Facts = { role: () => "orchestrator", load: () => ({ level: "ok", reasons: [] }), ownOpenPrs: () => undefined, readScript: () => undefined };
+  const verdict = (tool: string, input: Record<string, unknown>) =>
+    evaluate({ tool, input, cwd: "/work/acme", subagent: false }, role).decision;
+  for (const key of servers) {
+    const server = `plugin:sangsoe:${key}`;
+    assert.notEqual(verdict("ListMcpResourcesTool", { server }), "deny", `${server}: listing denied`);
+    for (const name of named) {
+      const uri = /uri: "([^"]+)"/.exec(read(`claude-plugin/mcp/resources/${name}.ts`))?.[1];
+      assert.ok(uri, `resource ${name} has no uri`);
+      assert.notEqual(verdict("ReadMcpResourceTool", { server, uri }), "deny", `${uri}: read denied`);
+    }
+  }
+  assert.equal(verdict("ReadMcpResourceTool", { server: "plugin:other:x", uri: "other://doc" }), "deny");
 });
 
 test("only the owner-only skills inject CLI output, and the model cannot invoke them", () => {
