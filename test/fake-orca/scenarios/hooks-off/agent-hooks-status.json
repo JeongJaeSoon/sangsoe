@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "result": {
+    "enabled": false,
+    "statuses": [
+      { "agent": "claude", "state": "installed", "managedHooksPresent": false, "detail": null }
+    ]
+  }
+}

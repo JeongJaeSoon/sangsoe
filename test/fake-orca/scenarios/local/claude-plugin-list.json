@@ -1,0 +1,22 @@
+[
+  {
+    "id": "example-tools@example-marketplace",
+    "version": "3.8.1",
+    "scope": "user",
+    "enabled": true,
+    "installPath": "/home/dev/.claude/plugins/cache/example-marketplace/example-tools/3.8.1",
+    "installedAt": "2026-11-06T04:55:43.969Z",
+    "lastUpdated": "2026-11-06T04:55:43.969Z",
+    "projectEnabled": false
+  },
+  {
+    "id": "sangsoe@sangsoe",
+    "version": "0.1.0",
+    "scope": "user",
+    "enabled": true,
+    "installPath": "/home/dev/.claude/plugins/cache/sangsoe/sangsoe/0.1.0",
+    "installedAt": "2026-11-09T15:00:00.000Z",
+    "lastUpdated": "2026-11-09T15:00:00.000Z",
+    "projectEnabled": false
+  }
+]

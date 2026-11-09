@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "result": {
+    "messages": [
+      {
+        "id": "msg_000000000001",
+        "type": "status",
+        "from": "term_00000000-0000-4000-8000-000000000009",
+        "to": "run:run_000000000001",
+        "subject": "acme/api: wave 1 started",
+        "handled": false,
+        "body": "Two units started."
+      },
+      {
+        "id": "msg_000000000002",
+        "type": "worker_done",
+        "from": "term_00000000-0000-4000-8000-000000000001",
+        "to": "run:run_000000000001",
+        "subject": "feature-a merged",
+        "handled": true,
+        "body": "Merged acme/api#40."
+      }
+    ]
+  }
+}

@@ -12,6 +12,8 @@
 | 실행 | `core/store/` | X | ④ 공유 코어 | sqlite event 표와 뷰 |
 | 실행 | `core/contract/` | X | ④ 공유 코어 | 계약: event type 파일 · 뷰 시그니처 · `dedupe_key` 규칙 · 전이표 · 시계 |
 | 실행 | `core/orca/` | X | ④ 공유 코어 | Orca CLI 어댑터(① 을 부르는 유일한 자리) |
+| 실행 | `core/gh/` | X | ④ 공유 코어 | GitHub 클라이언트(한도·ETag 캐시 인터페이스, 결정 81 의 조건 넷 읽기) |
+| 실행 | `core/checks/` | X | ④ 공유 코어 | 시작 점검과 `doctor` 의 점검 함수(점검 하나 = 파일 하나) |
 | 실행 | `core/install/` | X | ④ 공유 코어 | install · uninstall · doctor |
 | 실행 | `core/approve/` | X | ④ 공유 코어 | `sangsoe plugin approve` 의 세 조건 검사와 `orca plugin enable` 을 부르는 유일한 자리 |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
@@ -69,7 +71,7 @@
 
 **`dedupe_key`(split Q13 을 여기서 정한다).** `<접두어>:<대상>[:<조건>…]`. 접두어는 type 이 선언한 것이고 기본은 type 이름이며, 설계가 이미 쓰는 넷만 짧다: `notified`→`notify`, `decision_opened`→`decision`, `item_ready`→`ready`, `edge_added`→`edge`. 접두어 하나는 type 하나의 것이라 다른 type 끼리 부딪히지 않고, 같은 조건을 쓰는 쪽이 둘이어도 `UNIQUE(dedupe_key)` 로 한 줄만 남는다. 키에 기대는 type(`notified`·`decision_opened`·`item_ready`·`edge_added`·`waiting_released`)은 키 없는 쓰기를 거부하고, 각 마디는 `dedupeSegment`(URI 인코딩)로 적어서 `:`·공백이 든 Orca id 도 마디를 가르지 않고, 다른 대상끼리 같은 키가 되지 않는다(`dedupeKey(def, target, ...조건)` 이 해 준다). 앞 마디가 줄에서 나오는 type 은 `dedupeBound` 가 그 마디를 내고 키는 인코딩한 그 마디로 시작해야 한다(`ready:<task>`·`decision:<decision_key>`·`notify:<target 칸>`). `dedupeClosed` 인 type 은 그 뒤에 조건을 붙이지 못한다(`edge:<pred>:<succ>:<kind>`·`waiting_released:<ref>`·`owner_text_redacted:<seq>`). 그래서 한 조건의 철자는 하나뿐이고, 인코딩하지 않은 철자는 거부된다. 두 번째 쓰기는 `{ seq: 첫 줄, inserted: false }` 를 받는다.
 
-**뷰.** 모든 뷰는 `ViewInput = { orca: { tasks, gates }, events, now }` 를 받는 순수 함수이고 결과를 저장하지 않는다(`<뷰>_cache` 표 없음). 뷰가 읽는 Orca 칸은 `ViewTask { id, runId, status, result?, deps, activeDispatchId? }`·`ViewGate { id, taskId, open }` 이다. U2 의 Orca 행 타입은 여기에 대입될 수 있으면 되고, 비로컬 행은 어댑터가 이미 걸렀다(결정 88).
+**뷰.** 모든 뷰는 `ViewInput = { orca: { tasks, gates }, events, now }` 를 받는 순수 함수이고 결과를 저장하지 않는다(`<뷰>_cache` 표 없음). 뷰가 읽는 Orca 칸은 `ViewTask { id, runId, status, result?, deps, activeDispatchId? }`·`ViewGate { id, taskId, open }` 이다. U2 의 `TaskRow`·`GateRow`(`core/contract/orca.ts`)는 이 모양이 아니다(`runId`·`deps` 가 없고 게이트는 `status` 문자열). 그래서 어댑터 결과를 `OrcaSnapshot` 으로 옮기는 조립 함수가 따로 필요하고, 뷰를 처음 돌리는 유닛이 그것을 만든다. 비로컬 행은 어댑터가 이미 걸렀다(결정 88).
 
 | 뷰 | 시그니처 | 몸체 |
 |---|---|---|
@@ -90,6 +92,35 @@
 **시작 점검.** `checkSqliteVersion`(3.51.3 이상, 3.50.7+·3.44.6+)과 `checkLocalFs`(로컬로 아는 파일시스템만 통과, DB 파일의 링크는 따라간다)는 `Store.open` 이 먼저 부르고 `doctor` 도 같은 함수를 쓴다. Node 하한이 24.15 인 이유는 결정 102.
 
 **고른 꼴.** 후보 둘을 직접 썼다(한 시스템 안의 경계 하나라 compete 를 돌리지 않았다). (가, 고름) type 마다 파일 하나와 등록표 하나, 쓰기 입구 하나가 검증한다. (나) 모든 type 을 한 파일의 판별 합집합으로 둔다: 타입 추론은 쉽지만 여섯 유닛이 같은 파일을 고쳐 split §1.3 의 "파일 하나당 항목 하나"를 어긴다. 버린 꼴: sqlite `CREATE VIEW` 로 뷰를 두는 안. Orca 행을 읽을 때 합쳐야 해서 SQL 뷰로는 입력을 받을 수 없다.
+
+## Orca·GitHub 어댑터와 점검 (U2)
+
+코어가 Orca 와 GitHub 을 부르는 길은 둘뿐이다: `core/orca/` 와 `core/gh/`. 뒤 단위는 `core/index.ts` 에서 아래 계약만 쓴다.
+
+```ts
+// core/contract/orca.ts
+type Exec = (file: string, args: readonly string[]) => Promise<ExecResult>;
+type OrcaResult<T> = { ok: true; value: T; requestId?: string } | { ok: false; error: OrcaError; requestId?: string };
+type LocalRows<T> = { rows: T[]; nonLocal: { rows: number; hostIds: string[] }; omittedHostIds: string[]; truncated: boolean };
+interface OrcaAdapter { taskCreate(…); taskList(…); …; worktreeList(…): Promise<OrcaResult<LocalRows<WorktreeRow>>>; … }
+createOrcaAdapter(exec: Exec): OrcaAdapter;
+recoverWrite(orca, requestId, replay): Promise<OrcaResult<T>>;
+
+// core/gh
+createGhClient({ exec, cache: GhCache, now }): GhClient;   // get(path, { conditional? }) → ok | not_modified | rate_limited | error
+readMergeConditions(gh, { repo, base, pr, protectedPaths }): MergeConditions;
+
+// core/checks
+type Check = { id: string; run(ctx: CheckContext): Promise<CheckResult> };
+type CheckResult = { id: string; status: "ok" | "notice" | "warn" | "fail"; summary: string; fix?: string };
+runChecks(START_CHECKS, ctx) → startReport(results) | doctorReport(results)
+```
+
+- **명령 표 하나.** `core/orca/commands.ts` 의 `ORCA_COMMANDS` 가 래퍼의 argv 와 시작 점검 `orca-commands` 의 대조 대상을 같이 정한다. 설계 2절 첫째 칸 표의 명령마다 한 행이 있고, 표에 없는 옵션은 래퍼가 넘기지 못한다.
+- **호스트.** 호스트를 가진 행(`worktree list`·`worktree ps`·`worker-list`)은 로컬 행만 어댑터 밖으로 나가고 나머지는 수만 남는다(결정 88).
+- **요청 id.** 첫 호출에는 id 를 만들지 않는다. Orca 가 알려 준 id 를 결과에 싣고, 응답을 잃으면 `recoverWrite` 가 `request-show` 뒤에만 같은 id 로 다시 보낸다(결정 60, 결정 103).
+- **가짜 Orca.** `test/fake-orca/` 의 `createFakeOrca({ scenario, replies })` 가 `Exec` 을 준다. 이 Mac 에서 읽기 전용으로 녹화한 JSON 을 일반 이름으로 바꿔 `scenarios/local/` 에 두었고, 다른 시나리오 폴더는 바뀌는 파일만 갖는다. `ORCA_COMMANDS` 밖의 명령은 거부한다.
+- **고르지 않은 꼴.** 명령 이름으로 부르는 범용 함수 하나(`call("worktree list", …)`): 겉면은 작지만 부르는 쪽이 argv 와 결과 모양을 알아야 한다. 메서드마다 타입을 가진 인터페이스를 고르고, 안에서는 같은 표 하나로 argv 를 만든다.
 
 ## Orca plugin 골격 (U3)
 

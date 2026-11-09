@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "result": {
+    "workers": [
+      { "dispatchId": "ctx_000000000001", "taskId": "task_000000000001", "state": "ready", "host": "local" },
+      { "dispatchId": "ctx_000000000003", "taskId": "task_000000000003", "state": "ready", "host": "ssh-0000000000001-aaaaaa" },
+      { "dispatchId": "ctx_000000000004", "taskId": "task_000000000004", "state": "ready" }
+    ],
+    "scope": { "source": "all" }
+  }
+}
