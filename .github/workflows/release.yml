@@ -52,6 +52,8 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
+          # Beside orca-plugin/, outside its content hash: `sangsoe plugin approve` reads the commit here.
+          printf '{"commit":"%s"}\n' "$GITHUB_SHA" > build-info.json
           mkdir -p out
           npm pack --pack-destination out
           mv "out/sangsoe-$VERSION.tgz" "out/sangsoe-$VERSION.tar.gz"
@@ -69,6 +71,8 @@ jobs:
           out="$(SANGSOE_ROOT="$PWD/smoke/package" node smoke/package/dist/cli/main.js --version)"
           test "$out" = "sangsoe $VERSION"
           SANGSOE_ROOT="$PWD/smoke/package" node smoke/package/dist/cli/main.js doctor --offline
+          commit="$(node --input-type=module -e "import { resolveCommit } from '$PWD/smoke/package/dist/core/index.js'; console.log(await resolveCommit('$PWD/smoke/package/orca-plugin'))")"
+          test "$commit" = "$GITHUB_SHA"
 
       - name: Publish the GitHub release
         env:

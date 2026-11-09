@@ -25,7 +25,7 @@ test("the marketplace lists sangsoe from ./claude-plugin, the name install and d
 });
 
 test("the release tarball's file list carries the build, both plugins and the marketplace", () => {
-  for (const want of ["dist/", ".claude-plugin/", "claude-plugin/", "orca-plugin/"]) {
+  for (const want of ["dist/", ".claude-plugin/", "claude-plugin/", "orca-plugin/", "build-info.json"]) {
     assert.ok(pkg.files.includes(want), `package.json files lacks ${want}`);
   }
 });

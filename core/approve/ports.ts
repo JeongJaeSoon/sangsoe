@@ -52,17 +52,20 @@ export function nodePorts(write: (line: string) => void): ApprovePorts {
   };
 }
 
-// The commit a plugin folder was built from: a clean git checkout's HEAD, else the
-// `build-info.json` the release build writes beside the folder (outside it, so the content hash
-// Orca computes for the folder stays the reviewed tree's).
+// The commit a plugin folder was built from: the `build-info.json` the release build writes beside
+// the folder (outside it, so the content hash Orca computes for the folder stays the reviewed
+// tree's), else the HEAD of a clean git checkout that tracks the folder. A git repo that merely
+// contains the folder (Homebrew's prefix ignores its Cellar) says nothing about the build.
 export async function resolveCommit(dir: string, exec: Exec = nodeExec): Promise<string | null> {
-  const head = await exec("git", ["-C", dir, "rev-parse", "HEAD"]);
-  if (head.code === 0) {
-    const dirty = await exec("git", ["-C", dir, "status", "--porcelain", "--", "."]);
-    return dirty.code === 0 && dirty.stdout.trim() === "" ? head.stdout.trim() : null;
-  }
   const info = join(dirname(dir), "build-info.json");
-  if (!existsSync(info)) return null;
-  const commit = (JSON.parse(await readFile(info, "utf8")) as { commit?: unknown }).commit;
-  return typeof commit === "string" ? commit : null;
+  if (existsSync(info)) {
+    const commit = (JSON.parse(await readFile(info, "utf8")) as { commit?: unknown }).commit;
+    return typeof commit === "string" ? commit : null;
+  }
+  const tracked = await exec("git", ["-C", dir, "ls-files", "--error-unmatch", "--", "orca-plugin.json"]);
+  if (tracked.code !== 0) return null;
+  const dirty = await exec("git", ["-C", dir, "status", "--porcelain", "--", "."]);
+  if (dirty.code !== 0 || dirty.stdout.trim() !== "") return null;
+  const head = await exec("git", ["-C", dir, "rev-parse", "HEAD"]);
+  return head.code === 0 ? head.stdout.trim() : null;
 }
