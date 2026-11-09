@@ -95,6 +95,7 @@ export * from "./brief/index.ts";
 export type { EdgeKind } from "./graph/index.ts";
 
 export {
+  type Act,
   DEFAULT_MONITOR_CONFIG,
   isMonitorName,
   MONITOR_NAMES,
@@ -109,6 +110,9 @@ export { MONITORS, type MonitorRunner, openMonitors, runMonitor } from "./detect
 export { judgeOrca, type OrcaReads, type SessionActivity, sessionActivity } from "./detect/orca/judge.ts";
 export { judgeResource, type ResourceReads, withDiagnostics } from "./detect/resource/judge.ts";
 export { type ChatProvider, nullChatProvider } from "./detect/chat/provider.ts";
+export { parseWatch, readWatchConfig, type WatchConfig } from "./detect/pr/config.ts";
+export { classifyMain, type MainRun, type MainVerdict } from "./detect/pr/judge.ts";
+export { linkOf, type LinkedTask, prRound } from "./detect/pr/round.ts";
 
 export {
   type LandAction,

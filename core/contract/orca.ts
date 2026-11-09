@@ -52,6 +52,8 @@ export type WorktreeRow = {
   id: string;
   hostId?: string;
   repoId: string;
+  /** `github:<owner>/<repo>` when the checkout's origin is on GitHub. */
+  projectId?: string;
   path: string;
   branch: string;
   displayName: string;

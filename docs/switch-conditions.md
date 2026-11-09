@@ -38,7 +38,7 @@
 | D1 | 감지기 | orca-monitor 멈춤 판정 = 시각 필드, 못 보면 행동 0(R-07, P10) | U15 | |
 | D2 | 감지기 | `one_session_two_terminals` | U15 | |
 | D3 | 감지기 | 부하 판정 함수 하나(압박 게이트·resource-monitor·capacity, R-13) | U15(+U10) | |
-| D4 | 감지기 | 머지 확인 뒤에만 PR 항목 `completed`·`main_green/red` | U16 | |
+| D4 | 감지기 | 머지 확인 뒤에만 PR 항목 `completed`·`main_green/red` | U16 | `core/detect/pr/round.test.ts`: `merge_suggests_close`(머지 확인 → `pr_merged` 다음 같은 라운드에 Task `completed`, 다른 열린 Task 는 `close_suggested`) · 머지 커밋이 main 에 없으면 `pr_merged`·Task 쓰기 0 · dry run 은 Orca 쓰기 0 · `repo_level_main`(main_* 쪽). `judge.test.ts`: 재실행 1회로 flake 구분 · 취소는 빨강 아님 · 0-job 은 모름(결정 142·143). 실제 Orca 의 `task-update` 는 미실행(VERIFY 가 Task 쓰기를 금함) |
 | D5 | 감지기 | queue-monitor 는 항목을 닫지 않음·`escalation_stale`·`job_drift` | U17 | |
 | PN1 | 패널 | 승인된 plugin 의 worker 가 돈다(T1·T2·T4) | U3 | |
 | PN2 | 패널 | 패널 행 ID = `BriefModel` 행 ID | U19 | |
