@@ -12,6 +12,7 @@
 | 실행 | `core/store/` | X | ④ 공유 코어 | sqlite event 표와 뷰 |
 | 실행 | `core/orca/` | X | ④ 공유 코어 | Orca CLI 어댑터(① 을 부르는 유일한 자리) |
 | 실행 | `core/install/` | X | ④ 공유 코어 | install · uninstall · doctor |
+| 실행 | `core/approve/` | X | ④ 공유 코어 | `sangsoe plugin approve` 의 세 조건 검사와 `orca plugin enable` 을 부르는 유일한 자리 |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
 | 실행 | `orca-plugin/reaper/` | X | ② Orca plugin | REAPER 라운드 타이머 |
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |
