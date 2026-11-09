@@ -59,7 +59,7 @@ test("flow_expand and graph expand write the same flow on two fake Orcas", async
   assert.ok(tool.ok);
 });
 
-test("graph ready and graph why on the fake Orca print the 🟢 list and decision 92④'s table", async () => {
+test("graph ready and graph why on the fake Orca print the 🟢 list and decision 92④'s table", async (t) => {
   const w = createGraphWorld();
   w.task("t_pre", "run_a");
   w.task("t_send", "run_a", ["t_pre"]);
@@ -75,6 +75,9 @@ test("graph ready and graph why on the fake Orca print the 🟢 list and decisio
     lines: ["i002: 📅 예정", "| 항목 | 막는 선행 | 간선 종류 | 선행 상태 | 해야 할 일 |", "|---|---|---|---|---|", "| i002 | item:t_pre | blocks | 📅 예정 | 선행 항목 ✅ 완료를 기다린다 |"],
   });
   const unknown = await graphWhyCommand({ run: ["run_a"] }, ["i003"], ports);
+  for (const line of [...(await graphReadyCommand({ run: ["run_a"] }, ports)).lines, ...(await graphWhyCommand({ run: ["run_a"] }, ["i002"], ports)).lines, ...unknown.lines]) {
+    t.diagnostic(line);
+  }
   assert.match(unknown.lines[3] ?? "", /\| i003 \| pr:acme\/api#4 \| stacked_on \| 모름: PR 상태를 읽지 못했다 \|/);
 });
 
