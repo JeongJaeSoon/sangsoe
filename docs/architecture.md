@@ -16,6 +16,9 @@
 | 실행 | `core/checks/` | X | ④ 공유 코어 | 시작 점검과 `doctor` 의 점검 함수(점검 하나 = 파일 하나) |
 | 실행 | `core/install/` | X | ④ 공유 코어 | install · uninstall · doctor |
 | 실행 | `core/approve/` | X | ④ 공유 코어 | `sangsoe plugin approve` 의 세 조건 검사와 `orca plugin enable` 을 부르는 유일한 자리 |
+| 실행 | `core/start/` | X | ④ 공유 코어 | 세션을 여는 유일한 시작 함수(Task + Dispatch + new-child lineage)와 lineage·깊이 검사, `unit_lineage_complete` 읽기(결정 94) |
+| 실행 | `core/capacity/` | X | ④ 공유 코어 | 부하 판정 함수 하나(압박 게이트·resource-monitor·REAPER·`capacity` 공용, 결정 83) |
+| 실행 | `core/recover/` | X | ④ 공유 코어 | `sangsoe recover` 의 읽기 전용 표(결정 80 N4) |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
 | 실행 | `orca-plugin/reaper/` | X | ② Orca plugin | REAPER 라운드 타이머 |
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |
@@ -68,7 +71,7 @@
 - 페이로드 어디에든(중첩 포함) Orca 가 원본인 사실(`title`·`status`·`spec`·`deps`·`question`·`options`·`message_body`)이 있으면 type 과 상관없이 거부한다. sqlite 에는 Orca id 만 남는다.
 - `owner_action` 과 `owner_text_redacted` 는 `storeOnly` 라 `append` 의 인자 타입에서 빠지고 실행 중에도 거부된다. `appendOwnerAction`(원문과 한 트랜잭션, 원문은 비지 않은 문자열)과 `redactOwnerText`(비우기와 한 트랜잭션)만 쓴다.
 - Orca id 는 불투명한 값이라 sangsoe 는 형식을 따지지 않는다. 자원 줄(`resource`·`reap_*`·`resource_*`)은 `kind` 를 반드시 적고, `kind: worktree` 의 `ref` 는 경로가 아니라 Orca id 다(공백·`/`·`\` 거부). `item_extra_set.verify` 는 kind 별 합 타입 `VerifySpec` 이라 kind 마다 필요한 칸이 컴파일·실행 양쪽에서 걸린다(`orca_field` 는 target·field·value 등). `evidence{kind: probe:*}` 는 `observed` 가 있어야 한다.
-- `plugin_approved`(U3)·`start_refused`(U22, 결정 94)는 그 유닛이 파일을 더한다.
+- `plugin_approved`(U3)는 그 유닛이 파일을 더한다. `start_refused` 는 새 type 이 아니라 `signal` 의 kind 다(결정 94 (바), U10).
 
 **`dedupe_key`(split Q13 을 여기서 정한다).** `<접두어>:<대상>[:<조건>…]`. 접두어는 type 이 선언한 것이고 기본은 type 이름이며, 설계가 이미 쓰는 넷만 짧다: `notified`→`notify`, `decision_opened`→`decision`, `item_ready`→`ready`, `edge_added`→`edge`. 접두어 하나는 type 하나의 것이라 다른 type 끼리 부딪히지 않고, 같은 조건을 쓰는 쪽이 둘이어도 `UNIQUE(dedupe_key)` 로 한 줄만 남는다. 키에 기대는 type(`notified`·`decision_opened`·`item_ready`·`edge_added`·`waiting_released`)은 키 없는 쓰기를 거부하고, 각 마디는 `dedupeSegment`(URI 인코딩)로 적어서 `:`·공백이 든 Orca id 도 마디를 가르지 않고, 다른 대상끼리 같은 키가 되지 않는다(`dedupeKey(def, target, ...조건)` 이 해 준다). 앞 마디가 줄에서 나오는 type 은 `dedupeBound` 가 그 마디를 내고 키는 인코딩한 그 마디로 시작해야 한다(`ready:<task>`·`decision:<decision_key>`·`notify:<target 칸>`). `dedupeClosed` 인 type 은 그 뒤에 조건을 붙이지 못한다(`edge:<pred>:<succ>:<kind>`·`waiting_released:<ref>`·`owner_text_redacted:<seq>`). 그래서 한 조건의 철자는 하나뿐이고, 인코딩하지 않은 철자는 거부된다. 두 번째 쓰기는 `{ seq: 첫 줄, inserted: false }` 를 받는다.
 
