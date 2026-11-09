@@ -54,6 +54,8 @@
 {"type":"review_ask_sent","source":"review_ask_record","payload":{"pr":"acme/api#12","reviewer":"octocat"}}
 {"type":"review_commented","source":"pr-monitor","payload":{"pr":"acme/api#12","reviewer":"octocat"}}
 {"type":"review_replied","source":"pr-monitor","payload":{"pr":"acme/api#12","by":"worker:u1"}}
+{"type":"review_verdict","source":"review record","dedupe_key":"review_verdict:acme%2Fapi%2312:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:codex","payload":{"pr":"acme/api#12","head_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","act_on":0,"reviewer":"codex","author":"octocat"}}
+{"type":"plugin_approved","source":"plugin approve","payload":{"key":"local.sangsoe","version":"0.1.0","fingerprint":"ap1-0000","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","at":1000}}
 {"type":"run_stalled","source":"orca-monitor","payload":{"run":"run_1"}}
 {"type":"session_started","source":"SessionStart","payload":{"session":"sess-1","role":"worker","tier":"standard","model":"model-x","effort":"high"}}
 {"type":"signal","source":"lead:api","payload":{"kind":"main_flake","reason":"rerun passed"}}

@@ -1,0 +1,53 @@
+# Code archaeology (git and in-repo)
+
+## What this source contains
+
+- Commit history: messages, dates, authors, diffs.
+- PR descriptions, review comments, and discussion threads (through `gh`).
+- Inline code comments, TODOs, FIXMEs, deprecation notes.
+- Architectural decision records, if the repo keeps them.
+- Tests, whose names and assertions often encode the edge cases that motivated a change.
+- Files changed in the same commits (co-change signal).
+- CHANGELOG entries and release notes.
+- Issue keys in commit messages and PR bodies.
+
+It is the most trustworthy source, tied directly to the code, and the most complete. Everything that went through the repo is here.
+
+## How to search it
+
+Expand the seed commit list:
+
+```bash
+# History through renames
+git log --follow --oneline -- <file>
+
+# Pickaxe: commits that added or removed this exact text
+git log -S '<exact_string_from_code>' -- <file>
+
+# Or for patterns
+git log -G '<regex>' -- <file>
+
+# Who wrote each line and when
+git blame -L <start>,<end> <file>
+
+# One commit's full diff
+git show <hash>
+
+# Commits between two points affecting this file
+git log <old>..<new> -p -- <file>
+```
+
+Line-level review threads are not in `gh pr view --json reviews`. Read them with `gh api repos/{owner}/{repo}/pulls/<number>/comments --paginate`.
+
+Look for docs kept in the repo:
+
+```bash
+# Decision records often live in docs/adr/ or similar
+rg -l -i 'architecture.decision|decision' --glob '*.md'
+
+# TODOs and FIXMEs near the target
+rg -n -C2 '(TODO|FIXME|HACK|XXX|NOTE)' <target_file>
+
+# Related tests
+rg -l '<symbol>' --glob '*test*'
+```
