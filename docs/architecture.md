@@ -10,6 +10,7 @@
 | 감지 | `claude-plugin/hooks/` | X | ③ Claude Code plugin | SessionStart · 막는 hook(게이트) · 기록 hook |
 | 실행 | `core/` | X | ④ 공유 코어 | 판단 함수(GRAPH · ready · capacity · land · verify_tier · decision_* · notify · restart_due · recover_plan · 시작 점검) |
 | 실행 | `core/store/` | X | ④ 공유 코어 | sqlite event 표와 뷰 |
+| 실행 | `core/contract/` | X | ④ 공유 코어 | 계약: event type 파일 · 뷰 시그니처 · `dedupe_key` 규칙 · 전이표 · 시계 |
 | 실행 | `core/orca/` | X | ④ 공유 코어 | Orca CLI 어댑터(① 을 부르는 유일한 자리) |
 | 실행 | `core/gh/` | X | ④ 공유 코어 | GitHub 클라이언트(한도·ETag 캐시 인터페이스, 결정 81 의 조건 넷 읽기) |
 | 실행 | `core/checks/` | X | ④ 공유 코어 | 시작 점검과 `doctor` 의 점검 함수(점검 하나 = 파일 하나) |
@@ -21,6 +22,7 @@
 | 실행 | `claude-plugin/mcp/` | X | ③ Claude Code plugin | MCP 서버(에이전트의 입구) |
 | 실행 | `claude-plugin/mcp/tools/` | X | ③ Claude Code plugin | MCP tool 하나 = 파일 하나 |
 | 판단 | `claude-plugin/skills/` | O | ③ Claude Code plugin | 판단 절차 skill |
+| 판단 | `claude-plugin/skills/general/` | O | ③ Claude Code plugin | 일반 작업 skill(결정 95) |
 | 판단 | `claude-plugin/agents/` | O | ③ Claude Code plugin | 오케스트레이터 · 리드 · 워커 정의 |
 | — | `orca-plugin/` | X | ② Orca plugin | 칸 뿌리(매니페스트 `orca-plugin.json` 자리) |
 | — | `claude-plugin/` | 섞임 | ③ Claude Code plugin | 칸 뿌리(매니페스트 `.claude-plugin/plugin.json` 자리) |
@@ -69,6 +71,42 @@
 - 결과는 `Outcome` 하나: `{ ok: true, value }` 또는 `{ ok: false, refusal: { code, reason, fix } }`. MCP 는 `isError` 와 JSON 본문으로, CLI 는 종료 코드(0 성공 · 1 거부 · 2 사용법 오류)와 `--json` 출력으로 낸다. 사람에게 보고만 하는 CLI 명령(`install`·`uninstall`·`doctor`·`plugin approve`)은 `Report`(`{ code, lines }`)를 돌려준다. 명령은 호스트(`Host`)를 인자로 받아 시험이 가짜를 넣는다.
 - 모르는 명령·인자·tool·입력 칸은 코어 함수에 닿기 전에 입구가 거부하고 맞는 형태(사용법 줄, 입력 칸 목록)를 보인다. `--help` 도 아무것도 부르지 않는다.
 - `test/boundaries/both-entrances.ts` 의 `expectSameViaBothEntrances` 가 한 호출을 두 입구로 보내 `Outcome` 이 같은지 본다.
+
+## 코어 계약 (U1)
+
+뒤 유닛(U7–U21)이 대고 짜는 계약이다. 코드는 `core/contract/`, 저장은 `core/store/` 이고 다른 칸은 `core/index.ts` 로 들어온다.
+
+**event.** type 하나가 `core/contract/events/<type>.ts` 파일 하나다(부록 `#signal-flow` 의 이름 전체, 74개). 파일은 `defineEvent(type, 칸 검증기, { dedupe?, dedupeRequired?, dedupeBound?, dedupeClosed?, sources?, storeOnly?, needs?, version?, upcast? })` 하나를 내보낸다. 쓰기는 `Store.append({ type, source, payload, target?, subject?, entity?, entity_id?, actor?, needs?, severity?, dedupe_key? })` 하나로만 하고, 이 함수가 type 등록·쓰는 쪽(`sources`, 간선은 GRAPH 만)·페이로드(새 쓰기는 정의에 없는 칸도 거부)·`dedupe_key`·전이표(`item_transition`)를 검사한 뒤 `BEGIN IMMEDIATE` 안에서 넣는다. 페이로드는 `after` 칸의 JSON 이다. `before` 칸은 비워 둔다.
+
+- 읽는 쪽은 모르는 칸을 무시하고, 줄의 `schema_v` 가 type 의 `version` 보다 낮으면 `upcast` 로 올려 읽는다(`decodeRow`).
+- 페이로드 어디에든(중첩 포함) Orca 가 원본인 사실(`title`·`status`·`spec`·`deps`·`question`·`options`·`message_body`)이 있으면 type 과 상관없이 거부한다. sqlite 에는 Orca id 만 남는다.
+- `owner_action` 과 `owner_text_redacted` 는 `storeOnly` 라 `append` 의 인자 타입에서 빠지고 실행 중에도 거부된다. `appendOwnerAction`(원문과 한 트랜잭션, 원문은 비지 않은 문자열)과 `redactOwnerText`(비우기와 한 트랜잭션)만 쓴다.
+- Orca id 는 불투명한 값이라 sangsoe 는 형식을 따지지 않는다. 자원 줄(`resource`·`reap_*`·`resource_*`)은 `kind` 를 반드시 적고, `kind: worktree` 의 `ref` 는 경로가 아니라 Orca id 다(공백·`/`·`\` 거부). `item_extra_set.verify` 는 kind 별 합 타입 `VerifySpec` 이라 kind 마다 필요한 칸이 컴파일·실행 양쪽에서 걸린다(`orca_field` 는 target·field·value 등). `evidence{kind: probe:*}` 는 `observed` 가 있어야 한다.
+- `plugin_approved`(U3)·`start_refused`(U22, 결정 94)는 그 유닛이 파일을 더한다.
+
+**`dedupe_key`(split Q13 을 여기서 정한다).** `<접두어>:<대상>[:<조건>…]`. 접두어는 type 이 선언한 것이고 기본은 type 이름이며, 설계가 이미 쓰는 넷만 짧다: `notified`→`notify`, `decision_opened`→`decision`, `item_ready`→`ready`, `edge_added`→`edge`. 접두어 하나는 type 하나의 것이라 다른 type 끼리 부딪히지 않고, 같은 조건을 쓰는 쪽이 둘이어도 `UNIQUE(dedupe_key)` 로 한 줄만 남는다. 키에 기대는 type(`notified`·`decision_opened`·`item_ready`·`edge_added`·`waiting_released`)은 키 없는 쓰기를 거부하고, 각 마디는 `dedupeSegment`(URI 인코딩)로 적어서 `:`·공백이 든 Orca id 도 마디를 가르지 않고, 다른 대상끼리 같은 키가 되지 않는다(`dedupeKey(def, target, ...조건)` 이 해 준다). 앞 마디가 줄에서 나오는 type 은 `dedupeBound` 가 그 마디를 내고 키는 인코딩한 그 마디로 시작해야 한다(`ready:<task>`·`decision:<decision_key>`·`notify:<target 칸>`). `dedupeClosed` 인 type 은 그 뒤에 조건을 붙이지 못한다(`edge:<pred>:<succ>:<kind>`·`waiting_released:<ref>`·`owner_text_redacted:<seq>`). 그래서 한 조건의 철자는 하나뿐이고, 인코딩하지 않은 철자는 거부된다. 두 번째 쓰기는 `{ seq: 첫 줄, inserted: false }` 를 받는다.
+
+**뷰.** 모든 뷰는 `ViewInput = { orca: { tasks, gates }, events, now }` 를 받는 순수 함수이고 결과를 저장하지 않는다(`<뷰>_cache` 표 없음). 뷰가 읽는 Orca 칸은 `ViewTask { id, runId, status, result?, deps, activeDispatchId? }`·`ViewGate { id, taskId, open }` 이다. U2 의 `TaskRow`·`GateRow`(`core/contract/orca.ts`)는 이 모양이 아니다(`runId`·`deps` 가 없고 게이트는 `status` 문자열). 그래서 어댑터 결과를 `OrcaSnapshot` 으로 옮기는 조립 함수가 따로 필요하고, 뷰를 처음 돌리는 유닛이 그것을 만든다. 비로컬 행은 어댑터가 이미 걸렀다(결정 88).
+
+| 뷰 | 시그니처 | 몸체 |
+|---|---|---|
+| `item_status` | `(input) => ItemStatusRow[]` | U9(상태는 U7) |
+| `owner_todo` | `(input) => OwnerTodoRow[]` | U14 |
+| `decision` | `(input) => DecisionRow[]` | U1 |
+| `ready` | `(input) => ReadyRow[]` | U7 |
+| `group_brief` | `(input) => GroupBriefRow[]` | U9 |
+| `group_items` | `(input, lead) => ItemStatusRow[]` | U9 |
+| `item_timeline` | `(input, task) => TimelineRow[]` | U1 |
+| `ask_due` | `(input, { remindAfterMinutes }) => AskDueRow[]` | U8 |
+| `restart_due` | `(input, { maxAutoCompactions, firstCallShare, minIntervalMinutes, tokenCeiling }) => RestartDueRow[]` | U10 |
+
+**시계.** 코어가 적는 시각은 모두 주입한 `Clock`(`() => ISO UTC`)에서 오고, 뷰는 `now` 를 입력으로 받는다. `core/contract`·`core/store` 에서 `Date.now()`·`new Date()` 를 부르는 곳은 기본 시계 하나뿐이다(시험이 확인).
+
+**전이표.** 상태 일곱(`planned`·`ready`·`in_progress`·`blocked`·`on_hold`·`done`·`cancelled`)의 순서쌍 49 중 허용 19·거부 30(`core/contract/transitions.ts`).
+
+**시작 점검.** `checkSqliteVersion`(3.51.3 이상, 3.50.7+·3.44.6+)과 `checkLocalFs`(로컬로 아는 파일시스템만 통과, DB 파일의 링크는 따라간다)는 `Store.open` 이 먼저 부르고 `doctor` 도 같은 함수를 쓴다. Node 하한이 24.15 인 이유는 결정 102.
+
+**고른 꼴.** 후보 둘을 직접 썼다(한 시스템 안의 경계 하나라 compete 를 돌리지 않았다). (가, 고름) type 마다 파일 하나와 등록표 하나, 쓰기 입구 하나가 검증한다. (나) 모든 type 을 한 파일의 판별 합집합으로 둔다: 타입 추론은 쉽지만 여섯 유닛이 같은 파일을 고쳐 split §1.3 의 "파일 하나당 항목 하나"를 어긴다. 버린 꼴: sqlite `CREATE VIEW` 로 뷰를 두는 안. Orca 행을 읽을 때 합쳐야 해서 SQL 뷰로는 입력을 받을 수 없다.
 
 ## Orca·GitHub 어댑터와 점검 (U2)
 
