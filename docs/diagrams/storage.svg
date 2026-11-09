@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 690" role="img" aria-labelledby="t4 d4">
+<title id="t4">데이터가 어디에 저장되나</title>
+<desc id="d4">저장 위치 네 칸. 첫째 Orca(원본): Run, Task, Dispatch와 워커, 게이트, 메시지, 카드 표시, 항목과 PR 의 연결(Orca 참조). 둘째 sangsoe sqlite(Orca 에 없는 것만): event, 계산되는 뷰, owner_text, 번호 표, 캐시 예외. 셋째 파일: 흐름 틀, 설정, 브리프와 증거, 로그, 압박 기록. 각각 왜 파일인지와 sqlite 로 옮길 수 있는지 한 줄. 넷째 저장 안 함(참조만): GitHub, Claude Code 대화 기록, 티켓 도구, Orca Task 의 제목과 상태 사본, Orca 메시지 편지함 사본.</desc>
+<style>
+:root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--orc:#6d28d9;--orcbg:#f1eaff;--warn:#b42318}
+@media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--orc:#a78bfa;--orcbg:#2a1f45;--warn:#fca5a5}}
+text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:12px;fill:var(--fg)}
+.t{font-weight:700;font-size:14px}.h{font-weight:700;font-size:15px}.s{font-size:12px;fill:var(--mut)}.m{font-family:ui-monospace,Menlo,monospace;font-size:12px}.b{font-weight:700}
+.fo{fill:none;stroke:var(--orc);stroke-width:2}
+.fs{fill:none;stroke:var(--scr);stroke-width:2;stroke-dasharray:8 4}
+.ff{fill:none;stroke:var(--scr);stroke-width:2}
+.fn{fill:none;stroke:var(--ext);stroke-width:2;stroke-dasharray:3 3}
+.orc rect{fill:var(--orcbg);stroke:var(--orc);stroke-width:1.5}
+.scr rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5}
+.st rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5;stroke-dasharray:5 3}
+.core rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:2.5;stroke-dasharray:5 3}
+.no rect{fill:var(--bg);stroke:var(--ext);stroke-width:1.5;stroke-dasharray:3 3}
+.ext rect{fill:var(--extbg);stroke:var(--ext);stroke-width:1.5}
+.grp rect{fill:var(--bg);stroke:var(--scr);stroke-width:1}
+.hdr{stroke:var(--line);stroke-width:1}
+</style>
+
+<!-- column 1: Orca -->
+<rect class="fo" x="10" y="12" width="236" height="640" rx="12"/>
+<text class="h" x="22" y="36" style="fill:var(--orc)">① Orca (원본)</text><text class="s" x="22" y="54">있는 기능은 Orca 가 쥔다</text>
+<g class="orc"><rect x="20" y="66" width="216" height="58" rx="8"/><text class="t" x="30" y="86">Run</text><text x="30" y="103">프로그램 하나 = Run 하나</text><text x="30" y="117" class="s">항목은 그 Run 에 만든다</text></g>
+<g class="orc"><rect x="20" y="132" width="216" height="58" rx="8"/><text class="t" x="30" y="152">Task</text><text x="30" y="169">제목 · 상태 · spec</text><text x="30" y="183" class="s">만들 때의 의존 (--deps)</text></g>
+<g class="orc"><rect x="20" y="198" width="216" height="58" rx="8"/><text class="t" x="30" y="218">Dispatch · 워커</text><text x="30" y="235">터미널 · worktree</text><text x="30" y="249" class="s">worker_done · 자동 해제</text></g>
+<g class="orc"><rect x="20" y="264" width="216" height="58" rx="8"/><text class="t" x="30" y="284">게이트</text><text x="30" y="301">질문 문구 · 열림 · 닫힘</text><text x="30" y="315" class="s">대기자 Task 마다 하나</text></g>
+<g class="orc"><rect x="20" y="330" width="216" height="58" rx="8"/><text class="t" x="30" y="350">메시지</text><text x="30" y="367">깨움 · ask · reply</text><text x="30" y="381" class="s">받는 순서는 주소로</text></g>
+<g class="orc"><rect x="20" y="396" width="216" height="58" rx="8"/><text class="t" x="30" y="416">카드 표시 · PR 연결</text><text x="30" y="433">PR 연결은 Orca 참조가 원본</text><text x="30" y="447" class="s">카드는 당사자가 worktree set</text></g>
+<g class="no"><rect x="20" y="464" width="216" height="62" rx="8"/><text class="t" x="30" y="484">읽기만 한다</text><text x="30" y="501" class="s">Run 조회 · 검색 · 진단</text><text x="30" y="515" class="s">terminal-daemon</text></g>
+<text class="s" x="22" y="552">sangsoe 는 이 값의 id 만</text><text class="s" x="22" y="568">가리키고 복사하지 않는다.</text><text class="s" x="22" y="584">Orca 를 못 읽으면 그 값은</text><text class="s" x="22" y="600">"모름"이다.</text>
+
+<!-- column 2: sqlite -->
+<rect class="fs" x="256" y="12" width="236" height="640" rx="12"/>
+<text class="h" x="268" y="36" style="fill:var(--scr)">② sangsoe sqlite</text><text class="s" x="268" y="54">Orca 에 없는 것만</text>
+<g class="core"><rect x="266" y="66" width="216" height="142" rx="8"/><text class="m b" x="276" y="86">event</text><text class="s" x="322" y="86">정본 · 줄만 더함</text>
+<text class="s" x="276" y="103">지우거나 고치지 않는다</text>
+<text class="m" x="276" y="122">owner_action · owner_class</text><text x="276" y="138">결정 키 · dNNN · 게이트 id</text><text x="276" y="154">부가 정보 · 부가 간선</text><text x="276" y="170">PR 변화 사건</text><text x="276" y="186">자원 · 신호 · 증거 · notified</text></g>
+<g class="grp"><rect x="266" y="216" width="216" height="140" rx="8"/><text class="b" x="276" y="234">뷰 (계산 · 저장 안 함)</text>
+<text class="m" x="276" y="254">item = Task + 부가 정보</text><text class="m" x="276" y="270">ready · owner_todo</text><text class="m" x="276" y="286">decision · evidence</text><text class="m" x="276" y="302">item_timeline · flow_gap</text><text class="m" x="276" y="318">done_blockers</text><text class="s" x="276" y="342">Orca 값은 읽을 때만 가져온다</text></g>
+<g class="core"><rect x="266" y="364" width="216" height="58" rx="8"/><text class="m b" x="276" y="384">owner_text</text><text x="276" y="401">마스킹한 오너 원문</text><text class="s" x="276" y="415">원문 칸만 비울 수 있다</text></g>
+<g class="st"><rect x="266" y="430" width="216" height="40" rx="8"/><text class="m b" x="276" y="448">counter</text><text x="334" y="448">iNNN · dNNN 번호</text><text class="s" x="276" y="463">다시 쓰지 않는다</text></g>
+<g class="grp"><rect x="266" y="478" width="216" height="124" rx="8"/><text class="b" x="276" y="496">캐시 예외 (원본이 이긴다)</text>
+<line class="hdr" x1="274" y1="504" x2="474" y2="504"/>
+<text class="m b" x="276" y="522">pr_ref</text><text class="s" x="276" y="538">열린 PR 1분 · 머지 24시간</text>
+<line class="hdr" x1="274" y1="546" x2="474" y2="546"/>
+<text class="m b" x="276" y="564">gh_budget · gh_seen</text><text class="s" x="276" y="580">API 한도 안에서만</text><text class="s" x="276" y="594">Orca 값은 캐시도 없다</text></g>
+<text class="s" x="268" y="626">쓰기: hook · monitor ·</text><text class="s" x="268" y="642">스크립트 · 에이전트 · 오너</text>
+
+<!-- column 3: files -->
+<rect class="ff" x="502" y="12" width="236" height="640" rx="12"/>
+<text class="h" x="514" y="36" style="fill:var(--scr)">③ 파일</text><text class="s" x="514" y="54">이유와 sqlite 로 갈 수 있는지</text>
+<g class="st"><rect x="512" y="66" width="216" height="86" rx="8"/><text class="t" x="522" y="86">흐름 틀</text><text class="s" x="522" y="103">쓰기: 사람 · 읽기: GRAPH</text><text x="522" y="120">이유: 사람이 쓰는 선언 문서</text><text x="522" y="136">sqlite: 가능, 파일이 낫다</text></g>
+<g class="st"><rect x="512" y="160" width="216" height="86" rx="8"/><text class="t" x="522" y="180">설정</text><text class="s" x="522" y="197">쓰기: 사람만 · 읽기: 전부</text><text x="522" y="214">이유: sqlite 경로를 담는다</text><text x="522" y="230">sqlite: 아니오</text></g>
+<g class="st"><rect x="512" y="254" width="216" height="86" rx="8"/><text class="t" x="522" y="274">브리프 · 증거</text><text class="s" x="522" y="291">쓰기: 리드 · 워커</text><text x="522" y="308">이유: 열어서 읽는 긴 글</text><text x="522" y="324">sqlite: 가능, 긴 글은 파일</text></g>
+<g class="st"><rect x="512" y="348" width="216" height="86" rx="8"/><text class="t" x="522" y="368">로그</text><text class="s" x="522" y="385">쓰기: hook · 스크립트</text><text x="522" y="402">이유: 사람이 읽는 기록</text><text x="522" y="418">sqlite: 가능, 보존이 달라 분리</text></g>
+<g class="st"><rect x="512" y="442" width="216" height="86" rx="8"/><text class="t" x="522" y="462">압박 기록</text><text class="s" x="522" y="479">쓰기: resource-monitor</text><text x="522" y="496">이유: 8일 · 4MB 로 돌려 쓴다</text><text x="522" y="512">sqlite: 가능, 파일이 쉽다</text></g>
+<text class="s" x="514" y="560">원본은 어느 칸이든 한 곳이다.</text><text class="s" x="514" y="576">파일은 사람이 고치거나 크기·</text><text class="s" x="514" y="592">보존이 달라 파일로 둔다.</text>
+
+<!-- column 4: not stored -->
+<rect class="fn" x="748" y="12" width="242" height="640" rx="12"/>
+<text class="h" x="760" y="36" style="fill:var(--ext)">④ 저장 안 함</text><text class="s" x="760" y="54">참조 · 사건 한 줄만</text>
+<g class="ext"><rect x="758" y="66" width="222" height="72" rx="8"/><text class="t" x="768" y="86">GitHub</text><text x="768" y="103">PR 상태 · 리뷰 · CI · 머지</text><text class="s" x="768" y="119">저장: 저장소·번호와 변화 사건</text></g>
+<g class="ext"><rect x="758" y="146" width="222" height="72" rx="8"/><text class="t" x="768" y="166">Claude Code</text><text x="768" y="183">대화 기록 본문 (위치만)</text><text class="s" x="768" y="199">저장: 세션 id · 메시지 uuid</text></g>
+<g class="ext"><rect x="758" y="226" width="222" height="58" rx="8"/><text class="t" x="768" y="246">티켓 도구</text><text x="768" y="263">상태 · 본문</text><text class="s" x="768" y="277">저장: 참조만</text></g>
+<g class="no"><rect x="758" y="292" width="222" height="72" rx="8"/><text class="t" x="768" y="312">Orca Task 사본</text><text x="768" y="329">제목 · 상태 · spec · deps</text><text class="s" x="768" y="345">id 만 가리킨다</text></g>
+<g class="no"><rect x="758" y="372" width="222" height="72" rx="8"/><text class="t" x="768" y="392">메시지·게이트 사본</text><text x="768" y="409">받은 편지함 · 질문 문구</text><text class="s" x="768" y="425">notified 한 줄만 쓴다</text></g>
+<g class="no"><rect x="758" y="452" width="222" height="72" rx="8"/><text class="t" x="768" y="472">항목 상태 표</text><text x="768" y="489">상태는 뷰가 계산한다</text><text class="s" x="768" y="505">바뀐 이력 event 만 남는다</text></g>
+<text class="s" x="760" y="552">같은 사실을 두 곳에서</text><text class="s" x="760" y="568">다른 값으로 보이게</text><text class="s" x="760" y="584">하지 않는다.</text>
+
+<text class="s" x="10" y="680">Orca plugin 의 자체 저장소(JSON 키-값)는 패널 화면 상태와 설정에만 쓰고 원본을 두지 않는다.</text>
+</svg>

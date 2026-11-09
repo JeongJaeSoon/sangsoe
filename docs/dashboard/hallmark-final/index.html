@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="상쇠 현황: 결정, 오너 할 일, 진행 중, 보류 네 표.">
+<title>상쇠 현황</title>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get('theme');
+  if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+  if (q.get('w') === '360') document.documentElement.classList.add('w360');
+})();
+</script>
+<style>
+/* Hallmark v2.0.0 · built: 2026-11-09 · genre: modern-minimal · shape: app screen · theme: custom (orch-dash baseline, tinted neutrals) · posture: restrained
+ * critique: tables are the product; hairline rules only, no card around a table, labels in the body face. One accent marks the primary action and focus.
+ * waive 63: the header line, count line and footer are spec-literal strings (decision 89) that carry middle dots.
+ * answered F-body16: 13px body is the baseline's compact density for a side panel, not a reading page.
+ */
+:root {
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --text-xs: 11px; --text-sm: 12px; --text-base: 13px; --text-md: 15px; --text-lg: 20px; --text-xl: 24px;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --r1: 4px; --r2: 6px; --r3: 8px;
+  --dur: 120ms;
+  /* light */
+  --paper: oklch(98.6% 0.004 255);
+  --paper-2: oklch(96.2% 0.005 255);
+  --paper-3: oklch(94% 0.006 255);
+  --ink: oklch(21% 0.01 255);
+  --ink-2: oklch(41% 0.012 255);
+  --muted: oklch(50% 0.012 255);
+  --rule: oklch(91.5% 0.006 255);
+  --rule-2: oklch(82% 0.008 255);
+  --accent: oklch(52% 0.17 255);
+  --accent-ink: oklch(99% 0.005 255);
+  --accent-soft: oklch(95% 0.03 255);
+  --focus: oklch(52% 0.19 255);
+  --good: oklch(47% 0.12 150);
+  --warn: oklch(48% 0.1 75);
+  --bad: oklch(50% 0.18 27);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: oklch(17% 0.008 255); --paper-2: oklch(21% 0.009 255); --paper-3: oklch(25% 0.01 255);
+    --ink: oklch(94% 0.005 255); --ink-2: oklch(80% 0.01 255); --muted: oklch(69% 0.012 255);
+    --rule: oklch(29% 0.01 255); --rule-2: oklch(40% 0.012 255);
+    --accent: oklch(70% 0.15 255); --accent-ink: oklch(15% 0.03 255); --accent-soft: oklch(26% 0.05 255); --focus: oklch(74% 0.17 255);
+    --good: oklch(75% 0.15 150); --warn: oklch(80% 0.13 80); --bad: oklch(72% 0.16 25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: oklch(17% 0.008 255); --paper-2: oklch(21% 0.009 255); --paper-3: oklch(25% 0.01 255);
+  --ink: oklch(94% 0.005 255); --ink-2: oklch(80% 0.01 255); --muted: oklch(69% 0.012 255);
+  --rule: oklch(29% 0.01 255); --rule-2: oklch(40% 0.012 255);
+  --accent: oklch(70% 0.15 255); --accent-ink: oklch(15% 0.03 255); --accent-soft: oklch(26% 0.05 255); --focus: oklch(74% 0.17 255);
+  --good: oklch(75% 0.15 150); --warn: oklch(80% 0.13 80); --bad: oklch(72% 0.16 25);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: var(--text-base)/20px var(--font-sans); font-variant-numeric: tabular-nums; -webkit-text-size-adjust: 100%; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: var(--text-xs); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+h1, h2 { margin: 0; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; overflow-wrap: break-word; min-width: 0; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: var(--s3) var(--s5) var(--s6); container: panel / inline-size; }
+html.w360 .wrap { max-width: 360px; padding: var(--s3) var(--s3) var(--s5); }
+
+.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s3); padding-bottom: var(--s3); }
+.brand { font-weight: 600; font-size: var(--text-md); letter-spacing: -0.01em; }
+.brand small { color: var(--muted); font-weight: 400; font-size: var(--text-xs); margin-left: var(--s1); }
+.top code { color: var(--muted); }
+.fresh { margin-left: auto; color: var(--muted); font-size: var(--text-xs); }
+.crumbs { color: var(--muted); font-size: var(--text-sm); margin: 0 0 var(--s1); }
+.crumbs a { color: var(--accent); }
+
+h1 { font-size: var(--text-md); line-height: 24px; }
+h1 .dim { color: var(--ink-2); font-weight: 400; }
+.sumline { margin: var(--s2) 0 var(--s5); padding: var(--s2) var(--s3); background: var(--accent-soft); border-radius: var(--r2); font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+
+section { margin: 0 0 var(--s5); }
+.sec-h { display: flex; align-items: baseline; gap: var(--s2); padding-bottom: var(--s2); border-bottom: 1px solid var(--rule-2); }
+.sec-h h2 { font-size: var(--text-md); line-height: 24px; }
+.sec-h .count { color: var(--muted); font-weight: 400; font-size: var(--text-md); }
+.sec-h .hint { margin-left: auto; color: var(--muted); font-size: var(--text-xs); }
+
+.tbl { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.tbl th { text-align: left; font-weight: 500; font-size: var(--text-xs); line-height: 16px; color: var(--muted); padding: var(--s2) var(--s3); white-space: nowrap; border-bottom: 1px solid var(--rule); }
+/* one data-row height for every table: 40px = 5 x s2; buttons are 28px so they never stretch a row */
+.tbl td { height: 40px; padding: var(--s1) var(--s3); border-bottom: 1px solid var(--rule); vertical-align: middle; overflow-wrap: anywhere; line-height: 20px; }
+.tbl th:first-child, .tbl td:first-child { padding-left: var(--s1); }
+.tbl tbody tr:hover { background: var(--paper-2); }
+.tbl .id { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); margin-right: var(--s1); }
+.tbl td.title { font-weight: 500; }
+.tbl tr.lead td { background: var(--paper-2); font-weight: 600; border-top: 1px solid var(--rule-2); }
+.tbl tr.lead td.plain { font-weight: 400; color: var(--ink-2); }
+.tbl tr.lead:hover td { background: var(--paper-3); }
+.tbl tr.item td:first-child::before { content: "└"; color: var(--rule-2); margin-right: var(--s1); }
+.tbl .brk { display: none; }
+.pri { display: inline-block; margin-left: var(--s1); padding: 0 6px; border: 1px solid var(--rule-2); border-radius: var(--r1); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; line-height: 16px; vertical-align: 1px; }
+.pri.p0 { border-color: var(--bad); color: var(--bad); }
+.ago { color: var(--ink-2); }
+.dash { color: var(--muted); }
+.empty { padding: var(--s3) var(--s1); color: var(--muted); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; height: 28px; padding: 0 var(--s3); border: 1px solid var(--rule-2); border-radius: var(--r2); background: var(--paper); color: var(--ink); font: inherit; font-size: var(--text-sm); white-space: nowrap; cursor: pointer; transition: background-color var(--dur) ease-out, border-color var(--dur) ease-out; }
+.btn:hover { background: var(--paper-2); border-color: var(--muted); text-decoration: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.primary:hover { background: var(--accent); filter: brightness(1.08); }
+td.acts { white-space: nowrap; text-align: right; }
+td.acts .btn + .btn { margin-left: var(--s2); }
+
+details { margin: 0 0 var(--s4); }
+summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: var(--s2); padding: var(--s2) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--text-md); font-weight: 600; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "›"; margin-left: auto; color: var(--muted); }
+details[open] summary::after { content: "⌄"; }
+summary .count { color: var(--muted); font-weight: 400; }
+.done { list-style: none; margin: 0; padding: 0; }
+.done li { display: flex; gap: var(--s3); padding: var(--s2) var(--s1); border-bottom: 1px solid var(--rule); }
+.done .when { margin-left: auto; color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
+.foot { margin: var(--s5) 0 0; color: var(--ink-2); font-size: var(--text-xs); line-height: 16px; }
+
+/* narrow: no column is dropped, each row is one block: title line, then label/value pairs */
+@container panel (max-width: 639px) {
+  .tbl, .tbl tbody { display: block; }
+  .tbl colgroup { display: none; }
+  .tbl thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .tbl tr { display: flex; flex-wrap: wrap; align-items: baseline; padding: var(--s2) var(--s1); border-bottom: 1px solid var(--rule); }
+  .tbl td { display: block; height: auto; padding: 0; border: 0; font-size: var(--text-sm); line-height: 16px; color: var(--ink-2); min-width: 0; }
+  .tbl td:first-child { flex: none; margin-right: var(--s2); }
+  .tbl td.title { flex: 1 1 0; font-size: var(--text-base); line-height: 20px; color: var(--ink); font-weight: 500; }
+  .tbl td.brk { display: block; flex: 0 0 100%; height: var(--s1); margin: 0; }
+  .tbl td[data-l] { margin-right: var(--s3); }
+  .tbl td[data-l]::before { content: attr(data-l); color: var(--muted); margin-right: var(--s1); }
+  .tbl tr.item { padding-left: var(--s4); }
+  .tbl tr.item td:first-child::before { content: none; }
+  .tbl tr.lead { background: var(--paper-2); border-top: 1px solid var(--rule-2); }
+  .tbl tr.lead td { background: none; border: 0; }
+  .tbl tr.lead td:first-child { flex: 1 1 0; margin: 0; font-size: var(--text-base); line-height: 20px; color: var(--ink); font-weight: 600; }
+  .tbl tr.lead td.plain { font-weight: 400; }
+  .tbl td.acts { flex: 1 0 100%; display: flex; gap: var(--s2); margin: var(--s2) 0 0; }
+  .tbl td.acts .btn { height: 32px; }
+  .tbl td.acts .btn { flex: 1 1 0; min-width: 0; margin: 0; }
+  .tbl tbody tr:hover { background: none; }
+  .sec-h .hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+
+/* status bar example (same strip as statusbar.html) */
+.sbdemo { margin: 0 0 var(--s5); }
+.sbdemo .cap { margin: 0 0 var(--s2); color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
+.sbdemo .cap a { margin-left: var(--s1); }
+.frame { border: 1px solid var(--rule-2); border-radius: var(--r3); overflow: hidden; background: var(--paper); }
+.frame .win { padding: var(--s3); color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
+.sbar { display: flex; align-items: center; gap: var(--s3); height: 28px; padding: 0 var(--s2); background: var(--paper-3); border-top: 1px solid var(--rule-2); color: var(--ink-2); font-size: var(--text-sm); white-space: nowrap; }
+.sbar .sp { margin-left: auto; }
+.sbar a.sg { display: inline-flex; align-items: center; height: 20px; padding: 0 var(--s2); border-radius: var(--r1); color: var(--ink); font-weight: 600; text-decoration: none; transition: background-color var(--dur) ease-out; }
+.sbar a.sg:hover { background: var(--paper-2); }
+.sbar a.sg.owner { background: var(--bad); color: var(--paper); }
+.sbar a.sg.owner:hover { filter: brightness(1.1); }
+@media (prefers-reduced-motion: reduce) { .sbar a.sg { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <span class="brand">상쇠<small>sangsoe</small></span>
+  <code>sangsoe brief</code>
+  <span class="fresh">갱신 11/09 14:02:11, 5초 전</span>
+</header>
+
+<main>
+  <div class="sbdemo">
+    <p class="cap">Orca 상태 표시줄 예시. 오너가 할 일이 있으면 붉게 칠한다. 누르면 상쇠 패널이 열린다. <a href="statusbar.html">두 상태 보기</a></p>
+    <div class="frame">
+      <div class="win" aria-hidden="true">Orca 창</div>
+      <div class="sbar" role="status"><span>⎇ feature/api-n1</span><a class="sg owner sp" href="#" aria-label="상쇠 열기: 막힘 5, 결정 2, 진행 중 5. 오너가 할 일 있음">🚧 5 · 결정 2 · 🔄 5</a></div>
+    </div>
+  </div>
+
+  <h1>현황 · 11/09 14:02 · 묶음 4 · 내가 할 일 <span>5</span> <span class="dim">(결정 2 + 할 일 3)</span></h1>
+  <p class="sumline">✅ 완료 11건 · 🔄 진행 중 5건 · 남은 것 11건 · 🚧 막힌 것 5건</p>
+
+  <section aria-labelledby="h-dec">
+    <div class="sec-h"><h2 id="h-dec">결정 필요 <span class="count">2</span></h2></div>
+    <table class="tbl">
+      <colgroup><col style="width:64px"><col><col style="width:176px"><col style="width:136px"><col style="width:72px"><col style="width:208px"></colgroup>
+      <thead><tr><th>ID</th><th>결정</th><th>추천</th><th>묶음</th><th>경과</th><th><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">답하기</span></th></tr></thead>
+      <tbody>
+        <tr class="own"><td><span class="id">d012</span></td><td class="title">웹훅 재시도 정책</td><td class="brk" aria-hidden="true"></td><td data-l="추천">3회 지수 백오프</td><td data-l="묶음">api-migration</td><td data-l="경과" class="ago">17h</td><td class="acts"><a class="btn" href="#">다른 답</a><a class="btn primary" href="#">추천대로 답</a></td></tr>
+        <tr class="own"><td><span class="id">d013</span></td><td class="title">feature 머지 방식</td><td class="brk" aria-hidden="true"></td><td data-l="추천">merge commit</td><td data-l="묶음">app-login</td><td data-l="경과" class="ago">12h</td><td class="acts"><a class="btn" href="#">다른 답</a><a class="btn primary" href="#">추천대로 답</a></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section aria-labelledby="h-me">
+    <div class="sec-h"><h2 id="h-me">지금 오너가 할 일 <span class="count">3</span></h2></div>
+    <table class="tbl">
+      <colgroup><col style="width:64px"><col><col style="width:176px"><col style="width:136px"><col style="width:72px"><col style="width:208px"></colgroup>
+      <thead><tr><th>ID</th><th>할 일</th><th>풀리는 일</th><th>어디서</th><th>경과</th><th><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">확인</span></th></tr></thead>
+      <tbody>
+        <tr class="own"><td><span class="id">i032</span></td><td class="title">권한 입력</td><td class="brk" aria-hidden="true"></td><td data-l="풀리는 일"><span class="dash">—</span></td><td data-l="어디서">터미널</td><td data-l="경과" class="ago">5h</td><td class="acts"><a class="btn" href="#">확인함</a></td></tr>
+        <tr class="own"><td><span class="id">i035</span></td><td class="title">prod 동기화 확인</td><td class="brk" aria-hidden="true"></td><td data-l="풀리는 일"><span class="dash">—</span></td><td data-l="어디서">prod 콘솔</td><td data-l="경과" class="ago">2h</td><td class="acts"><a class="btn" href="#">확인함</a></td></tr>
+        <tr class="own"><td><span class="id">d011</span></td><td class="title">답 다시 보내기</td><td class="brk" aria-hidden="true"></td><td data-l="풀리는 일">i040 세션 만료 안내</td><td data-l="어디서">sangsoe</td><td data-l="경과" class="ago">91m</td><td class="acts"><a class="btn" href="#">확인함</a></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section aria-labelledby="h-prog">
+    <div class="sec-h"><h2 id="h-prog">진행 중 <span class="count">17</span></h2><span class="hint">우선순위, 오래된 🚧 순</span></div>
+    <table class="tbl">
+      <colgroup><col style="width:64px"><col><col style="width:152px"><col style="width:200px"><col style="width:144px"></colgroup>
+      <thead><tr><th>상태</th><th>항목</th><th>PR</th><th>다음</th><th>누가</th></tr></thead>
+      <tbody>
+        <tr class="lead"><td colspan="2"><a href="group.html">🚧 api-migration <span class="pri p0">P0</span> ›</a></td><td class="brk" aria-hidden="true"></td><td data-l="PR" class="plain"><span class="dash">—</span></td><td data-l="다음" class="plain">9건·막힘 2</td><td data-l="누가" class="plain">인프라 3d</td></tr>
+        <tr class="item own"><td><span role="img" aria-label="막힘">🚧</span></td><td class="title"><span class="id">i033</span>스테이징 키 발급</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다음">키 도착 확인</td><td data-l="누가">인프라 3d</td></tr>
+        <tr class="item own"><td><span role="img" aria-label="막힘">🚧</span></td><td class="title"><span class="id">i031</span>웹훅 재시도 정책</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><a href="https://github.com/acme/api/pull/31">acme/api#31</a></td><td data-l="다음">d012 답</td><td data-l="누가">오너 17h</td></tr>
+        <tr class="item"><td><span role="img" aria-label="진행 중">🔄</span></td><td class="title"><span class="id">i026</span>N+1 쿼리 제거</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><a href="https://github.com/acme/api/pull/40">acme/api#40</a></td><td data-l="다음">🚨 CI 수정</td><td data-l="누가">w-api-1 2d</td></tr>
+        <tr class="item"><td><span role="img" aria-label="준비됨">🟢</span></td><td class="title"><span class="id">i037</span>롤백 스크립트 점검</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다음">리드가 시작</td><td data-l="누가"><span class="dash">—</span></td></tr>
+        <tr class="item"><td><span role="img" aria-label="예정">📅</span></td><td class="title"><span class="id">i034</span>스테이징 점검</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다음">선행 i042 외</td><td data-l="누가"><span class="dash">—</span></td></tr>
+        <tr class="item"><td><span role="img" aria-label="예정">📅</span></td><td class="title"><span class="id">i036</span>prod 전환</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다음">선행 i034 외</td><td data-l="누가"><span class="dash">—</span></td></tr>
+        <tr class="item"><td><span role="img" aria-label="예정">📅</span></td><td class="title"><span class="id">i042</span>dev 배포</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다음">선행 i031 외</td><td data-l="누가"><span class="dash">—</span></td></tr>
+        <tr class="item"><td><span role="img" aria-label="예정">📅</span></td><td class="title"><span class="id">i038</span>N+1 후속 정리 PR</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><a href="https://github.com/acme/api/pull/42">acme/api#42</a></td><td data-l="다음">선행 i026</td><td data-l="누가"><span class="dash">—</span></td></tr>
+        <tr class="item"><td><span role="img" aria-label="예정">📅</span></td><td class="title"><span class="id">i043</span>후속 테스트 PR</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><a href="https://github.com/acme/api/pull/43">acme/api#43</a></td><td data-l="다음">선행 i038 외</td><td data-l="누가"><span class="dash">—</span></td></tr>
+
+        <tr class="lead"><td colspan="2"><a href="group.html">🚧 app-login <span class="pri p1">P1</span> ›</a></td><td class="brk" aria-hidden="true"></td><td data-l="PR" class="plain"><span class="dash">—</span></td><td data-l="다음" class="plain">5건·막힘 1</td><td data-l="누가" class="plain">리뷰어 26h</td></tr>
+        <tr class="item own"><td><span role="img" aria-label="막힘">🚧</span></td><td class="title"><span class="id">i030</span>로그인 개편</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><a href="https://github.com/acme/app/pull/142">acme/app#142</a></td><td data-l="다음">리뷰 대기</td><td data-l="누가">리뷰어 26h</td></tr>
+        <tr class="item"><td><span role="img" aria-label="진행 중">🔄</span></td><td class="title"><span class="id">i029</span>2단계 인증 화면</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><a href="https://github.com/acme/app/pull/150">acme/app#150</a></td><td data-l="다음">리뷰 요청</td><td data-l="누가">w-app-2 3h</td></tr>
+        <tr class="item"><td><span role="img" aria-label="준비됨">🟢</span></td><td class="title"><span class="id">i039</span>로그인 문구 정리</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다음">리드가 시작</td><td data-l="누가"><span class="dash">—</span></td></tr>
+        <tr class="item"><td><span role="img" aria-label="예정">📅</span></td><td class="title"><span class="id">i040</span>세션 만료 안내</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다음">선행 d011</td><td data-l="누가"><span class="dash">—</span></td></tr>
+
+        <tr class="lead"><td colspan="2">🔄 그 외 <span class="pri">P2</span></td><td class="brk" aria-hidden="true"></td><td data-l="PR" class="plain"><span class="dash">—</span></td><td data-l="다음" class="plain">4건·막힘 0</td><td data-l="누가" class="plain"><span class="dash">—</span></td></tr>
+        <tr class="item"><td><span role="img" aria-label="진행 중">🔄</span></td><td class="title"><span class="id">i044</span>의존 패키지 점검</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><a href="https://github.com/acme/app/pull/148">acme/app#148</a></td><td data-l="다음">테스트 실행</td><td data-l="누가">w-m1 40m</td></tr>
+        <tr class="item"><td><span role="img" aria-label="진행 중">🔄</span></td><td class="title"><span class="id">i045</span>설정 문서 정리</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다음">초안 작성</td><td data-l="누가">w-m2 1h</td></tr>
+        <tr class="item"><td><span role="img" aria-label="준비됨">🟢</span></td><td class="title"><span class="id">i046</span>린트 규칙 갱신</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다음">시작 대기</td><td data-l="누가"><span class="dash">—</span></td></tr>
+
+        <tr class="lead"><td colspan="2">🔄 docs <span class="pri">P3</span></td><td class="brk" aria-hidden="true"></td><td data-l="PR" class="plain"><span class="dash">—</span></td><td data-l="다음" class="plain">1건·막힘 0</td><td data-l="누가" class="plain"><span class="dash">—</span></td></tr>
+        <tr class="item"><td><span role="img" aria-label="진행 중">🔄</span></td><td class="title"><span class="id">i052</span>API 전환 가이드</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다음">초안 검토</td><td data-l="누가">w-d1 1d</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section aria-labelledby="h-hold">
+    <div class="sec-h"><h2 id="h-hold">보류 <span class="count">2</span></h2></div>
+    <table class="tbl">
+      <colgroup><col style="width:64px"><col><col style="width:152px"><col style="width:200px"><col style="width:144px"></colgroup>
+      <thead><tr><th>상태</th><th>항목</th><th>PR</th><th>다시 볼 조건</th><th>기간</th></tr></thead>
+      <tbody>
+        <tr><td><span role="img" aria-label="보류">⏸️</span></td><td class="title"><span class="id">i028</span>소셜 로그인</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다시 볼 조건">d013 답 뒤</td><td data-l="기간" class="ago">6d</td></tr>
+        <tr><td><span role="img" aria-label="보류">⏸️</span></td><td class="title"><span class="id">i041</span>문서 색인</td><td class="brk" aria-hidden="true"></td><td data-l="PR"><span class="dash">—</span></td><td data-l="다시 볼 조건">다음 스프린트</td><td data-l="기간" class="ago">3d</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <details>
+    <summary>✅ 완료 최근 7일 <span class="count">11</span></summary>
+    <ul class="done">
+      <li><span>i024 인덱스 추가</span><span class="when">api-migration, 11/07</span></li>
+      <li><span>i021 읽기 전용 모드</span><span class="when">api-migration, 11/05</span></li>
+      <li><span>i020 스키마 초안</span><span class="when">api-migration, 11/04</span></li>
+      <li><span>i019 로그인 오류 문구</span><span class="when">app-login, 11/08</span></li>
+      <li><span>i018 소셜 로그인 버튼</span><span class="when">app-login, 11/06</span></li>
+      <li><span>i017 비밀번호 재설정</span><span class="when">app-login, 11/05</span></li>
+      <li><span>i016 토큰 갱신</span><span class="when">app-login, 11/04</span></li>
+      <li><span>i015 로그인 화면 시안</span><span class="when">app-login, 11/03</span></li>
+      <li><span>i049 API 문서 목차</span><span class="when">docs, 11/06</span></li>
+      <li><span>i013 의존 패키지 갱신</span><span class="when">그 외, 11/08</span></li>
+      <li><span>i014 설정 문서 오타 (ABC-12)</span><span class="when">그 외, 11/05</span></li>
+    </ul>
+  </details>
+
+  <p class="foot">완료는 최근 7일 · 🔍 근거 부족 0 · 상세: <code>sangsoe brief &lt;묶음&gt;</code></p>
+</main>
+</div>
+</body>
+</html>

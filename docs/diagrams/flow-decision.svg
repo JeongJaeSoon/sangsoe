@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 724" role="img" aria-labelledby="tfd dfd">
+<title id="tfd">흐름 2. 결정</title>
+<desc id="dfd">워커 세션이 MCP tool decision_open 으로 코어를 부르면 코어가 Orca CLI 의 gate-create 로 게이트를 만든다. Orca plugin 패널이 코어의 owner_todo 뷰를 읽어 결정 필요 표시를 오너에게 보인다. 오너가 채팅으로 답하면 UserPromptSubmit hook 이 코어에 owner_action 을 기록하고 decision_answered 를 기록하며, decision_answer 가 decision_closed 를 쓴 뒤 호출자가 묶인 Run 의 게이트만 gate-resolve 로 푼다. 다른 Run 의 게이트는 그 Run 을 쥔 세션에 Orca 메시지(send)로 넘기고 그 세션이 푼다. 게이트를 푼 뒤에는 resolve 에 기대지 않고 notify 가 막혀 있던 워커에게 Orca 메시지를 정확히 한 번 보내 깨운다. 패널 버튼으로 답하는 길은 plugin.request 로 같은 함수를 부른다. 오른쪽 열은 단계마다 무엇이 오가고 어느 쪽이 원본인지 적었다.</desc>
+<style>
+:root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--orc:#6d28d9;--orcbg:#f1eaff;--warn:#b42318}
+@media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--orc:#a78bfa;--orcbg:#2a1f45;--warn:#fca5a5}}
+text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:13px;fill:var(--fg)}
+.t{font-weight:700;font-size:14px}.s{font-size:12px;fill:var(--mut)}.m{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.c{text-anchor:middle}
+.l{font-size:12px;fill:var(--fg);paint-order:stroke;stroke:var(--halo);stroke-width:4px;stroke-linejoin:round}
+.ll{stroke:var(--line);stroke-width:1;stroke-dasharray:3 4;opacity:.7}
+.sec rect{fill:var(--extbg);stroke:none}.sec text{font-weight:700}
+.a{stroke:var(--line);stroke-width:1.6;fill:none;marker-end:url(#h)}
+.a.w{stroke-dasharray:6 4}
+.mk{fill:var(--line)}
+.scr rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5}
+.st rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5;stroke-dasharray:5 3}
+.llm rect{fill:var(--llmbg);stroke:var(--llm);stroke-width:1.5}
+.own rect{fill:var(--ownbg);stroke:var(--own);stroke-width:1.5}
+.orc rect{fill:var(--orcbg);stroke:var(--orc);stroke-width:1.5}
+.num circle{fill:var(--bg);stroke:var(--line);stroke-width:1.2}.num text{font-size:11px;font-weight:700;text-anchor:middle}
+</style>
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+<rect width="100%" height="100%" fill="var(--bg)"/>
+<!-- lifelines -->
+<line class="ll" x1="62" y1="56" x2="62" y2="692"/><line class="ll" x1="192" y1="56" x2="192" y2="692"/><line class="ll" x1="322" y1="56" x2="322" y2="692"/>
+<line class="ll" x1="452" y1="56" x2="452" y2="692"/><line class="ll" x1="582" y1="56" x2="582" y2="692"/><line class="ll" x1="712" y1="56" x2="712" y2="692"/>
+
+<!-- actors -->
+<g class="llm"><rect x="4" y="8" width="116" height="48" rx="8"/><text class="t c" x="62" y="28">워커 세션</text><text class="s c" x="62" y="46">MCP tool</text></g>
+<g class="scr"><rect x="134" y="8" width="116" height="48" rx="8"/><text class="t c" x="192" y="28">공유 코어</text><text class="s c" x="192" y="46">TS/Node · sqlite</text></g>
+<g class="orc"><rect x="264" y="8" width="116" height="48" rx="8"/><text class="t c" x="322" y="28">Orca CLI</text><text class="s c" x="322" y="46">게이트 · 메시지</text></g>
+<g class="scr"><rect x="394" y="8" width="116" height="48" rx="8"/><text class="t c" x="452" y="28">Orca plugin</text><text class="s c" x="452" y="46">패널 · worker</text></g>
+<g class="own"><rect x="524" y="8" width="116" height="48" rx="8"/><text class="t c" x="582" y="28">오너</text><text class="s c" x="582" y="46">채팅 · 버튼</text></g>
+<g class="scr"><rect x="654" y="8" width="116" height="48" rx="8"/><text class="t c" x="712" y="28">hook</text><text class="s c m" x="712" y="46" style="font-size:10px">UserPromptSubmit</text></g>
+<g class="st"><rect x="790" y="8" width="364" height="48" rx="8"/><text class="t" x="802" y="28">오가는 것 · 원본</text><text class="s" x="802" y="46">원본이 있는 쪽을 적는다</text></g>
+
+<!-- A -->
+<g class="sec"><rect x="10" y="68" width="1140" height="24" rx="5"/><text x="20" y="85">열기: 워커가 막힌다 → 게이트가 생긴다</text></g>
+<g class="num"><circle cx="24" cy="116" r="9"/><text x="24" y="120">1</text></g>
+<path class="a" d="M62,116 L192,116"/><text class="l c" x="127" y="109">MCP tool decision_open</text>
+<text class="m" x="796" y="112">결정 키 · 질문 · 추천</text><text class="m" x="796" y="126">같은 키가 열려 있으면 거부</text>
+<g class="num"><circle cx="24" cy="164" r="9"/><text x="24" y="168">2</text></g>
+<path class="a" d="M192,164 L322,164"/><text class="l c" x="257" y="157">gate-create --task</text>
+<text class="m" x="796" y="160">원본: Orca 게이트</text><text class="m" x="796" y="174">sqlite: decision_opened (dNNN)</text>
+
+<!-- B -->
+<g class="sec"><rect x="10" y="184" width="1140" height="24" rx="5"/><text x="20" y="201">보임: 패널이 오너 할 일을 읽어 보인다</text></g>
+<g class="num"><circle cx="24" cy="232" r="9"/><text x="24" y="236">3</text></g>
+<path class="a" d="M452,232 L192,232"/><text class="l c" x="322" y="225">owner_todo 뷰 읽기 (코어 직접 import)</text>
+<text class="m" x="796" y="228">원본: sqlite event · Orca 읽기</text><text class="m" x="796" y="242">저장하지 않는 뷰</text>
+<g class="num"><circle cx="24" cy="276" r="9"/><text x="24" y="280">4</text></g>
+<path class="a" d="M452,276 L582,276"/><text class="l c" x="517" y="269">패널 🙋 · 상태 표시줄</text>
+<text class="m" x="796" y="280">오너 할 일 수는 한 곳에서 센다</text>
+
+<!-- C -->
+<g class="sec"><rect x="10" y="296" width="1140" height="24" rx="5"/><text x="20" y="313">답: 오너의 말이 기록되고 결정이 닫힌다</text></g>
+<g class="num"><circle cx="24" cy="344" r="9"/><text x="24" y="348">5</text></g>
+<path class="a" d="M582,344 L712,344"/><text class="l c" x="647" y="337">채팅 답 (dNNN)</text>
+<text class="m" x="796" y="348">Claude Code 가 hook 을 부른다</text>
+<g class="num"><circle cx="24" cy="388" r="9"/><text x="24" y="392">6</text></g>
+<path class="a" d="M712,388 L192,388"/><text class="l c" x="452" y="381">command hook → sangsoe CLI: owner_action 기록</text>
+<text class="m" x="796" y="384">sqlite: owner_action</text><text class="m" x="796" y="398">마스킹 원문 · 세션 id · uuid</text>
+<g class="num"><circle cx="24" cy="436" r="9"/><text x="24" y="440">7</text></g>
+<g class="scr"><rect x="130" y="421" width="124" height="30" rx="6"/><text class="m c" x="192" y="441">decision_answer</text></g>
+<text class="m" x="796" y="432">sqlite: decision_closed</text><text class="m" x="796" y="446">같은 호출은 한 번만 반영(멱등)</text>
+<g class="num"><circle cx="24" cy="484" r="9"/><text x="24" y="488">8</text></g>
+<path class="a" d="M192,484 L322,484"/><text class="l c" x="257" y="477">gate-resolve (같은 Run)</text>
+<text class="m" x="796" y="480">원본: Orca 게이트 → 해제 (묶인 Run 만)</text><text class="m" x="796" y="494">dNNN + 마스킹 인용</text>
+
+<!-- D -->
+<g class="sec"><rect x="10" y="504" width="1140" height="24" rx="5"/><text x="20" y="521">깨움: gate-resolve 뒤마다 Orca 메시지 1회가 기다리던 워커에게 간다</text></g>
+<g class="num"><circle cx="24" cy="552" r="9"/><text x="24" y="556">9</text></g>
+<path class="a" d="M192,552 L322,552"/><text class="l c" x="257" y="545">send → Run 을 쥔 세션</text>
+<text class="m" x="796" y="548">다른 Run 의 게이트는 그 세션이 푼다</text><text class="m" x="796" y="562">sqlite: notified (dedupe_key)</text>
+<g class="num"><circle cx="24" cy="600" r="9"/><text x="24" y="604">10</text></g>
+<path class="a w" d="M322,600 L62,600"/><text class="l c" x="192" y="593">notify: 푼 게이트마다 메시지 1회</text>
+<text class="m" x="796" y="596">원본: Orca 메시지 (resolve 만으로 깨우지 않는다)</text><text class="m" x="796" y="610">Task: blocked → ready 이나 워커가 쥐면 🔄</text>
+
+<!-- E -->
+<g class="sec"><rect x="10" y="620" width="1140" height="24" rx="5"/><text x="20" y="637">대안 답 경로: 패널 버튼</text></g>
+<g class="num"><circle cx="24" cy="664" r="9"/><text x="24" y="668">5′</text></g>
+<path class="a" d="M582,664 L452,664"/><text class="l c" x="517" y="657">버튼</text>
+<text class="m" x="796" y="660">버튼 답도 owner_action (origin=button)</text>
+<g class="num"><circle cx="24" cy="690" r="9"/><text x="24" y="694">6′</text></g>
+<path class="a" d="M452,688 L192,688"/><text class="l c" x="322" y="681">plugin.request → decision_answer (7로 이어짐)</text>
+</svg>

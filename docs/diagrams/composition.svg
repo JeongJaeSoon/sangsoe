@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 740" role="img" aria-labelledby="t1 d1">
+<title id="t1">네 칸 배치</title>
+<desc id="d1">모든 기능은 네 칸 중 정확히 하나에 놓이고 판정은 위에서 아래 순서로 한다. 첫째 칸 Orca CLI 내장 기능은 만들지 않고 그대로 부른다: Orca Task, Orca 게이트, Orca 메시지, Orca 워커와 Dispatch, Auto-close, 카드 표시와 조회, Orca Run, 참조와 검색, 대체 시작 대기, 진단, hook 상태 읽기(agent hooks status), 저장소 archive hook(worktree rm --run-hooks), plugin 켜기. Orca 자동화는 기본은 쓰지 않고 T2 가 실패할 때만 automations --precheck 가 타이머를 대신한다. 둘째 칸 Orca plugin 은 sangsoe 가 배포하며 패널, 상태 표시줄 항목, plugin 저장소, 타이머로 도는 monitor 다섯 개와 타이머 멈춤 감지, REAPER, Orca 이벤트 처리(이벤트 4종은 REAPER 에 주는 힌트와 패널 갱신)를 싣는다. Orca plugin hook 8종은 쓰지 않는다. 셋째 칸 Claude Code plugin 은 Orca plugin 이 못 담는 hook, skill, MCP 서버(tools 와 resources), agents 정의만 싣는다. 넷째 칸 공유 코어는 두 plugin 이 함께 쓰는 TS/Node 코어 라이브러리, sqlite 파일, 셸 호출자 전용 CLI 와 판단 함수(GRAPH, ready 뷰, capacity, decision_open, decision_answer, notify, land 판정 함수, restart_due, recover_plan, 시작 점검, 흐름 틀 펼치기, plugin 승인)를 싣는다. 칸 사이의 연결점은 공유 코어의 sqlite 와 Orca CLI 이고 두 plugin 사이에는 공식 직접 통신 경로가 없다.</desc>
+<style>
+:root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--orc:#6d28d9;--orcbg:#f1eaff;--warn:#b42318}
+@media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--orc:#a78bfa;--orcbg:#2a1f45;--warn:#fca5a5}}
+text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:13px;fill:var(--fg)}
+.t{font-weight:700;font-size:14px}.s{font-size:12px;fill:var(--mut)}.m{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.big{font-weight:700;font-size:20px}
+.lane{fill:var(--bg);stroke:var(--line);stroke-width:1}
+.lane.c1{stroke:var(--orc);stroke-width:2}
+.lane.c2{stroke:var(--scr);stroke-width:2}
+.lane.c3{stroke:var(--llm);stroke-width:2}
+.lane.c4{stroke:var(--scr);stroke-width:2;stroke-dasharray:8 4}
+.lane.nolane{stroke-dasharray:4 3}
+.scr rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5}
+.st rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5;stroke-dasharray:5 3}
+.llm rect{fill:var(--llmbg);stroke:var(--llm);stroke-width:1.5}
+.ext rect{fill:var(--extbg);stroke:var(--ext);stroke-width:1.5}
+.orc rect{fill:var(--orcbg);stroke:var(--orc);stroke-width:1.5}
+.no rect{fill:var(--bg);stroke:var(--ext);stroke-width:1.5;stroke-dasharray:3 3}
+.ar{stroke:var(--line);stroke-width:2;fill:none;marker-end:url(#h)}
+.mk{fill:var(--line)}
+</style>
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+<text class="s" x="22" y="26">판정 순서: 위에서 아래로. 앞 칸이 할 수 있으면 뒤 칸에 만들지 않는다. 모든 기능은 네 칸 중 정확히 하나에 있다.</text>
+<path class="ar" d="M8,40 L8,650"/>
+
+<!-- 1 Orca CLI -->
+<rect class="lane c1" x="14" y="40" width="982" height="176" rx="10"/>
+<text class="big" x="26" y="70" style="fill:var(--orc)">1</text><text class="t" x="50" y="68">Orca CLI 내장 기능</text><text class="s" x="26" y="90">만들지 않고</text><text class="s" x="26" y="106">그대로 부른다</text><text class="s" x="26" y="130">sangsoe 가 쓰는 명령</text>
+<g class="orc"><rect x="215" y="48" width="176" height="34" rx="6"/><text x="225" y="63">Orca Task</text><text class="m" x="225" y="76" style="font-size:10.5px">task-create --deps</text></g>
+<g class="orc"><rect x="399" y="48" width="176" height="34" rx="6"/><text x="409" y="63">Orca 게이트</text><text class="m" x="409" y="76" style="font-size:10.5px">gate-create · -resolve</text></g>
+<g class="orc"><rect x="583" y="48" width="176" height="34" rx="6"/><text x="593" y="63">Orca 메시지</text><text class="m" x="593" y="76" style="font-size:10.5px">send · ask · reply</text></g>
+<g class="orc"><rect x="767" y="48" width="176" height="34" rx="6"/><text x="777" y="63">Orca 워커 · Dispatch</text><text class="m" x="777" y="76" style="font-size:10.5px">worker-start --task</text></g>
+<g class="orc"><rect x="215" y="88" width="176" height="34" rx="6"/><text x="225" y="103">Auto-close</text><text class="m" x="225" y="116" style="font-size:10.5px">worker-release</text></g>
+<g class="orc"><rect x="399" y="88" width="176" height="34" rx="6"/><text x="409" y="103">카드 표시 · 조회</text><text class="m" x="409" y="116" style="font-size:10.5px">set · ps · list · rm</text></g>
+<g class="orc"><rect x="583" y="88" width="176" height="34" rx="6"/><text x="593" y="103">Orca 참조 · 검색</text><text class="m" x="593" y="116" style="font-size:10.5px">reference · search</text></g>
+<g class="orc"><rect x="767" y="88" width="176" height="34" rx="6"/><text x="777" y="103">Orca 진단</text><text class="m" x="777" y="116" style="font-size:10.5px">diagnostics memory</text></g>
+<g class="orc"><rect x="215" y="128" width="176" height="34" rx="6"/><text x="225" y="143">대체 시작 대기</text><text class="m" x="225" y="156" style="font-size:10.5px">wait --for tui-idle</text></g>
+<g class="orc"><rect x="399" y="128" width="176" height="34" rx="6"/><text x="409" y="143">plugin 켜기</text><text class="m" x="409" y="156" style="font-size:10.5px">plugin enable --approve</text></g>
+<g class="orc"><rect x="583" y="128" width="176" height="34" rx="6"/><text x="593" y="143">Orca Run</text><text class="m" x="593" y="156" style="font-size:10.5px">run-use · show</text></g>
+<g class="orc"><rect x="767" y="128" width="176" height="34" rx="6"/><text x="777" y="143">hook 상태 읽기</text><text class="m" x="777" y="156" style="font-size:10.5px">agent hooks status</text></g>
+<g class="orc"><rect x="215" y="168" width="176" height="34" rx="6"/><text x="225" y="183">저장소 archive hook</text><text class="m" x="225" y="196" style="font-size:10.5px">rm --run-hooks (결정 86)</text></g>
+<g class="no"><rect x="399" y="168" width="544" height="34" rx="6"/><text x="409" y="183">Orca 자동화: 기본은 쓰지 않음 (에이전트 프롬프트 실행이라)</text><text class="s" x="409" y="197">T2 가 실패할 때만 automations --precheck 가 타이머를 대신한다</text></g>
+
+<!-- 2 Orca plugin -->
+<rect class="lane c2" x="14" y="226" width="982" height="164" rx="10"/>
+<text class="big" x="26" y="256" style="fill:var(--scr)">2</text><text class="t" x="50" y="254">Orca plugin</text><text class="s m" x="26" y="274" style="font-size:10.5px">orca-plugin.json</text><text class="s" x="26" y="294">sangsoe 가 배포</text><text class="s" x="26" y="310">Orca plugin 이 할 수</text><text class="s" x="26" y="326">있는 것은 전부 여기</text>
+<g class="scr"><rect x="215" y="236" width="330" height="36" rx="6"/><text x="225" y="259">패널: 현황 세 단계 · 오너 할 일 · 결정 버튼</text></g>
+<g class="scr"><rect x="553" y="236" width="140" height="36" rx="6"/><text x="563" y="259">상태 표시줄 항목</text></g>
+<g class="st"><rect x="701" y="236" width="224" height="36" rx="6"/><text x="711" y="259">plugin 저장소 (화면 상태·설정)</text></g>
+<g class="scr"><rect x="215" y="280" width="112" height="36" rx="6"/><text class="m" x="223" y="303">chat-monitor</text></g>
+<g class="scr"><rect x="335" y="280" width="120" height="36" rx="6"/><text class="m" x="343" y="303">queue-monitor</text></g>
+<g class="scr"><rect x="463" y="280" width="140" height="36" rx="6"/><text class="m" x="471" y="303">resource-monitor</text></g>
+<g class="scr"><rect x="611" y="280" width="120" height="36" rx="6"/><text class="m" x="619" y="303">orca-monitor</text></g>
+<g class="scr"><rect x="739" y="280" width="100" height="36" rx="6"/><text class="m" x="747" y="303">pr-monitor</text></g>
+<text class="s" x="850" y="302">worker 타이머</text>
+<g class="scr"><rect x="215" y="324" width="86" height="36" rx="6"/><text class="m" x="223" y="347">REAPER</text></g>
+<g class="scr"><rect x="309" y="324" width="140" height="36" rx="6"/><text x="319" y="347">타이머 멈춤 감지</text></g>
+<g class="scr"><rect x="457" y="324" width="140" height="36" rx="6"/><text x="467" y="340">Orca 이벤트 처리</text><text class="s" x="467" y="354">4종 · 힌트 · 갱신</text></g>
+<g class="scr"><rect x="605" y="324" width="146" height="36" rx="6"/><text x="615" y="347">코어를 직접 import</text></g>
+<g class="no"><rect x="759" y="324" width="212" height="36" rx="6"/><text x="769" y="340" style="font-size:12px">Orca plugin hook 8종: 안 씀</text><text class="s" x="769" y="354">archive hook 은 1칸에서 쓴다</text></g>
+
+<!-- 3 Claude Code plugin -->
+<rect class="lane c3" x="14" y="400" width="982" height="112" rx="10"/>
+<text class="big" x="26" y="430" style="fill:var(--llm)">3</text><text class="t" x="50" y="428">Claude Code plugin</text><text class="s m" x="26" y="448" style="font-size:10.5px">.claude-plugin/plugin.json</text><text class="s" x="26" y="468">sangsoe 가 배포</text><text class="s" x="26" y="484">Orca plugin 이 못 담는 것만</text>
+<g class="scr"><rect x="215" y="410" width="110" height="36" rx="6"/><text class="m" x="223" y="433">SessionStart</text></g>
+<g class="scr"><rect x="333" y="410" width="100" height="36" rx="6"/><text x="343" y="433">게이트 4종</text></g>
+<g class="scr"><rect x="441" y="410" width="240" height="36" rx="6"/><text x="451" y="433">기록 hook (UserPromptSubmit · Stop …)</text></g>
+<g class="llm"><rect x="215" y="454" width="140" height="36" rx="6"/><text x="225" y="477">skill (판단 절차)</text></g>
+<g class="scr"><rect x="363" y="454" width="220" height="36" rx="6"/><text x="373" y="477">MCP 서버 (tools + resources)</text></g>
+<g class="llm"><rect x="591" y="454" width="300" height="36" rx="6"/><text x="601" y="477">agent 정의: 오케스트레이터 · 리드 · 워커</text></g>
+
+<!-- 4 shared core -->
+<rect class="lane c4" x="14" y="522" width="982" height="128" rx="10"/>
+<text class="big" x="26" y="552" style="fill:var(--scr)">4</text><text class="t" x="50" y="550">공유 코어</text><text class="s" x="26" y="570">TS/Node 하나</text><text class="s" x="26" y="586">두 plugin 이 같이 쓴다</text><text class="s" x="26" y="602">CLI 는 셸 호출자만</text><text class="s" x="26" y="618">에이전트는 MCP 만</text>
+<g class="scr"><rect x="215" y="532" width="176" height="34" rx="6"/><text x="225" y="554">코어 라이브러리</text></g>
+<g class="st"><rect x="399" y="532" width="150" height="34" rx="6"/><text class="m" x="409" y="554">sqlite 파일 하나</text></g>
+<g class="scr"><rect x="557" y="532" width="224" height="34" rx="6"/><text x="567" y="554">CLI sangsoe (셸 호출자 전용)</text></g>
+<g class="scr"><rect x="215" y="574" width="76" height="34" rx="6"/><text class="m" x="223" y="596">GRAPH</text></g>
+<g class="scr"><rect x="299" y="574" width="134" height="34" rx="6"/><text class="m" x="307" y="596">ready 뷰 · capacity</text></g>
+<g class="scr"><rect x="441" y="574" width="240" height="34" rx="6"/><text class="m" x="449" y="596">decision_open · decision_answer</text></g>
+<g class="scr"><rect x="689" y="574" width="70" height="34" rx="6"/><text class="m" x="697" y="596">notify</text></g>
+<g class="scr"><rect x="215" y="614" width="180" height="30" rx="6"/><text x="225" y="634">land 판정 · verify_tier</text></g>
+<g class="scr"><rect x="403" y="614" width="84" height="30" rx="6"/><text x="413" y="634">시작 점검</text></g>
+<g class="scr"><rect x="495" y="614" width="124" height="30" rx="6"/><text x="505" y="634">흐름 틀 펼치기</text></g>
+<g class="scr"><rect x="627" y="614" width="110" height="30" rx="6"/><text x="637" y="634">plugin 승인</text></g>
+<g class="scr"><rect x="745" y="614" width="245" height="30" rx="6"/><text class="m" x="753" y="634">restart_due · recover_plan</text></g>
+
+<!-- joints -->
+<rect class="lane nolane" x="14" y="662" width="982" height="68" rx="10"/>
+<text class="t" x="26" y="684">칸 사이의 연결점</text>
+<text x="26" y="704">공유 코어(sqlite) 와 Orca CLI 둘뿐이다. 두 plugin 사이에는 공식 직접 통신 경로가 없다.</text>
+<text class="s" x="26" y="722">일반 스킬은 sangsoe 밖, 별도 저장소의 별도 plugin 이고 어느 칸에도 두지 않는다.</text>
+</svg>

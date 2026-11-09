@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 580" role="img" aria-labelledby="t6 d6">
+<title id="t6">세 관점과 구성요소</title>
+<desc id="d6">왼쪽 중심에 harness engineering: 게이트, 거부 규칙, 재질문 게이트, event, Orca 메시지, 감지기, 실행(REAPER, land 판정 함수, GRAPH, ready 뷰·capacity·결정 함수·notify). 오른쪽 위에 loop engineering: 워커, 리드, 오케스트레이터 각각의 루프와 멈추는 조건. 오른쪽 아래에 graph engineering: 간선 네 종류, GRAPH, 흐름 틀, 크리티컬 패스, 그리고 그래프로 만들지 않는 두 가지.</desc>
+<style>
+:root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--warn:#b42318}
+@media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--warn:#fca5a5}}
+text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:12px;fill:var(--fg)}
+.h{font-weight:700;font-size:15px}.t{font-weight:700;font-size:13px}.s{font-size:12px;fill:var(--mut)}.m{font-family:ui-monospace,Menlo,monospace;font-size:12px}.b{font-weight:700}
+.l{font-size:12px;paint-order:stroke;stroke:var(--halo);stroke-width:4px;stroke-linejoin:round}
+.pg{fill:var(--bg);stroke:var(--scr);stroke-width:3}
+.pl{fill:var(--bg);stroke:var(--llm);stroke-width:2}
+.pgr{fill:var(--bg);stroke:var(--scr);stroke-width:2}
+.a{stroke:var(--line);stroke-width:1.6;fill:none;marker-end:url(#h)}
+.a.w{stroke-dasharray:6 4}.a.d{marker-start:url(#hs)}
+.mk{fill:var(--line)}
+.scr rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5}
+.st rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5;stroke-dasharray:5 3}
+.llm rect{fill:var(--llmbg);stroke:var(--llm);stroke-width:1.5}
+.no rect{fill:var(--extbg);stroke:var(--line);stroke-width:1.5;stroke-dasharray:4 3}
+</style>
+<defs>
+<marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="hs" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+</defs>
+
+<!-- harness -->
+<rect class="pg" x="10" y="10" width="460" height="550" rx="14"/>
+<text class="h" x="24" y="36" style="fill:var(--scr)">harness engineering · 중심</text>
+<text class="s" x="24" y="56">모델 바깥의 환경: 모델이 혼자 못 지키는 것을 코드가 지킨다</text>
+<text class="s" x="24" y="90">막는 것</text>
+<g class="scr"><rect x="24" y="98" width="62" height="28" rx="6"/><text x="34" y="116">게이트</text></g>
+<g class="scr"><rect x="94" y="98" width="68" height="28" rx="6"/><text x="104" y="116">거부 규칙</text></g>
+<g class="scr"><rect x="170" y="98" width="98" height="28" rx="6"/><text x="180" y="116">재질문 게이트</text></g>
+<text class="s" x="24" y="150">기록 · 깨움</text>
+<g class="st"><rect x="24" y="158" width="56" height="28" rx="6"/><text class="m" x="34" y="176">event</text></g>
+<g class="scr"><rect x="88" y="158" width="100" height="28" rx="6"/><text x="98" y="176">Orca 메시지</text></g>
+<g class="scr"><rect x="196" y="158" width="46" height="28" rx="6"/><text x="206" y="176">뷰</text></g>
+<text class="s" x="24" y="210">감지</text>
+<g class="scr"><rect x="24" y="218" width="46" height="28" rx="6"/><text class="m" x="34" y="236">hook</text></g>
+<g class="scr"><rect x="78" y="218" width="106" height="28" rx="6"/><text class="m" x="88" y="236">chat-monitor</text></g>
+<g class="scr"><rect x="192" y="218" width="114" height="28" rx="6"/><text class="m" x="202" y="236">queue-monitor</text></g>
+<g class="scr"><rect x="314" y="218" width="135" height="28" rx="6"/><text class="m" x="324" y="236">resource-monitor</text></g>
+<g class="scr"><rect x="24" y="254" width="114" height="28" rx="6"/><text class="m" x="34" y="272">orca-monitor</text></g>
+<g class="scr"><rect x="146" y="254" width="92" height="28" rx="6"/><text class="m" x="156" y="272">pr-monitor</text></g>
+<text class="s" x="24" y="316">실행</text>
+<g class="scr"><rect x="24" y="324" width="71" height="28" rx="6"/><text class="m" x="34" y="342">REAPER</text></g>
+<g class="scr"><rect x="103" y="324" width="130" height="28" rx="6"/><text class="m" x="113" y="342">land 판정 함수</text></g>
+<g class="scr"><rect x="241" y="324" width="63" height="28" rx="6"/><text class="m" x="251" y="342">GRAPH</text></g>
+<g class="scr"><rect x="312" y="324" width="62" height="28" rx="6"/><text class="m" x="322" y="342">notify</text></g>
+<g class="scr"><rect x="24" y="360" width="76" height="28" rx="6"/><text class="m" x="34" y="378">ready 뷰</text></g>
+<g class="scr"><rect x="108" y="360" width="74" height="28" rx="6"/><text class="m" x="118" y="378">capacity</text></g>
+<g class="scr"><rect x="190" y="360" width="108" height="28" rx="6"/><text class="m" x="200" y="378">decision_open</text></g>
+<g class="scr"><rect x="306" y="360" width="124" height="28" rx="6"/><text class="m" x="316" y="378">decision_answer</text></g>
+<text class="s" x="24" y="424">코드가 지키는 것</text>
+<text x="24" y="446">기록 → event</text>
+<text x="24" y="466">같은 질문 막기 → 재질문 게이트</text>
+<text x="24" y="486">머지 판정 → land 판정 함수 · 순서 → GRAPH</text>
+<text x="24" y="506">정리 → REAPER</text>
+
+<!-- loop -->
+<rect class="pl" x="560" y="10" width="430" height="320" rx="14"/>
+<text class="h" x="574" y="36" style="fill:var(--llm)">loop engineering · 역할마다</text>
+<text class="s" x="574" y="56">루프마다 멈추는 조건이 하나씩 있다</text>
+<g class="llm"><rect x="574" y="66" width="402" height="76" rx="8"/><text class="t" x="586" y="86">워커</text><text x="586" y="106">/goal → 일 → 끝나는 조건</text><text class="s" x="586" y="126">멈춤: 증거와 함께 worker_done</text></g>
+<g class="llm"><rect x="574" y="150" width="402" height="76" rx="8"/><text class="t" x="586" y="170">리드</text><text x="586" y="190">Orca 메시지 대기 → 처리 → 대기</text><text class="s" x="586" y="210">멈춤: 프로그램 완료 조건을 /goal 이 판정하거나, 오너가 중단을 지시</text></g>
+<g class="llm"><rect x="574" y="234" width="402" height="76" rx="8"/><text class="t" x="586" y="254">오케스트레이터</text><text x="586" y="274">Orca 메시지로 깨어남 → 처리 → 잠듦</text><text class="s" x="586" y="294">멈춤: 없다 · 종료하지 않는다</text></g>
+
+<!-- graph -->
+<rect class="pgr" x="560" y="346" width="430" height="214" rx="14"/>
+<text class="h" x="574" y="372" style="fill:var(--scr)">graph engineering · 일의 순서에만</text>
+<g class="scr"><rect x="574" y="384" width="63" height="28" rx="6"/><text class="m" x="584" y="402">GRAPH</text></g>
+<g class="st"><rect x="645" y="384" width="112" height="28" rx="6"/><text x="655" y="402">흐름 틀 · flow</text></g>
+<g class="scr"><rect x="765" y="384" width="112" height="28" rx="6"/><text x="775" y="402">크리티컬 패스</text></g>
+<g class="scr"><rect x="574" y="420" width="59" height="28" rx="6"/><text class="m" x="584" y="438">blocks</text></g>
+<g class="scr"><rect x="641" y="420" width="52" height="28" rx="6"/><text class="m" x="651" y="438">after</text></g>
+<g class="scr"><rect x="701" y="420" width="88" height="28" rx="6"/><text class="m" x="711" y="438">stacked_on</text></g>
+<g class="scr"><rect x="797" y="420" width="110" height="28" rx="6"/><text class="m" x="807" y="438">deploys_after</text></g>
+<g class="no"><rect x="574" y="462" width="402" height="86" rx="8"/><text class="t" x="586" y="482">그래프로 고정하지 않는 것</text><text x="586" y="504">오너 지시 흐름 (분류 여섯 갈래)</text><text x="586" y="524">에이전트 대화 경로 (Orca 메시지 받는 순서)</text><text class="s" x="586" y="540">event 기반 상태 기계로 둔다</text></g>
+
+<!-- arrows -->
+<path class="a w" d="M470,150 L558,150"/><text class="l" x="482" y="142" style="font-size:11px">Orca 메시지</text>
+<path class="a" d="M558,196 L470,196"/><text class="l" x="494" y="216" style="font-size:11px">MCP</text>
+<path class="a d" d="M470,440 L558,440"/><text class="l" x="478" y="432">event 의 간선</text>
+</svg>
