@@ -19,6 +19,33 @@
 {"expect":"deny","gate":"start","note":"interpreter one-liner","tool_name":"Bash","tool_input":{"command":"python3 -c \"import subprocess; subprocess.run(['orca','agent','launch','--agent','claude'])\""}}
 {"expect":"deny","gate":"start","note":"wrapped in a script file","tool_name":"Bash","tool_input":{"command":"sh ./start.sh"},"facts":{"scripts":{"/work/acme/start.sh":"#!/bin/sh\norca agent launch --agent claude\n"}}}
 {"expect":"deny","gate":"start","note":"script run by path","tool_name":"Bash","tool_input":{"command":"./bin/go.sh feat-x"},"facts":{"scripts":{"/work/acme/bin/go.sh":"nohup claude -p \"$1\" &\n"}}}
+{"expect":"deny","gate":"start","note":"backgrounded pipeline with a log","tool_name":"Bash","tool_input":{"command":"claude -p x 2>&1 | tee out &"}}
+{"expect":"deny","gate":"start","note":"backgrounded |& pipeline","tool_name":"Bash","tool_input":{"command":"claude -p x |& tee log &"}}
+{"expect":"deny","gate":"start","note":"backgrounded subshell group","tool_name":"Bash","tool_input":{"command":"(claude -p x) &"}}
+{"expect":"deny","gate":"start","note":"backgrounded brace group","tool_name":"Bash","tool_input":{"command":"{ claude -p x; } &"}}
+{"expect":"deny","gate":"start","note":"setsid around a shell","tool_name":"Bash","tool_input":{"command":"setsid bash -c 'claude -p x'"}}
+{"expect":"deny","gate":"start","note":"nohup around a shell","tool_name":"Bash","tool_input":{"command":"nohup bash -c 'claude -p x'"}}
+{"expect":"deny","gate":"self-land","note":"worker merges through gh api","agent_type":"sangsoe:worker","tool_name":"Bash","tool_input":{"command":"gh api -X PUT repos/acme/api/pulls/4/merge"}}
+{"expect":"deny","gate":"self-land","note":"worker_done with a body file naming no wait","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject done --body-file /work/acme/done.md --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}],"scripts":{"/work/acme/done.md":"all good\n"}}}
+{"expect":"deny","gate":"self-land","note":"READY-WAIT echoed outside the body","tool_name":"Bash","tool_input":{"command":"echo READY-WAIT: land-after; orca orchestration send --type worker_done --subject done --body x --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}]}}
+{"expect":"pass","note":"worker_done body file naming the wait","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject ready --body-file /work/acme/ready.md --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}],"scripts":{"/work/acme/ready.md":"PR open.\nREADY-WAIT: land-after\n"}}}
+{"expect":"pass","note":"worker_done body from cat naming the wait","tool_name":"Bash","tool_input":{"command":"orca orchestration send --type worker_done --subject ready --body \"$(cat /work/acme/ready.md)\" --outcome succeeded"},"facts":{"role":"worker","openPrs":[{"pr":"acme/api#4","landRequested":false}],"scripts":{"/work/acme/ready.md":"READY-WAIT: land-after\n"}}}
+{"expect":"deny","gate":"start","note":"tmux session running claude","tool_name":"Bash","tool_input":{"command":"tmux new-session -d -s w1 'claude -p \"do the task\"'"}}
+{"expect":"deny","gate":"start","note":"tmux window running claude unquoted","tool_name":"Bash","tool_input":{"command":"tmux new -d -s w2 claude --agent sangsoe:worker"}}
+{"expect":"deny","gate":"start","note":"tmux keys typing claude","tool_name":"Bash","tool_input":{"command":"tmux send-keys -t w1 'claude -p go' Enter"}}
+{"expect":"deny","gate":"start","note":"detached screen running claude","tool_name":"Bash","tool_input":{"command":"screen -dmS w3 claude -p x"}}
+{"expect":"deny","gate":"start","note":"at job running claude","tool_name":"Bash","tool_input":{"command":"echo 'claude -p x' | at now + 1 minute"}}
+{"expect":"deny","gate":"start","note":"batch job running claude","tool_name":"Bash","tool_input":{"command":"batch <<< 'cd /work/acme && claude -p x'"}}
+{"expect":"deny","gate":"start","note":"launchctl submit of claude","tool_name":"Bash","tool_input":{"command":"launchctl submit -l acme.worker -- /usr/local/bin/claude -p x"}}
+{"expect":"deny","gate":"start","note":"launchctl load of a plist that runs claude","tool_name":"Bash","tool_input":{"command":"launchctl load /work/acme/worker.plist"},"facts":{"scripts":{"/work/acme/worker.plist":"<plist><dict><key>ProgramArguments</key><array><string>/usr/local/bin/claude</string><string>-p</string><string>x</string></array></dict></plist>\n"}}}
+{"expect":"deny","gate":"start","note":"setsid claude","tool_name":"Bash","tool_input":{"command":"setsid claude -p x"}}
+{"expect":"pass","note":"tmux running a dev server","tool_name":"Bash","tool_input":{"command":"tmux new-session -d -s dev 'npm run dev'"}}
+{"expect":"pass","note":"tmux listing and capture","tool_name":"Bash","tool_input":{"command":"tmux ls; tmux capture-pane -p -t dev"}}
+{"expect":"pass","note":"screen list","tool_name":"Bash","tool_input":{"command":"screen -ls"}}
+{"expect":"pass","note":"at job without claude","tool_name":"Bash","tool_input":{"command":"echo 'make backup' | at now + 1 hour"}}
+{"expect":"pass","note":"launchctl list","tool_name":"Bash","tool_input":{"command":"launchctl list | grep acme"}}
+{"expect":"pass","note":"pipeline with claude in the foreground","tool_name":"Bash","tool_input":{"command":"git diff | claude -p 'review this diff' | tee review.md"}}
+{"expect":"pass","note":"background job after a foreground claude","tool_name":"Bash","tool_input":{"command":"claude -p 'summarize' < a.md > b.md; npm run build &"}}
 {"expect":"deny","gate":"report-address","note":"send to a terminal handle","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to term_ab12cd --type escalation --subject x --body y"}}
 {"expect":"deny","gate":"report-address","note":"send to a handle, = form","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to=term_ab12cd --type status --subject x --body y"}}
 {"expect":"deny","gate":"report-address","note":"a brief reporting to a handle","tool_name":"mcp__plugin_sangsoe_sangsoe__start_unit","tool_input":{"role":"lead","worktreeId":"wt1","runId":"run_1","childRole":"worker","spec":"/goal fix it\nREPORT  orca orchestration send --to term_ab12cd --type worker_done"}}
