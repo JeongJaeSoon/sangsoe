@@ -21,6 +21,9 @@ export const claudePluginVersion: Check = {
     }
     const mine = (rows as ClaudePluginRow[]).find((p) => typeof p.id === "string" && p.id.startsWith("sangsoe@"));
     if (!mine) return { id, status: "warn", summary: "Claude Code 에 sangsoe plugin 이 없다", fix };
+    if (mine.enabled === false) {
+      return { id, status: "warn", summary: "Claude Code 의 sangsoe plugin 이 꺼져 있다", fix: `claude plugin enable ${mine.id}` };
+    }
     if (mine.version !== coreVersion) {
       return { id, status: "warn", summary: `Claude Code plugin ${mine.version} ≠ 코어 ${coreVersion}`, fix };
     }

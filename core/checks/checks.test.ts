@@ -92,6 +92,21 @@ test("a pending re-approval points at sangsoe plugin approve", async () => {
   assert.equal(byId(rs, "orca-plugin-version")?.fix, "sangsoe plugin approve");
 });
 
+test("a disabled plugin on either host is not green", async () => {
+  const rs = await check("local", {
+    "claude-plugin-list": [{ id: "sangsoe@sangsoe", version: "0.1.0", enabled: false }],
+    "plugin-list": { ok: true, result: { plugins: [{ pluginKey: "local.sangsoe", name: "sangsoe", version: "0.1.0", status: "disabled", needsReconsent: false, isDev: true, consentFingerprint: "x" }] } },
+  });
+  assert.deepEqual(
+    [byId(rs, "claude-plugin-version")?.status, byId(rs, "claude-plugin-version")?.fix],
+    ["warn", "claude plugin enable sangsoe@sangsoe"],
+  );
+  assert.deepEqual(
+    [byId(rs, "orca-plugin-version")?.status, byId(rs, "orca-plugin-version")?.summary],
+    ["warn", "Orca plugin 이 꺼져 있다"],
+  );
+});
+
 test("a check that throws becomes a failed item instead of breaking the run", async () => {
   const rs = await runChecks([{ id: "boom", run: async () => { throw new Error("x"); } }], {
     orca: createOrcaAdapter(createFakeOrca().exec),

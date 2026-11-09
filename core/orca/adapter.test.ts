@@ -161,6 +161,20 @@ test("a host-row read without its row array is unexpected_shape, not zero rows",
   assert.equal(!r.ok && r.error.code, "unexpected_shape");
 });
 
+test("malformed rows and fields stay inside OrcaResult", async () => {
+  const fake = createFakeOrca({
+    replies: {
+      "orchestration-task-list": { ok: true, result: { tasks: {} } },
+      "worktree-list": { ok: true, result: { worktrees: [null] } },
+      status: { ok: true, result: { runtime: { reachable: true } } },
+    },
+  });
+  const orca = createOrcaAdapter(fake.exec);
+  for (const r of [await orca.taskList({ run: "run_1" }), await orca.worktreeList({}), await orca.status()]) {
+    assert.equal(!r.ok && r.error.code, "unexpected_shape");
+  }
+});
+
 test("first writes never mint a request id", async () => {
   const fake = createFakeOrca();
   await createOrcaAdapter(fake.exec).taskCreate({ spec: "do it", deps: ["task_1"] });

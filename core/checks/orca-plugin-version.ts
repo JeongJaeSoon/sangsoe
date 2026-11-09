@@ -16,8 +16,9 @@ export const orcaPluginVersion: Check = {
     if (mine.version !== coreVersion) {
       return { id, status: "warn", summary: `Orca plugin ${mine.version} ≠ 코어 ${coreVersion}`, fix: "sangsoe install" };
     }
-    if (mine.needsReconsent) {
-      return { id, status: "warn", summary: "Orca plugin 의 지문이 바뀌어 승인을 기다린다", fix: "sangsoe plugin approve" };
+    if (mine.needsReconsent || mine.status === "disabled") {
+      const summary = mine.needsReconsent ? "Orca plugin 의 지문이 바뀌어 승인을 기다린다" : "Orca plugin 이 꺼져 있다";
+      return { id, status: "warn", summary, fix: "sangsoe plugin approve" };
     }
     return { id, status: "ok", summary: `Orca plugin ${mine.version} (${mine.status})` };
   },

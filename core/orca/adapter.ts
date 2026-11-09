@@ -110,21 +110,28 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     return parseEnvelope(r, "write" in spec) as OrcaResult<T>;
   }
 
-  async function field<T>(name: CommandName, key: string, call?: Call): Promise<OrcaResult<T>> {
-    const r = await run<Json>(name, call);
-    if (!r.ok) return r;
-    if (!isObject(r.value) || r.value[key] === undefined) {
-      return { ok: false, error: { code: "unexpected_shape", message: `no "${key}" in the result`, data: r.value } };
-    }
-    return { ok: true, value: r.value[key] as T };
+  const unexpected = (message: string, data: unknown) =>
+    ({ ok: false, error: { code: "unexpected_shape", message, data } }) as const;
+
+  /** Checks only what callers index into: the container, rows being objects, and named arrays. */
+  async function shaped<T>(name: CommandName, valid: (v: unknown) => boolean, call?: Call): Promise<OrcaResult<T>> {
+    const r = await run<unknown>(name, call);
+    if (!r.ok || valid(r.value)) return r as OrcaResult<T>;
+    return unexpected(`orca ${ORCA_COMMANDS[name].path.join(" ")}: result has an unexpected shape`, r.value);
+  }
+
+  const isRows = (v: unknown): v is Json[] => Array.isArray(v) && v.every(isObject);
+  const has = (key: string, valid: (v: unknown) => boolean) => (v: unknown) => isObject(v) && valid(v[key]);
+
+  async function field<T>(name: CommandName, key: string, valid: (v: unknown) => boolean, call?: Call): Promise<OrcaResult<T>> {
+    const r = await shaped<Json>(name, has(key, valid), call);
+    return r.ok ? { ok: true, value: r.value[key] as T } : r;
   }
 
   async function local<T>(name: CommandName, key: string, hostKey: string, call?: Call): Promise<OrcaResult<LocalRows<T>>> {
     const r = await run<Json>(name, call);
     if (!r.ok) return r;
-    if (!isObject(r.value) || !Array.isArray(r.value[key])) {
-      return { ok: false, error: { code: "unexpected_shape", message: `no "${key}" array in the result`, data: r.value } };
-    }
+    if (!isObject(r.value) || !isRows(r.value[key])) return unexpected(`no "${key}" rows in the result`, r.value);
     const v = r.value;
     const scope = isObject(v.hostScope) ? v.hostScope : {};
     const omitted = Array.isArray(scope.omittedHostIds) ? scope.omittedHostIds.map(String) : [];
@@ -137,10 +144,10 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
   const jsonArray = (xs: readonly string[] | undefined) => (xs ? JSON.stringify(xs) : undefined);
 
   return {
-    status: () => run("status"),
-    hostList: () => field<HostRow[]>("hostList", "hosts"),
-    agentHooksStatus: () => run("agentHooksStatus"),
-    agentContext: () => run("agentContext"),
+    status: () => shaped("status", has("runtime", has("capabilities", Array.isArray))),
+    hostList: () => field<HostRow[]>("hostList", "hosts", isRows),
+    agentHooksStatus: () => shaped("agentHooksStatus", has("statuses", isRows)),
+    agentContext: () => shaped("agentContext", has("commands", isRows)),
     diagnosticsMemory: () => run("diagnosticsMemory"),
 
     taskCreate: (a, o) =>
@@ -149,18 +156,18 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
         { flags: { spec: a.spec, "task-title": a.title, deps: jsonArray(a.deps), parent: a.parent, run: a.run } },
         o,
       ),
-    taskList: (a) => field("taskList", "tasks", { flags: { run: a.run, status: a.status, ready: a.ready } }),
+    taskList: (a) => field("taskList", "tasks", isRows, { flags: { run: a.run, status: a.status, ready: a.ready } }),
     taskUpdate: (a, o) => run("taskUpdate", { flags: { id: a.id, status: a.status, result: a.result, run: a.run } }, o),
 
     runCreate: (a, o) => run("runCreate", { flags: { objective: a.objective } }, o),
     runUse: (a, o) => run("runUse", { flags: { id: a.id } }, o),
-    runCurrent: () => run("runCurrent"),
-    runShow: (a) => run("runShow", { flags: { id: a.id } }),
+    runCurrent: () => shaped("runCurrent", isObject),
+    runShow: (a) => shaped("runShow", isObject, { flags: { id: a.id } }),
 
     gateCreate: (a, o) =>
       run("gateCreate", { flags: { task: a.task, question: a.question, options: jsonArray(a.options) } }, o),
     gateResolve: (a, o) => run("gateResolve", { flags: { id: a.id, resolution: a.resolution } }, o),
-    gateList: (a) => field("gateList", "gates", { flags: { run: a.run, task: a.task, status: a.status } }),
+    gateList: (a) => field("gateList", "gates", isRows, { flags: { run: a.run, task: a.task, status: a.status } }),
 
     send: (a, o) =>
       run(
@@ -181,16 +188,16 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
       ),
     ask: (a, o) => run("ask", { flags: { question: a.question, to: a.to, options: a.options?.join(",") } }, o),
     reply: (a, o) => run("reply", { flags: { id: a.id, body: a.body } }, o),
-    inbox: (a) => field("inbox", "messages", { flags: { terminal: a.terminal, limit: a.limit, full: true } }),
+    inbox: (a) => field("inbox", "messages", isRows, { flags: { terminal: a.terminal, limit: a.limit, full: true } }),
 
     workerStart: (a, o) =>
       run("workerStart", { flags: { task: a.task, agent: a.agent, worktree: placement(a.worktree), run: a.run } }, o),
-    workerShow: (a) => run("workerShow", { flags: { dispatch: a.dispatch } }),
+    workerShow: (a) => shaped("workerShow", isObject, { flags: { dispatch: a.dispatch } }),
     workerList: (a) =>
       local("workerList", "workers", "host", { flags: { run: a.run, limit: a.limit, cursor: a.cursor } }),
     workerRelease: (a, o) => run("workerRelease", { flags: { dispatch: a.dispatch } }, o),
-    dispatchShow: (a) => field("dispatchShow", "dispatch", { flags: { task: a.task } }),
-    requestShow: (a) => run("requestShow", { flags: { request: a.request } }),
+    dispatchShow: (a) => field("dispatchShow", "dispatch", isObject, { flags: { task: a.task } }),
+    requestShow: (a) => shaped("requestShow", isObject, { flags: { request: a.request } }),
 
     worktreeList: (a) => local("worktreeList", "worktrees", "hostId", { flags: { repo: a.repo, limit: a.limit } }),
     worktreePs: (a) =>
@@ -213,7 +220,7 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     terminalWaitIdle: (a) =>
       run("terminalWaitIdle", { flags: { terminal: a.terminal, for: "tui-idle", "timeout-ms": a.timeoutMs } }),
 
-    pluginList: () => field("pluginList", "plugins"),
+    pluginList: () => field("pluginList", "plugins", isRows),
     pluginInspect: (a) => run("pluginInspect", { pos: [a.dir] }),
     pluginEnable: (a) => run("pluginEnable", { pos: [a.key], flags: { approve: a.approve } }),
   };

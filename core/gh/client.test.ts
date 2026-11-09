@@ -71,7 +71,13 @@ test("an exhausted budget is rate_limited, and the next call is not made until r
 test("a 429 is rate_limited even without rate headers", async () => {
   const s = scripted(http("429 Too Many Requests", {}, '{"message":"slow down"}'));
   const r = await createGhClient({ exec: s.exec, cache: memoryGhCache(), now: () => NOW }).get("repos/acme/api");
-  assert.equal(r.kind, "rate_limited");
+  assert.deepEqual(r, { kind: "rate_limited", resource: "core", resetAt: NOW / 1000 + 60 });
+});
+
+test("a secondary rate limit 403 with budget left is rate_limited a minute out", async () => {
+  const s = scripted(http("403 Forbidden", RATE, '{"message":"You have exceeded a secondary rate limit."}'));
+  const r = await createGhClient({ exec: s.exec, cache: memoryGhCache(), now: () => NOW }).get("repos/acme/api");
+  assert.deepEqual(r, { kind: "rate_limited", resource: "core", resetAt: NOW / 1000 + 60 });
 });
 
 test("a 403 with budget left is an error, not rate_limited", async () => {

@@ -105,9 +105,13 @@ export function createGhClient(deps: { exec: Exec; cache: GhCache; now: () => nu
       const budget = readBudget(raw.headers);
       if (budget) cache.setBudget(budget);
       if (raw.status === 304) return { kind: "not_modified" };
-      if (raw.status === 429 || (raw.status === 403 && (budget?.remaining === 0 || raw.headers.has("retry-after")))) {
+      const secondary = raw.status === 403 && /secondary rate limit/i.test(raw.body);
+      if (raw.status === 429 || secondary || (raw.status === 403 && (budget?.remaining === 0 || raw.headers.has("retry-after")))) {
+        const nowS = Math.ceil(now() / 1000);
         const retryAfter = Number(raw.headers.get("retry-after"));
-        const resetAt = Number.isFinite(retryAfter) ? Math.ceil(now() / 1000) + retryAfter : (budget?.resetAt ?? 0);
+        const exhausted = budget?.remaining === 0 ? budget.resetAt : undefined;
+        // GitHub's advice for a throttle with no reset: wait at least a minute.
+        const resetAt = Number.isFinite(retryAfter) && retryAfter > 0 ? nowS + retryAfter : (exhausted ?? nowS + 60);
         return { kind: "rate_limited", resource: budget?.resource ?? "core", resetAt };
       }
       if (raw.status < 200 || raw.status >= 300) {
