@@ -18,10 +18,10 @@ const storeAt = () => {
   return () => Store.open({ path, clock: fixedClock("2026-11-10T00:00:00.000Z", 1000), fsProbe: () => "apfs" });
 };
 const ghAuthor =
-  (login: string, code = 0): Exec =>
+  (login: string, code = 0, head = HEAD): Exec =>
   async (cmd, args) => {
-    assert.deepEqual([cmd, ...args], ["gh", "api", "repos/acme/api/pulls/7", "--jq", ".user.login"]);
-    return { code, stdout: code === 0 ? `${login}\n` : "", stderr: code === 0 ? "" : "not found" };
+    assert.deepEqual([cmd, ...args], ["gh", "api", "repos/acme/api/pulls/7", "--jq", "[.user.login, .head.sha] | @tsv"]);
+    return { code, stdout: code === 0 ? `${login}\t${head}\n` : "", stderr: code === 0 ? "" : "not found" };
   };
 const input = { repo: "acme/api", pr: 7, head: HEAD, actOn: 0, reviewer: "codex" };
 
@@ -29,8 +29,8 @@ test("review record writes one review_verdict with the author read from GitHub",
   const openStore = storeAt();
   const first = await recordReviewVerdict(input, { exec: ghAuthor("alice"), openStore });
   assert.deepEqual([first.ok, first.inserted, first.author], [true, true, "alice"]);
-  const again = await recordReviewVerdict({ ...input, actOn: 3 }, { exec: ghAuthor("alice"), openStore });
-  assert.deepEqual([again.ok, again.inserted], [true, false], "a reviewer's first verdict on a head stands");
+  const again = await recordReviewVerdict({ ...input, reviewer: "Codex", actOn: 3 }, { exec: ghAuthor("Alice"), openStore });
+  assert.deepEqual([again.ok, again.inserted], [true, false], "a reviewer's first verdict on a head stands, whatever the case");
   const s = openStore();
   const rows = s.events({ type: "review_verdict" });
   s.close();
@@ -45,7 +45,11 @@ test("review record refuses the PR's author as reviewer, an unreadable PR and a 
   assert.equal(self.ok, false);
   assert.match(self.note, /is the author/);
   const gone = await recordReviewVerdict(input, { exec: ghAuthor("alice", 1), openStore });
-  assert.match(gone.note, /cannot read the author/);
+  assert.match(gone.note, /cannot read acme\/api#7/);
+  const padded = await recordReviewVerdict({ ...input, reviewer: "alice " }, { exec: ghAuthor("alice"), openStore });
+  assert.match(padded.note, /reviewer must be a login or name/, "padding cannot dodge the author check");
+  const future = await recordReviewVerdict({ ...input, head: "c".repeat(40) }, { exec: ghAuthor("alice"), openStore });
+  assert.match(future.note, /is not the head of acme\/api#7/, "a head the PR does not point at, stale or not yet pushed, is refused");
   const short = await recordReviewVerdict({ ...input, head: "abc1234" }, { exec: ghAuthor("alice"), openStore });
   assert.match(short.note, /full 40-character sha/);
   const negative = await recordReviewVerdict({ ...input, actOn: -1 }, { exec: ghAuthor("alice"), openStore });
@@ -56,12 +60,23 @@ test("review record refuses the PR's author as reviewer, an unreadable PR and a 
     () =>
       s.append({
         type: "review_verdict",
-        source: "x",
+        source: "review record",
         dedupe_key: `review_verdict:acme%2Fapi%237:${HEAD}:alice`,
         payload: { pr: "acme/api#7", head_sha: HEAD, act_on: 0, reviewer: "alice", author: "alice" },
       }),
     /author cannot review it/,
-    "the contract refuses it too, whoever writes",
+    "the contract refuses it too",
+  );
+  assert.throws(
+    () =>
+      s.append({
+        type: "review_verdict",
+        source: "lead:x",
+        dedupe_key: `review_verdict:acme%2Fapi%237:${HEAD}:codex`,
+        payload: { pr: "acme/api#7", head_sha: HEAD, act_on: 0, reviewer: "codex", author: "alice" },
+      }),
+    /only by review record/,
+    "and any writer but review record",
   );
   s.close();
 });

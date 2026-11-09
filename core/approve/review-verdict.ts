@@ -8,6 +8,7 @@ export type ReviewRecordInput = { repo: string; pr: number; head: string; actOn:
 export type ReviewRecordResult = { ok: boolean; inserted: boolean; seq: number | null; author: string | null; note: string };
 
 const prRefOf = (repo: string, pr: number) => `${repo.toLowerCase()}#${pr}`;
+const IDENTITY = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 
 export async function recordReviewVerdict(
   input: ReviewRecordInput,
@@ -18,13 +19,20 @@ export async function recordReviewVerdict(
   if (!Number.isInteger(input.pr) || input.pr < 1) return fail(`pr must be a PR number, got ${input.pr}`);
   if (!FULL_SHA.test(input.head)) return fail(`head must be a full 40-character sha, got ${input.head}`);
   if (!Number.isInteger(input.actOn) || input.actOn < 0) return fail(`act-on must be a count, got ${input.actOn}`);
-  if (input.reviewer.trim() === "") return fail("reviewer is empty");
+  // One spelling per reviewer: compared, stored and keyed lowercased, with no room for padding.
+  if (!IDENTITY.test(input.reviewer)) return fail(`reviewer must be a login or name (letters, digits, _ . -), got ${JSON.stringify(input.reviewer)}`);
+  const reviewer = input.reviewer.toLowerCase();
 
-  // The author comes from GitHub, never from the caller, so a caller cannot name someone else.
-  const pr = await deps.exec("gh", ["api", `repos/${input.repo}/pulls/${input.pr}`, "--jq", ".user.login"]);
-  const author = pr.stdout.trim();
-  if (pr.code !== 0 || author === "") return fail(`cannot read the author of ${input.repo}#${input.pr}: ${pr.stderr.trim() || pr.code}`);
-  if (author.toLowerCase() === input.reviewer.toLowerCase()) return fail(`${input.reviewer} is the author of ${input.repo}#${input.pr}`, author);
+  // Author and head come from GitHub, never from the caller: a caller can name neither someone
+  // else's PR as its own nor a head nobody has pushed yet.
+  const pr = await deps.exec("gh", ["api", `repos/${input.repo}/pulls/${input.pr}`, "--jq", '[.user.login, .head.sha] | @tsv']);
+  const [login = "", head = ""] = pr.stdout.trim().split("\t");
+  const author = login.toLowerCase();
+  if (pr.code !== 0 || !IDENTITY.test(author)) {
+    return fail(`cannot read ${input.repo}#${input.pr}: ${pr.stderr.trim() || pr.code}`);
+  }
+  if (head !== input.head) return fail(`${input.head} is not the head of ${input.repo}#${input.pr} (${head})`, author);
+  if (author === reviewer) return fail(`${input.reviewer} is the author of ${input.repo}#${input.pr}`, author);
 
   const ref = prRefOf(input.repo, input.pr);
   let store: Store;
@@ -37,13 +45,13 @@ export async function recordReviewVerdict(
     const out = store.append({
       type: "review_verdict",
       source: "review record",
-      actor: input.reviewer,
-      dedupe_key: dedupeKey(EVENTS.review_verdict, ref, input.head, input.reviewer),
-      payload: { pr: ref, head_sha: input.head, act_on: input.actOn, reviewer: input.reviewer, author },
+      actor: reviewer,
+      dedupe_key: dedupeKey(EVENTS.review_verdict, ref, input.head, reviewer),
+      payload: { pr: ref, head_sha: input.head, act_on: input.actOn, reviewer, author },
     });
     const note = out.inserted
-      ? `recorded: ${ref} ${input.head} reviewed by ${input.reviewer}, ${input.actOn} Act-on`
-      : `already recorded: ${input.reviewer}'s verdict on ${ref} ${input.head} stands (seq ${out.seq})`;
+      ? `recorded: ${ref} ${input.head} reviewed by ${reviewer}, ${input.actOn} Act-on`
+      : `already recorded: ${reviewer}'s verdict on ${ref} ${input.head} stands (seq ${out.seq})`;
     return { ok: true, inserted: out.inserted, seq: out.seq, author, note };
   } catch (e) {
     if (e instanceof ContractError) return fail(e.message, author);
