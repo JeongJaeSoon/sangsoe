@@ -16,6 +16,8 @@
 | 실행 | `core/checks/` | X | ④ 공유 코어 | 시작 점검과 `doctor` 의 점검 함수(점검 하나 = 파일 하나) |
 | 실행 | `core/install/` | X | ④ 공유 코어 | install · uninstall · doctor |
 | 실행 | `core/approve/` | X | ④ 공유 코어 | `sangsoe plugin approve` 의 세 조건 검사와 `orca plugin enable` 을 부르는 유일한 자리 |
+| 실행 | `core/land/` | X | ④ 공유 코어 | land 판정 함수(`sangsoe land`·MCP `land`, 머지하는 유일한 길) · `merge_confirm` · `gh pr merge --auto` 를 부르는 유일한 자리 |
+| 실행 | `core/verify/` | X | ④ 공유 코어 | `verify_tier` 순수 함수(V0~V3) · head 별 증거 점검 · `deploys_after` 항목의 dev 증거 판정 |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
 | 실행 | `orca-plugin/reaper/` | X | ② Orca plugin | REAPER 라운드 타이머 |
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |
