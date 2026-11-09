@@ -34,12 +34,12 @@
 | R5 | 정리 | `rm --run-hooks --delete-branch`(`--force` 없음), 훅 실패 → `archive_hook_failed`(P6) | U18 | |
 | R6 | 정리 | Docker 기록 id 만·순서·`prune`/`down -v`/라벨 선택 없음 | U18 | |
 | R7 | 정리 | `remote_host` 카드당 한 번·`isMainWorktree` 건너뜀·터미널 안 닫음 | U18 | |
-| R8 | 정리 | `reap_round` 필드·`timer_stalled`(간격 3배·`roots_ok=false` 3회) | U17 | |
+| R8 | 정리 | `reap_round` 필드·`timer_stalled`(간격 3배·`roots_ok=false` 3회) | U17 | `test/detect/queue.test.ts` "timer_stalled"(행 없음 0 · 3배 안 0 · 3배 넘음 1 · 힌트 라운드가 가리지 못함 · 실패 2회 0 · 3회 1 · 4회 같은 키 1) · "stallCheck"(쓰기 1 · 다시 0 · 오케스트레이터 알림 1 · Run 없으면 0) · `test/orca-plugin.test.ts` "the stall check runs on Orca events"(타이머 10분 0 · 이벤트 둘 1 · 패널 1). `reap_round` 를 쓰는 쪽은 U18 |
 | D1 | 감지기 | orca-monitor 멈춤 판정 = 시각 필드, 못 보면 행동 0(R-07, P10) | U15 | |
 | D2 | 감지기 | `one_session_two_terminals` | U15 | |
 | D3 | 감지기 | 부하 판정 함수 하나(압박 게이트·resource-monitor·capacity, R-13) | U15(+U10) | |
 | D4 | 감지기 | 머지 확인 뒤에만 PR 항목 `completed`·`main_green/red` | U16 | `core/detect/pr/round.test.ts`: `merge_suggests_close`(머지 확인 → `pr_merged` 다음 같은 라운드에 Task `completed`, 다른 열린 Task 는 `close_suggested`) · 머지 커밋이 main 에 없으면 `pr_merged`·Task 쓰기 0 · dry run 은 Orca 쓰기 0 · `repo_level_main`(main_* 쪽). `judge.test.ts`: 재실행 1회로 flake 구분 · 취소는 빨강 아님 · 0-job 은 모름(결정 142·143). 실제 Orca 의 `task-update` 는 미실행(VERIFY 가 Task 쓰기를 금함) |
-| D5 | 감지기 | queue-monitor 는 항목을 닫지 않음·`escalation_stale`·`job_drift` | U17 | |
+| D5 | 감지기 | queue-monitor 는 항목을 닫지 않음·`escalation_stale`·`job_drift` | U17 | `test/detect/queue.test.ts` 13건: 닫는 Orca 호출 0(`task-update`·`gate-resolve`·`worker-release`, probe 참·moot·재전달 라운드), `escalation_stale` 세 갈래(`waiting_unreleased` 1 · `verify_unconfirmed` 1 · 전달 안 된 답 1, 각 한 번), `job_drift`(어긋남 1 · 같은 어긋남 0 · 못 읽음 0) |
 | PN1 | 패널 | 승인된 plugin 의 worker 가 돈다(T1·T2·T4) | U3 | |
 | PN2 | 패널 | 패널 행 ID = `BriefModel` 행 ID | U19 | |
 | PN3 | 패널 | `sangsoe todo` = 패널 띠 = 상태 표시줄 숫자 | U19(+U9) | |

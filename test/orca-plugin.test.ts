@@ -415,7 +415,7 @@ test("plugin code imports nothing outside orca-plugin/, and only core-link.ts na
 });
 
 test("core-link loads only the core inside the approved folder in an installed tree, the source core in a checkout (decision 152)", () => {
-  assert.equal(coreUrl()?.href, new URL("core/index.ts", root).href);
+  // Trees of its own, so a dist/ or vendor/ left in the checkout does not change the answer.
   const dir = mkdtempSync(join(tmpdir(), "sangsoe-link-"));
   const tree = (name: string, files: readonly string[]) => {
     for (const f of files) {
@@ -438,7 +438,7 @@ test("core-link loads only the core inside the approved folder in an installed t
   }
 });
 
-test("activate starts the four monitors once the core opens, hints orca on agent status, and closes it", async () => {
+test("activate starts the five monitors once the core opens, hints orca on agent status, and closes it", async () => {
   const w = fakeWorker();
   const { clock, advance } = fakeClock();
   const handlers = new Map<string, (p: unknown) => void>();
@@ -466,15 +466,56 @@ test("activate starts the four monitors once the core opens, hints orca on agent
     await advance(55_000);
     assert.deepEqual(ran, ["orca", "orca"]);
     await advance(240_000);
-    assert.deepEqual(ran.filter((n) => n !== "orca").sort(), ["chat", "pr", "pr", "resource"], "pr every two minutes");
+    assert.deepEqual(ran.filter((n) => n !== "orca").sort(), ["chat", "pr", "pr", "queue", "queue", "resource"], "pr and queue every two minutes");
     const report = (await w.handlers.get("probe.report")?.(null)) as { monitors: { state: string; last: Record<string, unknown> } };
     assert.equal(report.monitors.state, "running");
-    assert.deepEqual(Object.keys(report.monitors.last).sort(), ["chat", "orca", "pr", "resource"]);
+    assert.deepEqual(Object.keys(report.monitors.last).sort(), ["chat", "orca", "pr", "queue", "resource"]);
   } finally {
     deactivate();
   }
   await settle();
   assert.equal(closed, 1);
+});
+
+test("the stall check runs on Orca events and panel refreshes, never on a timer, at most once a minute", async () => {
+  const w = fakeWorker();
+  const { clock, advance } = fakeClock();
+  const handlers = new Map<string, (p: unknown) => void>();
+  w.orca.events.on = (e, h) => void handlers.set(e, h);
+  let checks = 0;
+  activate(w.orca, {
+    clock,
+    exec: async (cmd) => ok(cmd, ""),
+    panel: fakePanel().load,
+    monitors: async () => ({
+      run: async () => ({ planned: [], written: [], unseen: [], aborted: false }),
+      stall: async () => {
+        checks += 1;
+        return { written: [] };
+      },
+      close: () => {},
+    }),
+  });
+  try {
+    await settle();
+    await advance(600_000);
+    assert.equal(checks, 0, "ten minutes of timer rounds run no stall check");
+    handlers.get("workspace.changed")?.({});
+    handlers.get("agent.status.changed")?.({});
+    await settle();
+    assert.equal(checks, 1, "two events inside the gap: one check");
+    await advance(60_000);
+    const report = (await w.handlers.get("probe.report")?.(null)) as { monitors: { stall: { checks: number } } };
+    await settle();
+    assert.equal(checks, 2, "a panel refresh checks too");
+    assert.equal(report.monitors.stall.checks, 2);
+    await advance(60_000);
+    await w.handlers.get("panel.brief")?.({});
+    await settle();
+    assert.equal(checks, 3, "so does the panel's own brief request");
+  } finally {
+    deactivate();
+  }
 });
 
 test("deactivate aborts an in-flight monitor round and closes the core only after it returns", async () => {
