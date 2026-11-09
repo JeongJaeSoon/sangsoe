@@ -62,9 +62,10 @@ const HASH = /\.(py|sh|bash|zsh|rb)$/;
 
 function isCommentLine(line: string, lang: "c" | "hash"): boolean {
   if (lang === "hash") return line.startsWith("#");
-  if (line.startsWith("//") || line === "*/" || line === "*" || line.startsWith("* ")) return true;
-  if (line.startsWith("/*")) return !line.includes("*/") || line.endsWith("*/");
-  return false;
+  // Lines inside or closing a multi-line block cannot be told apart from code without the
+  // surrounding file, so only self-contained comment lines count; anything else fails closed.
+  if (line.startsWith("//")) return true;
+  return line.startsWith("/*") && line.length >= 4 && line.indexOf("*/", 2) === line.length - 2;
 }
 
 /** true only when the language has a parser here and every changed non-blank line is a comment. */

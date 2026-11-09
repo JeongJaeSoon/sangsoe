@@ -82,6 +82,7 @@ const verdict = (store: Store, head = HEAD, actOn = 0, reviewer = "codex") =>
   });
 const stackEdge = (store: Store, pred: string, succ: string) =>
   store.append({ type: "edge_added", source: "GRAPH", dedupe_key: dedupeKey(EVENTS.edge_added, pred, succ, "stacked_on"), payload: { pred, succ, kind: "stacked_on" } });
+const opened = (store: Store, pr: string, task: string) => store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr, task } });
 const evidence = (store: Store, kind: string, extra: Record<string, unknown> = {}, actor = "worker:u11") =>
   store.append({ type: "evidence", source: "test", subject: PR, actor, payload: { kind, head_sha: HEAD, exit_code: 0, not_verified: ["prod"], ...extra } });
 const ready = (store: Store) => {
@@ -118,7 +119,7 @@ test("decision 81's re-call: approved by another login and green at the head, so
   const r0 = routes({ rules: LOOSE, pull: { mergeable_state: "clean" } });
   r0[`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`] = ok([
     { user: { login: "alice" }, state: "APPROVED", commit_id: HEAD },
-    { user: { login: "bob" }, state: "APPROVED", commit_id: HEAD },
+    { user: { login: "bob" }, state: "APPROVED", commit_id: HEAD, author_association: "MEMBER" },
   ]);
   r0[`repos/${REPO}/commits/${HEAD}/check-runs?per_page=100`] = ok({ total_count: 1, check_runs: [{ status: "completed", conclusion: "success" }] });
   const h = harness(r0);
@@ -128,6 +129,24 @@ test("decision 81's re-call: approved by another login and green at the head, so
   assert.equal(r.value.action, "merge_approved");
   assert.equal(h.merges.length, 1);
   assert.deepEqual(landRows(h.store), ["land_requested:approved"]);
+});
+
+test("an approval counts only from a member, collaborator, owner or a login in config owners", async () => {
+  const approvedBy = async (login: string, association: string) => {
+    const r0 = routes({ rules: LOOSE, pull: { mergeable_state: "clean" } });
+    r0[`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`] = ok([
+      { user: { login }, state: "APPROVED", commit_id: HEAD, author_association: association },
+    ]);
+    r0[`repos/${REPO}/commits/${HEAD}/check-runs?per_page=100`] = ok({ total_count: 1, check_runs: [{ status: "completed", conclusion: "success" }] });
+    const h = harness(r0);
+    ready(h.store);
+    const r = await land(input(), h.deps);
+    return { action: r.ok && r.value.action, merges: h.merges.length };
+  };
+  assert.deepEqual(await approvedBy("outsider", "NONE"), { action: "merge_on_approval", merges: 0 });
+  assert.deepEqual(await approvedBy("drive-by", "CONTRIBUTOR"), { action: "merge_on_approval", merges: 0 });
+  assert.deepEqual(await approvedBy("Owner1", "NONE"), { action: "merge_approved", merges: 1 });
+  assert.deepEqual(await approvedBy("carol", "COLLABORATOR"), { action: "merge_approved", merges: 1 });
 });
 
 test("only the author approved: still merge_on_approval", async () => {
@@ -213,8 +232,11 @@ test("scenario repo_level_main (land side): one main state per repo, any group's
 test("scenario stack_bottom: only the bottom PR can land; an upper one is refused with the order", async () => {
   const h = harness(routes());
   ready(h.store);
-  stackEdge(h.store, "acme/api#10", "acme/api#11");
-  stackEdge(h.store, "acme/api#11", PR);
+  opened(h.store, "acme/api#10", "task_a");
+  opened(h.store, "acme/api#11", "task_b");
+  opened(h.store, PR, "task_c");
+  stackEdge(h.store, "task_a", "task_b");
+  stackEdge(h.store, "task_b", "task_c");
   const upper = await land(input(), h.deps);
   assert.equal(upper.ok ? "" : upper.refusal.code, "stack_order");
   assert.match(upper.ok ? "" : upper.refusal.fix, /land acme\/api#10 first/);
@@ -225,11 +247,24 @@ test("scenario stack_bottom: only the bottom PR can land; an upper one is refuse
   assert.ok((await land(input(), h.deps)).ok, "the bottom merged, so the upper one opens");
 });
 
+test("a stacked_on predecessor task with no PR opened fails closed", async () => {
+  const h = harness(routes());
+  ready(h.store);
+  opened(h.store, PR, "task_c");
+  stackEdge(h.store, "task_x", "task_c");
+  const r = await land(input(), h.deps);
+  assert.equal(r.ok ? "" : r.refusal.code, "stack_order");
+  assert.match(r.ok ? "" : r.refusal.reason, /task_x/);
+  assert.deepEqual(landRows(h.store), ["land_failed:stack_order:task_x"]);
+});
+
 test("a removed stacked_on edge no longer blocks", async () => {
   const h = harness(routes());
   ready(h.store);
-  stackEdge(h.store, "acme/api#10", PR);
-  h.store.append({ type: "edge_removed", source: "GRAPH", payload: { pred: "acme/api#10", succ: PR, kind: "stacked_on", reason: "restacked" } });
+  opened(h.store, "acme/api#10", "task_a");
+  opened(h.store, PR, "task_c");
+  stackEdge(h.store, "task_a", "task_c");
+  h.store.append({ type: "edge_removed", source: "GRAPH", payload: { pred: "task_a", succ: "task_c", kind: "stacked_on", reason: "restacked" } });
   assert.ok((await land(input(), h.deps)).ok);
 });
 

@@ -76,8 +76,12 @@ test("labels that could not be read are V3", () => {
 });
 
 test("comment-only changes are V0 where a parser exists, V2 where none does", () => {
-  const ts = "@@ -1,2 +1,2 @@\n-// old note\n+// new note\n /* untouched */\n+\n+/*\n+ * block\n+ */";
+  const ts = "@@ -1,2 +1,2 @@\n-// old note\n+// new note\n /* untouched */\n+\n+/* one line */";
   assert.equal(tierOf([f("core/a.ts", ts)]), "V0");
+  assert.equal(tierOf([f("core/a.ts", "@@ -1,3 +1 @@\n-/*\n doDanger();\n-*/")]), "V2", "removing block delimiters");
+  assert.equal(tierOf([f("core/a.ts", "@@ -1 +1 @@\n-  * 2;\n+  * 2000;")]), "V2", "a continuation line that starts with *");
+  assert.equal(tierOf([f("core/a.ts", "@@ -1 +1,3 @@\n+/*\n run();\n+*/")]), "V2", "commenting code out");
+  assert.equal(tierOf([f("core/a.ts", "@@ -1 +1,3 @@\n+/**\n+ * block\n+ */")]), "V2", "a multi-line block is not read");
   assert.equal(tierOf([f("tools/a.py", "@@ -1 +1 @@\n-# old\n+# new")]), "V0");
   assert.equal(tierOf([f("core/a.ts", "@@ -1 +1 @@\n-// note\n+const a = 1; // note")]), "V2", "code with a trailing comment");
   assert.equal(tierOf([f("core/a.ts", "@@ -1 +1 @@\n+/* a */ run()")]), "V2", "code after a closed block comment");

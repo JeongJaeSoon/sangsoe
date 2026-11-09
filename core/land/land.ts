@@ -122,8 +122,16 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   }
 
   const bottom = unmergedBelow(pr, events);
-  if (bottom) {
-    throw new Refused("stack_order", bottom, `${pr} is stacked on ${bottom}, which has not merged`, `land ${bottom} first; ${pr} opens once it merges`);
+  if (bottom?.kind === "pr") {
+    throw new Refused("stack_order", bottom.id, `${pr} is stacked on ${bottom.id}, which has not merged`, `land ${bottom.id} first; ${pr} opens once it merges`);
+  }
+  if (bottom?.kind === "task") {
+    throw new Refused(
+      "stack_order",
+      bottom.id,
+      `${pr} is stacked on task ${bottom.id}, which has no pr_opened, so its PR cannot be checked`,
+      `open and land the PR of task ${bottom.id} first, or remove the stacked_on edge`,
+    );
   }
 
   const note: string[] = [];
@@ -153,31 +161,56 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   const conditions = read.kind === "read" ? read.conditions : [];
   const base = { pr, head_sha: head, tier: tier.effective, dry_run: input.dryRun === true, conditions };
   if (read.kind === "read" && read.autoMerge) return { ...base, action: "auto_merge", note: [...note, "all four conditions hold"].join("; ") };
-  const approved = must(await approvedAndGreen(gh, repo, input.pr, pull), "pr_unreadable", "call land again");
+  const approved = must(await approvedAndGreen(gh, repo, input.pr, pull, config.tier?.owners ?? []), "pr_unreadable", "call land again");
   if (approved) return { ...base, action: "merge_approved", note: [...note, "approved and green at the head"].join("; ") };
   return { ...base, action: "merge_on_approval", note: [...note, "merge once approved; the lead calls land again"].join("; ") };
 }
 
-function unmergedBelow(pr: string, events: readonly StoredEvent[]): string | null {
+type StackNode = { kind: "pr" | "task"; id: string };
+
+/**
+ * The lowest unmerged PR this one is stacked on. Edges join Orca Task ids (glossary 부가 간선),
+ * so PRs and tasks are joined through `pr_opened{pr, task}`; a predecessor task with no PR is
+ * returned as itself, because an unknown PR cannot be shown merged.
+ */
+function unmergedBelow(pr: string, events: readonly StoredEvent[]): StackNode | null {
   const edges = new Map<string, boolean>();
+  const tasksOf = new Map<string, Set<string>>();
+  const prOf = new Map<string, string>();
   for (const e of events) {
+    if (e.type === "pr_opened" && typeof e.payload.task === "string") {
+      const ref = String(e.payload.pr).toLowerCase();
+      prOf.set(e.payload.task, ref);
+      tasksOf.set(ref, (tasksOf.get(ref) ?? new Set()).add(e.payload.task));
+    }
     if ((e.type !== "edge_added" && e.type !== "edge_removed") || e.payload.kind !== "stacked_on") continue;
     edges.set(`${String(e.payload.pred)}\n${String(e.payload.succ)}`, e.type === "edge_added");
   }
-  const merged = new Set(events.filter((e) => e.type === "pr_merged").map((e) => String(e.payload.pr)));
-  const preds = (succ: string) =>
-    [...edges.entries()].filter(([k, live]) => live && k.endsWith(`\n${succ}`)).map(([k]) => k.split("\n")[0] as string);
+  const merged = new Set(events.filter((e) => e.type === "pr_merged").map((e) => String(e.payload.pr).toLowerCase()));
+  const preds = (ref: string): StackNode[] => {
+    const succs = new Set([ref, ...(tasksOf.get(ref) ?? [])]);
+    return [...edges.entries()]
+      .filter(([k, live]) => live && succs.has(k.slice(k.indexOf("\n") + 1)))
+      .map(([k]) => {
+        const p = k.slice(0, k.indexOf("\n"));
+        const mapped = PR_REF.test(p.toLowerCase()) ? p.toLowerCase() : prOf.get(p);
+        return mapped ? { kind: "pr", id: mapped } : { kind: "task", id: p };
+      });
+  };
   const seen = new Set<string>();
-  const walk = (succ: string): string | null => {
-    for (const p of preds(succ)) {
-      if (merged.has(p) || seen.has(p)) continue;
-      seen.add(p);
-      return walk(p) ?? p;
+  const walk = (ref: string): StackNode | null => {
+    for (const p of preds(ref)) {
+      if (p.kind === "task") return p;
+      if (merged.has(p.id) || seen.has(p.id)) continue;
+      seen.add(p.id);
+      return walk(p.id) ?? p;
     }
     return null;
   };
   return walk(pr);
 }
+
+const PR_REF = /^[a-z0-9_.-]+\/[a-z0-9_.-]+#[1-9][0-9]*$/;
 
 async function reviewed(gh: GhClient, a: { repo: string; pr: string; head: string; base: string; events: readonly StoredEvent[] }): Promise<string> {
   const verdicts = a.events.filter((e) => e.type === "review_verdict" && e.payload.pr === a.pr);

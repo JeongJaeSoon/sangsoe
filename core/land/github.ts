@@ -75,14 +75,22 @@ export async function readLabels(gh: GhClient, repo: string, pr: number, pull: P
   return { kind: "ok", data: names.map((name) => ({ name, actor: actor.get(name) ?? null })) };
 }
 
-type Review = { user: { login: string } | null; state: string; commit_id: string };
+type Review = { user: { login: string } | null; state: string; commit_id: string; author_association?: string };
+
+const TRUSTED = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 type CheckRuns = { total_count: number; check_runs: { status: string; conclusion: string | null }[] };
 
 /**
  * Decision 81's re-call after approval: someone other than the author approved this head, nobody's
  * latest review asks for changes, GitHub calls the PR clean, and every check run on the head passed.
  */
-export async function approvedAndGreen(gh: GhClient, repo: string, pr: number, pull: Pull): Promise<Read<boolean>> {
+export async function approvedAndGreen(
+  gh: GhClient,
+  repo: string,
+  pr: number,
+  pull: Pull,
+  owners: readonly string[],
+): Promise<Read<boolean>> {
   if (pull.mergeable_state !== "clean") return { kind: "ok", data: false };
   const reviews = await pages<Review>(gh, (p) => `repos/${repo}/pulls/${pr}/reviews?per_page=100&page=${p}`, "reviews");
   if (reviews.kind !== "ok") return reviews;
@@ -90,7 +98,9 @@ export async function approvedAndGreen(gh: GhClient, repo: string, pr: number, p
   for (const r of reviews.data) if (r.user && r.state !== "COMMENTED") latest.set(r.user.login.toLowerCase(), r);
   const author = pull.user.login.toLowerCase();
   const states = [...latest.entries()].filter(([who]) => who !== author).map(([, r]) => r);
-  const approved = states.some((r) => r.state === "APPROVED" && r.commit_id === pull.head.sha);
+  const trusted = (r: Review) =>
+    TRUSTED.has(r.author_association ?? "") || owners.includes(r.user?.login.toLowerCase() ?? "");
+  const approved = states.some((r) => r.state === "APPROVED" && r.commit_id === pull.head.sha && trusted(r));
   if (!approved || states.some((r) => r.state === "CHANGES_REQUESTED")) return { kind: "ok", data: false };
   const runs = lift<CheckRuns>(await gh.get(`repos/${repo}/commits/${pull.head.sha}/check-runs?per_page=100`), "check runs");
   if (runs.kind !== "ok") return runs;
