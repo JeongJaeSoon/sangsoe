@@ -423,14 +423,14 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal): Promise<Read
 }
 
 /**
- * Workspaces on the PR's head branch. Orca lists full refs (`refs/heads/x`), GitHub the short name.
- * Orca's repo id does not name the GitHub repository, so a fork's head and a head named like the
- * base (`main` in every checkout) match nothing rather than every workspace on that name.
+ * Workspaces of this repository on the PR's head branch. Orca lists full refs (`refs/heads/x`) and
+ * `projectId: github:<owner>/<repo>`; a row without that id matches nothing. A fork's head (a deleted
+ * fork has `head.repo: null`) and a head named like the base match nothing either.
  */
-export function onBranchRows<W extends { branch: string; isArchived: boolean }>(rows: readonly W[], repo: string, p: ListedPull): W[] {
-  const headRepo = p.head.repo?.full_name?.toLowerCase();
-  if ((headRepo !== undefined && headRepo !== repo.toLowerCase()) || p.head.ref === p.base.ref) return [];
-  return rows.filter((w) => w.branch.replace(/^refs\/heads\//, "") === p.head.ref && !w.isArchived);
+export function onBranchRows<W extends { branch: string; isArchived: boolean; projectId?: string }>(rows: readonly W[], repo: string, p: ListedPull): W[] {
+  const own = repo.toLowerCase();
+  if (p.head.repo?.full_name?.toLowerCase() !== own || p.head.ref === p.base.ref) return [];
+  return rows.filter((w) => w.projectId?.toLowerCase() === `github:${own}` && w.branch.replace(/^refs\/heads\//, "") === p.head.ref && !w.isArchived);
 }
 
 async function onBranch(d: MonitorDeps, repo: string, p: ListedPull): Promise<boolean> {

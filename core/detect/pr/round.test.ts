@@ -25,7 +25,7 @@ const listed = (n: number, o: Record<string, unknown> = {}) => ({
   number: n,
   merged_at: null,
   user: { login: "alice" },
-  head: { sha: HEAD, ref: `feature-${n}` },
+  head: { sha: HEAD, ref: `feature-${n}`, repo: { full_name: REPO } },
   base: { ref: "main" },
   labels: [],
   ...o,
@@ -39,7 +39,7 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
   const refs: Record<string, unknown[]> = {};
   const dispatches: Record<string, { taskId: string; runId: string }> = {};
   const tasks = new Map<string, Task>();
-  const worktrees: { id: string; branch: string; isArchived: boolean; displayName: string }[] = [];
+  const worktrees: { id: string; projectId?: string; branch: string; isArchived: boolean; displayName: string }[] = [];
   const calls: string[] = [];
   const workerRows: { dispatchId: string; taskId: string; state: string; workspace: string }[] = [];
   const gh: GhClient = { get: async <T>(path: string) => (routes[path] ?? { kind: "error", status: 404, message: "Not Found" }) as GhResponse<T> };
@@ -316,21 +316,28 @@ test("pr_ready_to_merge: a merge_on_approval PR approved and green wakes its own
 test("scope: watch.authors and linked_only; a branch workspace Orca has not linked gets reference add", async () => {
   const w = world({ watch: { authors: ["alice"] } });
   w.routes[OPEN] = ok([listed(20, { user: { login: "mallory" } }), listed(21), listed(22)]);
-  w.worktrees.push({ id: "repo1::/w/22", branch: "refs/heads/feature-22", isArchived: false, displayName: "card 22" });
+  w.worktrees.push(
+    { id: "repo1::/w/22", projectId: `github:${REPO}`, branch: "refs/heads/feature-22", isArchived: false, displayName: "card 22" },
+    { id: "repo2::/w/22", projectId: "github:acme/web", branch: "refs/heads/feature-22", isArchived: false, displayName: "web 22" },
+  );
   const r = await w.round({ tier: () => null });
   assert.deepEqual(r.planned.filter((e) => e.type === "pr_opened").map((e) => e.payload.pr), ["acme/api#22"], "#20 another author, #21 linked nowhere");
-  assert.deepEqual(w.calls, [`reference add ${url(22)} id:repo1::/w/22`], "Orca's full ref matches GitHub's short head ref");
+  assert.deepEqual(w.calls, [`reference add ${url(22)} id:repo1::/w/22`], "full ref matches the short head ref; another repo's same branch does not");
 });
 
-test("a fork's head or a head named like the base matches no workspace", async () => {
+test("a fork's head, a deleted fork, a head named like the base, or a row without a GitHub project matches no workspace", async () => {
   const w = world();
   w.routes[OPEN] = ok([
     listed(23, { head: { sha: HEAD, ref: "feature-23", repo: { full_name: "someone/api" } } }),
     listed(24, { head: { sha: HEAD, ref: "main", repo: { full_name: REPO } } }),
+    listed(25, { head: { sha: HEAD, ref: "feature-25", repo: null } }),
+    listed(26),
   ]);
   w.worktrees.push(
-    { id: "repo1::/w/23", branch: "refs/heads/feature-23", isArchived: false, displayName: "x" },
-    { id: "repo1::/w/main", branch: "refs/heads/main", isArchived: false, displayName: "main" },
+    { id: "repo1::/w/23", projectId: `github:${REPO}`, branch: "refs/heads/feature-23", isArchived: false, displayName: "x" },
+    { id: "repo1::/w/main", projectId: `github:${REPO}`, branch: "refs/heads/main", isArchived: false, displayName: "main" },
+    { id: "repo1::/w/25", projectId: `github:${REPO}`, branch: "refs/heads/feature-25", isArchived: false, displayName: "y" },
+    { id: "repo3::/w/26", projectId: "repo:local-only", branch: "refs/heads/feature-26", isArchived: false, displayName: "z" },
   );
   const r = await w.round({ tier: () => null });
   assert.deepEqual(r.planned, []);
