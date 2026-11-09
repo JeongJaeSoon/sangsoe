@@ -26,7 +26,7 @@ export const ORCA_COMMANDS = {
     flags: ["json", "spec", "task-title", "deps", "parent", "run", "retry-request"],
     write: true,
   },
-  taskList: { path: ["orchestration", "task-list"], flags: ["json", "run", "status", "ready"] },
+  taskList: { path: ["orchestration", "task-list"], flags: ["json", "run", "status", "ready", "full"] },
   taskUpdate: {
     path: ["orchestration", "task-update"],
     flags: ["json", "id", "status", "result", "run", "retry-request"],

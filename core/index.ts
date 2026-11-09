@@ -19,6 +19,24 @@ export {
 export { nodeExec as approveExec, nodePorts, resolveCommit } from "./approve/ports.ts";
 export { recordReviewVerdict, reviewEvidenceFrom } from "./approve/review-verdict.ts";
 
+export type { CoreDeps, Refusal, Result } from "./notify/result.ts";
+export { reportAddress } from "./notify/address.ts";
+export { type Chain, type Notified, type NotifyInput, notify, type Tier, TIERS } from "./notify/notify.ts";
+export { decisionKey } from "./decision/key.ts";
+export { type DecisionOpened, type DecisionOpenInput, decisionOpen } from "./decision/open.ts";
+export { type DecisionAnswered, type DecisionAnswerInput, decisionAnswer } from "./decision/answer.ts";
+export { type DecisionMooted, type DecisionMootInput, decisionMoot, type MootEvidence } from "./decision/moot.ts";
+export { waiterReading } from "./decision/held.ts";
+export { defaultDeps } from "./decision/deps.ts";
+export {
+  decisionAnswerFrom,
+  decisionMootFrom,
+  decisionOpenFrom,
+  parseDecisionAnswer,
+  parseDecisionMoot,
+  parseDecisionOpen,
+} from "./decision/input.ts";
+
 export type * from "./contract/orca.ts";
 export { createOrcaAdapter, recoverWrite } from "./orca/adapter.ts";
 export { type CommandName, type CommandSpec, ORCA_COMMANDS } from "./orca/commands.ts";
@@ -42,6 +60,19 @@ export {
   readMergeConditions,
 } from "./gh/merge-conditions.ts";
 
+export * from "./start/index.ts";
+export {
+  capacity,
+  DEFAULT_THRESHOLDS,
+  judgeLoad,
+  type LoadLevel,
+  type LoadSample,
+  type LoadThresholds,
+  type LoadVerdict,
+  sampleLoad,
+} from "./capacity/capacity.ts";
+export { type RecoverPlan, type RecoverRow, recoverPlan, renderRecover } from "./recover/recover.ts";
+
 export {
   type LandAction,
   type LandConfig,
@@ -61,7 +92,7 @@ export {
   type DiffFile,
   parseTierConfig,
   requiredEvidence,
-  type Tier,
+  type Tier as VerifyTier,
   type TierConfig,
   type TierLabel,
   type TierVerdict,

@@ -1,0 +1,87 @@
+import { createOrcaAdapter, nodeExec, type Role, runSlots, type StartPorts, Store, startUnit } from "../../../core/index.ts";
+import type { Outcome, Refusal, ToolDef } from "../contract.ts";
+
+const DEFAULT_LIMIT = 4;
+const ROLES: readonly Role[] = ["orchestrator", "lead", "worker"];
+
+const invalid = (reason: string, fix: string): Outcome => ({ ok: false, refusal: { code: "invalid_input", reason, fix } });
+
+/** The handler's body with its ports passed in, so tests drive the tool with a fake Orca. */
+export async function handle(input: Record<string, unknown>, ports: StartPorts): Promise<Outcome> {
+  const s = (k: string) => (typeof input[k] === "string" && input[k] !== "" ? (input[k] as string) : undefined);
+  const list = (k: string) => (Array.isArray(input[k]) ? (input[k] as unknown[]).map(String) : undefined);
+  const taskId = s("taskId");
+  const task = s("task");
+  const spec = s("spec");
+  if (!task && !spec) return invalid("neither task nor spec was given", "pass task (an existing Task id) or spec (a new Task)");
+  const role = s("role");
+  const childRole = s("childRole");
+  if (!ROLES.includes(role as Role) || (childRole !== "lead" && childRole !== "worker")) {
+    return invalid(`role "${role}" or childRole "${childRole}" is not an allowed value`, "role: orchestrator|lead|worker, childRole: lead|worker");
+  }
+  const title = s("title");
+  const deps = list("deps");
+  const lateAnswers = list("lateAnswers");
+  // An existing Task's spec is already written; the answers would be dropped, so say so.
+  if (task && lateAnswers?.length) {
+    return invalid("lateAnswers go only into a new Task's first prompt", "omit task and pass spec with lateAnswers to create and start a new Task");
+  }
+  const references = list("references");
+  const out = await startUnit(ports, {
+    requester: { role: role as Role, worktreeId: s("worktreeId") ?? "", runId: s("runId") ?? "", ...(taskId ? { taskId } : {}) },
+    childRole,
+    task: task
+      ? { id: task }
+      : { spec: spec ?? "", ...(title ? { title } : {}), ...(deps ? { deps } : {}), ...(lateAnswers ? { lateAnswers } : {}) },
+    agent: s("agent") ?? "claude",
+    ...(references ? { references } : {}),
+  });
+  if (out.kind === "refused") {
+    const refusal: Refusal = {
+      code: out.reason,
+      reason: out.detail,
+      fix: "do not start the same work another way; the refusal was escalated, wait for the answer (decision 94)",
+    };
+    return { ok: false, refusal };
+  }
+  return { ok: true, value: out };
+}
+
+export default {
+  name: "start_unit",
+  description:
+    "Start one worker (or, for the orchestrator, a lead) on an item: the only way sangsoe opens a session. Refusals come back with their reason and are already escalated to whoever handed you the work.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      role: { type: "string", enum: ["orchestrator", "lead", "worker"], description: "Your own role." },
+      worktreeId: { type: "string", description: "Your own Orca worktree id; the new worktree is its child." },
+      taskId: { type: "string", description: "Your own Task id (lead or worker)." },
+      runId: { type: "string", description: "The Run you hold." },
+      childRole: { type: "string", enum: ["lead", "worker"] },
+      task: { type: "string", description: "An existing Task id to start. Omit to create one from spec." },
+      spec: { type: "string", description: "The new Task's brief, acceptance criteria included. A /goal line in it does not take effect on a worker." },
+      title: { type: "string" },
+      deps: { type: "array", items: { type: "string" } },
+      lateAnswers: {
+        type: "array",
+        items: { type: "string" },
+        description: "Answers that arrived after the last worker ended; only with spec (a new Task), added to its first prompt.",
+      },
+      references: { type: "array", items: { type: "string" }, description: "Ticket URLs." },
+      agent: { type: "string", description: "Orca agent id, default claude." },
+    },
+    required: ["role", "worktreeId", "runId", "childRole"],
+    additionalProperties: false,
+  },
+  async handler(input) {
+    const orca = createOrcaAdapter(nodeExec(180_000));
+    const store = Store.open();
+    const runId = typeof input.runId === "string" ? input.runId : "";
+    try {
+      return await handle(input, { orca, store, slots: () => runSlots(orca, runId, DEFAULT_LIMIT), source: "mcp:start_unit" });
+    } finally {
+      store.close();
+    }
+  },
+} satisfies ToolDef;

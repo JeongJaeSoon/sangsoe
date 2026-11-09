@@ -15,7 +15,7 @@ import {
 } from "./index.ts";
 
 // Appendix #signal-flow "event 이름 전체", every writer's row, plus the names decisions 82·83·85·86·88·91
-// added there. plugin_approved (U3, split Q12) and start_refused (U22, decision 94) are added by their units.
+// added there. plugin_approved (U3, split Q12) is added by its unit; start_refused is a `signal` kind (decision 94 (바)).
 const SPEC_TYPES = [
   ...["waiting_human", "turn_ended", "worker_idle", "loop_detected", "session_started", "gate_denied"],
   ...["worker_stuck", "worker_dead", "compacted", "waiting_released", "owner_action", "evidence", "owner_act_unlinked"],

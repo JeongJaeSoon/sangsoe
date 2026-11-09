@@ -31,8 +31,8 @@ test("(1) an empty tool and an empty command are collected and run", async () =>
   assert.deepEqual(await run(["empty"], { commands: dirs.commands }), { code: 0, out: "null" });
 });
 
-test("(1) the shipped folders collect: the land tool, the version command", async () => {
-  assert.deepEqual([...(await createServer()).tools.keys()], ["land"]);
+test("(1) the shipped folders collect: the shipped tools, the version command", async () => {
+  assert.deepEqual([...(await createServer()).tools.keys()], ["decision_answer", "decision_open", "item_create", "land", "start_unit"]);
   assert.deepEqual(await run(["--version"]), { code: 0, out: `sangsoe ${VERSION}` });
 });
 
@@ -187,5 +187,9 @@ test("the server answers initialize and tools/list over stdio", async () => {
     },
   });
   const listed = lines[1] as { id: number; result: { tools: { name: string }[] } };
-  assert.deepEqual([listed.id, listed.result.tools.map((t) => t.name)], [2, ["land"]]);
+  assert.equal(listed.id, 2);
+  assert.deepEqual(
+    listed.result.tools.map((t) => t.name),
+    ["decision_answer", "decision_open", "item_create", "land", "start_unit"],
+  );
 });
