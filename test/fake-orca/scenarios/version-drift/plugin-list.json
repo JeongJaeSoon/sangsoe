@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "result": {
+    "plugins": [
+      {
+        "pluginKey": "local.sangsoe",
+        "consentFingerprint": "sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
+        "name": "sangsoe",
+        "version": "0.0.9",
+        "status": "running",
+        "needsReconsent": false,
+        "isDev": true
+      }
+    ]
+  }
+}

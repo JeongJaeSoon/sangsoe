@@ -1,6 +1,6 @@
 {
   "name": "sangsoe",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0-rc.2",
   "description": "Orchestration for Claude Code sessions on Orca",
   "private": true,
   "type": "module",
@@ -14,6 +14,7 @@
     "claude-plugin/",
     "!claude-plugin/agents/README.md",
     "orca-plugin/",
+    "build-info.json",
     "!**/*.test.ts"
   ],
   "engines": {

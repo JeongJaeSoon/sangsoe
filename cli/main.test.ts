@@ -33,7 +33,7 @@ const touchless = (): Host => ({
   nodeVersion: "26.0.0",
 });
 
-for (const argv of [["install", "--help"], ["uninstall", "-h"], ["doctor", "--help"], ["--help"]]) {
+for (const argv of [["install", "--help"], ["uninstall", "-h"], ["doctor", "--help"], ["plugin", "approve", "--help"], ["--help"]]) {
   test(`${argv.join(" ")} prints usage and touches nothing`, async () => {
     const r = await run(argv, { host: touchless() });
     assert.equal(r.code, 0);
@@ -41,7 +41,7 @@ for (const argv of [["install", "--help"], ["uninstall", "-h"], ["doctor", "--he
   });
 }
 
-for (const argv of [["install", "--bogus"], ["uninstall", "now"], ["doctor", "--online"]]) {
+for (const argv of [["install", "--bogus"], ["uninstall", "now"], ["doctor", "--online"], ["plugin", "approve", "--bogus"], ["plugin", "approve", "--dir"]]) {
   test(`${argv.join(" ")} exits 2 and touches nothing`, async () => {
     const r = await run(argv, { host: touchless() });
     assert.equal(r.code, 2);
