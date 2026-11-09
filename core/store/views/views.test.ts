@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import type { StoredEvent, ViewInput, Views } from "../../contract/index.ts";
+import { answerNotifiedKey, type StoredEvent, type ViewInput, type ViewTask, type Views } from "../../contract/index.ts";
 import { decision } from "./decision.ts";
 import { item_timeline } from "./item_timeline.ts";
 
@@ -68,6 +68,27 @@ test("decision folds open → joined → answered; a late answer does not replac
     ],
   });
   assert.deepEqual([moot[0]?.state, moot[0]?.closedReason, moot[0]?.answer], ["closed", "moot", null]);
+});
+
+test("an answer closed by decision_closed{answered} stays undelivered until each waiter has it (91④)", () => {
+  const closed = [...events, ev("decision_closed", { decision: "d001", reason: "answered" })];
+  const t2 = (status: ViewTask["status"], result?: string): ViewTask => ({ id: "t2", runId: "r2", status, deps: [], ...(result ? { result } : {}) });
+  const at = (extra: StoredEvent[], gates: { id: string; taskId: string; open: boolean }[], t2Task: ViewTask = t2("blocked")) => {
+    const base = input(gates);
+    return decision({ ...base, orca: { ...base.orca, tasks: [...base.orca.tasks, t2Task] }, events: [...closed, ...extra] })[0];
+  };
+  const g2Open = [{ id: "g2", taskId: "t2", open: true }];
+  assert.equal(at([], g2Open)?.state, "closed");
+  assert.equal(at([], g2Open)?.undelivered, true, "closed by the answer while t2's gate is still open");
+  assert.equal(at([], [{ id: "g2", taskId: "t2", open: false }])?.undelivered, false, "every waiter's gate is resolved");
+  // 91④(ii): a closed Task keeps its gate open on purpose; its Run told under the answer key is the delivery.
+  const told = ev("notified", { msg_id: "m1", to: "run:r2", msg_type: "decision_gate" }, { target: "t2", dedupe_key: answerNotifiedKey("d001", "t2").dedupe_key });
+  assert.equal(at([told], g2Open, t2("completed"))?.undelivered, false, "t2 is completed and its Run was told the answer");
+  assert.equal(at([told], g2Open, t2("failed", "cancelled"))?.undelivered, false, "t2 is cancelled and its Run was told the answer");
+  // A live Task told by SessionStart's injection still holds an open gate: decision_answer must be re-called.
+  assert.equal(at([told], g2Open)?.undelivered, true, "t2 is still live, so its open gate is not delivered");
+  const otherKey = ev("notified", { msg_id: "m2", to: "run:r2", msg_type: "decision_gate" }, { target: "t2", dedupe_key: answerNotifiedKey("d009", "t2").dedupe_key });
+  assert.equal(at([otherKey], g2Open, t2("completed"))?.undelivered, true, "a notice about another decision is not this delivery");
 });
 
 test("item_timeline keeps the item's own rows, its PR and decision signals, and drops noise (5)", () => {

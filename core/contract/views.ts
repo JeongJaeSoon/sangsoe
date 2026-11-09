@@ -89,7 +89,7 @@ export interface DecisionRow {
   readonly linkedBy: string | null;
   readonly closedReason: "answered" | "moot" | null;
   readonly waiters: readonly { readonly task: string; readonly gate: string | null }[];
-  /** Answered but a waiter's gate is still open in Orca: the answer is not delivered yet. */
+  /** Answered (closed by the answer included) and some waiter has neither its gate resolved nor its notified row. */
   readonly undelivered: boolean;
 }
 

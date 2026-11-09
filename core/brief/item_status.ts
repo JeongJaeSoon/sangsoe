@@ -1,14 +1,6 @@
-import type {
-  DecisionRow,
-  ItemState,
-  ItemStatusRow,
-  ItemStatusView,
-  StoredEvent,
-  ViewGate,
-  ViewInput,
-  WaitsOn,
-} from "../contract/index.ts";
+import type { ItemState, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, WaitsOn } from "../contract/index.ts";
 import { waiterReading } from "../decision/held.ts";
+import { countsAsEvidence } from "../owner/marks.ts";
 import { decision } from "../store/views/decision.ts";
 import { depsGraph, type GraphRead } from "./graph.ts";
 import type { BriefTask } from "./types.ts";
@@ -45,17 +37,6 @@ export interface ItemFacts {
 
 const ALARMS = new Set(["worker_stuck", "worker_dead", "ci_failed", "land_failed", "loop_detected", "decision_untracked"]);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
-/**
- * "Answered but a waiter's gate is still open". The decision view sets `undelivered` only while the
- * row is `answered`, but decisionAnswer writes decision_closed{answered} right after the answer, so a
- * closed-by-answer row with an open waiter gate is undelivered too.
- */
-export function isUndelivered(d: DecisionRow, gates: readonly ViewGate[]): boolean {
-  if (d.undelivered) return true;
-  if (d.closedReason !== "answered") return false;
-  const open = new Set(gates.filter((g) => g.open).map((g) => g.id));
-  return d.waiters.some((w) => w.gate !== null && open.has(w.gate));
-}
 
 const RANK: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
 export const rank = (p: Priority): number => RANK[p];
@@ -106,7 +87,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = depsGraph): ItemF
     } else if (e.type === "pr_merged" || e.type === "pr_closed") {
       const t = prTask.get(String(p.pr));
       if (t && prOpen.get(t) === p.pr) prOpen.delete(t);
-    } else if (e.type === "evidence" && e.entity === "task" && e.entity_id) evidence.add(e.entity_id);
+    } else if (countsAsEvidence(e) && e.entity === "task" && e.entity_id) evidence.add(e.entity_id);
     else if (e.type === "trigger_unclear") unclear.set(String(p.task), e.seq);
     if (ALARMS.has(e.type)) {
       const t = taskOf(e, prTask);
@@ -128,7 +109,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = depsGraph): ItemF
     const last = moved.get(t.id) ?? 0;
     // An alarm stands until the item moves again.
     const standing = [...(alarms.get(t.id) ?? new Map<string, number>())].filter(([, seq]) => seq > last).map(([type]) => type);
-    const undelivered = own.filter((d) => isUndelivered(d, input.orca.gates)).map((d) => d.decision);
+    const undelivered = own.filter((d) => d.undelivered).map((d) => d.decision);
     const waitsOn = (openDecisions.length > 0 || undelivered.length > 0 ? "owner" : (str(x.waits_on) as WaitsOn | null)) ?? null;
     out.push({
       task: t.id,
