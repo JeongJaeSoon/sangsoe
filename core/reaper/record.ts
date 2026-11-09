@@ -12,7 +12,16 @@ type Appender = { append(e: NewEvent<"resource"> | NewEvent<"reap_blocked">): Ap
 const refusal = (reason: string, fix: string, code = "invalid_input") => ({ ok: false, refusal: { code, reason, fix } }) as const;
 
 /** Who holds one recorded Docker name now. `gen` counts how often it was let go, so a re-made name gets new keys. */
-export type Hold = { kind: DockerKind; ref: string; owner: string; held: boolean; gen: number; createdSeq: number };
+export type Hold = {
+  kind: DockerKind;
+  ref: string;
+  owner: string;
+  held: boolean;
+  /** Two owners claimed the name: no one holds it again, so REAPER never sweeps it. */
+  contested: boolean;
+  gen: number;
+  createdSeq: number;
+};
 
 /**
  * Folds the record of every Docker name in seq order. A hold ends when its owner releases it, when
@@ -27,13 +36,12 @@ export function dockerHolds(events: readonly StoredEvent[]): Map<string, Hold> {
     const p = e.payload as { action?: string; kind: string; ref: string; owner?: string; reason?: string };
     if (!isDockerKind(p.kind)) continue;
     const k = `${p.kind}\n${p.ref}`;
-    const h = holds.get(k) ?? { kind: p.kind, ref: p.ref, owner: "", held: false, gen: 0, createdSeq: 0 };
+    const h = holds.get(k) ?? { kind: p.kind, ref: p.ref, owner: "", held: false, contested: false, gen: 0, createdSeq: 0 };
     holds.set(k, h);
-    const ends =
-      (e.type === "resource" && p.action === "released") ||
-      e.type === "reap_done" ||
-      (e.type === "reap_blocked" && p.reason === "in_use");
-    if (e.type === "resource" && p.action === "created" && !h.held) {
+    const inUse = e.type === "reap_blocked" && p.reason === "in_use";
+    const ends = (e.type === "resource" && p.action === "released") || e.type === "reap_done" || inUse;
+    if (inUse && e.source === "resource_record") h.contested = true;
+    if (e.type === "resource" && p.action === "created" && !h.held && !h.contested) {
       Object.assign(h, { owner: p.owner ?? "", held: true, createdSeq: e.seq });
     } else if (ends && h.held) {
       Object.assign(h, { held: false, gen: h.gen + 1 });
@@ -76,6 +84,7 @@ export function recordResource(store: Appender, input: ResourceInput): Result<Re
     return refusal(`${kind} ${ref} is not held by ${owner}`, "only the owner that recorded it releases it");
   }
   if (hold?.held && hold.owner !== owner) return contested(store, hold);
+  if (hold?.contested) return contestedRefusal(hold);
   const a = store.append({
     type: "resource",
     source: "resource_record",
@@ -102,6 +111,10 @@ function contested(store: Appender, h: Hold): Result<never> {
     payload: { kind: h.kind, ref: h.ref, reason: "in_use" },
     dedupe_key: blockedKey(h.kind, h.ref, h.gen),
   });
+  return contestedRefusal(h);
+}
+
+function contestedRefusal(h: Hold): Result<never> {
   return refusal(
     `${h.kind} ${h.ref} is already recorded for another owner; it is now left for a person, not swept`,
     "use a name of your own (another compose project name)",

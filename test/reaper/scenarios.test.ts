@@ -251,6 +251,11 @@ test("reap_docker_order: a name a second owner also claims is refused and never 
   const other = recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-second" });
   assert.equal(!other.ok && other.refusal.code, "held_by_other");
   assert.deepEqual(w.types("reap_blocked"), [{ kind: "volume", ref: "shared_data", reason: "in_use" }]);
+  for (const owner of ["inst-second", "inst-first"]) {
+    const again = recordResource(w.store, { kind: "volume", ref: "shared_data", owner });
+    assert.equal(!again.ok && again.refusal.code, "held_by_other", `${owner} cannot take a contested name back`);
+  }
+  assert.equal(w.types("resource").length, 1);
   await rounds(w, 4);
   assert.equal(rms(w).length, 1, "the first owner's card goes");
   assert.ok(!w.docker.calls.some((c) => c.startsWith("volume")), "the shared volume is not touched");
