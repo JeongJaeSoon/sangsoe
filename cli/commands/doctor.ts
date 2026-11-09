@@ -6,5 +6,8 @@ export default {
   summary: "check the install; --offline checks only the installed tree",
   usage: "[--offline]",
   options: { offline: { type: "boolean" } },
-  run: ({ values, host }) => doctor(host, treeRoot(host), { offline: values.offline === true }),
+  run: ({ values, host, checkContext }) => {
+    const root = treeRoot(host);
+    return doctor(host, root, values.offline === true ? { offline: true } : { ctx: checkContext(root) });
+  },
 } satisfies CommandDef;

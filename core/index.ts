@@ -4,7 +4,7 @@ export * from "./store/checks.ts";
 export * from "./store/store.ts";
 export { decision } from "./store/views/decision.ts";
 export { item_timeline } from "./store/views/item_timeline.ts";
-export { doctor } from "./install/doctor.ts";
+export { doctor, realCheckContext } from "./install/doctor.ts";
 export { type Host, realHost, treeRoot } from "./install/host.ts";
 export { install, type Outcome, uninstall } from "./install/install.ts";
 export { VERSION } from "./version.ts";
@@ -47,7 +47,9 @@ export {
   type CheckContext,
   type CheckResult,
   type CheckStatus,
+  DOCTOR_CHECKS,
   doctorReport,
+  type PluginBuild,
   REQUIRED_CAPABILITIES,
   runChecks,
   START_CHECKS,
