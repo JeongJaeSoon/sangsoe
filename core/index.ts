@@ -52,6 +52,8 @@ export {
   parseDecisionOpen,
 } from "./decision/input.ts";
 
+export * from "./session/index.ts";
+
 export type * from "./contract/orca.ts";
 export { createOrcaAdapter, recoverWrite } from "./orca/adapter.ts";
 export { type CommandName, type CommandSpec, ORCA_COMMANDS } from "./orca/commands.ts";

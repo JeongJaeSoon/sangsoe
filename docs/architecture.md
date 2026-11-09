@@ -22,6 +22,7 @@
 | 실행 | `core/recover/` | X | ④ 공유 코어 | `sangsoe recover` 의 읽기 전용 표(결정 80 N4) |
 | 실행 | `core/decision/` | X | ④ 공유 코어 | 결정 루프: `decision_open`(재질문 게이트) · `decision_answer` · `moot` 닫기 · 결정 84③ 읽기 |
 | 실행 | `core/notify/` | X | ④ 공유 코어 | `notify`: Orca 메시지 한 번 + `notified`, 받는 순서 · `term_` 거부 |
+| 감지 | `core/session/` | X | ④ 공유 코어 | 기록 hook 일곱의 판정(`session_started` · `owner_action` · `waiting_human`/`waiting_released` · `turn_ended` · `compacted` · `!` 입력), SessionStart 주입, `restart_due`, `handoff_save` · `review_ask_record` |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
 | 실행 | `orca-plugin/reaper/` | X | ② Orca plugin | REAPER 라운드 타이머 |
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |
