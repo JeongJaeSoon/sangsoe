@@ -1,6 +1,23 @@
 # sangsoe
 
-Orchestration for Claude Code sessions on Orca. Work in progress; install instructions will follow.
+Orchestration for Claude Code sessions on Orca. Work in progress: pre-releases (`v0.1.0-rc.N`) only.
+
+## Install
+
+macOS with Homebrew, Claude Code and Orca:
+
+```sh
+brew install JeongJaeSoon/tap/sangsoe
+sangsoe install      # registers the Claude Code plugin and the Orca plugin; safe to re-run
+sangsoe doctor       # ok / FAIL (with the fix) / not yet, per item
+```
+
+When `sangsoe install` reports that the Orca plugin waits for approval, run `sangsoe plugin approve`. Open a new Claude Code session to pick up the plugin.
+
+Update: `brew upgrade sangsoe && sangsoe install`.
+Remove: `sangsoe uninstall`, then `brew uninstall sangsoe`. Neither deletes `~/.local/share/sangsoe` (data) or `~/.config/sangsoe` (settings).
+
+`sangsoe install` registers with the Claude Code configuration it runs under (`CLAUDE_CONFIG_DIR`, or `~/.claude`). Homebrew itself writes nothing to your home directory.
 
 ## Layout
 

@@ -1,0 +1,9 @@
+# 105. 승인 조건 (2) 는 폴더 내용 해시로 읽는다
+
+결정 77 다의 조건 (2) "`orca plugin inspect` 의 지문이 리뷰된 커밋 빌드와 같음"을 바꾼다. Orca 1.4.250 에서 확인한 것: `orca plugin inspect` 는 지문을 내지 않고 폴더의 `contentHash` 를 낸다. 승인 지문(`ap1-…`)은 `orca plugin dev load`·`dev reload` 의 `approval_required` 가 내며, 개발 폴더에서는 그 지문이 파일 내용이 아니라 경로(`contentIdentity: dev:<폴더>`)와 접근에 묶인다. Orca 문구 그대로 "이 개발 폴더의 이후 코드 수정은 다시 묻지 않고 돈다. 새 접근·더 높은 실행 단계·바뀐 명령과 단축키만 새 승인이 든다".
+
+그래서 조건 (2) 는 "승인할 폴더의 `contentHash` 가 main 의 빌드 커밋 트리와, 그 커밋을 main 으로 머지한 PR 의 리뷰된 head 트리, 둘 다의 `orca-plugin/` `contentHash` 와 같다"로 읽는다(squash 나 리뷰 뒤 main 병합으로 리뷰 안 된 바이트가 끼지 않게). 두 트리는 `gh api repos/<repo>/tarball/<commit>` 로 받아 같은 `orca plugin inspect` 로 잰다(내용만 같으면 해시가 같다: `git archive` 사본과 작업 트리가 같은 값을 냈다). 커밋은 그 폴더를 추적하는 깨끗한 git checkout 이면 HEAD, 아니면 릴리스 워크플로가 plugin 폴더 **옆**에 쓰는 `build-info.json` 의 `commit`(`$GITHUB_SHA`, 폴더 안에 두면 내용 해시가 리뷰된 트리와 달라진다)이다. Homebrew prefix 처럼 폴더를 무시하는 저장소 안에 있을 뿐이면 git 은 보지 않는다. 릴리스 워크플로는 main 위에 없는 커밋의 태그를 거부한다(그런 빌드는 조건 (1) 에서 떨어져 승인할 수 없다). 지문 자체는 Orca 가 준 값을 그대로 `--approve` 에 넘긴다.
+
+남는 틈: 승인이 경로에 묶이므로 승인 뒤 같은 경로의 내용이 바뀌어도(`brew upgrade` 가 `opt/sangsoe` 아래를 바꿔도) Orca 는 다시 묻지 않는다. T4 가 확인했다: 코드 수정과 `version` 올림은 `needsReconsent=false` 로 계속 돌고, 능력을 더할 때만 `pending`·`needsReconsent=true` 가 된다. 승인 시점의 검사만으로는 그 뒤의 내용을 지키지 못하므로, 시작 점검·`doctor`·queue-monitor 의 `job_drift` 가 같은 내용 해시 비교를 되풀이해야 한다(T4 행과 worker_done 의 발견 항목). 다만 그 비교는 이미 돈 코드를 되돌리지 못한다.
+
+`approve` 는 enable 직전에 내용을 한 번 더 재서 실행 중 `brew upgrade` 같은 우연한 겹침을 막는다. 두 번째 측정과 enable 사이에 같은 사용자 권한으로 폴더를 바꾸는 경쟁은 막지 못한다. 그 권한이면 `approve` 없이 `dev reload`·`enable` 을 직접 부를 수 있으므로 `approve` 는 그 상대에 대한 경계가 아니다. `approve` 는 운영자가 켜는 코드가 리뷰된 코드인지를 보는 검사다. 이 틈과 위 경로 틈을 함께 닫는 방법은 리뷰된 바이트를 내용 주소 경로의 사본(`<data>/plugin/<contentHash>/`, 쓰기 금지)으로 옮기고 그 경로를 승인하는 것이다. 그러면 Orca 가 읽는 경로가 설치 폴더에서 사본으로 바뀌어 U4 의 설치 배치와 doctor 의 비교 대상이 달라지므로, U4 가 설치 배치를 정할 때(오케스트레이터가 하는 brew 경로 승인 전) 정한다. `opt`·`Cellar` 경로를 승인하는 것이 이 그림을 바꾸는지는 U24 가 다시 본다(프로그램 리드 결정: U3 에서는 사본을 만들지 않는다).
