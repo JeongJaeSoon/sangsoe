@@ -184,6 +184,7 @@ test("applyImport: a decision whose gate-create failed is opened on the re-run, 
   assert.deepEqual(again.value.created, { items: 0, decisions: 1, edges: 0 });
   assert.equal(w.gates.size, 1);
   assert.equal(w.store.events({ type: "decision_opened" }).length, 1);
+  assert.equal([...w.tasks.values()].filter((t) => t.run === "run_o").length, 1);
 });
 
 test("sangsoe migrate: dry run by default, no Orca call, no store created, no titles; --apply needs --run", async () => {
