@@ -23,3 +23,8 @@
 | P11 | U15 | | | | | |
 | P12 | U13 | | | | | |
 | P13 | U13 | | | | | |
+| T3 2차 | U19 | 2026-11-10 | `orca plugin test .`(저장소 뿌리) · `PANEL_PREVIEW_DIR=<scratch> node --test --test-name-pattern preview test/panel/panel.test.ts` 뒤 headless Chrome `--dump-dom`·`--screenshot`(360px · 1280px, 라이트·다크) | `orca plugin test .`: tests 417 · pass 415 · fail 0 · skipped 2(패널 시험 포함). 넓은 화면 데이터 행 높이 1단계 `{"40":20}` · 2단계 `{"40":7}`(SVG DAG 1) · 3단계 `{"40":6}`, 360px 은 행이 블록 하나로 접혀 내용만큼(57–97px). 색 토큰 13개가 시안과 같아 시안 README 의 대비(최저 4.69)가 그대로다 | 통과(패널 구조·행 높이·SVG). Orca 안 새 패널 화면은 미실행: `shot --act` 가 html 패널을 거부하고, 이 Mac 의 `local.sangsoe` 는 오너의 개발 폴더라 바꿔 끼우지 않았다. html 패널의 인라인 SVG 는 T3 1차가 Orca 안에서 보였다 | 없음(결정 137) |
+| PN1 | U3 | 2026-11-10 | T1 · T2 · T4 행 | 승인된 worker 가 돈다(위 세 행) | 통과(U3) | 없음 |
+| PN2 | U19 | 2026-11-10 | `node --test test/panel/panel.test.ts` | 1·2·3단계에서 그린 `<tr data-id>` 목록 = 모델 표의 `Row.id` 목록(순서 포함). `lead:` 행 → `{group}`, 항목 행 → `{item}` 이고 모든 내려가기 목표를 코어가 연다 | 통과 | 없음 |
+| PN3 | U19(+U9) | 2026-11-10 | 같은 시험 · `test/brief/todo-count.test.ts` | 상태 표시줄 `🚧${summary.blocked} · 결정${todo.decisions} · 🔄${summary.doing}` 가 `renderMarkdown` 의 건수 줄 · `renderTodo` · 패널 머리 줄의 `내가 할 일` 과 같은 필드, 다섯 자리 수에도 64자 이하, `todo.total>0` 이면 `danger` | 통과 | 없음 |
+| PN4 | U19 | 2026-11-10 | 같은 시험(가짜 Orca world) | "추천대로 답" → `owner_action{origin: button, source: plugin:panel}` 1줄 → `decisionAnswer`(CLI·MCP 와 같은 함수) → `decision_answered{linked_by: button}`. 패널은 Run 이 없어 게이트를 풀지 않고 그 Run 에 handoff 1통. "완료" 는 U14 의 `ownerDone` 이 이 base 에 없어 `not_available` 거부, 아무것도 안 씀 | 결정 버튼: 통과. 완료 버튼: 미실행(U14 미머지, 같은 꼴의 포트만) | 없음(결정 136) |
