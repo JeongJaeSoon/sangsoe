@@ -16,6 +16,7 @@
 | 실행 | `core/checks/` | X | ④ 공유 코어 | 시작 점검과 `doctor` 의 점검 함수(점검 하나 = 파일 하나) |
 | 실행 | `core/install/` | X | ④ 공유 코어 | install · uninstall · doctor |
 | 실행 | `core/approve/` | X | ④ 공유 코어 | `sangsoe plugin approve` 의 세 조건 검사와 `orca plugin enable` 을 부르는 유일한 자리 |
+| 실행 | `core/gates/` | X | ④ 공유 코어 | 막는 hook 의 판정 함수: 게이트 4종 · 시작 가드 · 모양 검사 · 합치기 · `gate_denied` 기록 |
 | 실행 | `core/start/` | X | ④ 공유 코어 | 세션을 여는 유일한 시작 함수(Task + Dispatch + new-child lineage)와 lineage·깊이 검사, `unit_lineage_complete` 읽기(결정 94) |
 | 실행 | `core/capacity/` | X | ④ 공유 코어 | 부하 판정 함수 하나(압박 게이트·resource-monitor·REAPER·`capacity` 공용, 결정 83) |
 | 실행 | `core/recover/` | X | ④ 공유 코어 | `sangsoe recover` 의 읽기 전용 표(결정 80 N4) |
