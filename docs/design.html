@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sangsoe 설계안</title>
+<style>
+  :root { color-scheme: light dark;
+    --fg:#1d2330; --mut:#586174; --line:#d9dee7; --bg:#ffffff; --soft:#f6f8fb; --code:#eef1f6;
+    --llm:#c2410c; --llmbg:#fff1e6; --scr:#047857; --scrbg:#e7f8f0;
+    --ink:#1d4ed8; --owner:#475467; --warn:#b42318; --boxline:#bcd4fb; --boxbg:#f5f9ff; }
+  @media (prefers-color-scheme: dark) { :root {
+    --fg:#e6e9ef; --mut:#a3adbf; --line:#343c4d; --bg:#161b26; --soft:#0f131b; --code:#232a3a;
+    --llm:#fdba74; --llmbg:#3a2616; --scr:#6ee7b7; --scrbg:#10302a;
+    --ink:#93c5fd; --owner:#b6c0d2; --warn:#fca5a5; --boxline:#2c4a7a; --boxbg:#16233a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.6 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; color:var(--fg); background:var(--soft); }
+  main { max-width:1180px; margin:0 auto; padding:24px; }
+  p, ul, ol { margin:12px 0; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:17px; margin:0 0 16px; padding-bottom:12px; border-bottom:2px solid var(--line); }
+  h3 { font-size:15px; margin:24px 0 8px; }
+  h2 + p, h2 + table { margin-top:0; }
+  section { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:16px 20px; margin:16px 0; }
+  a { color:var(--ink); }
+  .sub, .note { color:var(--mut); }
+  .note { font-size:12.5px; margin:8px 0; }
+  .lead { margin:0 0 12px; }
+  .more { font-size:12.5px; color:var(--mut); margin:12px 0 0; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th, td { border-bottom:1px solid var(--line); padding:8px 12px; text-align:left; vertical-align:top; }
+  th { background:var(--code); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; }
+  td code { overflow-wrap:anywhere; }
+  code { font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background:var(--code); padding:0 4px; border-radius:3px; }
+  .b { display:inline-block; padding:0 8px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; border:1px solid var(--line); }
+  .llm { background:var(--llmbg); color:var(--llm); border-color:var(--llm); }
+  .scr { background:var(--scrbg); color:var(--scr); border-color:var(--scr); }
+  .v-use, .v-later, .v-no { background:var(--code); color:var(--fg); border-color:var(--mut); }
+  .v-use { font-weight:700; }
+  .v-later { border-style:dashed; }
+  .v-no { border-style:dotted; color:var(--mut); font-weight:500; }
+  .c1 { background:#f1eaff; color:#6d28d9; border-color:#6d28d9; }
+  .c2, .c4 { background:var(--scrbg); color:var(--scr); border-color:var(--scr); }
+  .c3 { background:var(--llmbg); color:var(--llm); border-color:var(--llm); }
+  @media (prefers-color-scheme: dark) { .c1 { background:#2a1f45; color:#a78bfa; border-color:#a78bfa; } }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns:1fr; } }
+  .box { border:1px solid var(--boxline); background:var(--boxbg); border-radius:8px; padding:12px 16px; }
+  .box ul { margin:4px 0; padding-left:20px; }
+  .box li { margin:4px 0; }
+  .toc { margin:4px 0; padding-left:20px; }
+  li a, td a, th a, .lg-i a { text-decoration:none; }
+  li a:hover, td a:hover, th a:hover, .lg-i a:hover, li a:focus-visible, td a:focus-visible, .lg-i a:focus-visible { text-decoration:underline; }
+  @media (max-width: 600px) {
+    main { padding:12px; }
+    section { padding:12px 12px; }
+    table { display:block; overflow-x:auto; }
+    code { overflow-wrap:anywhere; }
+  }
+  figure { margin:12px 0; border:1px solid var(--line); border-radius:8px; padding:12px 16px; background:var(--soft); }
+  figure img { display:block; width:100%; height:auto; }
+  figcaption { font-size:12.5px; color:var(--mut); margin-top:8px; }
+  :root { --d-scr:#047857; --d-scrbg:#e7f8f0; --d-llm:#c2410c; --d-llmbg:#fff1e6; --d-ext:#475467; --d-extbg:#f2f4f7; --d-own:#1d4ed8; --d-ownbg:#e8f0ff; --d-orc:#6d28d9; --d-orcbg:#f1eaff; --d-line:#667085; }
+  @media (prefers-color-scheme: dark) { :root { --d-scr:#10b981; --d-scrbg:#0f2d26; --d-llm:#f97316; --d-llmbg:#38200f; --d-ext:#98a2b3; --d-extbg:#242b38; --d-own:#3b82f6; --d-ownbg:#14233f; --d-orc:#a78bfa; --d-orcbg:#2a1f45; --d-line:#98a2b3; } }
+  .legend { margin:12px 0; border:1px solid var(--line); border-radius:8px; padding:8px 16px; background:var(--bg); font-size:12.5px; }
+  .lg-row { display:flex; flex-wrap:wrap; gap:4px 16px; align-items:center; margin:4px 0; }
+  .lg-i { display:inline-flex; align-items:center; gap:8px; }
+  .sw { display:inline-block; width:22px; height:14px; border-radius:4px; border:2px solid; }
+  .sw-scr { border-color:var(--d-scr); background:var(--d-scrbg); }
+  .sw-llm { border-color:var(--d-llm); background:var(--d-llmbg); }
+  .sw-ext { border-color:var(--d-ext); background:var(--d-extbg); }
+  .sw-own { border-color:var(--d-own); background:var(--d-ownbg); }
+  .sw-orc { border-color:var(--d-orc); background:var(--d-orcbg); }
+  .sw-dash { border-style:dashed; }
+  .ln { display:inline-block; width:30px; border-top:2px solid var(--d-line); }
+  .ln-w { border-top-style:dashed; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:8px; padding:12px 16px; overflow:auto; font:12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin:8px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>sangsoe 설계안</h1>
+<p class="sub">상쇠(sangsoe, [sang-soe])는 풍물패 앞에서 꽹과리 신호로 패를 이끄는 사람이다. 이 한 장이 통합 설계안이고 처음부터 읽으면 된다: 무엇을 만드는가 → 네 칸 배치 → 컴포넌트 → 데이터 → 흐름 → 구현 순서와 전환. 각 절은 결론과 이유를 본문에 쓰고, 상세는 부록에 링크한다. 부록: <a href="design-appendix.html">design-appendix.html</a>(스키마·역할 카드·전달 규칙·기존 설계 조사) · <a href="decisions.md">decisions.md</a>(결정 전체) · <a href="glossary.md">glossary.md</a>(용어집, 용어의 정본) · <a href="port-plan.md">port-plan.md</a>(agent-skills 에서 무엇을 참조하나) · <a href="dashboard/README.md">dashboard/</a>(패널 시안).</p>
+
+<section id="what">
+<h2>1. 무엇을 만드는가</h2>
+<p class="lead">sangsoe 는 여러 Claude Code·Orca 세션에 나눠 맡긴 일을 Orca 위에 기록하고, 막히면 필요한 쪽을 깨우고, 끝난 일에 증거가 없으면 표시하는 <b>하네스</b>다. 항목·의존·게이트·메시지는 Orca 가 원본이고, sangsoe 는 Orca 에 없는 것(오너의 말, 결정 키, 부가 간선, PR 사실, 자원·신호 기록)을 sqlite 에 쌓는다. 모델 바깥의 환경(hook · 게이트 · sqlite <code>event</code> · Orca 메시지 · 감지기)이 일의 기록과 깨움을 맡고, 모델이 혼자 못 지키는 것(기록 · 같은 질문 막기 · 머지 순서 · 정리)을 코드가 지킨다. 원칙은 하나다: <b>Orca 가 기능을 제공하면 그것을 쓴다.</b></p>
+<div class="grid2">
+<div class="box"><b>이다</b>
+<ul>
+  <li><b>원본은 기능이 있는 쪽</b>: 항목(Orca Task)·만들 때의 의존·게이트·메시지·Dispatch·Run 은 Orca 가, 오너의 말·결정 키·Orca 에 없는 간선·부가 정보는 sangsoe sqlite 가 쥔다. sangsoe 는 Orca id 만 들고 사본을 두지 않는다. Orca 를 못 읽으면 그 값은 "모름"이다.</li>
+  <li><b>sangsoe 의 기록은 하나</b>: sqlite 의 <code>event</code> 표. 줄만 더하고(append-only) 고치거나 지우지 않는다. 항목의 현재 상태는 <b>뷰</b>가 Orca 읽기와 <code>event</code> 를 합쳐 만들고 합친 결과를 저장하지 않는다.</li>
+  <li><b>깨움은 따로</b>: <code>event</code> 는 기록이고 깨우지 않는다. 사람이 아닌 쪽을 깨우는 것은 Orca 메시지 하나뿐이다.</li>
+  <li><b>기다리는 일은 한 곳</b>: 지금 돌고 있지 않은 일은 Orca Task(<code>pending</code>·<code>ready</code>·<code>blocked</code>)와 열린 Orca 게이트로만 기다린다. 파일 큐도 채팅 속 약속도 없다.</li>
+  <li><b>판단만 토큰을 쓴다</b>: 감지·실행은 hook 과 스크립트라 토큰이 들지 않는다. 오케스트레이터·리드·워커만 LLM 이고 Orca 메시지로 깨어났을 때만 쓴다.</li>
+  <li>일의 순서(의존 간선 · 흐름 틀 · 크리티컬 패스)에만 그래프를 쓴다.</li>
+</ul></div>
+<div class="box"><b>아니다</b>
+<ul>
+  <li><b>에이전트 모델도 실행 환경도 아니다.</b> 세션은 Claude Code 가, 터미널·워커·메시지·Task·게이트는 Orca 가 맡고 sangsoe 는 그 위의 기록과 신호만 둔다.</li>
+  <li><b>LangGraph 같은 고정 그래프가 아니다.</b> 오너 지시와 에이전트 대화는 그래프로 묶지 않고 event 기반 상태 기계로 돈다.</li>
+  <li><b>MCP 는 저장소가 아니다.</b> MCP 서버를 에이전트의 입구로 내지만 MCP 는 인터페이스일 뿐이고 상태는 Orca 와 sqlite 에 있다.</li>
+  <li><b>정기적으로 훑는 LLM 작업은 없다.</b> 정기 감지는 모델 없이 도는 monitor 이고 Orca plugin worker 안에서 돈다. 자체 상주 프로세스·포트·웹 서버는 없다.</li>
+  <li><b>일반 스킬·오너 개인 도구는 본체가 아니다.</b> 새로 만들되 별도 저장소·plugin 에 둔다(6절).</li>
+</ul></div>
+</div>
+
+<h3 id="perspectives">설계 관점</h3>
+<p>sangsoe 를 세 관점으로 읽는다. 업계에 합의된 정의가 없어 이 문서가 쓰는 뜻은 <a href="glossary.md">용어집</a>에 적었다. 결론: <b>harness 가 중심이고, loop 는 역할마다 다르며, graph 는 일의 순서에만 쓴다.</b></p>
+<ul>
+  <li><b>harness engineering: 중심이다.</b> 모델 바깥의 환경을 만든다: hook · 게이트 · 거부 규칙 · sqlite <code>event</code> · Orca 메시지 · 감지기 · REAPER. 모델이 혼자 못 지키는 것은 규칙으로 두는 것보다 코드가 지키게 해야 어긋나지 않는다.</li>
+  <li><b>loop engineering: 역할마다 다르다.</b> 워커는 <code>/goal</code> 과 끝나는 조건으로 돌다 증거와 함께 멈춘다. 리드는 Orca 메시지를 기다리고(<code>check --wait</code>) → 처리하고 → 다시 기다리며, 프로그램의 완료 조건을 <code>/goal</code> 이 판정하면 멈춘다. 오케스트레이터는 Orca 메시지로만 깨어나고 처리한 뒤 다시 잠든다. 정기적으로 훑는 LLM 루프는 없고, 루프마다 멈추는 조건이 하나씩 있다.</li>
+  <li><b>graph engineering: 일의 순서에만 쓴다.</b> 의존 간선·흐름 틀·크리티컬 패스에 한해 그래프를 쓴다. 오너 지시 흐름과 에이전트 대화 경로는 매번 오너의 말과 Orca 메시지가 정하므로 그래프로 고정하지 않는다.</li>
+</ul>
+<p class="more">자세히: <a href="design-appendix.html#role-cards">부록 §역할 카드</a> · <a href="design-appendix.html#gates">§게이트와 원칙</a> · <a href="design-appendix.html#dependencies-detail">§의존 관리 상세</a> · <a href="design-appendix.html#perspectives-figure">§설계 관점 도식</a> · <a href="glossary.md">glossary.md</a></p>
+</section>
+
+<section id="four-cells">
+<h2>2. 네 칸 배치</h2>
+<p class="lead">결론: <b>모든 기능과 컴포넌트는 아래 네 칸 중 정확히 하나에 놓는다. 판정은 위에서 아래로 하고, 앞 칸이 할 수 있으면 뒤 칸에 만들지 않는다.</b> ① Orca CLI 내장 기능은 만들지 않고 그대로 부른다. ② Orca plugin 은 Orca plugin 이 할 수 있는 것을 전부 싣는다. ③ Claude Code plugin 은 Orca plugin 이 못 담는 것(hook · skill · MCP 서버 · agent 정의)만 싣는다. ④ 공유 코어는 두 plugin 이 같이 쓰는 TS/Node 코드와 sqlite 와 CLI 다. 두 plugin 은 한 저장소의 매니페스트 둘이고, 서로 직접 통신하는 공식 경로가 없어 <b>연결점은 공유 코어(sqlite)와 Orca CLI 둘뿐</b>이다. 같은 일을 하는 입구가 칸마다 달라지면 시험과 권한이 입구 수만큼 늘어나서 이렇게 둔다.</p>
+
+<div class="legend" id="figures" role="group" aria-label="도식 범례">
+<div class="lg-row"><b>색</b>
+<span class="lg-i"><i class="sw sw-scr"></i>초록 = 데이터·스크립트 (토큰 X)</span>
+<span class="lg-i"><i class="sw sw-llm"></i>주황 = LLM 에이전트 (토큰 O)</span>
+<span class="lg-i"><i class="sw sw-ext"></i>회색 = 외부 시스템</span>
+<span class="lg-i"><i class="sw sw-own"></i>파랑 = 오너</span>
+<span class="lg-i"><i class="sw sw-orc"></i>보라 = Orca 가 하는 일 (Orca 는 외부 시스템이지만 외부 중 Orca 만 보라로 구분한다. <a href="design-appendix.html#orca-feature-table">부록 §Orca 기능 활용 표</a>)</span></div>
+<div class="lg-row"><b>모양</b>
+<span class="lg-i"><i class="sw sw-scr"></i>실선 칸 = 스크립트·hook·감지기와 계산되는 뷰</span>
+<span class="lg-i"><i class="sw sw-scr sw-dash"></i>점선 칸 = 저장되는 데이터</span>
+<span class="lg-i"><i class="ln"></i>실선 화살표 = 기록·읽기·호출</span>
+<span class="lg-i"><i class="ln ln-w"></i>긴 점선 화살표 = Orca 메시지로 깨움</span></div>
+<div class="lg-row"><b>왜 이 형태인가</b> 강제해야 하는 규칙 = hook · 판단 절차 = skill · 역할 = agent 정의 · 반복 계산 = 코어 함수 · 주기 감지 = Orca plugin worker · 화면 = Orca 패널 · sangsoe 의 기록 = sqlite. 이모지는 상태·플래그 표시에만 쓴다(🟢 준비됨 · ✅ 완료 · 🚧 막힘).</div>
+</div>
+
+<figure id="fig-composition"><img src="diagrams/composition.svg" width="1000" height="740" alt="네 칸이 위에서 아래로 판정 순서대로 놓여 있다. 첫째 Orca CLI 내장 기능: Orca Task, Orca 게이트, Orca 메시지, Orca 워커와 Dispatch, Auto-close, 카드 표시와 조회, Orca Run, 참조와 검색, 진단, hook 상태 읽기, 저장소 archive hook, 대체 시작 대기, plugin 켜기, 그리고 기본은 쓰지 않고 T2 가 실패할 때만 타이머를 대신하는 Orca 자동화. 둘째 Orca plugin: 패널, 상태 표시줄 항목, plugin 저장소, monitor 다섯 개, REAPER, 타이머 멈춤 감지, Orca 이벤트 처리(4종, REAPER 힌트와 패널 갱신). Orca plugin hook 8종은 쓰지 않는다. 셋째 Claude Code plugin: SessionStart·게이트 4종·기록 hook, skill, MCP 서버, agent 정의. 넷째 공유 코어: 코어 라이브러리, sqlite 파일, CLI, GRAPH, ready 뷰, decision_open·decision_answer, notify, land 판정 함수, restart_due·recover_plan, 시작 점검, 흐름 틀 펼치기, plugin 승인. 아래에 칸 사이의 연결점은 공유 코어와 Orca CLI 뿐이라는 설명."><figcaption><b>도식 1. 네 칸 배치.</b> 위에서 아래가 판정 순서다. 보라색 칸이 Orca 가 하는 일이고 이름은 <a href="design-appendix.html#orca-feature-table">부록 §Orca 기능 활용 표</a>와 같다. 색과 모양은 위 범례를 따른다. 자세히: <a href="design-appendix.html#files">부록 §남는 파일과 플러그인 경계</a></figcaption></figure>
+
+<h3 id="placement">배치표</h3>
+<p>표의 한 줄은 구성요소 하나이고 칸 하나에 산다. 확인 칸은 근거를 적는다: <b>실행</b>(이 호스트에서 돌려 봄) · <b>도움말</b>(<code>--help</code>·<code>agent-context</code> 로 명령이 있음을 읽음) · <b>문서</b>(공식 문서) · <b>미확인</b>(돌려 보지 않은 동작).</p>
+<table>
+<thead><tr><th style="width:12%">칸</th><th style="width:26%">구성요소</th><th>이유 한 줄</th><th style="width:20%">확인</th></tr></thead>
+<tbody>
+<tr><td rowspan="5"><span class="b c1">① Orca CLI</span></td><td>Orca Task · Orca Run (<code>task-create --deps</code>)</td><td>항목과 만들 때의 의존의 원본이다. 프로그램마다 Run 을 먼저 만든다.</td><td>확인(실행)</td></tr>
+<tr><td>Orca 게이트 · Orca 메시지</td><td>결정의 막기·풀기와 깨움의 원본이다. sangsoe 에는 받은 편지함 사본이 없다.</td><td>확인(실행). 게이트를 푼 뒤에는 resolve 에 기대지 않고 막혀 있던 워커에게 Orca 메시지를 한 번 보낸다</td></tr>
+<tr><td>Orca 워커 · Dispatch · Auto-close</td><td>일을 시작하는 유일한 길이고, 끝난 워커의 터미널은 Orca 가 자동으로 해제한다.</td><td>확인(실행) · 확인(<code>agent-context</code> 가 자동 해제를 광고)</td></tr>
+<tr><td>카드 표시 · 참조 · 검색 · 대체 시작 대기 · 진단 · 조회</td><td>모두 상태를 읽거나 한 방향으로 표시하는 기능이고 원본을 옮기지 않는다.</td><td>확인(도움말) · 미확인(실행)</td></tr>
+<tr><td>plugin 켜기 (<code>plugin enable --approve</code>)</td><td>코드를 도는 plugin 은 Orca 가 승인 명령으로만 켠다.</td><td>확인(도움말)</td></tr>
+<tr><td rowspan="7"><span class="b c2">② Orca plugin</span></td><td>패널(대시보드: 현황 세 단계 · 오너 할 일 · 결정 버튼 · 할 일 완료 버튼)</td><td>같은 일을 하는 별도 서버·포트가 필요 없다. 버튼은 패널 → worker → 코어로 간다.</td><td>확인(시험) · 미확인(Orca 안에서 그려지는 모양)</td></tr>
+<tr><td>상태 표시줄 항목</td><td>건수 줄의 짧은 꼴(<code>🚧2 · 결정2 · 🔄5</code>)을 글자(64자 이하)로, 오너가 할 일이 있으면 <code>danger</code> 색으로 바꾸고 누르면 명령이 실행된다(결정 92).</td><td>확인(문서) · 미확인(누르면 plugin 자신의 패널이 열리는지, T3)</td></tr>
+<tr><td>monitor 5개(<code>chat-monitor</code> · <code>queue-monitor</code> · <code>resource-monitor</code> · <code>orca-monitor</code> · <code>pr-monitor</code>)</td><td>모델 없는 감지기는 worker 타이머가 맞는 자리다. 타이머는 코드라 토큰이 들지 않는다.</td><td>확인(문서) · 첫 빌드 시험 T2(타이머 간격·<code>gh</code> 호출·이벤트 수신). 실패하면 <code>orca automations --precheck</code> 가 타이머를 대신한다</td></tr>
+<tr><td>REAPER (끝난 일이 남긴 것의 정리, 결정 82·83·88)</td><td>이 PC 의 로컬 worktree 만 다룬다: <code>worktree list</code> 행의 <code>hostId</code> 가 <code>local</code> 이 아닌 행은 후보도 대상도 편입도 아니고 <code>reap_blocked</code>(<code>remote_host</code>)로 한 번 남기고 모름으로 센다(결정 88). 라운드는 표시 → 정리 두 단계다(GC 는 별도 부품이 아니라 이 라운드다, 도식 3a). 루트(열린 PR · 닫히지 않은 Task · 살아 있는 세션 · 카드 목록 · 보호 목록)는 읽기만 하고 저장하지 않으며, 루트에 닿는 것은 표시하고 닿지 않는 후보 가운데 끝남 판정이 긍정이고 두 라운드 연속이며 유예가 지난 것만 지운다. 소유자를 모르는 것은 모름으로 보고만 하고, 루트 읽기가 하나라도 실패하면 그 라운드는 정리하지 않는다. 끝났는지는 잠잠함이 아니라 끝남 판정(PR 이 머지되었거나 닫히고 HEAD 가 실림 · 항목 완료·취소·대체 · <code>worker_done</code>·머지 대기 보고)만으로 정한다. pr·orca·resource monitor 의 이벤트는 라운드를 앞당기는 힌트일 뿐 정리하지 않는다. 라운드는 worker 타이머가 돌리고, 기록 없는 카드는 먼저 편입한다. 지우는 일은 호스트 API 에 없어 worker 가 <code>worktree rm --run-hooks --delete-branch</code> 를 <code>--force</code> 없이 부르고(결정 86), 삭제 전 검사(커밋 안 된 변경·추적 안 된 파일·원격에 없는 커밋)는 코어 함수가 하며 그 뒤에 저장소의 <code>orca.yaml</code> archive hook 이 돌아 저장소 고유의 정리(예: 자기 compose 내림)를 맡는다. 훅이 실패하면 Orca 가 아무것도 지우지 않으므로 <code>reap_blocked</code>(<code>archive_hook_failed</code>)로 사람에게 넘긴다. Docker 는 <code>docker</code> 명령과 현재 context 만 쓰고, <code>compose up</code> 직후 기록한 id 가 훅 뒤에도 남아 있으면 카드가 닫힌 뒤 하나씩 지운다(훅이 없는 저장소는 이 규칙이 전부 맡는다). 타이머 라운드가 오래되면(또는 루트 읽기 실패가 연속 3회) 멈춤 감지가 <code>timer_stalled</code> 로 알린다.</td><td>확인(도움말 · 실행: <code>worktree list</code> 행의 <code>isMainWorktree</code> 가 메인 체크아웃을 표시) · 미확인(worker 의 CLI 호출 · <code>rm</code> 의 변경·미푸시 거부 · archive hook 의 동작과 <code>orca.yaml</code> 의 키 이름(시험 P6) · 타이머 간격). 구현 때 실측: <code>task-list</code> 의 Run 범위 · <code>gh</code> 한도 · 유예 값</td></tr>
+<tr><td>타이머 멈춤 감지 · Orca 이벤트 처리</td><td>이벤트 4종은 받는다. 메시지·Task·게이트 변화는 이벤트가 없어 <code>orchestration</code> 조회를 주기로 읽는다. 타이머가 멈추면 타이머의 monitor 도 알리지 못하므로, 타이머가 아닌 이벤트와 패널 갱신에서 마지막 <code>reap_round</code> 의 나이를 보고 <code>timer_stalled</code> 를 쓴다.</td><td>확인(이벤트 목록) · 미확인(수신)</td></tr>
+<tr><td>plugin 저장소(JSON 키-값)</td><td>패널 화면 상태와 설정만 둔다. append-only <code>event</code>·트리거·재귀 질의를 못 담는다.</td><td>확인(저장소 한계)</td></tr>
+<tr><td>승인 대상: sangsoe plugin 자신 (<code>orca-plugin.json</code>)</td><td>worker·패널·접근 권한을 선언하고 켤 때 승인을 받는다. 승인 명령은 ④ 에 있다.</td><td>확인(실행: <code>approval_required</code>·지문)</td></tr>
+<tr><td rowspan="6"><span class="b c3">③ Claude Code plugin</span></td><td>hook: <code>SessionStart</code></td><td>역할 줄과 <code>run-use</code> 를 붙인다. 시작 때는 MCP 서버가 아직 없다.</td><td>확인(문서)</td></tr>
+<tr><td>hook: 막는 hook(게이트 4종 · 모양 검사)</td><td>모든 Claude Code 세션에 걸려야 한다. Orca hook 은 Orca 터미널 밖·SSH·WSL 을 못 걸고 입력에 세션 id·역할이 없다.</td><td>확인(문서)</td></tr>
+<tr><td>hook: 기록 hook(<code>owner_action</code>·<code>waiting_human</code>·<code>waiting_released</code>·<code>turn_ended</code>·<code>session_started</code>·<code>compacted</code> 등)</td><td>세션 id·메시지 uuid·<code>Stop</code>·<code>UserPromptSubmit</code> 은 Claude Code hook 만 받는다.</td><td>확인(문서)</td></tr>
+<tr><td>skill(판단 절차, 오너 전용 현황 입구)</td><td>Orca plugin 의 <code>skills</code> 칸은 비어 있어야 한다.</td><td>확인(실행)</td></tr>
+<tr><td>MCP 서버(tools + resources)</td><td>Orca plugin 의 <code>mcpServers</code> 칸은 비어 있어야 한다. 에이전트가 코어를 부르는 유일한 길이다.</td><td>확인(실행)</td></tr>
+<tr><td>agent 정의(오케스트레이터 · 리드 · 워커)</td><td>Orca plugin 에 agent 정의 칸이 없다.</td><td>확인(문서)</td></tr>
+<tr><td rowspan="6"><span class="b c4">④ 공유 코어</span></td><td>코어 라이브러리(TS/Node): GRAPH · <code>ready</code> 뷰 · <code>capacity</code> · <code>decision_open</code> · <code>decision_answer</code> · <code>notify</code> · land 판정 함수 · <code>restart_due</code> · <code>recover_plan</code> · 시작 점검 · 흐름 틀 펼치기</td><td>MCP 서버·CLI·plugin worker·패널 버튼이 모두 같은 함수를 지난다. worker 가 <code>.js</code>·<code>.ts</code> 만 돌려서 언어는 TS/Node 하나다.</td><td>확인(설계) · 첫 빌드 시험 T1(worker 에서 코어 실행)</td></tr>
+<tr><td>sqlite 파일 하나(plugin 밖 경로)</td><td>양쪽 plugin 이 같은 파일을 열고 쓰기는 파일이 직렬화한다.</td><td>확인(저장소 한계) · 첫 빌드 시험 T1(worker 에서 <code>node:sqlite</code>). 실패하면 sqlite 접근만 코어 프로세스를 CLI 로 불러 한다</td></tr>
+<tr><td>검증 등급(<code>verify_tier</code>): PR 의 변경 내용으로 V0~V3 을 매기는 순수 함수와 읽기 전용 CLI <code>sangsoe verify-tier</code></td><td>land 판정 함수와 같은 모듈이라 어느 호출자가 불러도 결과가 같고 토큰이 들지 않는다. 라벨 <code>verify-tier:N</code> 은 ② pr-monitor 가 읽어 <code>verify_tier_set</code> 으로 남기고, PR 코멘트(기존 sticky-comment 흐름)는 <code>evidence</code> 를 렌더한 사람용 거울이며 land 판정은 코멘트가 아니라 <code>evidence</code> 를 읽는다.</td><td>확인(설계) · 구현 때 실측(라벨 이벤트 지연과 라벨을 단 사람의 권한 · 주석만 바뀐 줄의 파서 범위 · 실제 PR 에 돌린 등급 분포)</td></tr>
+<tr><td>CLI(<code>sangsoe</code>): 셸 호출자 전용</td><td>MCP 를 쓸 수 없는 셸 호출자(3절 호출 경로 규칙 표의 CLI 여섯 행)용으로 얇게 둔다. 에이전트는 MCP 만 쓴다.</td><td>확인(문서)</td></tr>
+<tr><td>land 판정 함수 · land 요청(<code>sangsoe land</code>)</td><td>PR 을 만든 당사자가 부르는 함수다. 어디서 부르든 결과가 같다.</td><td>확인(설계) · 확인(시험)</td></tr>
+<tr><td>plugin 승인(<code>sangsoe plugin approve</code>)</td><td>권한을 문자열 한 줄로 좁히려고 셸 명령 하나로 둔다. 세 조건을 검사한 뒤 ① 의 승인 명령을 부른다.</td><td>확인(지문 동작) · 첫 빌드 시험 T4(승인 뒤 자율 범위와 재승인 빈도). 결과가 승인 안내문과 <code>job_drift</code> 알림 주기를 정한다</td></tr>
+</tbody></table>
+<p class="more">칸에 놓지 않는 것: 사람인 오너, 세션 안 호출인 서브에이전트, 규칙인 당사자 원칙, 데이터·설정 개념인 묶음·프로그램·프로필, 여러 칸에 걸친 묶음 이름인 에이전트·스크립트 역할·감지기. 일반 스킬은 sangsoe 밖, 별도 저장소의 별도 plugin 이다. 승인 경로는 세 조각이 ①·②·④ 에 나뉘어 있다(대상은 ②, 명령은 ①, 검사는 ④). 자세히: <a href="design-appendix.html#files">부록 §남는 파일과 플러그인 경계</a> · <a href="glossary.md">glossary.md</a></p>
+
+<h3 id="orca-cli-cell">첫째 칸: Orca CLI 내장 기능을 어디서 어떻게 부르나</h3>
+<p>결론: <b>Orca 가 기능을 제공하면 그것을 쓰고 원본으로 삼는다.</b> 안 쓰는 것은 Orca 에 그 기능이 없거나 sangsoe 범위 밖(계정·에뮬레이터·컴퓨터 조작·브라우저 구동)일 때뿐이다. 아래 표의 명령은 모두 <code>orca --help</code>·<code>orca orchestration --help</code>·<code>orca skills get orchestration</code> 에서 읽기 전용으로 있음을 확인했다. 시작 점검이 이 PC 의 Orca 가 필요한 기능을 읽어 없으면 시작을 거부하고 호환 어댑터는 만들지 않는다. <b>범위는 이 PC 하나다</b>(결정 88): PC 마다 sangsoe 가 하나씩 돌고 각자 자기 로컬 worktree 와 자기 sqlite 만 다룬다. 다른 PC 는 Orca relay 로 조작하고 거기서는 그 PC 의 sangsoe 가 자기 worktree 를 맡는다. 코어는 <code>hostId</code> 가 <code>local</code> 인 행만 쓰고, 시작 점검은 비로컬 행이 보이면 "건드리지 않는다"는 경고 한 줄을 낸다(시작은 거부하지 않는다).</p>
+<table>
+<thead><tr><th style="width:16%">Orca 기능</th><th style="width:21%">부르는 컴포넌트</th><th style="width:25%">명령</th><th>쓰는 곳 · 확인</th></tr></thead>
+<tbody>
+<tr><td>Orca Task</td><td>코어(MCP tool 의 항목 만들기·상태 전환) · GRAPH</td><td><code>task-create --deps</code> · <code>task-list</code> · <code>task-update</code></td><td>항목·만들 때의 의존의 원본. 확인(실행)</td></tr>
+<tr><td>Orca Run</td><td>시작 절차(<code>SessionStart</code> 줄 포함)</td><td><code>run-create</code> · <code>run-use</code> · <code>run-current</code> · <code>run-show</code></td><td>프로그램마다 Run 하나. 확인(실행)</td></tr>
+<tr><td>Orca 게이트</td><td>코어 <code>decision_open</code> · <code>decision_answer</code> · queue-monitor</td><td><code>gate-create</code> · <code>gate-resolve</code> · <code>gate-list</code></td><td>결정의 막기·풀기. 확인(실행). 묶인 Run 밖에서는 쓰지 못한다(읽기는 된다)</td></tr>
+<tr><td>Orca 메시지</td><td>코어 <code>notify</code> · 세션(<code>ask</code> · <code>reply</code> · <code>check --wait</code>)</td><td><code>send</code> · <code>check</code> · <code>ask</code> · <code>reply</code> · <code>inbox</code></td><td>깨움의 원본. 스크립트는 소비하는 <code>check</code> 를 부르지 않는다. 확인(실행)</td></tr>
+<tr><td>Orca 워커 · Dispatch</td><td>코어의 시작 절차(리드·오케스트레이터가 MCP tool 로 요청)</td><td><code>worker-start --task --worktree new-child</code> · <code>worker-show</code> · <code>worker-list</code> · <code>dispatch-show</code></td><td>일을 시작하는 유일한 길. <code>--worktree</code> 값에 <code>new-child</code> 가 있음을 확인(도움말). 이미 Dispatch 된 Task 의 재시작 거부는 첫 빌드 시험 T5</td></tr>
+<tr><td>Auto-close</td><td>Orca 자동 · 리드</td><td><code>worker-release</code></td><td><code>worker_done</code> 수락 약 2분 뒤 자동 해제(머지 대기 보고로 끝난 작성자의 터미널은 리드가 <code>worker-release</code> 로 해제한다). 확인(도움말 · <code>agent-context</code> 의 <code>worker-auto-release.v1</code>)</td></tr>
+<tr><td>카드 표시 · 조회</td><td>카드 당사자 · REAPER · 시작 점검 · orca-monitor</td><td><code>worktree set</code> · <code>worktree ps</code> · <code>worktree list</code> · <code>worktree rm</code></td><td>카드는 한 방향 표시이고 원본이 아니다. <code>rm</code> 은 <code>--run-hooks --delete-branch</code> 로 <code>--force</code> 없이 부른다: 저장소의 archive hook 이 그 저장소 고유의 정리를 하고(실패하면 지우지 않는다) 브랜치는 Orca 가 지운다(결정 86). REAPER 는 라운드마다 <code>list</code> 로 카드를 읽고 행의 <code>isMainWorktree</code> 로 메인 체크아웃을 건너뛴다. 확인(도움말 · 실행: 행 필드) · 미확인(worker 에서 호출 · 훅 동작, 시험 P6)</td></tr>
+<tr><td>Orca 참조</td><td>pr-monitor(<code>pr_opened</code> 를 쓸 때)</td><td><code>reference add</code> · <code>reference list</code> · <code>reference find</code></td><td>Orca 참조가 항목↔PR 연결의 원본이다. 외부 트래커(Jira·Linear 등)의 티켓도 같은 명령으로 일을 하는 워크스페이스에 붙일 뿐이고, sangsoe 는 트래커를 읽지도 쓰지도 않는다(결정 93). 확인(도움말) · 미확인(실행)</td></tr>
+<tr><td>Orca 검색</td><td>코어(오너 원문 위치 찾기 보조)</td><td><code>search</code> (<code>--scope conversation</code>)</td><td>대화 기록 위치. 확인(도움말) · 미확인(실행)</td></tr>
+<tr><td>대체 시작 대기</td><td>워커 시작 절차(대체 시작)</td><td><code>terminal wait --for tui-idle</code></td><td>대체 시작에서 터미널이 입력을 받을 때까지 한 번 기다리는 데만 쓰고, "N분 활동 없음" 판정에는 쓰지 않는다. 확인(도움말) · 미확인(실행)</td></tr>
+<tr><td>Orca 진단</td><td>resource-monitor</td><td><code>diagnostics memory</code></td><td>한 시점 진단이라 간격을 길게 둔다. 프로세스·CPU·load 는 OS 명령을 직접 부른다. 확인(도움말)</td></tr>
+<tr><td>plugin 켜기</td><td>코어의 plugin 승인 검사</td><td><code>plugin inspect</code> · <code>plugin enable --approve</code></td><td>종료 코드 3 이 <code>approval_required</code>·<code>approval_stale</code>. 확인(도움말 · 실행)</td></tr>
+<tr><td>Orca 자동화</td><td>쓰지 않음</td><td><code>automations</code></td><td>에이전트 프롬프트를 도는 기능이라 모델 없는 감지기에 얹으면 변칙이다. 모델이 필요한 주기 작업이 생길 때, 그리고 첫 빌드 시험 T2 가 실패해 <code>automations --precheck</code> 가 타이머를 대신할 때만 쓴다. 확인(도움말)</td></tr>
+<tr><td>그 밖의 Orca 명령</td><td>쓰지 않음</td><td><code>dispatch</code> · <code>reset</code> · <code>account</code> · <code>computer</code> · <code>emulator</code> · 브라우저 등</td><td><code>dispatch</code> 는 감독 없는 배정이라 <code>worker-start --task</code> 가 한다. 나머지는 오너 몫이거나 범위 밖이다</td></tr>
+<tr><td>외부 Orca plugin</td><td>쓰지 않음</td><td>—</td><td>plugin 사이 공식 데이터 교환 경로가 없고 버전·권한이 우리 것과 다르다. 사람이 보는 화면으로 켜 두는 것은 무방하다</td></tr>
+</tbody></table>
+<p class="more">Orca 1.4.250 의 기능 50행을 하나씩 판정했다: 씀 33 · 나중 1 · 안 씀 16. 전부는 <a href="design-appendix.html#orca-feature-table">부록 §Orca 기능 활용 표</a>, 결정마다 이미 있는 해법의 판정은 <a href="design-appendix.html#prior-art">§기존 설계 참고</a> 에 있다. <code>environment</code>·<code>serve</code> 는 여러 머신에 걸친 항목 공유가 필요해질 때 다시 본다.</p>
+
+<h3 id="install">한 저장소, 매니페스트 둘, 설치</h3>
+<p>저장소 <code>JeongJaeSoon/sangsoe</code> 하나에 매니페스트가 둘(<code>.claude-plugin/plugin.json</code> = Claude Code plugin, <code>orca-plugin.json</code> = Orca plugin)과 공유 코어 하나가 있고, 일반 스킬 저장소와 브루 탭 저장소는 같은 개인 계정 아래 따로 둔다(결정 90). <b>설치 길은 하나다</b>: Homebrew 가 코어와 두 매니페스트가 든 트리 하나를 깔고, <code>sangsoe install</code> 한 명령이 그 트리를 두 호스트의 공식 명령으로 등록한다. 브루의 <code>post_install</code> 은 <code>~/.claude</code> 나 Orca 설정에 쓰지 않는다(등록은 사용자·호스트마다 하는 일이다). 사람이 순서대로 실행한다. (1) <code>brew install &lt;탭&gt;/sangsoe</code> (2) <code>sangsoe install</code> (멱등): <code>claude plugin marketplace add &lt;브루 트리의 마켓플레이스 경로&gt; --scope user</code> → <code>claude plugin install sangsoe@&lt;마켓플레이스 이름&gt; --scope user</code> → <code>orca plugin dev load &lt;브루 트리의 Orca plugin 폴더&gt;</code> 를 부르고 <code>doctor</code> 로 끝낸다. Orca 에는 plugin 설치 명령이 없어(<code>install</code>·<code>add</code> 없음, 카탈로그 설치는 설정 화면뿐) <code>dev load</code> 가 CLI 로 되는 유일한 길이다. 접근을 선언한 plugin 은 <code>approval_required</code>(종료 코드 3)로 멈추고 승인 전에는 아무것도 돌지 않는다. (3) <code>sangsoe plugin approve</code> 가 세 조건(그 버전이 독립 리뷰 지적 0으로 main 에 머지됨 · <code>orca plugin inspect</code> 의 지문이 리뷰된 빌드와 같음 · 대상이 sangsoe plugin 자신)을 검사하고, 통과할 때만 <code>orca plugin enable &lt;plugin-key&gt; --approve &lt;지문&gt;</code>(키는 <code>orca plugin list --json</code> 에서 읽는다)을 불러 켠 뒤 승인 <code>event</code>(누가·어느 지문·근거)를 남긴다. 오너는 <code>permissions.allow</code> 에 이 한 명령만 넣고, <code>orca plugin enable</code> 자체는 넣지 않는다. 확인: (2)의 명령 형식은 도움말, (3)의 지문·종료 코드는 실행. 갱신은 <code>brew upgrade sangsoe &amp;&amp; sangsoe install</code> 이고 (3) 은 지문이 바뀌면(<code>approval_stale</code>) 다시 한다. 제거는 <code>sangsoe uninstall</code>(<code>claude plugin uninstall</code> · <code>marketplace remove</code> · <code>orca plugin dev unload</code>) 다음 <code>brew uninstall sangsoe</code> 이고 sqlite 는 남는다. <b>버전 고정</b>: 코어·두 plugin·MCP 서버는 같은 버전 문자열이어야 하고, 시작 점검(<code>doctor</code> 와 같은 함수)이 <code>claude plugin list --json</code>·<code>orca plugin list --json</code> 의 버전을 코어와 맞춰 보며 다르면 SessionStart 에서 <code>sangsoe install</code> 을 권하는 한 줄을 낸다(Orca 쪽은 <code>job_drift</code>). 사람이 직접 하는 단계는 승인 하나이고, 호스트에서 plugin 이 꺼져 있으면 설정의 "Turn on plugins" 가 한 번 더 든다. 미확인(첫 빌드 시험 T6): 경로 마켓플레이스 설치와 <code>brew upgrade</code> 뒤 갱신, Claude Code hook 의 PATH 에 브루의 <code>sangsoe</code> 가 보이는지(사람 터미널은 브루가 링크한다), 개발 폴더로 올린 Orca plugin 이 앱 재시작 뒤에도 남는지.</p>
+<p class="more">자세히: <a href="design-appendix.html#files">부록 §남는 파일과 플러그인 경계</a> · <a href="port-plan.md">port-plan.md</a>(설치 모듈) · 전환 날의 순서는 6절.</p>
+</section>
+
+<section id="components">
+<h2>3. 컴포넌트</h2>
+<p class="lead">결론: 오너의 말은 채팅이든 패널 버튼이든 모두 <code>owner_action</code> 한 줄이 되고, 감지기가 신호를 기록하고, 판단이 필요한 것만 받는 순서(워커 → 소유 리드 → 오케스트레이터)대로 Orca 메시지로 깨운다. 아래는 역할과 완료 판정 · 호출 경로 규칙 · monitor 다섯 · 오너가 보는 것(패널) · 상태와 용어 · MCP 순이다. 도식 2·3 이 컴포넌트와 토큰이 드는 곳을, 도식 3a 가 GC 가 도는 자리를 그린다.</p>
+<figure id="fig-components"><img src="diagrams/components.svg" width="1000" height="790" alt="외부(Claude Code, Orca, GitHub, 채팅)의 신호를 hook 과 monitor 가 코어 라이브러리의 event 로 쓴다. 보라색은 Orca 가 하는 일이다: 항목의 원본인 Orca Task, 결정을 막고 푸는 Orca 게이트, 에이전트를 깨우는 Orca 메시지, 워커를 시작하고 해제하는 Orca 워커와 Dispatch, Orca Run, 상태를 읽는 Orca 조회, Orca 참조, Orca 검색, Orca 진단. 코어 라이브러리에는 MCP 서버·CLI·plugin worker 의 세 입구, event·뷰·파일, GRAPH 와 ready 뷰·capacity·decision_open·decision_answer·notify 함수가 있다. 스크립트 역할은 뷰를 읽고 결과 event 를 쓰며 GitHub 와 Orca 에 행동한다. 에이전트는 Orca 메시지로 깨어나 MCP 로 쓴다. 오너는 채팅과 패널로 말하고 본다."><figcaption><b>도식 2. 컴포넌트와 상호작용.</b> 화살표 위 글자가 그 길로 오가는 것이다. 감지기는 쓰고, 스크립트 역할은 읽고 행동하고, 에이전트는 Orca 메시지로만 깨어난다. 항목·게이트·메시지의 원본은 Orca 이고 sangsoe 는 그 id 와 Orca 에 없는 것만 <code>event</code> 로 쓴다. 자세히: <a href="design-appendix.html#signal-flow">부록 §신호 흐름</a> · <a href="design-appendix.html#role-cards">§역할 카드</a></figcaption></figure>
+<figure id="fig-token-boundary"><img src="diagrams/token-boundary.svg" width="1000" height="712" alt="왼쪽은 토큰이 들지 않는 hook, 게이트, 감지기, 스크립트 역할 둘(GRAPH, REAPER), 함수(ready 뷰, capacity, decision_open, decision_answer, notify), 뷰 계산. 오른쪽은 LLM 인 오케스트레이터, 리드, 워커, 서브에이전트와 기본 프로필. 가운데 event 의 needs 값이 judgment 일 때만 Orca 메시지로 에이전트를 깨운다. 결정 루프 네 단계 중 연결만 LLM 이다."><figcaption><b>도식 3. 정해진 코드로 도는 것과 토큰을 쓰는 것.</b> 에이전트는 <code>needs</code> 가 <code>judgment</code> 인 Orca 메시지로 깨어날 때만 토큰을 쓴다. 결정 루프에서는 hook·<code>decision_answer</code> 함수·재질문 게이트가 결정적이고 dNNN 없는 답의 연결만 LLM 이다. 자세히: <a href="design-appendix.html#profiles">부록 §모델 프로필</a> · <a href="design-appendix.html#decision-loop-detail">§전달 규칙의 결정 루프</a></figcaption></figure>
+<figure id="fig-gc-where"><img src="diagrams/gc-where.svg" width="1000" height="484" alt="GC 는 어디서 도는가. Orca plugin 의 worker 타이머가 REAPER 라운드를 돌린다. 라운드는 표시와 정리 두 단계이고, 루트를 Orca CLI(task-list, worker-list, worktree list, worktree ps)와 gh(열린 PR, 머지·닫힘 판정)에서 읽기만 하며 저장하지 않는다. 루트는 열린 PR · Task · 세션 · 카드 목록 · 보호 목록(설정) · 메인 체크아웃이다. 소유 기록은 공유 코어 sqlite 의 resource 소유 사슬을 읽고 쓰며 reap_candidate 와 reap_round 를 남긴다. 후보 가운데 끝남 판정이 긍정이고 두 라운드 연속이며 유예가 지나 삭제 전 검사를 통과한 것만 정리하고, 아니면 보고한다. pr-monitor, orca-monitor, resource-monitor 는 점선 화살표로 힌트만 넣어 라운드를 앞당길 뿐 정리하지 않는다. 루트를 하나라도 못 읽으면 그 라운드는 정리하지 않는다."><figcaption><b>도식 3a. GC 는 어디서 도는가.</b> GC 는 별도 부품이 아니라 둘째 칸의 REAPER 라운드이고, 타이머 · monitor 다섯 개 · 코어 sqlite 는 그대로다. 자세히: <a href="design-appendix.html#role-cards">부록 §역할 카드의 REAPER</a> · <a href="decisions.md">결정 83</a></figcaption></figure>
+
+<h3 id="roles">역할과 완료 판정</h3>
+<p>오너의 말은 <code>owner_action</code> 한 줄이 되고, 오케스트레이터가 그 턴 안에서 여섯 갈래(바로 답 · 읽기·조사 · 진행 중인 일의 범위 · 새 일 · 시각·조건 대기 · 오너 판단) 중 하나로 분류한다. 분류도 <code>event</code> 한 줄이다. 열린 결정에 대한 답은 분류하지 않고 <code>decision_answered</code> 가 된다. 스크립트 역할은 기록만 읽고 움직인다.</p>
+<table>
+<thead><tr><th style="width:18%">역할</th><th style="width:36%">하는 일</th><th>완료 판정</th></tr></thead>
+<tbody>
+<tr><td><b>오케스트레이터</b> <span class="b llm">LLM</span></td><td>오너의 말을 분류하고, 항목을 만들고, 자기 Run 의 준비된 일(프로그램 없는 일)을 시작하고, 리드를 띄우고, 오너에게 현황과 결정을 올린다. 직접 일하지 않는다.</td><td>없다. <code>/goal</code> 을 걸지 않고 종료하지 않는다. 쉬는 동안은 Orca 메시지가 깨울 때까지 토큰을 쓰지 않는다.</td></tr>
+<tr><td><b>리드</b> <span class="b llm">LLM</span></td><td>프로그램 하나(자기 Run)를 맡아 <code>ready</code> 뷰에서 시작할 일을 골라 시작하고 증거를 모은다. 못 풀면 오케스트레이터로 <code>escalation</code>.</td><td>프로그램의 완료 조건을 채웠다는 증거가 <code>event</code> 에 있고 <code>/goal</code> 이 판정할 때, 또는 오너가 중단을 지시했을 때. 완료 조건은 시작 전에 적고 미룬 것은 보류 항목으로 남긴다.</td></tr>
+<tr><td><b>워커</b> <span class="b llm">LLM</span></td><td>받은 작업 하나를 구현·조사·리뷰한다. 게시는 오너 승인 뒤.</td><td>받은 작업의 완료 조건을 <code>/goal</code> 이 판정하고 <code>worker_done</code>(PR 이 걸린 일은 머지 대기 보고)을 보냈을 때. 막히면 <code>escalation</code>, 거부당하면 <code>거부 보고</code>.</td></tr>
+<tr><td><b>스크립트 역할</b> <span class="b scr">토큰 X</span></td><td>GRAPH(간선의 유일한 입구) · REAPER(끝난 일이 남긴 자원의 정리, 표시 → 정리 라운드: worktree 삭제 전 안전 검사 · Docker 자원 · 고아 수거). 준비됨 고르기·결정 닫기·알림은 역할이 아니라 함수다: <code>ready</code> 뷰·<code>capacity</code>·<code>decision_open</code>·<code>decision_answer</code>·<code>notify</code>.</td><td>한 번 돌고 끝난다. 항목을 닫지 않는다(REAPER 는 결과와 라운드 시각을 <code>event</code> 로 쓰면 끝, 안전하지 않으면 <code>reap_blocked</code>).</td></tr>
+<tr><td><b>land 판정 함수</b> <span class="b scr">토큰 X</span></td><td>역할이 아니라 함수다. PR 을 만든 워커·리드가 독립 리뷰에서 더 고칠 것이 없을 때 <code>sangsoe land</code>(land 요청)로 부른다. 먼저 증거를 점검한다: PR 의 검증 등급(V0~V3, <code>verify_tier</code> 가 diff 로 매기며 문서·주석, 테스트만·리팩터, 로직 변경, 화면·외부 연동·배포·prod·보안 순으로 깊어진다)이 요구하는 증거가 머지할 head 의 <code>evidence</code> 에 없거나, 종료 코드가 0 이 아니거나, 확인하지 못한 것을 적는 칸이 비어 있으면 <code>land_failed</code>(사유 <code>evidence_missing</code>)로 거부하고 예약도 "승인되면 머지"도 만들지 않는다. 통과하면 저장소 설정을 읽어 <b>자동 머지 조건 넷</b>(필수 리뷰·필수 CI 강제 / 최신 main 필수 또는 병합 대기열 / 새 push 에 승인 무효 / prod·인프라·보안 경로 아님)이 모두 참일 때만 머지를 예약(<code>gh pr merge --auto</code>)하고, 하나라도 거짓이면 예약하지 않고 "승인되면 머지"(<code>merge_on_approval</code>)를 남긴다. 어느 쪽이든 머지 대기 보고(<code>merge_ready</code>)를 보낸 뒤 스스로 끝나고 Task 는 머지 확인까지 열려 있다. 예약했으면 사람 승인과 CI 가 찰 때 GitHub 이 머지하고, "승인되면 머지"이면 승인이 찰 때 pr-monitor 가 소유 리드를 깨워 리드가 같은 land 요청으로 머지한다. 머지 뒤에는 둘 다 main CI 를 감시한다. 머지하는 길은 land 하나다.</td><td>호출한 세션이 <code>land_requested</code>(예약하지 않았으면 사유 <code>merge_on_approval</code>)를 쓰면 끝. 항목은 이 함수가 닫지 않는다: PR 이 걸린 항목은 pr-monitor 가 실제 머지와 main 포함을 확인한 뒤에 Task 를 <code>completed</code> 로 닫고(머지 확인), 머지 뒤에도 남은 항목은 <code>close_suggested</code> 를 받은 리드·오케스트레이터가 닫는다.</td></tr>
+<tr><td><b>당사자 원칙</b></td><td>리드·워커가 스스로 할 수 있는 일은 끝까지 스스로 한다. 위 역할·감지기·hook·게이트·Orca 메시지를 이 기준으로 가른 표는 <a href="design-appendix.html#party-principle">부록 §역할 카드의 당사자 원칙 표</a>에 있다. 컴포넌트는 (a) 당사자가 이미 없을 때 (b) 당사자를 믿으면 안 될 때 (c) 세션이 못 하는 일일 때만 둔다.</td><td>적용한 것 넷(land 판정, 워커의 프로세스 정리, 리드의 직접 시작, 리드의 <code>worker-release</code>).</td></tr>
+<tr><td><b>감지기</b> <span class="b scr">토큰 X</span></td><td>hook 과 Orca plugin worker 안의 monitor. hook 이 못 보는 것(죽은 프로세스, PR·채팅 변화, 자원, 열려 있는 게이트)만 monitor 가 본다.</td><td>신호를 <code>event</code> 로 쓰면 끝. 항목을 닫지 않고 닫기를 제안만 한다(예외는 하나: pr-monitor 가 머지 확인 뒤 PR 이 걸린 항목을 닫는다). 증거 없이 <code>completed</code> 가 된 항목은 🔍 로 표시한다.</td></tr>
+<tr><td><b>오너</b></td><td>사람. 지시·결정·승인을 한다.</td><td>오너의 말은 모두 <code>owner_action</code> 이 된다.</td></tr>
+</tbody></table>
+<h4 id="who-changes-state">항목의 상태를 누가 바꾸나 (결정 76 의 6번 · 91 · 92)</h4>
+<p><b>오너의 입력(프롬프트·<code>!</code> 명령)만으로는 어떤 항목도 답했다고 하거나 끝났다고 하거나 상태가 바뀌지 않는다.</b> 입력은 후보 신호이고, 상태는 관측한 효과나 명시적으로 이어진 답이 있을 때만 바뀐다. 세 층이 나눠 맡는다.</p>
+<table>
+<thead><tr><th style="width:16%">층</th><th style="width:30%">누가</th><th>상태에 대해 하는 일</th></tr></thead>
+<tbody>
+<tr><td><b>감지</b> <span class="b scr">토큰 X</span></td><td>hook · monitor</td><td>사실과 표지만 쓴다: <code>owner_action</code> · <code>evidence</code>(<code>probe:</code>·<code>owner_act:</code>) · 관측한 세션 재개 뒤의 <code>waiting_released</code> · 표지 <code>입력 확인됨 · 검증 중</code> · <code>verify</code> probe 가 참일 때의 <code>close_suggested</code>. probe 를 읽는 것도 queue-monitor 라서 이 층이다. 항목을 닫지 않는다(예외는 하나: pr-monitor 가 머지 확인 뒤 PR 항목의 Task 를 닫는다).</td></tr>
+<tr><td><b>실행</b> <span class="b scr">토큰 X</span></td><td>코어 함수 · 패널 버튼</td><td>명시적으로 이어진 답만 처리한다: <code>dNNN</code> 을 단 답이나 패널 버튼 → <code>decision_answer</code> → <code>gate-resolve</code>. 패널 "완료" 버튼은 오너 항목을 닫는다(<code>verify</code> 가 있는데 증거가 없으면 ✅ 🔍). 원인이 사라진 결정은 <code>moot</code> 로 닫고 게이트를 <code>MOOT</code> 표시로 푼다.</td></tr>
+<tr><td><b>판단</b> <span class="b llm">LLM</span></td><td>리드 · 오케스트레이터</td><td><code>close_suggested</code> 와 <code>evidence</code> 를 보고 오너 항목을 닫는다(Task 를 <code>completed</code> 로). 오너의 말이 어느 항목의 답인지 가리기 어려우면 연결하지 않고 제안만 남긴다(<code>owner_act:proposed</code>).</td></tr>
+</tbody></table>
+<p class="more">자세히: <a href="design-appendix.html#delivery">부록 §전달 규칙</a>의 오너 입력은 후보 신호(결정 91 ⑥)와 전이표.</p>
+<p class="more">자세히: <a href="design-appendix.html#role-cards">부록 §역할 카드</a>(역할과 완료 판정 표 전체) · <a href="design-appendix.html#intake-table">§지시 분류 표</a> · <a href="design-appendix.html#signal-flow">§신호 흐름</a> · <a href="design-appendix.html#delivery">§전달 규칙</a>(일이 기다리는 곳 포함) · <a href="design-appendix.html#profiles">§모델 프로필</a></p>
+
+<h3 id="call-path">호출 경로 규칙</h3>
+<p>결론: <b>코어는 하나이고 에이전트(리드·워커·오케스트레이터)는 MCP 만 쓴다.</b> Bash 로 <code>sangsoe</code> CLI 를 부르지 않는다(Bash 문자열 권한 규칙을 맞출 필요가 없어진다). CLI 는 MCP 를 쓸 수 없는 호출자 전용으로 얇게 둔다. plugin worker(패널 버튼·monitor 타이머)는 코어를 직접 import 하므로 MCP 도 CLI 도 거치지 않는다. 이유: 같은 일을 하는 입구가 호출자마다 달라지면 시험과 권한이 입구 수만큼 늘어난다. 호출자 8행을 경로별로 모으면 MCP 1행, 직접 import 1행, CLI 6행이다. 아래 표가 각 행의 경로와 다른 길을 쓰지 못하는 이유를 보인다. MCP prompts·MCP tasks·상주 HTTP 서버는 어느 행에서도 쓰지 않는다.</p>
+<table>
+<thead><tr><th style="width:20%">호출자</th><th style="width:14%">경로</th><th>다른 길을 쓰지 못하는 이유</th><th style="width:16%">확인</th></tr></thead>
+<tbody>
+<tr><td>리드·워커·오케스트레이터</td><td>MCP 만</td><td>타입 있는 인자와 구조화된 거부 오류를 받는다. CLI 는 부르지 않는다: Bash 호출이 되면 문자열 권한 규칙을 입구마다 맞춰야 하고 거부 오류가 글자로 온다.</td><td>확인(설계 규칙)</td></tr>
+<tr><td>plugin worker(패널 버튼 · monitor 타이머)</td><td>코어 직접 import</td><td>MCP: worker 에 MCP 클라이언트가 없다(호스트 API 에 없고 매니페스트의 <code>mcpServers</code> 는 예약뿐). CLI 대신 import: worker 는 사용자 계정 권한의 별도 Node 프로세스이고 코어가 TS/Node 라 그대로 부르며, 타이머 주기와 패널 요청마다 프로세스를 띄우지 않고 시험도 코어 함수 한 경로로 돈다. worker 안에서 <code>node:sqlite</code> 가 열리지 않으면 sqlite 접근만 CLI 호출로 돌린다.</td><td>확인(호스트 API · 승인 화면 문구) · 첫 빌드 시험 T1(worker 안 <code>node:sqlite</code> 열기)</td></tr>
+<tr><td><code>SessionStart</code> hook</td><td>CLI</td><td>시작 때는 MCP 서버가 아직 없어 <code>mcp_tool</code> hook 을 건너뛴다. 역할 줄과 <code>run-use</code> 만 CLI 로 붙인다.</td><td>확인(문서)</td></tr>
+<tr><td>막는 hook(게이트 4종·land 판정 호출)</td><td>CLI</td><td>실패 시 막기(<code>onFailure: "block"</code>)는 command hook 에만 있고 <code>mcp_tool</code> hook 은 실패해도 통과한다.</td><td>확인(문서)</td></tr>
+<tr><td>기록 hook(<code>UserPromptSubmit</code>·<code>Stop</code> 등 관찰 이벤트)</td><td>CLI</td><td>command hook 으로 CLI 를 부른다. <code>mcp_tool</code> hook 이 plugin 서버의 tool 을 직접 부를 수 있으나 지연·신뢰성을 재지 않았고, 이 hook 에서만 MCP 로 옮길 수 있는 후보다.</td><td>확인(문서) · 미확인(<code>mcp_tool</code> 지연)</td></tr>
+<tr><td>오너 전용 skill 의 상태 주입 줄</td><td>CLI</td><td>주입은 skill 본문의 셸 명령 줄이라 MCP tool 을 부를 수 없다.</td><td>확인(실행)</td></tr>
+<tr><td>사람 터미널 · 시험 · CI</td><td>CLI</td><td>셸이 입구다. 같은 시험이 MCP 와 CLI 로 돌아 결과가 같음을 보인다.</td><td>확인(자명)</td></tr>
+<tr><td>plugin worker 승인 (<code>sangsoe plugin approve</code>)</td><td>CLI</td><td>MCP 로 내지 않는 것은 일부러다. 오너가 <code>permissions.allow</code> 에 이 명령 한 줄만 넣어 권한을 문자열 한 줄로 좁히는 것이 목적이라 MCP tool 로 내지 않고 셸 명령 하나로 둔 예외다. 명령은 코어 함수이고 세 조건을 검사한다. <code>orca plugin enable</code> 자체는 허용 목록에 넣지 않아 다른 plugin 승인과 조건 우회가 막히고, 에이전트가 <code>--approve</code> 를 직접 부르는 길은 없다.</td><td>확인(지문은 <code>approval_required</code> 에서 나오고 plugin·버전·파일·접근에 묶여 바뀌면 <code>approval_stale</code> 이라 다시 승인한다. dev load 는 코드 수정에도 승인이 유지되나 접근·명령이 바뀌면 다시 필요하다) · 첫 빌드 시험 T4(승인 뒤 worker 가 계속 자율로 도는지·재승인 빈도). 승인은 릴리스 단위로 한 번이다</td></tr>
+</tbody></table>
+<p class="more">CLI 호출자는 여섯 행(시작 hook · 막는 hook · 기록 hook · skill 주입 줄 · 사람·시험·CI · 승인 명령)이라 CLI 는 없애지 않는다. CLI 는 코어의 얇은 진입점이다. 자세히: <a href="design-appendix.html#mcp">부록 §MCP 인터페이스</a></p>
+
+<h3 id="monitors">monitor 다섯</h3>
+<p>결론: 정기 감지는 모델 없이 Orca plugin worker 의 타이머와 Orca 이벤트로 돈다. 한 번 돌 때 하는 일은 읽고 판정해서 <code>event</code> 를 쓰는 것이고, 깨우는 일은 <code>notify</code> 가 따로 한다. 주기는 monitor 마다 다르고 한 시점 진단 호출은 간격을 길게 둔다. <code>orca-monitor</code> 는 Orca 값을 사본 없이 읽어서 맞추는 역할이고, <code>pr-monitor</code> 는 PR↔항목 연결을 <code>orca reference</code> 로 걸고 PR 상태 조회는 sangsoe 가 하며, <code>resource-monitor</code> 는 OS 명령을 직접 부른다(다른 Orca plugin 의 활동 감시에 기대지 않는다: plugin 사이 공식 경로가 없다).</p>
+<table>
+<thead><tr><th style="width:17%">monitor</th><th style="width:40%">보는 것 · 읽는 길(원본)</th><th>쓰는 <code>event</code></th></tr></thead>
+<tbody>
+<tr><td><code>chat-monitor</code></td><td>새 멘션·내 스레드 답글(채팅)</td><td><code>mention_new</code></td></tr>
+<tr><td><code>queue-monitor</code></td><td>예정·보류 항목의 trigger, 기한 지난 escalation, 답은 있는데 열린 게이트가 남은 결정, plugin 정의의 지문, 오너 항목의 <code>verify</code> probe(<code>pr_merged</code>·<code>orca_field</code>·<code>plugin_approved</code>. 표지가 달린 항목에 한해 <code>run_ok</code>=<code>gh run view</code>·<code>pr_found</code>=<code>gh pr list</code> 를 <code>gh_budget</code> 안에서 라운드마다 한 번)(Orca Task·sqlite 읽기)</td><td><code>item_ready</code> · <code>todo_due</code> · <code>trigger_unclear</code> · <code>close_suggested</code>(<code>verified</code>) · <code>escalation_stale</code>(<code>waiting_unreleased</code>·<code>verify_unconfirmed</code>) · <code>decision_closed</code>(<code>moot</code>) · <code>evidence</code>(<code>probe:</code>) · <code>job_drift</code></td></tr>
+<tr><td><code>resource-monitor</code></td><td>프로세스·메모리·CPU·load·worktree·compose·Docker 자원(OS 명령 직접, 기록 없는 Docker 자원은 알리기만 한다), Orca 쪽은 <code>diagnostics memory</code></td><td><code>resource_leak</code>(REAPER 라운드의 "모름" 입력) · <code>capacity_free</code> · <code>pressure_high</code>(REAPER 라운드를 앞당기는 힌트)</td></tr>
+<tr><td><code>orca-monitor</code></td><td>Orca 가 아는 워커·Run·Dispatch·답 없는 질문·열린 게이트(Orca 조회 명령 읽기, 사본 없음). 멈춤은 <code>worktree ps</code> 의 마지막 출력·활동 시각(<code>lastOutputAt</code>·<code>lastActivityAt</code>, 에이전트 행 <code>stateStartedAt</code>)으로 판정한다(결정 87, 필드 뜻은 시험 P10 전까지 미확인). <code>hostId</code> 가 <code>local</code> 이 아닌 행은 판정에 쓰지 않는다(보지 못함, 결정 88)</td><td><code>worker_dead</code> · <code>worker_stuck</code> · <code>run_stalled</code> · <code>waiting_decision</code> · <code>observed_change</code>(P10 이 실패할 때만 쓰는 대체 경로) · <code>wake_unconfirmed</code> · <code>decision_untracked</code></td></tr>
+<tr><td><code>pr-monitor</code></td><td>GitHub 알림과 변경이 있는 PR 의 코멘트(<code>gh</code>), PR 의 등급 라벨 <code>verify-tier:N</code> 과 새 push(라벨을 단 사람은 <code>gh</code> 의 이벤트에서 읽는다), PR 을 항목에 붙일 때 <code>orca reference</code></td><td><code>verify_tier_set</code> · <code>pr_opened</code> · <code>pr_review_requested</code> · <code>pr_changes_requested</code> · <code>pr_ready_to_merge</code> · <code>pr_merged</code> · <code>pr_closed</code> · <code>owner_act_unlinked</code> · <code>pr_base_changed</code> · <code>ci_failed</code> · <code>main_green</code> · <code>main_red</code> · <code>review_commented</code> · <code>review_replied</code> · <code>rate_limited</code></td></tr>
+</tbody></table>
+<p class="more">pr·orca·resource monitor 의 <code>pr_merged</code> · <code>pr_closed</code> · <code>worker_done</code> · <code>worker_dead</code> · <code>pressure_high</code> 는 REAPER 라운드를 앞당기는 힌트이고, monitor 는 정리하지 않는다(도식 3a). monitor 가 쓴 event 에서 누구를 깨우는지는 도식 9(흐름 4). 자세히: <a href="design-appendix.html#signal-flow">부록 §신호 흐름</a>(monitor 마다 본다·판단한다·낸다)</p>
+
+<h3 id="ops-rules">복구와 운영 규칙 여덟</h3>
+<p>결론: 오래 도는 세션과 머신 재시작, 머지 뒤 main, 리뷰 의뢰, 보고 주소에서 사고가 나기 쉬운 여덟 곳을 새 컴포넌트 없이 <b>기록 한 종류 · 함수 하나 · 한 줄 규칙</b>으로 막는다. 각 줄은 Orca 내장 후보를 도움말로 확인해 쓰는 것을 먼저 적고 Orca 에 없는 부분만 ②·③·④ 에 둔다(항목마다 "내장 후보 → 판정"은 <a href="decisions.md">decisions.md</a> 결정 80). 새 이름은 모두 <a href="glossary.md">glossary.md</a> 에 있다.</p>
+<table>
+<thead><tr><th style="width:15%">규칙</th><th style="width:11%">칸</th><th style="width:34%">컴포넌트 · 흐름</th><th style="width:22%">이름</th><th>확인</th></tr></thead>
+<tbody>
+<tr><td><b>N1 재시작 감지와 인계</b>(오케스트레이터·리드의 긴 컨텍스트)</td><td>① Orca 메시지 · ③ hook · ④ 코어 · ② 상태 표시줄</td><td><code>PostCompact</code> 기록 hook 이 <code>compacted</code> 를 쓰고, 코어 함수 <code>restart_due</code> 가 네 규칙(자동 압축 3회 · 압축 직후 첫 호출이 압축 전의 절반 이상 · 최근 두 압축 간격 30분 미만 · 토큰 상한)을 <code>event</code> 에서 계산한다(기본값은 설정). 상태 표시줄 항목과 <code>sangsoe brief</code> 가 "<code>/clear</code> 안전 + 인계 저장됨"을 보인다. 시계(정기 깨움)로는 판정하지 않는다. 자동 <code>/clear</code> 는 기본 꺼짐이고 오너가 <code>/clear</code> 를 친다. 인계 본문은 Orca 가 이미 가진 것을 쓴다. 세션이 MCP tool <code>handoff_save</code> 로 저장소에 없는 판단 상태 넷(다음에 할 일 · 기다리는 답 · 답 없는 질문 · 오너 요청의 회신 경로)의 모양을 검사해 Orca 메시지 type <code>handoff</code> 로 자기 Run 우편함에 남기고, 새 세션의 <code>SessionStart</code> hook 이 <code>inbox</code> 에서 그 Run 의 마지막 <code>handoff</code> 를 한 번 주입한다. 키는 세션 id 가 아니라 Run(역할)이다. 리드가 재시작하면 자기 Run 을 <code>run-use</code> 로 다시 쥔다.</td><td><code>compacted</code> · <code>restart_due</code>(뷰) · <code>handoff_save</code>(tool) · Orca <code>handoff</code> 메시지</td><td>확인(도움말: <code>send</code> 의 type, <code>inbox</code>, <code>run-use</code>) · 미확인(자기 Run 우편함에 보내 읽을 수 있는지 · Orca 의 컨텍스트 크기 표시는 도움말에 없다 · <code>PostCompact</code> 입력과 <code>SessionStart</code> 의 <code>clear</code> 출처, 부록 시험 P9)</td></tr>
+<tr><td><b>N2 머지 뒤 main 감시와 동결</b></td><td>② pr-monitor · ④ 코어</td><td><code>pr_merged</code> 뒤 pr-monitor 가 <code>gh</code> 로 그 sha 의 push CI 를 읽어 <code>main_green</code> · <code>main_red</code> 를 쓴다(재실행 1회로 flake 를 가르고, 새 push 로 취소된 run 은 빨강이 아니다). 그 저장소의 최신 main 이 <code>main_red</code> 인 동안 land 판정 함수는 <code>main_fix</code> 로 요청한 PR 외를 거부한다(<code>land_failed</code> 의 사유 <code>main_red</code>). 알림은 머지한 PR 을 쥔 워커 → 리드 → 오케스트레이터 순이고 원인 좁히기·revert 는 알림받은 당사자가 한다. 병합 대기열이 켜진 저장소는 대기열이 먼저이고 이 감시는 꺼진 저장소의 안전망이다. 머지가 예약으로 됐든 승인 뒤 리드가 했든 같은 감시를 쓰고, 빨강이면 🚨 와 동결이다(머지를 자동으로 허용하는 조건은 <a href="#flow-merge">흐름 3</a>). Orca 에는 CI 를 읽는 명령이 없고 <code>automations --precheck</code> 는 동작이 도움말에 없어 쓰지 않는다.</td><td><code>main_green</code> · <code>main_red</code> · <code>land_failed</code>(<code>main_red</code>) · <code>main_fix</code>(land 입력)</td><td>확인(도움말: <code>orca --help</code> 에 CI 조회 없음) · 미확인(<code>--precheck</code> 의 동작 · 필수 검사가 <code>merge_group</code> 을 받는 저장소)</td></tr>
+<tr><td><b>N3 깨움 확인</b></td><td>② orca-monitor · ④ <code>notify</code></td><td><code>notify</code> 가 Orca <code>send</code> 로 판단 메시지를 보낸 뒤, 읽혔는지는 Orca 우편함의 handled 상태를 orca-monitor 가 <code>inbox</code> 로 읽어 본다(감시자는 <code>check</code> 를 소비하지 않는다). 설정한 분 안에 읽히지 않았으면 <code>wake_unconfirmed</code> 를 쓰고, 받는 순서의 다음 사람에게 기존 <code>escalation_stale</code> 길로 올린다. 같은 세션을 두 번 깨우지 않는다. <code>terminal wait --for tui-idle</code> 는 부른 쪽을 막는 명령이라 쓰지 않는다.</td><td><code>wake_unconfirmed</code></td><td>확인(도움말: <code>check</code> · <code>inbox</code> · <code>terminal wait</code>) · 미확인(<code>inbox</code> 행에 읽음 상태가 보이는지 · 쉬는 일반 워커가 Orca 메시지로 깨어나는지, 부록 시험 P8)</td></tr>
+<tr><td><b>N4 머신 재시작 복구</b></td><td>① 워커 목록·시작 · ④ 코어</td><td>죽은 워커 찾기와 되살리기는 Orca 가 한다: <code>worker-list --terminal-state</code> 와 <code>worker-show</code> 가 낸 <code>next</code>, 같은 Task 를 <code>worker-start --task --retry-of</code>(또는 <code>--terminal</code>)로 다시 시작하는 recovery 문서의 절차, 3회 실패 뒤 차단이다. 마지막 세션은 <code>orca search</code> 로 찾는다. sangsoe 는 항목 ↔ 마지막 세션 ↔ <code>/goal</code> 유무를 한 표로 모으는 읽기 전용 <code>sangsoe recover</code>(코어 함수 <code>recover_plan</code>)와 한꺼번에 많이 죽었을 때의 사유 <code>worker_dead</code>(<code>host_restart</code>)만 갖고 아무것도 실행하지 않는다. Dispatch 를 잃은 리드는 코디네이터의 Run 이 아니라 자기 Run 을 <code>run-use</code> 로 다시 쥔다. <code>SessionStart</code> hook 은 살아 있는 세션만 다시 붙인다.</td><td><code>sangsoe recover</code> · <code>worker_dead</code>(<code>host_restart</code>)</td><td>확인(도움말·recovery 문서: <code>worker-list</code> · <code>worker-start --retry-of</code> · <code>run-use</code> · <code>search</code>) · 미확인(<code>orca search</code> 가 세션 id 를 돌려주는지 · 복구 실행)</td></tr>
+<tr><td><b>N5 릴리스 묶음</b></td><td>④ 흐름 틀</td><td>흐름 틀 <code>ship-batch</code> 는 dev 배포 · 확인 · prod 단계가 항목마다가 아니라 묶음 항목 하나이고, 구성원 여럿에 걸린다(Orca <code>task-create --deps</code> 에 JSON 배열로 여러 개). Orca 의 의존은 Task <code>completed</code> 를 보고 PR 이 걸린 항목은 머지 확인 뒤에야 <code>completed</code> 가 되므로, 머지에 거는 <code>blocks</code> 는 구성원의 ✅ 를 그대로 읽고 <code>deploys_after</code> 는 같은 라운드의 <code>pr_merged</code> 를 읽는다. <code>stage_recorded</code> 한 줄이 구성원 전체의 증거다. 긴급 수정은 <code>ship-change</code> 로 단독이다.</td><td><code>ship-batch</code>(틀) · <code>stage_recorded</code> 의 <code>members</code> 칸</td><td>확인(도움말: <code>task-create --deps</code>) · 미확인(<code>--deps</code> 다중 선행, 부록 시험 P1)</td></tr>
+<tr><td><b>N6 리뷰 의뢰 기록</b></td><td>③ MCP 서버 · ④ 코어</td><td>손으로 보낸 의뢰도 자동 의뢰도 MCP tool <code>review_ask_record</code> 한 입구로만 <code>review_ask_sent</code> 한 줄을 남긴다. 리마인드할 때는 뷰 <code>ask_due</code> 가 읽는다. 리뷰어 매핑이 설정에 없으면 조용히 넘기지 않고 <code>unmapped_reviewer</code> 로 🚨 를 올린다. 묶기·보내는 시각·문구는 코어가 아니라 별도 일반 스킬이 이 기록을 읽어 정한다. 채널·사람 값은 <code>~/.config/sangsoe/</code> 에 둔다. Orca <code>reference</code> 는 PR·이슈 URL 을 작업 공간에 붙일 뿐 의뢰 시각·리뷰어·기한이 없어 PR 을 항목에 붙일 때만 쓴다.</td><td><code>review_ask_sent</code> · <code>unmapped_reviewer</code> · <code>ask_due</code>(뷰) · <code>review_ask_record</code>(tool)</td><td>확인(도움말: <code>reference</code> 에 의뢰 기록 칸 없음)</td></tr>
+<tr><td><b>N7 감시 범위 필터</b></td><td>② pr-monitor · ④ 설정</td><td>설정 <code>watch</code>(<code>repos</code> · <code>authors</code> · <code>linked_only</code>)가 pr-monitor 가 읽는 PR 의 범위를 정한다. 범위 밖 PR 은 쓸어 담지 않고, "에이전트 없는 열린 PR" 뷰도 범위 안만 센다. 기본은 자기 프로그램·항목에 연결된 PR 만이고, "연결됨"은 Orca <code>reference list</code>·<code>find</code> 조회가 원본이라 sangsoe 에 연결 사본이 없다. sangsoe 가 갖는 것은 저장소·작성자 범위다.</td><td><code>watch</code>(설정 키)</td><td>확인(도움말: <code>reference list</code> · <code>find</code>)</td></tr>
+<tr><td><b>N8 보고 주소 규칙</b></td><td>④ <code>notify</code> · ③ 모양 검사 hook</td><td>Orca <code>send</code> 는 <code>run:&lt;id&gt;</code>·<code>dispatch:&lt;id&gt;</code> 주소를 받고, 활성 Dispatch 가 받는 쪽을 생략하면 그 Run 우편함으로 가며 <code>worker_done</code> 은 정확한 Dispatch 신호다. 워커의 <code>worker_done</code>·<code>ask</code> 주소는 Orca 가 정하고, <code>notify</code> 는 핸들이 아니라 Task·Run·Dispatch id 만 받아 코어가 <code>dispatch:</code> → <code>run:</code> 두 주소만 고른다. <code>send --to</code> 는 <code>term_</code> 핸들도 받으므로, 브리프의 보고 주소가 <code>term_</code> 핸들이면 모양 검사가 거부한다(<code>gate_denied</code> 의 사유 <code>report_address</code>). 이유: 핸들은 재시작마다 바뀌고, 사라진 터미널로 간 보고는 성공처럼 보이면서 없어진다.</td><td><code>gate_denied</code>(<code>report_address</code>)</td><td>확인(도움말: <code>send</code> 의 주소) · 미확인(오류 코드별 후속)</td></tr>
+</tbody></table>
+<p class="more">자세히: <a href="design-appendix.html#role-cards">부록 §역할 카드</a> · <a href="design-appendix.html#signal-flow">§신호 흐름</a> · <a href="design-appendix.html#delivery">§전달 규칙</a></p>
+
+<h3 id="dashboard">오너가 보는 것</h3>
+<p>결론: 오너는 Orca 메시지를 직접 받지 않고 현황 세 단계로 본다. 현황(1단계)은 <b>표 네 절</b>(결정 필요 · 지금 오너가 할 일 · 진행 중 · 보류)이고 리드·카드·PR·워커가 한 행씩이다 → 묶음 상세 → 항목 상세. 같은 모델을 <code>sangsoe brief</code> 와 <b>Orca plugin 패널</b>이 쓴다. 화면은 읽기 도구이고 버튼은 패널 → plugin worker → 코어의 같은 함수를 불러 <code>owner_action</code> 으로 기록된다. 127.0.0.1 웹 대시보드는 없고 별도 서버도 포트도 수집기도 없다. 이유: 화면이 스스로 만들면 원본이 둘이 된다. 패널은 오른쪽 사이드바에 그려지므로 같은 열을 행마다 한 블록으로 접는다(열을 빼지 않는다).</p>
+<p><b>패널의 모양(결정 92)</b>: 보이는 모양은 시안 하나, <a href="dashboard/hallmark-final/index.html">hallmark</a> 로 통일한다(시안을 섞지 않는다). 현재 시안은 <code>dashboard/hallmark-final/</code> 이다. 의존 그래프의 기본 형태는 <b>인라인 SVG DAG</b>(번호를 단 크리티컬 패스 노드 · 구조 · 간선 종류 범례)이고 들여쓴 목록은 대체다. 줌(<a href="dashboard/zoom.html">zoom.html</a>, L1 현황 · L2 묶음 상세 · L3 항목 상세)은 <b>보조 화면</b>이고 기본은 아래 세 화면이다. 오너가 해야 하는 행(🚧·결정 필요·지금 오너가 할 일)은 배경색을 입지 않고 🚧 마커와 절 건수가 신호다(오너, 2026-11-09). 넓은 화면의 표 데이터 행은 모두 한 높이(40px)이고 글자 대비는 AA 를 지킨다. 묶음 상세의 넓은 화면은 왼쪽 열에 의존 그래프와 그 바로 아래 간선 종류 범례를 두고, 오른쪽 열(크리티컬 패스 · 쌓은 PR 체인 · 릴리스 묶음 · 끊긴 선행)은 왼쪽과 같은 높이이며 더 길면 그 안에서 스크롤한다. 360px 은 그래프, 범례, 표 순으로 쌓고 안쪽 스크롤이 없다. 현재 시안은 <a href="dashboard/hallmark-final/index.html">dashboard/hallmark-final/</a> 이다. 묶음 상세의 "왜 준비되지 않았나"는 표(항목 · 막는 선행 · 간선 종류 · 선행 상태 · 해야 할 일)다. Orca 상태 표시줄 항목은 건수 줄의 짧은 꼴(<code>🚧2 · 결정2 · 🔄5</code>)이고 오너가 할 일이 있으면 붉게 바뀌며 누르면 명령이 실행된다. 같은 수를 따로 세지 않는다(<code>BriefModel.summary</code>·<code>owner_todo</code>).</p>
+<table>
+<thead><tr><th style="width:14%">단계</th><th style="width:22%">명령</th><th style="width:20%">패널 시안</th><th>오너가 묻는 것</th></tr></thead>
+<tbody>
+<tr><td>1. 현황</td><td><code>sangsoe brief</code></td><td><a href="dashboard/hallmark-final/index.html"><b>index.html</b></a> (현황)</td><td>"무엇이 어디까지 갔고 무엇이 누구를 기다리나, 내가 답할 것은 무엇인가". 표 네 절: 결정 필요 · 지금 오너가 할 일 · 진행 중(리드 행과 그 아래 모든 항목·세션·PR 한 행씩) · 보류. 아래 시안과 열 규칙(결정 89).</td></tr>
+<tr><td>2. 묶음 상세</td><td><code>sangsoe brief &lt;id|name&gt;</code></td><td><a href="dashboard/hallmark-final/group.html"><b>group.html</b></a> (<code>hallmark-final/</code>)</td><td>"이 묶음 안에서 무엇이 누구를 기다리나". 항목·세션·PR 을 상태별로 한 줄씩, 선행 → 후속 의존 그래프(SVG DAG)와 크리티컬 패스, 못 시작한 일은 "왜 준비되지 않았나" 표.</td></tr>
+<tr><td>3. 항목 상세</td><td><code>sangsoe brief &lt;id&gt; &lt;item&gt;</code></td><td><a href="dashboard/item.html"><b>item.html</b></a> (항목 상세)</td><td>"이 일은 내가 한 어떤 말에서 시작해 지금 어디에 있나". 오너의 원문 → 분류 → 전환 → 증거 → 연결된 PR·결정.</td></tr>
+<tr><td>(보조) 줌</td><td>—</td><td><a href="dashboard/zoom.html"><b>zoom.html</b></a></td><td>같은 세 질문을 위치를 잃지 않고 오간다. 새 뷰도 새 명령도 없는 또 하나의 그림이다(결정 92).</td></tr>
+</tbody></table>
+<h4 id="brief-tables">현황 보고는 표 네 절이다 (결정 89)</h4>
+<p>채팅(Claude Code)에 올라가는 글과 패널은 같은 <code>BriefModel</code> 에서 나온다. 절 순서는 고정이고 한 행은 항목·세션·PR 하나다(접지 않는다). 절 이름 "진행 중"은 상태 🔄 와 다른 뜻이다(상태 칸이 🚧 🔄 🟢 📅 를 가른다). 완료는 표에 넣지 않고 맨 위 건수 줄이 센다.</p>
+<p><b>건수 줄</b>(결정 89 개정): 헤더 한 줄 바로 아래, 첫 표 위에 <code>✅ 완료 N건 · 🔄 진행 중 N건 · 남은 것 N건 · 🚧 막힌 것 N건</code> 한 줄이 온다. 세는 단위는 항목 하나이고(리드 행·결정·전달되지 않은 답은 세지 않는다) 항목은 정확히 한 버킷에 든다. 남은 것은 상태 셋(🟢 📅 ⏸️)이라 이모지를 붙이지 않는다.</p>
+<table>
+<thead><tr><th style="width:16%">버킷</th><th>정의</th><th style="width:28%">표에서 세는 곳</th></tr></thead>
+<tbody>
+<tr><td>✅ 완료</td><td>✅ 인 항목 가운데 최근 <code>brief.done_days</code> 일(기본 7) 안에 닫힌 것. 🔍 근거 부족 포함, 🗑️ 취소 제외.</td><td>표 밖(창 질의). 맨 아래 줄은 창 길이만 말한다.</td></tr>
+<tr><td>🔄 진행 중</td><td>🔄 인 항목.</td><td>진행 중 절의 🔄 항목 행(리드 행 제외)</td></tr>
+<tr><td>남은 것</td><td>아직 시작하지 않은 항목: 🟢 + 📅 + ⏸️.</td><td>진행 중 절의 🟢·📅 항목 행 + 보류 절 행(리드 행 제외)</td></tr>
+<tr><td>🚧 막힌 것</td><td>🚧 인 항목 + 지금 오너가 할 일 절의 항목 행(<code>iNNN</code>). 오너가 하기 전에는 못 가는 일이다.</td><td>진행 중 절의 🚧 항목 행(리드 행 제외) + 오너 할 일 절의 <code>iNNN</code> 행</td></tr>
+</tbody></table>
+<table>
+<thead><tr><th style="width:16%">절</th><th style="width:44%">열(순서대로, 괄호는 최대 표시 폭)</th><th>한 행</th></tr></thead>
+<tbody>
+<tr><td>1. 결정 필요 N</td><td><code>ID</code>(4) · <code>결정</code>(20) · <code>추천</code>(16) · <code>묶음</code>(14) · <code>경과</code>(6)</td><td>열린 결정 하나. 추천 열이 있다. 경과가 긴 순.</td></tr>
+<tr><td>2. 지금 오너가 할 일 N</td><td><code>ID</code>(4) · <code>할 일</code>(22) · <code>풀리는 일</code>(16) · <code>어디서</code>(10) · <code>경과</code>(6)</td><td><code>owner_todo</code> 의 나머지 세 종류 하나. 결정과 겹치지 않는다.</td></tr>
+<tr><td>3. 진행 중 N</td><td><code>상태</code>(4) · <code>항목</code>(24) · <code>PR</code>(12) · <code>다음</code>(12) · <code>누가</code>(10)</td><td>리드 행 하나(굵게, 우선순위) 아래에 그 묶음의 항목·세션·PR 이 한 행씩. 상태 칸은 이모지 하나(🚧 🔄 🟢 📅), 🚨 는 <code>다음</code> 앞.</td></tr>
+<tr><td>4. 보류 N (있을 때만)</td><td><code>상태</code>(4) · <code>항목</code>(24) · <code>PR</code>(12) · <code>다시 볼 조건</code>(16) · <code>기간</code>(4)</td><td>⏸️ 항목 하나.</td></tr>
+</tbody></table>
+<ul>
+  <li><b>폭(터미널)</b>: 표 하나는 5열 이하, 표시 폭 78칸 이하(한글 2칸, 칸마다 양옆 공백 1과 세로줄 1, 링크는 라벨만 센다). 넘는 칸은 줄바꿈하지 않고 <code>…</code> 로 자르며 전문은 3단계(<code>sangsoe brief &lt;묶음&gt; &lt;항목&gt;</code>)에 있다. 기간은 <code>45m</code> · <code>17h</code> · <code>3d</code>. PR 은 <code>[acme/api#40](주소)</code> 로 라벨은 <code>저장소#번호</code>(12칸 넘으면 조직을 떼고, 그래도 넘으면 저장소 이름을 자르되 번호는 남긴다)이고 주소는 자르지 않는다. Claude Code 의 실제 표 폭과 링크 모양은 첫 빌드에서 실측한다(미확인).</li>
+  <li><b>한 함수</b>: ④ 코어 <code>brief</code> 모듈의 <code>buildBrief</code>(뷰 → <code>BriefModel</code>)와 <code>renderMarkdown</code>(→ 글). ③ MCP 서버 resource <code>brief</code> 와 오너 전용 skill 이 같은 글을 주고(tool 은 12개 그대로), ② 패널은 같은 <code>BriefModel</code> 을 행마다 한 블록으로 그린다. 시험은 골든 출력 시험 <code>brief.golden.test.ts</code> 하나가 절 순서·행 수·제목 숫자·78칸·자르기·모델과 글의 ID 일치, 건수 줄의 네 수가 버킷별 표 행 수와 같음, 연결 안 된 오너 일의 PR 행이 진행 중 N 에는 들고 네 수의 합은 바꾸지 않음(결정 91)을 본다. 건수는 <code>buildBrief</code> 가 표와 같은 <code>item_status</code> 를 한 번 훑어 <code>BriefModel.summary</code> 에 채우고 렌더러와 패널은 다시 세지 않는다.</li>
+</ul>
+<p>시안(발췌: 실제 출력은 모든 리드·카드·PR·워커를 한 행씩 낸다. 전체는 <a href="dashboard/cli-samples.txt">dashboard/cli-samples.txt</a>):</p>
+<p><b>✅ 완료 11건 · 🔄 진행 중 5건 · 남은 것 11건 · 🚧 막힌 것 5건</b></p>
+<p><b>결정 필요 2</b></p>
+<table>
+<thead><tr><th>ID</th><th>결정</th><th>추천</th><th>묶음</th><th>경과</th></tr></thead>
+<tbody>
+<tr><td>d012</td><td>웹훅 재시도 정책</td><td>3회 지수 백오프</td><td>api-migration</td><td>17h</td></tr>
+<tr><td>d013</td><td>feature 머지 방식</td><td>merge commit</td><td>app-login</td><td>12h</td></tr>
+</tbody></table>
+<p><b>지금 오너가 할 일 3</b></p>
+<table>
+<thead><tr><th>ID</th><th>할 일</th><th>풀리는 일</th><th>어디서</th><th>경과</th></tr></thead>
+<tbody>
+<tr><td>i032</td><td>권한 입력</td><td>—</td><td>터미널</td><td>5h</td></tr>
+<tr><td>i035</td><td>prod 동기화 확인</td><td>—</td><td>prod 콘솔</td><td>2h</td></tr>
+<tr><td>d011</td><td>답 다시 보내기</td><td>i040 세션 만료…</td><td>sangsoe</td><td>91m</td></tr>
+</tbody></table>
+<p><b>진행 중 17</b></p>
+<table>
+<thead><tr><th>상태</th><th>항목</th><th>PR</th><th>다음</th><th>누가</th></tr></thead>
+<tbody>
+<tr><td>🚧</td><td><b>api-migration</b> P0</td><td>—</td><td>9건·막힘 2</td><td>인프라 3d</td></tr>
+<tr><td>🚧</td><td>└ i033 스테이징 키 발급</td><td>—</td><td>키 도착 확인</td><td>인프라 3d</td></tr>
+<tr><td>🚧</td><td>└ i031 웹훅 재시도 정…</td><td>acme/api#31</td><td>d012 답</td><td>오너 17h</td></tr>
+<tr><td>🔄</td><td>└ i026 N+1 쿼리 제거</td><td>acme/api#40</td><td>🚨 CI 수정</td><td>w-api-1 2h</td></tr>
+</tbody></table>
+<p><b>보류 2</b></p>
+<table>
+<thead><tr><th>상태</th><th>항목</th><th>PR</th><th>다시 볼 조건</th><th>기간</th></tr></thead>
+<tbody>
+<tr><td>⏸️</td><td>i028 소셜 로그인</td><td>—</td><td>d013 답 뒤</td><td>6d</td></tr>
+<tr><td>⏸️</td><td>i041 문서 색인</td><td>—</td><td>다음 스프린트</td><td>3d</td></tr>
+</tbody></table>
+<ul>
+  <li><b>오너가 할 일은 한 곳에서 센다</b>: <code>owner_todo</code> 뷰(열린 결정 + 오너가 시작하는 쪽인 항목 + 소유 리드가 못 푼 <code>waiting_human</code> + 전달되지 않은 답). 이 줄들은 관측한 사실이나 기록된 답으로 스스로 빠진다: <code>waiting_human</code> 은 에이전트 세션이 다시 움직인 관측으로(<code>waiting_released</code>), 오너 항목은 probe(<code>verify</code>)가 참이 될 때 닫기 제안을 받고, 원인이 사라진 결정은 <code>moot</code> 로 닫힌다. 오너의 프롬프트·<code>!</code> 명령은 후보 신호일 뿐이라 표지 <code>입력 확인됨 · 검증 중</code> 만 달고 상태를 바꾸지 않는다. 명시적 답(<code>dNNN</code>·패널 버튼)만 예외다(결정 91). 패널 띠·상태 표시줄·<code>sangsoe todo</code>·<code>sangsoe brief</code> 의 숫자는 같다.</li>
+  <li><b>우선순위</b>: 항목과 묶음에 <code>P0</code>~<code>P3</code>(기본 <code>P2</code>)를 둔다. 묶음은 오너가, 묶음 안 항목은 리드가 정하고 오너는 어느 것이든 덮어쓴다. 현황 1단계는 이 순서로 정렬한다.</li>
+  <li>PR 표·이벤트 기록·토큰 사용 같은 보기는 오너의 판단 질문이 아니라서 화면으로 두지 않는다. 패널로 안 되는 기능(넓은 화면·Orca 가 꺼졌을 때 보기, 그림이 안 그려질 때의 의존 목록 등)은 모두 패널 안 대안이나 CLI 가 있어 웹 화면이 필요하지 않다. 터미널 출력 예시는 <a href="dashboard/cli-samples.txt">dashboard/cli-samples.txt</a>.</li>
+</ul>
+<p class="more">자세히: <a href="design-appendix.html#dashboard-pages">부록 §패널 화면</a>(패널 단계마다 읽는 뷰·정렬·접기·우선순위) · <a href="design-appendix.html#dashboard-fallback">§폴백 규칙과 패널로 안 되는 기능</a> · <a href="dashboard/README.md">dashboard/README.md</a></p>
+
+<h3 id="states">상태와 용어</h3>
+<p>항목은 늘 아래 상태 중 정확히 하나이고, 패널과 문서와 브리프는 아래 낱말만 쓴다. 상태는 Orca Task 의 <code>status</code> 6개에 대응하고(📅 <code>pending</code> · 🟢 <code>pending</code>·<code>ready</code> · 🔄 <code>dispatched</code> · 🚧·⏸️ <code>blocked</code> · ✅ <code>completed</code> · 🗑️ <code>failed</code>+<code>result=cancelled</code>) 보류와 기다리는 쪽은 부가 정보가 구분한다. 플래그는 상태 위에 0개 이상 붙는다. 이모지는 상태·플래그 표시에만 쓰고 하나에 뜻 하나이며 꾸밈으로 쓰지 않는다.</p>
+<table>
+<thead><tr><th>종류</th><th>표시</th><th>낱말</th><th>뜻</th></tr></thead>
+<tbody>
+<tr><td>상태</td><td>📅</td><td>예정</td><td>시작 trigger(날짜·PR 머지)나 선행 간선이 아직 안 찼다. 스크립트가 판정한다.</td></tr>
+<tr><td>상태</td><td>🟢</td><td>준비됨</td><td>지금 시작할 수 있고 아직 아무도 맡지 않았다.</td></tr>
+<tr><td>상태</td><td>🔄</td><td>진행 중</td><td>살아 있는 워커나 리드가 goal 을 걸고 쥐고 있다. 결정이 풀려 Orca 상태가 <code>ready</code> 가 됐어도 워커가 아직 쥐고 있으면(활성 Dispatch) 🟢 가 아니라 🔄 다.</td></tr>
+<tr><td>상태</td><td>🚧</td><td>막힘</td><td>시작했으나 누군가 없이는 못 간다. 기다리는 쪽을 괄호에 적는다(오너·리뷰어·인프라·리드·워커). 리뷰 대기도 막힘(리뷰어)이고, land 요청 뒤 머지를 기다리는 PR 항목도 같다.</td></tr>
+<tr><td>상태</td><td>⏸️</td><td>보류</td><td>일부러 지금 안 한다. 다시 볼 trigger 가 있다. 시작 조건이 글뿐인 항목도 여기다.</td></tr>
+<tr><td>상태</td><td>✅</td><td>완료</td><td>Orca Task 가 <code>completed</code> 다. PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 <code>completed</code> 가 되고, PR 이 없는 항목은 받아들여진 <code>worker_done</code> 이나 리드·오케스트레이터의 닫기로 <code>completed</code> 가 된다. 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않는다. 증거 없이 닫힌 항목은 🔍 로 표시되어 리드가 확인한다.</td></tr>
+<tr><td>상태</td><td>🗑️</td><td>취소</td><td>하지 않기로 했다. 이유가 필수다.</td></tr>
+<tr><td>플래그</td><td>🙋</td><td>결정 필요</td><td>오너를 기다리는 열린 결정이 이 항목에 있다.</td></tr>
+<tr><td>플래그</td><td>🚨</td><td>오류·멈춤</td><td>오류가 났거나 워커·리드가 멈췄다. sangsoe 를 거치지 않고 만들어진 게이트가 막고 있거나, 부가 정보가 Orca 에 없는 Task id 를 가리키는 경우도 여기 보인다.</td></tr>
+<tr><td>플래그</td><td>⚠️</td><td>확인 필요</td><td><code>trigger_unclear</code> 하나만 뜻한다. 스크립트가 판정 못 하는 trigger 다.</td></tr>
+<tr><td>플래그</td><td>🔍</td><td>근거 부족</td><td>일한 세션이 스스로 완료를 판정한 경우. 완료로 닫혔는데 증거 <code>event</code> 가 없거나 모자란 항목에 오른다.</td></tr>
+</tbody></table>
+<p class="more">자세히: <a href="glossary.md">glossary.md</a>(모든 용어) · <a href="design-appendix.html#schema">부록 §sqlite 스키마</a>(상태 대응표) · <a href="design-appendix.html#delivery">§전달 규칙</a>(일이 기다리는 곳)</p>
+
+<h3 id="mcp">MCP 인터페이스</h3>
+<p>결론: 인터페이스는 입구 셋이고 저장은 Orca 와 sqlite 다. 코어는 라이브러리 하나이고 그 위에 어댑터가 셋이다: MCP 서버(에이전트가 쓰는 유일한 길, tools 는 행동 9개 + land 요청 1개 + 기록 2개(<code>handoff_save</code> · <code>review_ask_record</code>) = 12개, 읽기 전용 resources: 현황 표 글 <code>brief</code> 포함, 결정 89), <code>sangsoe</code> CLI(MCP 를 쓸 수 없는 셸 호출자 여섯 행용, 위 호출 경로 규칙), plugin worker(코어를 직접 import). MCP 는 인터페이스일 뿐이고 상태는 Orca 와 sqlite 에 있다. stdio 서버는 세션이 끝나면 함께 끝나고 세션마다 서버가 뜨므로 쓰는 프로세스가 여럿이어도 sqlite 파일이 쓰기를 직렬화한다. 깨움은 MCP 로 하지 않고 Orca 메시지가 맡는다. prompts·MCP tasks·skills over MCP·상주 HTTP 서버는 쓰지 않는다. Claude Code plugin 이 MCP 서버를 함께 싣고 입력 스키마와 거부 오류의 모양은 tool 정의가 말해 skill 글에는 판단만 남는다.</p>
+<p class="more">자세히: <a href="design-appendix.html#mcp">부록 §MCP 인터페이스</a> · <a href="decisions.md">decisions.md</a></p>
+</section>
+
+<section id="data">
+<h2>4. 데이터</h2>
+<p class="lead">결론: <b>원본은 기능이 있는 쪽이다.</b> 항목·만들 때의 의존·게이트·메시지·Dispatch·Run 은 Orca 가, 오너의 말·결정 키·Orca 에 없는 간선·부가 정보는 sangsoe sqlite 가, PR·대화 기록·티켓은 각 외부가 쥔다. sangsoe 는 Orca 와 외부 값을 복사하지 않고 id·참조와 sangsoe 만 아는 판단·외부 사실의 변화 사건 한 줄만 저장한다. 같은 사실을 두 곳에서 다른 값으로 보이게 하지 않으려는 것이다. Orca 값은 캐시도 두지 않고, 다른 외부의 캐시는 예외 표에 이유가 있을 때만 두며 원본과 다르면 원본이 이긴다. 파일은 브리프·증거·설정·흐름 틀·로그에만 쓴다.</p>
+<figure id="fig-storage"><img src="diagrams/storage.svg" width="1000" height="690" alt="저장 위치 네 칸. 첫째 Orca(원본): Run, Task, Dispatch와 워커, 게이트, 메시지, 카드 표시, 항목과 PR 의 연결(Orca 참조). 둘째 sangsoe sqlite(Orca 에 없는 것만): event, 계산되는 뷰, owner_text, 번호 표, 캐시 예외. 셋째 파일: 흐름 틀, 설정, 브리프와 증거, 로그, 압박 기록. 각각 왜 파일인지와 sqlite 로 옮길 수 있는지 한 줄. 넷째 저장 안 함(참조만): GitHub, Claude Code 대화 기록, 티켓 도구, Orca Task 의 제목과 상태 사본, Orca 메시지 편지함 사본."><figcaption><b>도식 4. 데이터가 어디에 저장되나.</b> 아래 표를 네 칸으로 그린 것이다. 원본은 데이터마다 한 곳이고, sangsoe 는 Orca 값을 id 로만 가리키며, 캐시는 이유·신선도·갱신 주체가 있는 외부 데이터에만 둔다. Orca plugin 의 자체 저장소(JSON 키-값)는 패널 화면 상태와 설정에만 쓰고 원본을 두지 않는다. 자세히: <a href="design-appendix.html#data-ownership-detail">부록 §sqlite 스키마의 데이터 소유 · 캐시 예외 · 키와 불변식</a></figcaption></figure>
+
+<h3 id="data-ownership">데이터 소유</h3>
+<table>
+<thead><tr><th style="width:18%">데이터</th><th style="width:20%">Orca 원본</th><th style="width:26%">sqlite</th><th style="width:16%">파일</th><th>저장 안 함(참조만)</th></tr></thead>
+<tbody>
+<tr><td>항목(제목·상태·<code>spec</code>·만들 때의 의존)</td><td>Orca Task</td><td>Task id 에 붙는 부가 정보(<code>iNNN</code> 별칭·시작하는 쪽·소유 리드·우선순위·<code>est</code>·trigger·<code>hold</code>·<code>waits_on</code>·흐름 틀 단계·끝나는 조건)와 상태를 바꾼 이력 한 줄</td><td>—</td><td>Task 의 제목·상태 사본</td></tr>
+<tr><td>결정(질문 문구·열림·닫힘, 막기·풀기)</td><td>Orca 게이트</td><td><code>decision_key</code>·<code>dNNN</code>·게이트 id 목록·대기자 Task id, 답 연결(<code>owner_action</code> 과 닫는 <code>event</code>)</td><td>—</td><td>게이트 질문 문구</td></tr>
+<tr><td>깨움 메시지·Dispatch·워커·터미널·worktree</td><td>Orca</td><td>메시지 id·핸들 참조와 <code>notified</code>·<code>session_started</code>·<code>worker_dead</code>·<code>worker_stuck</code> 같은 사건</td><td>—</td><td>받은 편지함 사본</td></tr>
+<tr><td>Orca 에 없는 간선(<code>after</code>·<code>stacked_on</code>·<code>deploys_after</code>·만든 뒤의 <code>blocks</code>)</td><td>—</td><td>부가 간선 <code>event</code>(<code>pred</code>·<code>succ</code> 는 Orca Task id)</td><td>—</td><td>—</td></tr>
+<tr><td>오너의 말</td><td>—</td><td><code>owner_action</code>(시각·출처·마스킹 원문·요지·세션 id·메시지 uuid)와 별도 <code>owner_class</code></td><td>—</td><td>대화 기록 원문(세션 id + 메시지 uuid 로 가리킨다)</td></tr>
+<tr><td>PR 상태·리뷰·CI·머지</td><td>항목↔PR 연결(Orca 참조)</td><td>변화 사건(<code>pr_merged</code> 등), 판정, 증거(<code>evidence</code>: 칸 <code>kind</code> · <code>head_sha</code> · <code>exit_code</code> · <code>not_verified</code>. 증거는 머지할 head 마다이고 새 push 로 head 가 바뀌면 이전 증거는 그 head 에 대해 무효다), 검증 등급 기록 <code>verify_tier_set</code>. 표시용 상태는 캐시 예외(<code>pr_ref</code>)</td><td>증거 파일</td><td>GitHub 의 PR 본문·코멘트</td></tr>
+<tr><td>외부 티켓(Jira·Linear 등)</td><td>—</td><td>일을 하는 워크스페이스에 붙인 Orca 참조(<code>reference add</code>)만. 워크스페이스가 아직 없으면 Task 의 제목·<code>spec</code> 글에 키를 적고, 워커 시작 절차가 워크스페이스를 만든 뒤 붙인다. 일의 기록은 Orca Task(결정 93)</td><td>—</td><td>티켓의 상태·본문(복사·동기화·쓰기 없음)</td></tr>
+<tr><td>자원 기록(만든 프로세스·worktree·compose·Docker 컨테이너·볼륨·네트워크·이미지의 id)</td><td>worktree 목록은 <code>worktree list</code> 가 원본</td><td><code>resource</code>(만든 쪽이 쓴다) · <code>resource_adopted</code>(REAPER 가 기록 없는 카드·Docker 자원을 편입) · <code>reap_done</code> · <code>reap_candidate</code>(후보 최초 관측, 유예 계산용) · <code>reap_round</code>(라운드 시각 · <code>trigger</code> · <code>roots_ok</code> · 표시·후보·정리·모름 수). 루트(열린 PR · 닫히지 않은 Task · 살아 있는 세션)는 저장하지 않고 라운드마다 읽는다</td><td>—</td><td>Docker 의 컨테이너·이미지 정보(id 로만 가리킨다)</td></tr>
+<tr><td>브리프·증거·설정·흐름 틀·로그·압박 기록</td><td>—</td><td>—</td><td>파일 자체(왜 파일인지는 도식 4)</td><td>—</td></tr>
+</tbody></table>
+<p class="more">자세히: 도식 4 · <a href="design-appendix.html#data-ownership-detail">부록 §sqlite 스키마의 데이터 소유 · 캐시 예외 · 키와 불변식</a>(Orca Run 범위가 깨지는 곳 다섯과 시험 P1–P13 포함)</p>
+
+<h3 id="dependencies">의존 관리</h3>
+<p>결론: 일이 서로를 기다리는 관계(스택 PR 의 머지 순서, 머지 → dev 배포 → 확인 → prod, 티켓과 PR, 리드 사이)를 기억이 아니라 데이터로 둔다. 기반은 Orca Task 의 의존이고, sangsoe 는 Task id 를 키로 간선 종류·순환 거부·<code>ready</code>·크리티컬 패스·흐름 틀·감지기 사실과의 동기화만 맡는다. 별도 실행 엔진은 없다. 만들 때 알려진 <code>blocks</code> 는 Orca Task 의 <code>--deps</code> 에, 그 밖의 간선은 sangsoe 의 부가 간선에 두며 <b>한 간선은 한 곳에만 산다</b>. 의존이 기억에만 있으면 순서가 어긋나서 부록에 회귀 시나리오 12개를 두었다.</p>
+<table>
+<thead><tr><th style="width:15%">간선 종류</th><th style="width:30%">뜻</th><th style="width:20%">어디에 둔다</th><th>후속이 준비됨이 되는 때</th></tr></thead>
+<tbody>
+<tr><td><code>blocks</code></td><td>선행이 끝나야 시작할 수 있다</td><td>만들 때 알려진 것은 Orca <code>--deps</code>, 만든 뒤에 더한 것은 부가 간선</td><td>선행이 ✅ 완료(선행이 결정이면 닫힘)</td></tr>
+<tr><td><code>after</code></td><td>순서만 정한다</td><td>부가 간선</td><td>선행이 ✅ 완료 또는 🗑️ 취소</td></tr>
+<tr><td><code>stacked_on</code></td><td>후속 PR 이 선행 PR 위에 쌓였다</td><td>부가 간선</td><td>선행 PR 이 머지됨. 머지로 base 가 바뀌면 판정·승인을 다시 확인한다</td></tr>
+<tr><td><code>deploys_after</code></td><td>후속 배포·확인이 선행의 머지 뒤에 온다</td><td>부가 간선</td><td>선행에 <code>pr_merged</code> 가 있고 앞 단계에 <code>stage_recorded</code> 가 있으면 충족한다</td></tr>
+</tbody></table>
+<ul>
+  <li><b>GRAPH</b>: 간선을 더하고 빼는 길은 <code>sangsoe graph</code> 하나뿐이다. Orca <code>--deps</code> 에 쓰는 것(만들 때 한정)도 부가 간선에 쓰는 것도 이 모듈을 지난다(순환·없는 항목 거부, 같은 간선은 합침). 같은 모듈이 <code>ready</code> 계산·틀 펼치기·크리티컬 패스·영향 범위를 맡고, 감지기가 알린 외부 사실을 간선에 맞춘다. 결정적 코드라 토큰이 들지 않는다.</li>
+  <li><b>준비됨과 시작</b>: Orca 상태가 <code>pending</code>·<code>ready</code> 이고 Orca <code>deps</code> 의 선행이 모두 <code>completed</code> 이며 부가 간선·trigger 가 모두 차고 <code>hold</code> 가 아닌 항목을 <code>ready</code> 뷰가 가리킨다(계산하고 저장하지 않는다). Run 을 쥔 리드·오케스트레이터가 이 뷰에서 골라 <code>capacity</code> 를 확인한 뒤 <code>worker-start --task</code> 로 직접 시작한다. 아무도 대신 배정하지 않는다. <code>worker-start</code> 는 <code>ready</code> 인 Task 만 받고 선행이 안 끝난 Task 는 <code>task_not_startable</code> 로 거부한다(확인). 이미 Dispatch 된 Task 의 재시작 거부와 3회 실패 컷오프는 첫 빌드 시험 T5 가 정한다: 거부되면 Orca 가 이중 시작을 막고, 안 되면 시작 함수가 Task 상태를 먼저 읽어 걸러내며, 컷오프가 없으면 실패 횟수를 <code>event</code> 로 세어 3회에서 시작을 멈춘다. 선행이 <code>completed</code> 이면 후속이 <code>pending</code> 에서 <code>ready</code> 로 바뀌지만, 선행이 🗑️ 취소(<code>failed</code>)이면 후속은 <code>pending</code> 에 남고 "끊긴 선행"으로 보이며 자동으로 풀리지 않는다(확인). 그래서 취소와 무관하게 순서만 정하는 <code>after</code> 는 부가 간선이다. 다른 Run 의 Task 나 모르는 id 는 의존으로 거부되고, 의존은 만들 때만 걸 수 있어 순환이 생기지 않는다(확인, P1).</li>
+  <li><b>순환은 더할 때 거부</b>, <b>흐름 틀</b>(구현 → 리뷰 → 머지 → dev 배포 → 확인 → prod)은 선언형 틀로 Orca Task 를 위상 순서로 만들어 펼친다(요청 id 를 달아 끊기면 이어서 만든다). prod 단계는 오너만 하는 게이트라 준비됨이 되면 시작하는 쪽이 오너인 🟢 준비됨으로 <code>owner_todo</code> 에 오른다. <b>크리티컬 패스</b>는 묶음에서 아직 끝나지 않은 항목을 잇는 가장 긴 선행 사슬이다.</li>
+  <li><b>일부러 그래프로 만들지 않는 것</b>: 오너의 지시가 흐르는 길과 에이전트 사이의 대화 경로.</li>
+</ul>
+<p class="more">자세히: <a href="design-appendix.html#dependencies-detail">부록 §의존 관리 상세</a>(스키마·ready 질의·순환 검사·흐름 틀 형식·크리티컬 패스·실패 → 방지 장치 → 회귀 시험 표) · <a href="design-appendix.html#prior-art">§기존 설계 참고</a></p>
+</section>
+
+<section id="flows">
+<h2>5. 흐름</h2>
+<p class="lead">결론: 네 칸은 따로 도는 것이 아니라 흐름으로 이어진다. <b>두 plugin 은 서로 직접 통신하는 공식 경로가 없으므로 이어 주는 것은 공유 코어(sqlite)와 Orca CLI 둘뿐</b>이다. Claude Code 쪽(hook · MCP 서버)은 코어를 부르고, Orca 쪽(plugin worker · 패널)도 코어를 부르고, 코어가 Orca CLI 로 Orca 에 쓰고 읽는다. 아래 그림은 흐름마다 "누가 → 무엇으로 → 누구에게"를 단계별로 그렸고, 오른쪽 열은 그 단계에서 오가는 것과 원본이 어느 쪽인지를 적었다. 흐름 넷은 유닛 시작 · 결정 · 머지 · 모니터에서 깨움까지이고, 그 앞에 오너 지시 하나가 분류되는 순서가 있다.</p>
+
+<h3 id="flow-intake">오너 지시 하나</h3>
+<figure id="fig-sequence"><img src="diagrams/sequence.svg" width="1000" height="1290" alt="오너의 말이 owner_action 으로 기록되고 owner_class 로 분류된 뒤, 진행 중인 일의 범위, 새 일, 오너 판단 세 갈래가 위에서 아래로 이어지고 완료 보고로 끝난다. 단계마다 오른쪽 열에 그 단계가 쓰는 event 와 부르는 Orca 기능이 적혀 있다."><figcaption><b>도식 5. 오너 지시 하나가 이어지는 순서.</b> 위에서 아래가 시간이고, 오른쪽 열이 그 단계가 sqlite 에 쓰는 <code>event</code> 이고 화살표 글자가 부르는 Orca 기능이다. 갈래 셋(진행 중인 일의 범위·새 일·오너 판단)만 대표로 그렸고 나머지 셋은 같은 기록·분류 뒤에 갈라진다. 자세히: <a href="design-appendix.html#intake-table">부록 §지시 분류 표</a> · <a href="design-appendix.html#schema">§sqlite 스키마</a></figcaption></figure>
+
+<h3 id="flow-unit-start">흐름 1. 유닛 시작</h3>
+<p>리드 세션이 MCP tool 로 항목을 만들고 시작을 요청하면, 코어가 Orca Task 를 만들고(<code>task-create --deps</code>) 워커를 시작한다(<code>worker-start --task --worktree new-child</code>). 새 워커 세션이 뜨면 <code>SessionStart</code> hook 이 CLI 로 코어를 불러 역할 줄과 브리프 경로를 받아 세션에 주입한다. 시작은 항상 코어의 시작 절차 하나를 지나서 <code>ready</code> 뷰·<code>capacity</code> 를 먼저 읽는다.</p>
+<figure id="fig-flow-unit-start"><img src="diagrams/flow-unit-start.svg" width="1160" height="560" alt="리드 세션이 MCP 서버의 tool 로 항목 만들기와 시작을 요청하고 MCP 서버가 코어 함수를 부른다. 코어가 Orca CLI 의 task-create 와 worker-start 를 부르면 Orca 가 새 워커 세션을 띄운다. 새 워커 세션의 SessionStart hook 이 sangsoe CLI 로 코어를 부르고 코어가 역할 줄과 브리프 경로를 돌려주어 hook 출력으로 브리프가 주입된다."><figcaption><b>도식 6. 유닛 시작.</b> 원본: 항목·워커·Dispatch 는 Orca, 부가 정보와 <code>session_started</code> 는 sqlite, 브리프는 파일이다.</figcaption></figure>
+
+<h3 id="decision-loop">흐름 2. 결정</h3>
+<p>결론: 오너가 한 번 답한 결정은 닫히고, 기다리던 쪽에 답이 가고, 같은 질문은 다시 만들어지지 않는다. 막기와 풀기는 Orca 게이트가 하고, 이 일을 기억하는 에이전트는 없다. 판단이 필요한 한 군데(잇기)만 LLM 이고 나머지는 함수라 어긋나지 않는다. 결정 하나에 대기자가 여럿이면 게이트도 여럿이고 질문 문구는 각 게이트가 갖는다(Orca 가 원본). sangsoe 는 <code>decision_key</code> → <code>dNNN</code> → 게이트 id 목록만 갖는다. 게이트를 만들고 푸는 명령에는 Run 을 고르는 인자가 없어 묶인 Run 밖에서는 "Gate not found" 로 실패한다(확인, 읽기는 된다). 그래서 다른 Run 의 결정은 그 Run 을 쥔 세션에 Orca 메시지로 보내 그 세션이 푼다. 게이트가 풀리면 Task 는 <code>blocked</code> 에서 <code>ready</code> 로 전환된다(확인). 워커가 아직 그 Task 를 쥐고 있으므로 이 상태는 🟢 가 아니라 🔄 로 보인다. 게이트를 푸는 쪽은 <code>gate-resolve</code> 마다 뒤이어 막혀 있던 워커에게 <code>notify</code> 로 Orca 메시지를 정확히 한 번 보낸다(답 원문과 <code>dNNN</code> 을 싣는다). resolve 만으로 깨운다고 기대하지 않는다.</p>
+<figure id="fig-flow-decision"><img src="diagrams/flow-decision.svg" width="1160" height="724" alt="워커 세션이 MCP tool decision_open 으로 코어를 부르면 코어가 Orca CLI 의 gate-create 로 게이트를 만든다. Orca plugin 패널이 코어의 owner_todo 뷰를 읽어 결정 필요 표시를 오너에게 보인다. 오너가 채팅으로 답하면 UserPromptSubmit hook 이 코어에 owner_action 을 기록하고 decision_answered 를 기록하며, decision_answer 가 decision_closed 를 쓴 뒤 호출자가 묶인 Run 의 게이트만 gate-resolve 로 푼다. 다른 Run 의 게이트는 그 Run 을 쥔 세션에 Orca 메시지(send)로 넘기고 그 세션이 푼다. 게이트를 푼 뒤에는 resolve 에 기대지 않고 notify 가 막혀 있던 워커에게 Orca 메시지를 정확히 한 번 보내 깨운다. 패널 버튼으로 답하는 길은 plugin.request 로 같은 함수를 부른다."><figcaption><b>도식 7. 결정.</b> 원본: 질문·열림·닫힘은 Orca 게이트, <code>dNNN</code>·답 연결·<code>owner_action</code> 은 sqlite, 깨움은 Orca 메시지다.</figcaption></figure>
+<table>
+<thead><tr><th style="width:17%">단계</th><th style="width:19%">누가</th><th>하는 일</th></tr></thead>
+<tbody>
+<tr><td>기록</td><td>hook · 패널 버튼 (토큰 X)</td><td>오너의 말은 <code>UserPromptSubmit</code> hook 이 <code>owner_action</code> 으로 남기고, 말에 <code>dNNN</code> 이 있으면 그 결정에 바로 잇는다. 패널 버튼 답도 같은 <code>decision_answered</code> 다.</td></tr>
+<tr><td>연결</td><td>오케스트레이터 (LLM, 이 단계만)</td><td><code>dNNN</code> 없이 "빨간색으로 하자"라고만 답했을 때 열린 결정 중 어느 것의 답인지 고른다. 애매하면 확인 질문을 한 번 한다.</td></tr>
+<tr><td>열기·닫기·전파</td><td><code>decision_open</code> · <code>decision_answer</code> (토큰 X)</td><td><code>decision_open</code> 은 같은 결정 키가 열려 있으면 거부하고 기존 <code>dNNN</code> 을 돌려주며, 아니면 <code>dNNN</code> 을 발번해 대기자 Task 마다 <code>gate-create</code> 를 부른다. <code>decision_answer</code> 는 결정을 닫는 <code>event</code> 를 쓰고, 호출자가 묶인 Run 의 게이트마다 <code>gate-resolve</code> 를 <code>dNNN</code> 과 마스킹한 원문 인용으로 부르고, 푼 게이트마다 막혀 있던 워커에게 <code>notify</code> 로 Orca 메시지를 정확히 한 번 보낸다(멱등: 이미 푼 게이트와 이미 보낸 메시지는 건너뛴다). 다른 Run 의 게이트는 <code>gate-resolve</code> 가 묶인 Run 밖에서는 실패하므로 그 Run 을 쥔 세션에 Orca 메시지(<code>send</code>)로 답을 넘기고, 그 세션이 풀고 같은 메시지를 보낸다. 답은 있는데 게이트가 열려 있으면 queue-monitor 가 그 Run 을 쥔 세션에 같은 방식으로 다시 알린다. 읽히지 않은 escalation 과 전달이 안 된 답은 <code>escalation_stale</code> 로 한 단계 위로 올라간다. 오너가 직접 한 일(머지·수동 sync)은 pr-monitor 가 사실로 읽어 같은 길로 결정을 닫는다.</td></tr>
+<tr><td>재질문 게이트</td><td><code>decision_open</code> 안 (토큰 X)</td><td>질문을 만드는 모든 길이 거친다. 같은 결정 키의 닫힌 결정이 있으면 거부하고 기존 답을 돌려주며, 열린 같은 결정 키가 있으면 합친다. 대기할 항목이 없는 결정은 오케스트레이터 Run 의 결정 운반 Task 에 게이트를 건다.</td></tr>
+</tbody></table>
+<p class="more">🙋 는 열린 결정만 센다. 자세히: <a href="design-appendix.html#decision-loop-detail">부록 §전달 규칙의 결정 루프</a>(결정 키 정규화·event·시간·회귀 시나리오 11개: 결정 루프 4 + 결정 91 의 7)</p>
+
+<h3 id="flow-merge">흐름 3. 머지와 정리</h3>
+<p>PR 을 만든 당사자(워커 또는 리드)가 독립 리뷰에서 더 고칠 것이 없을 때 MCP tool 로 land 판정 함수를 부른다. 함수는 먼저 PR 의 검증 등급(V0~V3, 라벨 <code>verify-tier:N</code> 으로 조정하며 내리기는 설정 <code>owners</code> 만 유효하다)이 요구하는 증거가 그 head 에 있는지 읽고, 없으면 <code>land_failed</code>(사유 <code>evidence_missing</code>)로 끝낸다. 통과하면 저장소 설정을 읽고 <b>자동 머지 조건 넷</b>이 모두 참일 때만 <code>gh pr merge --auto</code> 로 머지를 예약한다: ① 필수 리뷰와 필수 CI 가 강제된다 ② 최신 main 이 필수이거나 병합 대기열을 쓴다 ③ 새 push 에 승인이 무효가 된다 ④ PR 이 prod·인프라·보안 경로(경로 목록은 설정 <code>protected_paths</code>)를 건드리지 않는다. 설정을 읽지 못하거나 하나라도 거짓이면 예약하지 않고 <code>land_requested</code> 에 사유 <code>merge_on_approval</code> 을 쓰며, 보고에 "승인되면 머지" 를 적어 Orca Task 에 남긴다. 만든 당사자는 어느 쪽이든 <code>worker_done</code> 이 아니라 머지 대기 보고(<code>send --type merge_ready</code>)를 보내고 스스로 끝난다. 상주하는 머지 실행자는 없다. Task 는 닫히지 않고 🚧 막힘(리뷰어)로 머지 확인까지 열려 있으며, 터미널은 리드가 <code>worker-release</code> 로 해제한다(Auto-close 는 받아들여진 <code>worker_done</code> 에만 걸린다). 예약했으면 사람 승인과 CI 가 찰 때 GitHub 이 머지한다. "승인되면 머지"이면 승인과 필수 검사가 찰 때 <code>pr-monitor</code> 가 <code>pr_ready_to_merge</code> 를 쓰고 소유 리드(없으면 오케스트레이터)를 깨우며, 리드가 같은 land 요청을 다시 불러 판정 함수가 조건을 다시 읽은 뒤 예약 없이 바로 머지한다. 머지하는 길은 land 하나이고 prod·인프라·보안 경로 PR 도 승인되면 이 길로 리드가 머지한다. 머지 뒤에는 어느 쪽이든 <code>pr-monitor</code> 가 GitHub 이 머지로 표시했는지와 그 머지 커밋이 main 에 들어 있는지를 읽고(머지 확인), 둘 다 참일 때만 <code>pr_merged</code> 를 기록한 뒤 같은 라운드에서 그 항목의 Task 를 <code>completed</code> 로 닫는다. 패널의 ✅ 는 이때 처음 뜬다. 검증 등급은 release·deploy 의 dev 확인을 덜어 주지 않는다: 머지가 release·deploy 를 일으키는 항목(<code>deploys_after</code> 간선이 있다)은 V0 PR 이라도 dev 칸 증거가 없으면 ✅ 가 되지 못하고 🔍 로 남고, prod 칸은 사람 승인과 prod 증거를 따로 요구한다. <code>pr_merged</code> 는 <code>deploys_after</code> 후속을 준비됨이 되게 하고, pr-monitor 는 그 sha 의 main CI 를 읽는다(위 "머지 뒤 main 감시와 동결"). 빨강이면 🚨 와 동결이다. 그 뒤의 정리는 REAPER 의 타이머 라운드가 표시 → 정리 두 단계로 한다. 기록 없는 기존 카드는 먼저 편입하고, 루트에 닿지 않는 후보 가운데 끝남 판정이 긍정(<code>gh</code> 로 PR 이 머지되었거나 닫히고 HEAD 가 그 PR 에 실림 · 항목 완료·취소·대체 · <code>worker_done</code> 이나 머지 대기 보고)이고 서로 다른 두 라운드에서 연속 후보였으며 유예가 지난 카드만 대상이 된다. 잠잠한 카드라는 이유로는 치우지 않는다. 대상은 삭제 전에 커밋 안 된 변경(추적 안 된 파일 포함)과 원격에 없는 커밋을 검사하고, 통과하면 <code>worktree rm --run-hooks --delete-branch</code> 를 <code>--force</code> 없이 불러 저장소의 archive hook 이 고유의 정리를 하게 하고(훅이 실패하면 지우지 않고 <code>reap_blocked</code>) 브랜치는 Orca 가 지운다. 컨테이너·볼륨·네트워크·이미지는 <code>compose up</code> 직후 기록한 id 만 카드가 닫힌 뒤 하나씩, 정지한 컨테이너 → 볼륨 → 네트워크 → 이미지 순으로 지운다. 쓰는 중이면 지우지 않고, 일괄 정리(<code>prune</code>)·<code>down -v</code>·라벨이나 이름 패턴 선택·base 이미지 삭제는 하지 않는다. REAPER 는 라운드마다 시각을 남기고, 오래 갱신이 없으면 멈춤 감지가 <code>timer_stalled</code> 로 알린다.</p>
+<figure id="fig-flow-merge"><img src="diagrams/flow-merge.svg" width="1160" height="1026" alt="PR 을 만든 워커가 MCP tool 로 land 요청을 하면 공유 코어의 land 판정 함수가 판정하고 GitHub 에서 저장소 설정을 읽는다. 자동 머지 조건 넷(필수 리뷰와 필수 CI 강제, 최신 main 필수 또는 병합 대기열, 새 push 에 승인 무효, prod·인프라·보안 경로가 아님)이 모두 참이면 gh pr merge --auto 로 머지를 예약하고, 하나라도 거짓이면 예약하지 않고 승인되면 머지를 남긴다. 워커는 어느 쪽이든 worker_done 이 아니라 머지 대기 보고(merge_ready)를 Orca 로 보내 스스로 끝나고, Task 는 막힘(리뷰어)로 열려 있다. 예약했으면 승인과 CI 가 찰 때 GitHub 이 머지하고, 승인되면 머지이면 pr-monitor 가 소유 리드를 깨워 리드가 같은 land 요청으로 머지한다. 머지 뒤에는 두 갈래 모두 pr-monitor 가 머지 확인(GitHub 의 머지 표시와 main 포함)을 하고, 확인되면 pr_merged 를 기록하고 Task 를 completed 로 닫아 ✅ 가 되며, 이어 main CI 결과를 기록하고 빨강이면 🚨 와 동결이다. pr_merged 는 REAPER 라운드를 앞당기는 힌트일 뿐이고, REAPER 가 타이머 라운드에서 루트를 읽어 표시한 뒤 후보 가운데 PR 상태와 HEAD 포함으로 끝났음이 확인되고 두 라운드 연속인 카드가 삭제 전 검사(커밋 안 된 변경, 원격에 없는 커밋)를 마치면 worktree rm 을 --force 없이 부르고 브랜치는 --delete-branch 로 지운다. 패널은 코어의 뷰와 Orca 의 Task 를 읽어 완료 표시와 머지됨을 보인다."><figcaption><b>도식 8. 머지와 정리.</b> 원본: PR·머지·저장소 설정은 GitHub, Task 의 완료는 Orca, <code>land_requested</code>·<code>pr_merged</code> 는 sqlite 다. ✅ 는 머지 확인 뒤에 Orca Task 에서 읽고, 머지됨은 sqlite 에서 읽는다.</figcaption></figure>
+
+<h3 id="flow-monitor-wake">흐름 4. 모니터에서 깨움까지</h3>
+<p>Orca plugin worker 의 타이머가 monitor 를 돌리면, monitor 가 Orca 조회·<code>gh</code>·OS 명령으로 신호를 읽고 코어 함수를 직접 import 로 불러 sqlite 에 <code>event</code> 를 쓴다. 기록은 깨우지 않는다. 판단이 필요한 것(<code>needs</code> 가 <code>judgment</code>)만 코어의 <code>notify</code> 가 Orca <code>send</code> 로 받는 순서(워커 → 소유 리드 → 오케스트레이터)대로 해당 세션을 한 번 깨운다. 깨어난 Claude 세션은 MCP resource 로 현황 1~3단계를 읽고 <code>reply</code> 로 답한다. 패널과 상태 표시줄은 worker 가 알릴 때 같은 뷰를 다시 읽는다.</p>
+<figure id="fig-flow-monitor-wake"><img src="diagrams/flow-monitor-wake.svg" width="1160" height="600" alt="Orca plugin worker 의 타이머가 monitor 를 돌리면 monitor 가 Orca 조회, gh, OS 명령으로 신호를 읽고 공유 코어 함수를 직접 import 로 불러 sqlite 에 event 를 쓴다. 판단이 필요하면 코어의 notify 가 Orca CLI 의 send 로 해당 Claude 세션을 깨우고, 패널에는 worker 가 갱신을 알린다. 깨어난 Claude 세션은 MCP 서버의 resource 로 현황 1~3단계를 읽고 결과를 reply 로 답한다."><figcaption><b>도식 9. 모니터에서 깨움까지.</b> 원본: 읽는 대상(GitHub·OS·Orca)이 원본이고 sangsoe 는 사건 한 줄만 쓴다. 깨움의 원본은 Orca 메시지이고 현황은 sqlite 와 Orca 읽기를 합친 뷰다.</figcaption></figure>
+
+<h3 id="boundaries">경계마다 무엇이 오가나</h3>
+<table>
+<thead><tr><th style="width:17%">경계</th><th style="width:34%">오가는 것</th><th style="width:21%">원본</th><th>확인</th></tr></thead>
+<tbody>
+<tr><td>hook ↔ 공유 코어</td><td>hook 입력(세션 id·메시지 uuid·원문·권한 요청)이 CLI 를 거쳐 코어로 가고, 코어는 역할 줄·브리프 경로·거부 사유를 출력으로 돌려준다.</td><td>오너의 말·세션 기록은 sqlite, 브리프는 파일</td><td>확인(문서) · 미확인(hook 한 번당 지연)</td></tr>
+<tr><td>MCP 서버 ↔ 공유 코어</td><td>타입 있는 인자가 코어 함수로 가고, 결과나 구조화된 거부 오류가 돌아온다. resources 는 뷰를 읽기 전용으로 낸다.</td><td>sqlite 와 Orca(MCP 서버는 상태가 없다)</td><td>확인(실행)</td></tr>
+<tr><td>Orca plugin worker ↔ 공유 코어</td><td>worker 가 코어를 직접 import 해 함수를 부른다. 패널 버튼은 <code>plugin.request</code> 로 worker 에 가고 worker 가 같은 함수를 부른다.</td><td>sqlite(plugin 저장소는 화면 상태·설정만)</td><td>확인(호스트 API·가짜 호스트 시험) · 첫 빌드 시험 T1(worker 에서 <code>node:sqlite</code>)</td></tr>
+<tr><td>공유 코어 ↔ Orca CLI</td><td>코어가 Orca 명령을 부르고 JSON 결과를 읽는다. 쓰는 것은 Task·게이트·메시지·워커 시작, 읽는 것은 상태·조회다.</td><td>Orca(코어는 id 와 Orca 에 없는 판단만 저장)</td><td>확인(실행·도움말)</td></tr>
+<tr><td>Orca plugin ↔ Claude Code plugin</td><td>직접 오가는 것이 없다. 같은 sqlite 파일을 따로 열고, 깨움은 Orca 메시지로 간다.</td><td>sqlite · Orca 메시지</td><td>확인(공식 경로 없음)</td></tr>
+</tbody></table>
+<p class="more">경계마다 같은 시험이 입구 둘 이상으로 돌아 결과가 같음을 보인다. 자세히: <a href="design-appendix.html#signal-flow">부록 §신호 흐름</a> · <a href="design-appendix.html#delivery">§전달 규칙</a></p>
+</section>
+
+<section id="build">
+<h2>6. 구현 순서와 전환</h2>
+<p class="lead">결론: <b>한 번에 짓고 한 번에 전환한다.</b> 단계로 나누지 않고, 모듈이 무엇 위에 서는지(아래 그림)와 끄기 전에 모두 통과해야 할 검증(전환 조건)만 정하고, 통과하면 agent-skills 를 끄고 sangsoe 로 넘어간다. 구축하는 동안 일은 agent-skills 로 계속한다. 두 plugin 이 같은 일을 나눠 맡는 기간이 없어 이중 hook·이중 메시지 대기·이중 주기 실행이 필요 없다. 세부 구현 계획은 구현을 시작할 때 구현 리드가 만든다(별도 계획 문서는 없다). 전제 시험 P1–P4(Task 의존·게이트·이중 시작·다른 Run 에 묶인 세션의 쓰기)는 일회용 Run 에서 돌렸다: P1·P2(Task 상태 전환)·P4 확인, P3 부분 확인(이미 <code>dispatched</code> 인 Task 의 재시작 거부와 세 번 실패 차단은 첫 빌드 시험 T5 로 닫는다). 다른 Run 에 묶인 세션의 쓰기는 <code>consumer_fenced</code> 로 막히고 읽기는 되며, 그 Run 의 주인에게 메시지로 부탁하는 폴백이 확인됐다. Orca 에는 Run 을 닫거나 지우는 명령이 없어 시험 Run 은 남으므로 이름 접두어로 구분한다. 구현의 첫 단계가 첫 빌드 시험 T1~T6 을 돌린다(T6 은 결정 90 의 설치 길: 경로 마켓플레이스 설치와 <code>brew upgrade</code> 뒤 갱신 · hook PATH · Orca 개발 폴더가 앱 재시작 뒤에도 남는지): T1 worker 안 <code>node:sqlite</code> 열기(실패하면 sqlite 접근만 코어 프로세스를 CLI 로 부른다) · T2 worker 타이머(실패하면 <code>orca automations --precheck</code>) · T3 패널 그림(실패하면 상태 표시줄과 <code>sangsoe brief</code> 출력) · T4 승인 뒤 자율 범위와 재승인 빈도 · T5 Dispatch 재시작 거부와 세 번 실패 차단, 그리고 머지 대기 보고로 끝낸 작성자의 Task 가 열린 채 남는지(안 남으면 머지 확인 하위 Task 를 pr-monitor 가 닫는다). 결과와 대체는 결정 84 에 있다.</p>
+<figure id="fig-build-order"><img src="diagrams/build-order.svg" style="max-width:760px;margin:0 auto" width="1000" height="440" alt="기반, 스키마, 알림과 GRAPH, 결정 루프와 역할·세션, 현황·MCP, 랜드와 감지기, 정리, 패널, 설치 순으로 이어지는 모듈 의존 순서. 굵은 선이 크리티컬 패스이고 패널과 일반 스킬은 점선이다."><figcaption><b>도식 10. 모듈 의존 순서.</b> 화살표는 서는 곳이고 서는 곳이 같으면 병렬로 짓는다. 코어는 스키마·알림·GRAPH·결정 루프·역할·세션·현황·MCP 여섯 부분이다.</figcaption></figure>
+
+<p><b>전환 조건</b>은 모두 통과해야 하고 하나라도 실패하면 agent-skills 를 끄지 않는다(전환 뒤에 재는 것은 없다). 검증은 전부 센 숫자로 끝나며 갈래별 개수는 기반 4 · 코어 13(스키마 불변식 허용 19 · 거부 30, 의존 실패 회귀 12/12, 결정 루프 회귀 11/11 등) · 랜드 6(land 판정 함수와 land 요청: 상주 역할 없이 함수 하나와 CLI·MCP tool) · 정리 8 · 감지기 5 · 패널 4 · 설치 3 · 이관 3, 합계 46개다.</p>
+<p><b>전환</b>은 각 PC 에서 오너가 한다: 설치 순서(2절: <code>brew install</code> → <code>sangsoe install</code>, 결정 90) → agent-skills 플러그인 비활성(지우지 않는다) → Orca plugin 승인·켜기(<code>sangsoe plugin approve</code>) → 열린 항목·열린 결정만 읽기 전용으로 넣기 → 시작 점검 통과·종단 실행 한 번·<code>sangsoe todo</code> 숫자가 패널 띠와 같음 확인. 저장소 보호 설정·CI 비밀·금지어 목록은 전환 직전에 오너가 둔다. <b>롤백 = agent-skills 를 다시 켜는 것</b>이고 sangsoe 의 sqlite 는 그대로 남는다. <b>새로 만드는 것</b> 13가지(일반 스킬·노트·티켓 도구·감시·정리·대시보드 등)는 agent-skills 를 참고만 하고 모두 새로 쓴다. 목록과 이유는 port-plan.md 1절에 있다.</p>
+<p class="more">자세히: <a href="port-plan.md">port-plan.md</a>(항목별로 무엇을 참조하고 새로 쓰나) · <a href="decisions.md">decisions.md</a></p>
+</section>
+</main>
+</body>
+</html>

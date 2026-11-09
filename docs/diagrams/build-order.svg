@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 440" role="img" aria-labelledby="t7 d7">
+<title id="t7">모듈 의존 순서</title>
+<desc id="d7">왼쪽에서 오른쪽으로 기반, 스키마, 알림과 GRAPH, 결정 루프와 역할·세션, 현황·MCP, 랜드와 감지기, 정리, 설치 순이다. 화살표는 서는 곳이다. 굵은 선은 크리티컬 패스(기반, 스키마, 알림, 역할·세션, 현황·MCP, 랜드, 정리, 설치)다. 패널은 코어의 뷰에 서고 마지막 확인은 랜드·정리·감지기 뒤라 점선이다. 일반 스킬은 어느 모듈과도 간선이 없는 별도 저장소의 별도 plugin 이다.</desc>
+<style>
+:root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--ext:#475467;--extbg:#f2f4f7}
+@media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--ext:#98a2b3;--extbg:#242b38}}
+text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:12px;fill:var(--fg)}
+.h{font-weight:700;font-size:15px}.t{font-weight:700;font-size:13px}.s{font-size:11.5px;fill:var(--mut)}
+.a{stroke:var(--line);stroke-width:1.6;fill:none;marker-end:url(#h)}
+.a.c{stroke-width:3.2}
+.a.w{stroke-dasharray:6 4}
+.mk{fill:var(--line)}
+.scr rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5}
+.st rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5;stroke-dasharray:5 3}
+.no rect{fill:var(--extbg);stroke:var(--line);stroke-width:1.5;stroke-dasharray:4 3}
+</style>
+<defs>
+<marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+</defs>
+
+<text class="h" x="10" y="28">모듈 의존 순서</text>
+<text class="s" x="10" y="48">화살표 = 서는 곳(선행). 서는 곳이 같으면 병렬로 짓는다. 굵은 선 = 크리티컬 패스</text>
+
+<!-- arrows (behind boxes) -->
+<path class="a c" d="M115,192 L133,192"/>
+<path class="a" d="M240,192 C250,192 250,112 258,112"/>
+<path class="a" d="M240,192 C250,192 250,272 258,272"/>
+<path class="a" d="M365,112 L383,112"/>
+<path class="a c" d="M365,112 C375,112 375,272 383,272"/>
+<path class="a" d="M365,272 L383,272"/>
+<path class="a" d="M490,112 C500,112 500,192 508,192"/>
+<path class="a c" d="M490,272 C500,272 500,192 508,192"/>
+<path class="a c" d="M615,192 C625,192 625,112 633,112"/>
+<path class="a" d="M615,192 C625,192 625,272 633,272"/>
+<path class="a w" d="M615,192 C625,192 625,352 633,352"/>
+<path class="a c" d="M740,112 L758,112"/>
+<path class="a c" d="M865,112 C875,112 875,192 883,192"/>
+<path class="a" d="M740,272 C810,272 830,192 883,192"/>
+<path class="a w" d="M740,352 C830,352 850,192 883,192"/>
+
+<!-- modules -->
+<g class="scr"><rect x="10" y="170" width="105" height="44" rx="8"/><text class="t" x="20" y="189">기반</text><text class="s" x="20" y="206">CI · 시작 점검</text></g>
+<g class="scr"><rect x="135" y="170" width="105" height="44" rx="8"/><text class="t" x="145" y="189">스키마</text><text class="s" x="145" y="206">event · 뷰</text></g>
+<g class="scr"><rect x="260" y="90" width="105" height="44" rx="8"/><text class="t" x="270" y="109">알림</text><text class="s" x="270" y="126">notify · Orca 메시지</text></g>
+<g class="scr"><rect x="260" y="250" width="105" height="44" rx="8"/><text class="t" x="270" y="269">GRAPH</text><text class="s" x="270" y="286">간선 · ready</text></g>
+<g class="scr"><rect x="385" y="90" width="105" height="44" rx="8"/><text class="t" x="395" y="109">결정 루프</text><text class="s" x="395" y="126">재질문 게이트</text></g>
+<g class="scr"><rect x="385" y="250" width="105" height="44" rx="8"/><text class="t" x="395" y="269">역할·세션</text><text class="s" x="395" y="286">워커 시작 절차</text></g>
+<g class="scr"><rect x="510" y="170" width="105" height="44" rx="8"/><text class="t" x="520" y="189">현황·MCP</text><text class="s" x="520" y="206">= 코어가 선다</text></g>
+<g class="scr"><rect x="635" y="90" width="105" height="44" rx="8"/><text class="t" x="645" y="109">랜드</text><text class="s" x="645" y="126">sangsoe land</text></g>
+<g class="scr"><rect x="635" y="250" width="105" height="44" rx="8"/><text class="t" x="645" y="269">감지기</text><text class="s" x="645" y="286">monitor 나머지</text></g>
+<g class="st"><rect x="635" y="330" width="105" height="44" rx="8"/><text class="t" x="645" y="349">패널</text><text class="s" x="645" y="366">뷰만 읽는다</text></g>
+<g class="scr"><rect x="760" y="90" width="105" height="44" rx="8"/><text class="t" x="770" y="109">정리</text><text class="s" x="770" y="126">REAPER</text></g>
+<g class="scr"><rect x="885" y="170" width="105" height="44" rx="8"/><text class="t" x="895" y="189">설치</text><text class="s" x="895" y="206">한 줄 · smoke</text></g>
+<text class="t" x="885" y="238">→ 전환 조건 검증</text>
+
+<g class="no"><rect x="10" y="330" width="230" height="44" rx="8"/><text class="t" x="20" y="349">일반 스킬</text><text class="s" x="20" y="366">어느 모듈과도 간선 없음 · 별도 저장소</text></g>
+<text class="s" x="10" y="410">점선 칸 = 마지막 확인이 다른 모듈 뒤(패널) 또는 모듈 밖(일반 스킬)</text>
+</svg>

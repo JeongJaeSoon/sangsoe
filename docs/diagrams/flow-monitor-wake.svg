@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 600" role="img" aria-labelledby="tfw dfw">
+<title id="tfw">흐름 4. 모니터에서 깨움까지</title>
+<desc id="dfw">Orca plugin worker 의 타이머가 monitor 를 돌리면 monitor 가 Orca 조회, gh, OS 명령으로 신호를 읽고 공유 코어 함수를 직접 import 로 불러 sqlite 에 event 를 쓴다. 판단이 필요하면 코어의 notify 가 Orca CLI 의 send 로 해당 Claude 세션을 깨우고, 패널에는 worker 가 갱신을 알린다. 깨어난 Claude 세션은 MCP 서버의 resource 로 현황 1~3단계를 읽고 결과를 reply 로 답한다. 오른쪽 열은 단계마다 무엇이 오가고 어느 쪽이 원본인지 적었다.</desc>
+<style>
+:root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--orc:#6d28d9;--orcbg:#f1eaff;--warn:#b42318}
+@media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--orc:#a78bfa;--orcbg:#2a1f45;--warn:#fca5a5}}
+text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:13px;fill:var(--fg)}
+.t{font-weight:700;font-size:14px}.s{font-size:12px;fill:var(--mut)}.m{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.c{text-anchor:middle}
+.l{font-size:12px;fill:var(--fg);paint-order:stroke;stroke:var(--halo);stroke-width:4px;stroke-linejoin:round}
+.ll{stroke:var(--line);stroke-width:1;stroke-dasharray:3 4;opacity:.7}
+.sec rect{fill:var(--extbg);stroke:none}.sec text{font-weight:700}
+.a{stroke:var(--line);stroke-width:1.6;fill:none;marker-end:url(#h)}
+.a.w{stroke-dasharray:6 4}
+.mk{fill:var(--line)}
+.scr rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5}
+.st rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5;stroke-dasharray:5 3}
+.llm rect{fill:var(--llmbg);stroke:var(--llm);stroke-width:1.5}
+.ext rect{fill:var(--extbg);stroke:var(--ext);stroke-width:1.5}
+.orc rect{fill:var(--orcbg);stroke:var(--orc);stroke-width:1.5}
+.num circle{fill:var(--bg);stroke:var(--line);stroke-width:1.2}.num text{font-size:11px;font-weight:700;text-anchor:middle}
+</style>
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+<rect width="100%" height="100%" fill="var(--bg)"/>
+<!-- lifelines -->
+<line class="ll" x1="62" y1="56" x2="62" y2="592"/><line class="ll" x1="192" y1="56" x2="192" y2="592"/><line class="ll" x1="322" y1="56" x2="322" y2="592"/>
+<line class="ll" x1="452" y1="56" x2="452" y2="592"/><line class="ll" x1="582" y1="56" x2="582" y2="592"/><line class="ll" x1="712" y1="56" x2="712" y2="592"/>
+
+<!-- actors -->
+<g class="scr"><rect x="4" y="8" width="116" height="48" rx="8"/><text class="t c" x="62" y="28">Orca plugin</text><text class="s c" x="62" y="46">worker 타이머</text></g>
+<g class="ext"><rect x="134" y="8" width="116" height="48" rx="8"/><text class="t c" x="192" y="28">읽는 대상</text><text class="s c" x="192" y="46">gh · OS 명령</text></g>
+<g class="scr"><rect x="264" y="8" width="116" height="48" rx="8"/><text class="t c" x="322" y="28">공유 코어</text><text class="s c" x="322" y="46">TS/Node · sqlite</text></g>
+<g class="orc"><rect x="394" y="8" width="116" height="48" rx="8"/><text class="t c" x="452" y="28">Orca CLI</text><text class="s c" x="452" y="46">조회 · 메시지</text></g>
+<g class="llm"><rect x="524" y="8" width="116" height="48" rx="8"/><text class="t c" x="582" y="28">Claude 세션</text><text class="s c" x="582" y="46">깨어나는 쪽</text></g>
+<g class="scr"><rect x="654" y="8" width="116" height="48" rx="8"/><text class="t c" x="712" y="28">MCP 서버</text><text class="s c" x="712" y="46">Claude Code plugin</text></g>
+<g class="st"><rect x="790" y="8" width="364" height="48" rx="8"/><text class="t" x="802" y="28">오가는 것 · 원본</text><text class="s" x="802" y="46">원본이 있는 쪽을 적는다</text></g>
+
+<!-- A -->
+<g class="sec"><rect x="10" y="68" width="1140" height="24" rx="5"/><text x="20" y="85">감지: 모델 없이 monitor 가 돈다</text></g>
+<g class="num"><circle cx="24" cy="116" r="9"/><text x="24" y="120">1</text></g>
+<g class="scr"><rect x="2" y="101" width="120" height="30" rx="6"/><text class="c" x="62" y="121">타이머 발화</text></g>
+<text class="m" x="796" y="112">chat · queue · resource ·</text><text class="m" x="796" y="126">orca · pr monitor 각자 주기</text>
+<g class="num"><circle cx="24" cy="164" r="9"/><text x="24" y="168">2</text></g>
+<path class="a" d="M62,164 L192,164"/><text class="l c" x="127" y="157">gh · OS 명령</text>
+<path class="a" d="M62,182 L452,182"/><text class="l c" x="257" y="175">worker-list · task-list · gate-list · worktree ps · list</text>
+<text class="m" x="796" y="164">원본: GitHub · OS · Orca</text><text class="m" x="796" y="178">orca monitor 는 사본 없이 읽는다</text>
+<g class="num"><circle cx="24" cy="226" r="9"/><text x="24" y="230">3</text></g>
+<path class="a" d="M62,226 L322,226"/><text class="l c" x="192" y="219">코어 직접 import (MCP·CLI 안 거침)</text>
+<text class="m" x="796" y="222">관측 사실 · 사건 한 줄</text>
+<g class="num"><circle cx="24" cy="270" r="9"/><text x="24" y="274">4</text></g>
+<g class="st"><rect x="252" y="255" width="140" height="30" rx="6"/><text class="m c" x="322" y="275">event 한 줄 기록</text></g>
+<text class="m" x="796" y="266">sqlite: reap_candidate · pr_merged ...</text><text class="m" x="796" y="280">기록은 깨우지 않는다 (needs 값)</text>
+
+<!-- B -->
+<g class="sec"><rect x="10" y="296" width="1140" height="24" rx="5"/><text x="20" y="313">깨움: 판단이 필요한 것만 Orca 메시지로</text></g>
+<g class="num"><circle cx="24" cy="344" r="9"/><text x="24" y="348">5</text></g>
+<path class="a" d="M322,344 L452,344"/><text class="l c" x="387" y="337">send (notify)</text>
+<text class="m" x="796" y="340">sqlite: notified (dedupe_key)</text><text class="m" x="796" y="354">받는 순서 워커 → 리드 → 오케스트레이터</text>
+<g class="num"><circle cx="24" cy="392" r="9"/><text x="24" y="396">6</text></g>
+<path class="a w" d="M452,392 L582,392"/><text class="l c" x="517" y="385">Orca 메시지</text>
+<text class="m" x="796" y="388">원본: Orca 메시지</text><text class="m" x="796" y="402">오너는 직접 받지 않는다</text>
+<g class="num"><circle cx="24" cy="440" r="9"/><text x="24" y="444">6′</text></g>
+<text class="s" x="76" y="444">패널 · 상태 표시줄은 worker 가 갱신을 알려 다시 읽는다 (사본 없음)</text>
+
+<!-- C -->
+<g class="sec"><rect x="10" y="460" width="1140" height="24" rx="5"/><text x="20" y="477">조회와 답: 깨어난 세션은 MCP resource 로 읽는다</text></g>
+<g class="num"><circle cx="24" cy="508" r="9"/><text x="24" y="512">7</text></g>
+<path class="a" d="M582,508 L712,508"/><text class="l c" x="647" y="501">MCP resource</text>
+<text class="m" x="796" y="504">현황 1~3단계 · 항목 · 결정</text><text class="m" x="796" y="518">읽기 전용</text>
+<g class="num"><circle cx="24" cy="552" r="9"/><text x="24" y="556">8</text></g>
+<path class="a" d="M712,552 L322,552"/><text class="l c" x="517" y="545">코어 함수 호출 (뷰 읽기)</text>
+<text class="m" x="796" y="548">원본: sqlite · Orca 읽기</text>
+<g class="num"><circle cx="24" cy="592" r="9"/><text x="24" y="596">9</text></g>
+<path class="a" d="M582,588 L452,588"/><text class="l c" x="517" y="581">reply</text>
+<text class="m" x="796" y="592">원본: Orca 메시지</text>
+</svg>

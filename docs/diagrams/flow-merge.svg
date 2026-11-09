@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 1026" role="img" aria-labelledby="tfm dfm">
+<title id="tfm">흐름 3. 머지와 정리</title>
+<desc id="dfm">PR 을 만든 워커가 MCP tool 로 land 요청을 하면 공유 코어의 land 판정 함수가 먼저 검증 등급 증거를 확인해 없으면 land_failed(evidence_missing)로 끝내고, 있으면 판정하며 GitHub 에서 저장소 설정을 읽는다. 자동 머지 조건 넷(필수 리뷰와 필수 CI 강제, 최신 main 필수 또는 병합 대기열, 새 push 에 승인 무효, prod·인프라·보안 경로가 아님)이 모두 참이면 gh pr merge --auto 로 머지를 예약하고, 하나라도 거짓이면 예약하지 않고 승인되면 머지를 남긴다. 워커는 어느 쪽이든 worker_done 이 아니라 머지 대기 보고(merge_ready)를 Orca 로 보내 스스로 끝나고, Task 는 막힘(리뷰어)로 열린 채 있으며 터미널은 리드가 해제한다. 예약했으면 사람 승인과 CI 가 찰 때 GitHub 이 머지하고, 승인되면 머지이면 승인이 찰 때 pr-monitor 가 소유 리드를 깨워 리드가 같은 land 요청으로 머지한다. 머지 뒤에는 두 갈래 모두 pr-monitor 가 GitHub 을 읽어 머지 확인(머지 표시와 main 포함)을 하고, 확인되면 pr_merged 를 기록한 뒤 Orca Task 를 completed 로 닫아 ✅ 가 되며, 이어 main CI 결과를 기록하고 빨강이면 🚨 와 동결이다. pr_merged 는 REAPER 라운드를 앞당기는 힌트일 뿐이고, REAPER 가 타이머 라운드에서 루트를 읽어 표시한 뒤 후보 가운데 PR 상태와 HEAD 포함으로 끝났음이 확인되고 두 라운드 연속인 카드가 삭제 전 검사(커밋 안 된 변경, 원격에 없는 커밋)를 마치면 worktree rm 을 --force 없이 부르고 브랜치는 --delete-branch 로 지운다. 패널은 코어의 뷰와 Orca 의 Task 를 읽어 완료 표시와 머지됨을 보인다. 오른쪽 열은 단계마다 무엇이 오가고 어느 쪽이 원본인지 적었다.</desc>
+<style>
+:root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--orc:#6d28d9;--orcbg:#f1eaff;--warn:#b42318}
+@media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--orc:#a78bfa;--orcbg:#2a1f45;--warn:#fca5a5}}
+text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:13px;fill:var(--fg)}
+.t{font-weight:700;font-size:14px}.s{font-size:12px;fill:var(--mut)}.m{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.c{text-anchor:middle}
+.l{font-size:12px;fill:var(--fg);paint-order:stroke;stroke:var(--halo);stroke-width:4px;stroke-linejoin:round}
+.ll{stroke:var(--line);stroke-width:1;stroke-dasharray:3 4;opacity:.7}
+.sec rect{fill:var(--extbg);stroke:none}.sec text{font-weight:700}
+.a{stroke:var(--line);stroke-width:1.6;fill:none;marker-end:url(#h)}
+.a.w{stroke-dasharray:6 4}
+.mk{fill:var(--line)}
+.scr rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5}
+.st rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5;stroke-dasharray:5 3}
+.llm rect{fill:var(--llmbg);stroke:var(--llm);stroke-width:1.5}
+.ext rect{fill:var(--extbg);stroke:var(--ext);stroke-width:1.5}
+.orc rect{fill:var(--orcbg);stroke:var(--orc);stroke-width:1.5}
+.num circle{fill:var(--bg);stroke:var(--line);stroke-width:1.2}.num text{font-size:11px;font-weight:700;text-anchor:middle}
+</style>
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+<rect width="100%" height="100%" fill="var(--bg)"/>
+<!-- lifelines -->
+<line class="ll" x1="62" y1="56" x2="62" y2="1016"/><line class="ll" x1="186" y1="56" x2="186" y2="1016"/><line class="ll" x1="310" y1="56" x2="310" y2="1016"/>
+<line class="ll" x1="434" y1="56" x2="434" y2="1016"/><line class="ll" x1="558" y1="56" x2="558" y2="1016"/><line class="ll" x1="682" y1="56" x2="682" y2="1016"/><line class="ll" x1="806" y1="56" x2="806" y2="1016"/>
+
+<!-- actors -->
+<g class="llm"><rect x="6" y="8" width="112" height="48" rx="8"/><text class="t c" x="62" y="28">워커 세션</text><text class="s c" x="62" y="46">PR 을 만든 쪽</text></g>
+<g class="scr"><rect x="130" y="8" width="112" height="48" rx="8"/><text class="t c" x="186" y="28">공유 코어</text><text class="s c" x="186" y="46">land 판정 함수</text></g>
+<g class="ext"><rect x="254" y="8" width="112" height="48" rx="8"/><text class="t c" x="310" y="28">GitHub</text><text class="s c" x="310" y="46">외부 시스템</text></g>
+<g class="orc"><rect x="378" y="8" width="112" height="48" rx="8"/><text class="t c" x="434" y="28">Orca CLI</text><text class="s c" x="434" y="46">Task · 메시지</text></g>
+<g class="scr"><rect x="502" y="8" width="112" height="48" rx="8"/><text class="t c" x="558" y="28">Orca plugin</text><text class="s c m" x="558" y="46" style="font-size:10.5px">pr-monitor</text></g>
+<g class="scr"><rect x="626" y="8" width="112" height="48" rx="8"/><text class="t c" x="682" y="28">패널</text><text class="s c" x="682" y="46">Orca plugin</text></g>
+<g class="llm"><rect x="750" y="8" width="112" height="48" rx="8"/><text class="t c" x="806" y="28">소유 리드</text><text class="s c" x="806" y="46">승인 뒤 머지</text></g>
+<g class="st"><rect x="872" y="8" width="282" height="48" rx="8"/><text class="t" x="882" y="28">오가는 것 · 원본</text><text class="s" x="882" y="46">원본이 있는 쪽을 적는다</text></g>
+
+<!-- A -->
+<g class="sec"><rect x="10" y="68" width="1140" height="24" rx="5"/><text x="20" y="85">판단: 만든 당사자가 한다</text></g>
+<g class="num"><circle cx="24" cy="116" r="9"/><text x="24" y="120">1</text></g>
+<path class="a" d="M62,116 L186,116"/><text class="l c" x="124" y="109">MCP tool land</text>
+<text class="m" x="882" y="112">PR 참조 (저장소 · 번호)</text><text class="m" x="882" y="126">독립 리뷰 판정은 GitHub 쪽</text>
+<g class="num"><circle cx="24" cy="160" r="9"/><text x="24" y="164">2</text></g>
+<g class="scr"><rect x="116" y="145" width="140" height="30" rx="6"/><text class="m c" x="186" y="165">land_verdict</text></g>
+<text class="m" x="882" y="152">검증 등급 증거 (V0~V3) · 리뷰</text><text class="m" x="882" y="168">필수 검사 · 지정 · 게이트</text>
+<path class="a" d="M256,160 L340,160"/><text class="l c" x="298" y="153">증거 없음</text>
+<g class="scr"><rect x="340" y="145" width="240" height="30" rx="6"/><text class="m c" x="460" y="165">land_failed (evidence_missing)</text></g>
+<g class="num"><circle cx="24" cy="204" r="9"/><text x="24" y="208">3</text></g>
+<path class="a" d="M186,204 L310,204"/><text class="l c" x="248" y="197">저장소 설정 읽기 (gh api)</text>
+<text class="m" x="882" y="200">원본: GitHub 저장소 설정</text><text class="m" x="882" y="214">읽지 못하면 조건 거짓</text>
+
+<!-- B -->
+<g class="sec"><rect x="10" y="228" width="1140" height="24" rx="5"/><text x="20" y="245">갈래: 자동 머지 조건 넷이 모두 참인가</text></g>
+<text class="s" x="20" y="270">① 필수 리뷰·필수 CI 강제  ② 최신 main 필수 또는 병합 대기열  ③ 새 push 에 승인 무효  ④ prod·인프라·보안 경로 아님</text>
+<g class="num"><circle cx="24" cy="304" r="9"/><text x="24" y="308">4</text></g>
+<path class="a" d="M186,304 L310,304"/><text class="l c" x="248" y="297">넷 모두 참: gh pr merge --auto</text>
+<text class="m" x="882" y="300">원본: GitHub (예약)</text><text class="m" x="882" y="314">sqlite: land_requested</text>
+<g class="num"><circle cx="24" cy="350" r="9"/><text x="24" y="354">5</text></g>
+<g class="scr"><rect x="86" y="335" width="200" height="30" rx="6"/><text class="c" x="186" y="355">하나라도 거짓: 예약 없음</text></g>
+<text class="m" x="882" y="346">sqlite: land_requested</text><text class="m" x="882" y="360">(사유 merge_on_approval)</text>
+
+<!-- C -->
+<g class="sec"><rect x="10" y="378" width="1140" height="24" rx="5"/><text x="20" y="395">보고와 정리: 워커는 스스로 끝난다</text></g>
+<g class="num"><circle cx="24" cy="426" r="9"/><text x="24" y="430">6</text></g>
+<path class="a" d="M62,426 L434,426"/><text class="l c" x="248" y="419">merge_ready (orca orchestration send)</text>
+<text class="m" x="882" y="422">원본: Orca 메시지 · Dispatch</text><text class="m" x="882" y="436">5 이면 "승인되면 머지" 를 적는다</text>
+<g class="num"><circle cx="24" cy="474" r="9"/><text x="24" y="478">7</text></g>
+<g class="orc"><rect x="334" y="459" width="200" height="30" rx="6"/><text class="c" x="434" y="479">Task 열림 🚧 막힘(리뷰어)</text></g>
+<text class="m" x="882" y="470">원본: Orca Task</text><text class="m" x="882" y="484">머지 확인까지 닫지 않는다 (✅ 아직 아님)</text>
+<g class="num"><circle cx="24" cy="522" r="9"/><text x="24" y="526">8</text></g>
+<g class="orc"><rect x="334" y="507" width="200" height="30" rx="6"/><text class="c" x="434" y="527">worker-release (리드)</text></g>
+<text class="m" x="882" y="518">Auto-close 는 worker_done 에만 걸린다</text>
+
+<!-- D -->
+<g class="sec"><rect x="10" y="546" width="1140" height="24" rx="5"/><text x="20" y="563">머지: 예약이면 GitHub 이, 아니면 승인 뒤 리드가</text></g>
+<g class="num"><circle cx="24" cy="594" r="9"/><text x="24" y="598">9</text></g>
+<g class="ext"><rect x="220" y="579" width="180" height="30" rx="6"/><text class="c" x="310" y="599">4: 승인 · CI 충족 → 머지</text></g>
+<text class="m" x="882" y="590">원본: GitHub</text>
+<g class="num"><circle cx="24" cy="642" r="9"/><text x="24" y="646">10</text></g>
+<path class="a w" d="M558,642 L806,642"/><text class="l c" x="682" y="635">5: 승인 충족 → 리드 깨움</text>
+<text class="m" x="882" y="638">sqlite: pr_ready_to_merge</text><text class="m" x="882" y="652">merge_on_approval 이 있는 PR 만</text>
+<g class="num"><circle cx="24" cy="690" r="9"/><text x="24" y="694">11</text></g>
+<path class="a" d="M806,690 L186,690"/><text class="l c" x="496" y="683">sangsoe land: 조건을 다시 읽고 바로 머지</text>
+<text class="m" x="882" y="686">원본: GitHub (머지)</text><text class="m" x="882" y="700">머지하는 길은 land 하나</text>
+
+<!-- E -->
+<g class="sec"><rect x="10" y="714" width="1140" height="24" rx="5"/><text x="20" y="731">머지 뒤: 두 갈래 모두 같다. 타이머가 GitHub 을 읽는다</text></g>
+<g class="num"><circle cx="24" cy="762" r="9"/><text x="24" y="766">12</text></g>
+<path class="a" d="M558,762 L310,762"/><text class="l c" x="434" y="755">타이머 → gh 로 머지 확인 · main CI 읽기</text>
+<text class="m" x="882" y="758">머지 표시 + 머지 커밋이 main 에 있는지</text>
+<g class="num"><circle cx="24" cy="810" r="9"/><text x="24" y="814">13</text></g>
+<path class="a" d="M558,810 L186,810"/><text class="l c" x="372" y="803">코어 직접 import: 확인되면 pr_merged · main_green / main_red</text>
+<text class="m" x="882" y="806">sqlite: pr_merged</text><text class="m" x="882" y="820">main_red 면 🚨 + 동결</text>
+
+<!-- F -->
+<g class="num"><circle cx="24" cy="858" r="9"/><text x="24" y="862">14</text></g>
+<path class="a" d="M558,858 L434,858"/><text class="l c" x="496" y="851">task-update completed</text>
+<text class="m" x="882" y="854">원본: Orca Task. 머지 확인 뒤에만 닫는다</text><text class="m" x="882" y="868">Task completed ✅ · 증거가 없으면 🔍</text>
+<g class="num"><circle cx="24" cy="906" r="9"/><text x="24" y="910">15</text></g>
+<path class="a" d="M558,906 L434,906"/><text class="l c" x="496" y="899">REAPER 라운드: 표시 → 정리</text>
+<text class="m" x="882" y="902">두 라운드 뒤 검사 → rm. 막히면 reap_blocked</text><text class="m" x="882" y="916">--force 없이, 브랜치는 --delete-branch</text>
+<g class="sec"><rect x="10" y="930" width="1140" height="24" rx="5"/><text x="20" y="947">표시: 패널이 두 곳을 읽어 보인다</text></g>
+<g class="num"><circle cx="24" cy="978" r="9"/><text x="24" y="982">16</text></g>
+<path class="a" d="M682,974 L186,974"/><text class="l c" x="434" y="967">뷰 읽기 (PR 머지됨)</text>
+<path class="a" d="M682,992 L434,992"/><text class="l c" x="558" y="985">task-list (completed)</text>
+<text class="m" x="882" y="978">패널은 사본을 두지 않는다</text><text class="m" x="882" y="992">✅ 는 머지 확인 뒤 Task · 머지됨 sqlite</text>
+</svg>

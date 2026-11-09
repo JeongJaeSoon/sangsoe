@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="상쇠 상태 표시줄 항목 시안: 오너가 할 일이 있을 때와 없을 때.">
+<title>상쇠 상태 표시줄</title>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get('theme');
+  if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+  if (q.get('w') === '360') document.documentElement.classList.add('w360');
+})();
+</script>
+<style>
+/* Hallmark v2.0.0 tokens, same as index.html and group.html. */
+:root {
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --text-xs: 11px; --text-sm: 12px; --text-base: 13px; --text-md: 15px; --text-lg: 20px;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --r1: 4px; --r2: 6px; --r3: 8px;
+  --dur: 120ms;
+  --paper: oklch(98.6% 0.004 255);
+  --paper-2: oklch(96.2% 0.005 255);
+  --paper-3: oklch(94% 0.006 255);
+  --ink: oklch(21% 0.01 255);
+  --ink-2: oklch(41% 0.012 255);
+  --muted: oklch(50% 0.012 255);
+  --rule: oklch(91.5% 0.006 255);
+  --rule-2: oklch(82% 0.008 255);
+  --accent: oklch(52% 0.17 255);
+  --focus: oklch(52% 0.19 255);
+  --bad: oklch(50% 0.18 27);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: oklch(17% 0.008 255); --paper-2: oklch(21% 0.009 255); --paper-3: oklch(25% 0.01 255);
+    --ink: oklch(94% 0.005 255); --ink-2: oklch(80% 0.01 255); --muted: oklch(69% 0.012 255);
+    --rule: oklch(29% 0.01 255); --rule-2: oklch(40% 0.012 255);
+    --accent: oklch(70% 0.15 255); --focus: oklch(74% 0.17 255);
+    --bad: oklch(72% 0.16 25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: oklch(17% 0.008 255); --paper-2: oklch(21% 0.009 255); --paper-3: oklch(25% 0.01 255);
+  --ink: oklch(94% 0.005 255); --ink-2: oklch(80% 0.01 255); --muted: oklch(69% 0.012 255);
+  --rule: oklch(29% 0.01 255); --rule-2: oklch(40% 0.012 255);
+  --accent: oklch(70% 0.15 255); --focus: oklch(74% 0.17 255);
+  --bad: oklch(72% 0.16 25);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: var(--text-base)/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: var(--text-xs); overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+h1, h2 { margin: 0; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: break-word; min-width: 0; }
+.wrap { max-width: 720px; margin: 0 auto; padding: var(--s3) var(--s5) var(--s6); }
+html.w360 .wrap { max-width: 360px; padding: var(--s3) var(--s3) var(--s5); }
+.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s3); padding-bottom: var(--s3); }
+.brand { font-weight: 600; font-size: var(--text-md); letter-spacing: -0.01em; }
+.brand small { color: var(--muted); font-weight: 400; font-size: var(--text-xs); margin-left: var(--s1); }
+.crumbs { color: var(--muted); font-size: var(--text-sm); margin: 0 0 var(--s1); }
+h1 { font-size: var(--text-lg); line-height: 28px; }
+.lede { margin: var(--s1) 0 var(--s5); color: var(--ink-2); }
+section { margin: 0 0 var(--s5); }
+.sec-h { display: flex; align-items: baseline; gap: var(--s2); padding-bottom: var(--s2); border-bottom: 1px solid var(--rule-2); }
+.sec-h h2 { font-size: var(--text-md); line-height: 24px; }
+.sec-h .hint { margin-left: auto; color: var(--muted); font-size: var(--text-xs); }
+.state { padding-top: var(--s3); }
+.note { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
+.note b { color: var(--ink-2); font-weight: 600; }
+
+.frame { border: 1px solid var(--rule-2); border-radius: var(--r3); overflow: hidden; background: var(--paper); }
+.frame .win { padding: var(--s3); color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
+.sbar { display: flex; align-items: center; gap: var(--s3); height: 28px; padding: 0 var(--s2); background: var(--paper-3); border-top: 1px solid var(--rule-2); color: var(--ink-2); font-size: var(--text-sm); white-space: nowrap; }
+.sbar .sp { margin-left: auto; }
+.sbar a.sg { display: inline-flex; align-items: center; height: 20px; padding: 0 var(--s2); border-radius: var(--r1); color: var(--ink); font-weight: 600; text-decoration: none; transition: background-color var(--dur) ease-out; }
+.sbar a.sg:hover { background: var(--paper-2); }
+.sbar a.sg.owner { background: var(--bad); color: var(--paper); }
+.sbar a.sg.owner:hover { filter: brightness(1.1); }
+
+.rules { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.rules th { text-align: left; font-weight: 500; font-size: var(--text-xs); line-height: 16px; color: var(--muted); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--rule); }
+.rules td { padding: var(--s2) var(--s3); border-bottom: 1px solid var(--rule); vertical-align: baseline; overflow-wrap: anywhere; }
+.rules th:first-child, .rules td:first-child { padding-left: var(--s1); }
+.rules td:first-child { font-weight: 600; }
+html.w360 .rules, html.w360 .rules tbody { display: block; }
+html.w360 .rules colgroup { display: none; }
+html.w360 .rules thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+html.w360 .rules tr { display: block; padding: var(--s2) var(--s1); border-bottom: 1px solid var(--rule); }
+html.w360 .rules td { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--s2); padding: 2px 0; border: 0; font-size: var(--text-sm); line-height: 16px; }
+html.w360 .rules td::before { content: attr(data-l); color: var(--muted); font-weight: 400; }
+@media (max-width: 439px) {
+  .rules, .rules tbody { display: block; }
+  .rules colgroup { display: none; }
+  .rules thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .rules tr { display: block; padding: var(--s2) var(--s1); border-bottom: 1px solid var(--rule); }
+  .rules td { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--s2); padding: 2px 0; border: 0; font-size: var(--text-sm); line-height: 16px; }
+  .rules td::before { content: attr(data-l); color: var(--muted); font-weight: 400; }
+}
+.foot { margin: var(--s5) 0 0; color: var(--ink-2); font-size: var(--text-xs); line-height: 16px; }
+@media (prefers-reduced-motion: reduce) { .sbar a.sg { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <span class="brand">상쇠<small>sangsoe</small></span>
+</header>
+
+<main>
+  <p class="crumbs"><a href="index.html">현황</a> › 상태 표시줄</p>
+  <h1>상태 표시줄</h1>
+  <p class="lede">Orca 상태 표시줄에 놓는 항목 하나. 세 숫자를 한 줄로 보이고, 오너가 할 일이 있을 때만 붉게 칠한다.</p>
+
+  <section aria-labelledby="h-owner">
+    <div class="sec-h"><h2 id="h-owner">오너가 할 일이 있을 때</h2><span class="hint">결정 2 + 할 일 3</span></div>
+    <div class="state">
+      <div class="frame">
+        <div class="win" aria-hidden="true">Orca 창</div>
+        <div class="sbar" role="status"><span>⎇ feature/api-n1</span><a class="sg owner sp" href="index.html" aria-label="상쇠 열기: 막힘 5, 결정 2, 진행 중 5. 오너가 할 일 있음">🚧 5 · 결정 2 · 🔄 5</a></div>
+      </div>
+      <p class="note">붉은 바탕. <b>누르면 상쇠 패널이 열린다</b> (click → opens the sangsoe panel).</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-none">
+    <div class="sec-h"><h2 id="h-none">오너가 할 일이 없을 때</h2><span class="hint">결정 0 + 할 일 0</span></div>
+    <div class="state">
+      <div class="frame">
+        <div class="win" aria-hidden="true">Orca 창</div>
+        <div class="sbar" role="status"><span>⎇ feature/api-n1</span><a class="sg sp" href="index.html" aria-label="상쇠 열기: 막힘 3, 결정 0, 진행 중 5. 오너가 할 일 없음">🚧 3 · 결정 0 · 🔄 5</a></div>
+      </div>
+      <p class="note">다른 항목과 같은 색. <b>누르면 상쇠 패널이 열린다</b>.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-fmt">
+    <div class="sec-h"><h2 id="h-fmt">표기</h2></div>
+    <table class="rules">
+      <colgroup><col style="width:104px"><col style="width:176px"><col></colgroup>
+      <thead><tr><th>칸</th><th>예</th><th>뜻</th></tr></thead>
+      <tbody>
+        <tr><td data-l="칸">🚧 N</td><td data-l="예">🚧 5</td><td data-l="뜻">막힌 항목 수</td></tr>
+        <tr><td data-l="칸">결정 N</td><td data-l="예">결정 2</td><td data-l="뜻">오너의 답을 기다리는 결정 수</td></tr>
+        <tr><td data-l="칸">🔄 N</td><td data-l="예">🔄 5</td><td data-l="뜻">진행 중인 항목 수</td></tr>
+        <tr><td data-l="칸">색</td><td data-l="예">붉은 바탕 / 보통</td><td data-l="뜻">오너가 할 일(결정 + 할 일)이 1건 이상이면 붉게</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <p class="foot">숫자는 <a href="index.html">현황</a> 시안과 같다. 상세는 <code>sangsoe brief</code>.</p>
+</main>
+</div>
+</body>
+</html>

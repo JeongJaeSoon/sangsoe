@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 712" role="img" aria-labelledby="t5 d5">
+<title id="t5">정해진 코드로 도는 것과 토큰을 쓰는 것</title>
+<desc id="d5">왼쪽은 토큰이 들지 않는 hook, 게이트, 감지기, 스크립트 역할 둘(GRAPH, REAPER), 함수(ready 뷰, capacity, decision_open, decision_answer, notify), 뷰 계산. 오른쪽은 LLM 인 오케스트레이터, 리드, 워커, 서브에이전트와 기본 프로필. 가운데 event 의 needs 값이 judgment 일 때만 Orca 메시지로 에이전트를 깨운다. 아래에 프로필 표와 결정 루프 네 단계, 원칙 한 줄이 있다.</desc>
+<style>
+:root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--warn:#b42318}
+@media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--warn:#fca5a5}}
+text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:12px;fill:var(--fg)}
+.t{font-weight:700;font-size:14px}.s{font-size:12px;fill:var(--mut)}.m{font-family:ui-monospace,Menlo,monospace;font-size:12px}.b{font-weight:700}.c{text-anchor:middle}
+.l{font-size:12px;paint-order:stroke;stroke:var(--halo);stroke-width:4px;stroke-linejoin:round}
+.a{stroke:var(--line);stroke-width:1.6;fill:none;marker-end:url(#h)}
+.a.w{stroke-dasharray:6 4}
+.mk{fill:var(--line)}
+.pl{fill:none;stroke:var(--scr);stroke-width:2.5}
+.pr{fill:none;stroke:var(--llm);stroke-width:2.5}
+.scr rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5}
+.st rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5;stroke-dasharray:5 3}
+.llm rect{fill:var(--llmbg);stroke:var(--llm);stroke-width:1.5}
+.cross rect{fill:var(--llmbg);stroke:var(--llm);stroke-width:3}
+.pri rect{fill:var(--extbg);stroke:none}
+</style>
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+<!-- left -->
+<rect class="pl" x="10" y="10" width="380" height="400" rx="12"/><text class="t" x="24" y="32" style="fill:var(--scr)">결정적 · 토큰 0</text>
+<text class="s" x="24" y="48">hook · 스크립트 · 감지기 · 뷰 계산</text>
+<text class="s" x="24" y="76">기록 · 거부</text>
+<g class="scr"><rect x="24" y="82" width="135" height="28" rx="6"/><text class="m" x="34" y="100">UserPromptSubmit</text></g>
+<g class="scr"><rect x="167" y="82" width="95" height="28" rx="6"/><text class="m" x="177" y="100">[gate:이름]</text></g>
+<g class="scr"><rect x="270" y="82" width="100" height="28" rx="6"/><text x="280" y="100">재질문 게이트</text></g>
+<text class="s" x="24" y="132">감지</text>
+<g class="scr"><rect x="24" y="138" width="46" height="28" rx="6"/><text class="m" x="34" y="156">hook</text></g>
+<g class="scr"><rect x="78" y="138" width="96" height="28" rx="6"/><text x="88" y="156">monitor 5개</text></g>
+<text class="s" x="24" y="188">실행 (스크립트 역할 · 함수)</text>
+<g class="scr"><rect x="24" y="194" width="71" height="28" rx="6"/><text class="m" x="34" y="212">REAPER</text></g>
+<g class="scr"><rect x="103" y="194" width="130" height="28" rx="6"/><text class="m" x="113" y="212">land 판정 함수</text></g>
+<g class="scr"><rect x="241" y="194" width="63" height="28" rx="6"/><text class="m" x="251" y="212">GRAPH</text></g>
+<g class="scr"><rect x="312" y="194" width="62" height="28" rx="6"/><text class="m" x="322" y="212">notify</text></g>
+<g class="scr"><rect x="24" y="230" width="74" height="28" rx="6"/><text class="m" x="34" y="248">capacity</text></g>
+<g class="scr"><rect x="106" y="230" width="108" height="28" rx="6"/><text class="m" x="116" y="248">decision_open</text></g>
+<g class="scr"><rect x="222" y="230" width="124" height="28" rx="6"/><text class="m" x="232" y="248">decision_answer</text></g>
+<text class="s" x="24" y="280">뷰 계산 · 화면</text>
+<g class="scr"><rect x="24" y="286" width="46" height="28" rx="6"/><text x="34" y="304">뷰</text></g>
+<g class="scr"><rect x="78" y="286" width="52" height="28" rx="6"/><text class="m" x="88" y="304">ready</text></g>
+<g class="scr"><rect x="138" y="286" width="88" height="28" rx="6"/><text x="148" y="304">Orca 패널</text></g>
+<g class="scr"><rect x="24" y="322" width="121" height="28" rx="6"/><text class="m" x="34" y="340">sangsoe brief</text></g>
+<text class="s" x="24" y="376">같은 입력이면 같은 결과 · 토큰도 호출 비용도 없다</text>
+<text class="s" x="24" y="394">감지하고 실행하고 그리는 일은 모두 여기다</text>
+
+<!-- right -->
+<rect class="pr" x="610" y="10" width="380" height="400" rx="12"/><text class="t" x="624" y="32" style="fill:var(--llm)">LLM 판단 · 토큰 O · 깨울 때만</text>
+<text class="s" x="624" y="48">에이전트별 기본 프로필</text>
+<g class="llm"><rect x="624" y="58" width="352" height="82" rx="8"/><text class="t" x="636" y="78">오케스트레이터</text><text x="636" y="96">분류 · 배치 · dNNN 없는 답 잇기</text><text class="m" x="636" y="114">standard</text><text class="s" x="710" y="114">설계·모호한 결정은 deep 으로</text><text class="s" x="636" y="130">완료 조건 없음 · 깨울 때만</text></g>
+<g class="llm"><rect x="624" y="148" width="352" height="74" rx="8"/><text class="t" x="636" y="168">리드</text><text x="636" y="186">범위 · 증거 · 프로그램 완료 판정</text><text class="m" x="636" y="206">standard</text><text class="s" x="710" y="206">오래 쉬면 wait · 위험하면 deep</text></g>
+<g class="llm"><rect x="624" y="230" width="352" height="82" rx="8"/><text class="t" x="636" y="250">워커</text><text x="636" y="268">구현 · 조사 · 리뷰 초안</text><text class="s" x="636" y="286">브리프가 프로필을 정한다</text><text class="m" x="636" y="304">standard · deep · light</text></g>
+<g class="llm"><rect x="624" y="320" width="352" height="74" rx="8"/><text class="t" x="636" y="340">서브에이전트</text><text x="636" y="358">읽기 전용 조사 (워커가 아니다)</text><text class="s" x="636" y="378">agent 정의의 model · effort</text></g>
+
+<!-- middle -->
+<text class="t" x="496" y="32">경계</text>
+<text class="s" x="404" y="48">event 의 needs 가 누구를 깨우나</text>
+<g class="st"><rect x="410" y="60" width="180" height="34" rx="8"/><text class="m" x="420" y="82">event 한 줄</text></g>
+<g class="scr"><rect x="410" y="108" width="180" height="46" rx="8"/><text class="m" x="420" y="127">needs = none</text><text class="s" x="420" y="144">기록만 · 깨우지 않는다</text></g>
+<g class="scr"><rect x="410" y="164" width="180" height="46" rx="8"/><text class="m" x="420" y="183">needs = action</text><text class="s" x="420" y="200">스크립트·함수가 수행</text></g>
+<g class="cross"><rect x="410" y="220" width="180" height="46" rx="8"/><text class="m b" x="420" y="239">needs = judgment</text><text class="s" x="420" y="256">에이전트를 깨운다</text></g>
+<g class="st"><rect x="410" y="296" width="180" height="62" rx="8"/><text class="b" x="420" y="314">Orca 메시지</text><text class="m" x="420" y="330" style="font-size:11px">notify → notified 한 줄</text><text class="m" x="420" y="346" style="font-size:11px">orca orchestration send</text></g>
+<path class="a" d="M410,187 L392,187" style="marker-end:url(#h)"/>
+<path class="a" d="M500,266 L500,294"/>
+<path class="a w" d="M590,327 L608,327"/>
+<path class="a" d="M624,398 L392,398" style="stroke-dasharray:2 3"/>
+<text class="l c" x="500" y="391">sangsoe 명령 → event 한 줄</text>
+
+<!-- profile table -->
+<text class="t" x="10" y="438">프로필 → 모델 · effort</text><text class="m s" x="196" y="438" style="font-size:11px">model_profiles</text>
+<g class="llm"><rect x="10" y="446" width="236" height="52" rx="8"/><text class="m b" x="20" y="465">deep</text><text x="20" y="484">Opus · high — 설계·리뷰·위험</text></g>
+<g class="llm"><rect x="254" y="446" width="236" height="52" rx="8"/><text class="m b" x="264" y="465">standard</text><text x="264" y="484">Sonnet 또는 Opus · medium</text></g>
+<g class="llm"><rect x="498" y="446" width="236" height="52" rx="8"/><text class="m b" x="508" y="465">light</text><text x="508" y="484">Haiku 또는 Sonnet · low</text></g>
+<g class="llm"><rect x="742" y="446" width="248" height="52" rx="8"/><text class="m b" x="752" y="465">wait</text><text x="752" y="484">가장 싼 것 · low — 오래 쉬는 리드</text></g>
+
+<!-- decision loop -->
+<text class="t" x="10" y="530">결정 루프: 네 단계 중 한 단계만 LLM</text>
+<g class="scr"><rect x="10" y="540" width="226" height="64" rx="8"/><text class="b" x="20" y="559">1 기록 · hook</text><text x="20" y="577">owner_action 을 쓰고</text><text x="20" y="593">dNNN 이면 바로 잇는다</text></g>
+<g class="llm"><rect x="258" y="540" width="226" height="64" rx="8" style="stroke-width:3"/><text class="b" x="268" y="559">2 연결 · 오케스트레이터</text><text x="268" y="577">dNNN 없는 답만</text><text x="268" y="593">열린 결정과 잇는다</text></g>
+<g class="scr"><rect x="506" y="540" width="226" height="64" rx="8"/><text class="b" x="516" y="559">3 decision_answer 함수</text><text x="516" y="577">결정을 닫고 게이트를 푼다</text><text x="516" y="593">전달 안 되면 escalation_stale</text></g>
+<g class="scr"><rect x="754" y="540" width="236" height="64" rx="8"/><text class="b" x="764" y="559">4 재질문 게이트</text><text x="764" y="577">닫힌 결정 키는 거부하고</text><text x="764" y="593">기존 답을 돌려준다</text></g>
+<path class="a" d="M236,572 L256,572"/><path class="a" d="M484,572 L504,572"/><path class="a" d="M732,572 L752,572"/>
+
+<!-- principle -->
+<g class="pri"><rect x="10" y="626" width="980" height="72" rx="10"/><text class="c b" x="500" y="656" style="font-size:20px">판단이 필요 없는 것은 토큰을 쓰지 않는다</text><text class="c s" x="500" y="680">정기적으로 훑는 LLM 작업은 없고, 에이전트는 Orca 메시지로 깨어났을 때만 토큰을 쓴다</text></g>
+</svg>

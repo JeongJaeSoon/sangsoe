@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1290" role="img" aria-labelledby="t3 d3">
+<title id="t3">오너 지시 하나가 이어지는 순서</title>
+<desc id="d3">오너의 말이 owner_action 으로 기록되고 owner_class 로 분류된 뒤, 진행 중인 일의 범위, 새 일, 오너 판단 세 갈래가 위에서 아래로 이어지고 완료 보고로 끝난다. 열은 오너, hook, 오케스트레이터, 리드, 스크립트·함수, 워커, 감지기 순이다. 단계마다 오른쪽 열에 그 단계가 쓰는 event 가 적혀 있고, 화살표 글자에 그 단계가 부르는 Orca 기능(메시지, Task, 워커 시작, 게이트)이 적혀 있다.</desc>
+<style>
+:root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--warn:#b42318}
+@media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--warn:#fca5a5}}
+text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:13px;fill:var(--fg)}
+.t{font-weight:700;font-size:14px}.s{font-size:12px;fill:var(--mut)}.m{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.c{text-anchor:middle}
+.l{font-size:12px;fill:var(--fg);paint-order:stroke;stroke:var(--halo);stroke-width:4px;stroke-linejoin:round}
+.ll{stroke:var(--line);stroke-width:1;stroke-dasharray:3 4;opacity:.7}
+.sec rect{fill:var(--extbg);stroke:none}.sec text{font-weight:700}
+.a{stroke:var(--line);stroke-width:1.6;fill:none;marker-end:url(#h)}
+.a.w{stroke-dasharray:6 4}
+.mk{fill:var(--line)}
+.scr rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5}
+.st rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:1.5;stroke-dasharray:5 3}
+.llm rect{fill:var(--llmbg);stroke:var(--llm);stroke-width:1.5}
+.own rect{fill:var(--ownbg);stroke:var(--own);stroke-width:1.5}
+.rej rect{fill:var(--scrbg);stroke:var(--scr);stroke-width:3}
+.num circle{fill:var(--bg);stroke:var(--line);stroke-width:1.2}.num text{font-size:11px;font-weight:700;text-anchor:middle}
+</style>
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+<!-- lifelines -->
+<line class="ll" x1="60" y1="56" x2="60" y2="1282"/><line class="ll" x1="167" y1="56" x2="167" y2="1282"/><line class="ll" x1="274" y1="56" x2="274" y2="1282"/><line class="ll" x1="381" y1="56" x2="381" y2="1282"/>
+<line class="ll" x1="488" y1="56" x2="488" y2="1282"/><line class="ll" x1="595" y1="56" x2="595" y2="1282"/><line class="ll" x1="702" y1="56" x2="702" y2="1282"/>
+
+<!-- actors -->
+<g class="own"><rect x="8" y="8" width="104" height="48" rx="8"/><text class="t c" x="60" y="28">오너</text><text class="s c" x="60" y="46">채팅 · 버튼</text></g>
+<g class="scr"><rect x="115" y="8" width="104" height="48" rx="8"/><text class="t c" x="167" y="28">hook</text><text class="s c m" x="167" y="46" style="font-size:10px">UserPromptSubmit</text></g>
+<g class="llm"><rect x="222" y="8" width="104" height="48" rx="8"/><text class="t c" x="274" y="26" style="font-size:12px">오케스트레이터</text><text class="s c" x="274" y="46">LLM</text></g>
+<g class="llm"><rect x="329" y="8" width="104" height="48" rx="8"/><text class="t c" x="381" y="28">리드</text><text class="s c" x="381" y="46">LLM</text></g>
+<g class="scr"><rect x="436" y="8" width="104" height="48" rx="8"/><text class="t c" x="488" y="28" style="font-size:13px">스크립트·함수</text><text class="s c" x="488" y="46">모델 없음</text></g>
+<g class="llm"><rect x="543" y="8" width="104" height="48" rx="8"/><text class="t c" x="595" y="28">워커</text><text class="s c" x="595" y="46">LLM</text></g>
+<g class="scr"><rect x="650" y="8" width="104" height="48" rx="8"/><text class="t c" x="702" y="28">감지기</text><text class="s c m" x="702" y="46" style="font-size:11px">pr-monitor</text></g>
+<g class="st"><rect x="796" y="8" width="194" height="48" rx="8"/><text class="t" x="808" y="28">쓰는 event</text><text class="s" x="808" y="46">sqlite · append-only</text></g>
+
+<!-- A -->
+<g class="sec"><rect x="10" y="68" width="980" height="24" rx="5"/><text x="20" y="85">모든 지시: 기록 → 분류</text></g>
+<g class="num"><circle cx="24" cy="128" r="9"/><text x="24" y="132">1</text></g>
+<path class="a" d="M60,128 L167,128"/><text class="l c" x="113" y="121">지시</text>
+<g class="st"><rect x="800" y="117" width="186" height="22" rx="5"/><text class="m" x="810" y="132">owner_action</text></g>
+<g class="num"><circle cx="24" cy="161" r="9"/><text x="24" y="165">2</text></g>
+<g class="llm"><rect x="204" y="146" width="140" height="30" rx="6"/><text class="c" x="274" y="166">여섯 갈래로 분류</text></g>
+<g class="st"><rect x="800" y="150" width="186" height="22" rx="5"/><text class="m" x="810" y="165">owner_class</text></g>
+
+<!-- B -->
+<g class="sec"><rect x="10" y="186" width="980" height="24" rx="5"/><text x="20" y="203">갈래: 진행 중인 일의 범위 (scope)</text></g>
+<g class="num"><circle cx="24" cy="240" r="9"/><text x="24" y="244">3</text></g>
+<path class="a w" d="M274,240 L595,240"/><text class="l c" x="435" y="233">Orca 메시지로 전달 (새 세션 없음)</text>
+<g class="st"><rect x="800" y="229" width="186" height="22" rx="5"/><text class="m" x="810" y="244">notified</text></g>
+<g class="num"><circle cx="24" cy="273" r="9"/><text x="24" y="277">4</text></g>
+<g class="llm"><rect x="535" y="258" width="120" height="30" rx="6"/><text class="c" x="595" y="278">처리하고 답신</text></g>
+<g class="st"><rect x="800" y="262" width="186" height="22" rx="5"/><text class="m" x="810" y="277">event 없음 (Orca 가 기록)</text></g>
+
+<!-- C -->
+<g class="sec"><rect x="10" y="300" width="980" height="24" rx="5"/><text x="20" y="317">갈래: 새 일 (new_item) → 워커 → PR → 리뷰 → 머지 → 배포 확인</text></g>
+<g class="num"><circle cx="24" cy="349" r="9"/><text x="24" y="353">5</text></g>
+<g class="llm"><rect x="184" y="334" width="180" height="30" rx="6"/><text class="c" x="274" y="354">Orca Task 만들기 🟢</text></g>
+<g class="st"><rect x="800" y="327" width="186" height="38" rx="5"/><text class="m" x="810" y="342">item_extra_set</text><text class="m" x="810" y="358">item_transition</text></g>
+<g class="num"><circle cx="24" cy="398" r="9"/><text x="24" y="402">6</text></g>
+<path class="a" d="M381,398 L488,398"/><text class="l c" x="435" y="391">ready 뷰 · capacity</text>
+<g class="st"><rect x="800" y="388" width="186" height="22" rx="5"/><text class="m" x="810" y="403">뷰 읽기 · event 없음</text></g>
+<g class="num"><circle cx="24" cy="436" r="9"/><text x="24" y="440">7</text></g>
+<path class="a" d="M381,436 L595,436"/><text class="l c" x="488" y="429">worker-start --task (브리프·프로필)</text>
+<g class="st"><rect x="800" y="426" width="186" height="22" rx="5"/><text class="m" x="810" y="441">session_started</text></g>
+<g class="num"><circle cx="24" cy="470" r="9"/><text x="24" y="474">8</text></g>
+<g class="scr"><rect x="632" y="455" width="140" height="30" rx="6"/><text class="c" x="702" y="475">PR 열림·리뷰 요청</text></g>
+<g class="st"><rect x="800" y="456" width="186" height="38" rx="5"/><text class="m" x="810" y="471">pr_opened</text><text class="m" x="810" y="487">pr_review_requested</text></g>
+<g class="num"><circle cx="24" cy="516" r="9"/><text x="24" y="520">9</text></g>
+<path class="a w" d="M702,516 L595,516"/><text class="l c" x="648" y="509">리뷰 코멘트</text>
+<g class="st"><rect x="800" y="505" width="186" height="22" rx="5"/><text class="m" x="810" y="520">review_commented</text></g>
+<g class="num"><circle cx="24" cy="554" r="9"/><text x="24" y="558">10</text></g>
+<g class="llm"><rect x="520" y="539" width="150" height="30" rx="6"/><text class="c" x="595" y="559">land 요청 · 조건부 예약</text></g>
+<g class="st"><rect x="800" y="543" width="186" height="22" rx="5"/><text class="m" x="810" y="558">land_requested</text></g>
+<g class="num"><circle cx="24" cy="589" r="9"/><text x="24" y="593">11</text></g>
+<g class="llm"><rect x="520" y="574" width="150" height="30" rx="6"/><text class="c" x="595" y="594">머지 대기 보고 · 종료</text></g>
+<g class="st"><rect x="800" y="578" width="186" height="22" rx="5"/><text class="m" x="810" y="593">merge_ready (Task 열림)</text></g>
+<g class="num"><circle cx="24" cy="627" r="9"/><text x="24" y="631">12</text></g>
+<g class="scr"><rect x="632" y="612" width="140" height="30" rx="6"/><text class="c" x="702" y="632">머지 확인 → ✅ · CI</text></g>
+<g class="st"><rect x="800" y="616" width="186" height="22" rx="5"/><text class="m" x="810" y="631">pr_merged · main_green</text></g>
+<g class="num"><circle cx="24" cy="665" r="9"/><text x="24" y="669">13</text></g>
+<g class="llm"><rect x="311" y="650" width="140" height="30" rx="6"/><text class="c" x="381" y="670">배포 확인 기록</text></g>
+<g class="st"><rect x="800" y="654" width="186" height="38" rx="5"/><text class="m" x="810" y="669">stage_recorded</text><text class="m" x="810" y="685">evidence</text></g>
+
+<!-- D -->
+<g class="sec"><rect x="10" y="704" width="980" height="24" rx="5"/><text x="20" y="721">갈래: 오너 판단 (owner_judgment) = 결정 루프</text></g>
+<g class="num"><circle cx="24" cy="764" r="9"/><text x="24" y="768">14</text></g>
+<path class="a" d="M274,764 L60,764"/><text class="l c" x="167" y="757">decision_open · 게이트 생성</text>
+<g class="st"><rect x="800" y="753" width="186" height="22" rx="5"/><text class="m" x="810" y="768">decision_opened</text></g>
+<g class="num"><circle cx="24" cy="806" r="9"/><text x="24" y="810">15</text></g>
+<path class="a" d="M60,806 L167,806"/><text class="l c" x="113" y="799">답 (dNNN 포함)</text>
+<g class="st"><rect x="800" y="788" width="186" height="38" rx="5"/><text class="m" x="810" y="803">owner_action</text><text class="m" x="810" y="819">decision_answered</text></g>
+<g class="num"><circle cx="24" cy="855" r="9"/><text x="24" y="859">16</text></g>
+<g class="llm"><rect x="194" y="834" width="160" height="42" rx="6"/><text class="c" x="274" y="852">dNNN 없는 답만</text><text class="c" x="274" y="868">열린 결정과 잇기</text></g>
+<g class="st"><rect x="800" y="844" width="186" height="22" rx="5"/><text class="m" x="810" y="859">decision_answered</text></g>
+<g class="num"><circle cx="24" cy="917" r="9"/><text x="24" y="921">17</text></g>
+<g class="scr"><rect x="408" y="896" width="160" height="42" rx="6"/><text class="c" x="488" y="914">decision_answer 함수</text><text class="c" x="488" y="930">결정 닫음 · 게이트 풀림</text></g>
+<g class="st"><rect x="800" y="906" width="186" height="22" rx="5"/><text class="m" x="810" y="921">decision_closed</text></g>
+<g class="num"><circle cx="24" cy="972" r="9"/><text x="24" y="976">18</text></g>
+<path class="a w" d="M488,972 L595,972"/><text class="l c" x="541" y="965">gate-resolve + 답 원문</text>
+<g class="st"><rect x="800" y="961" width="186" height="22" rx="5"/><text class="m" x="810" y="976">notified</text></g>
+<g class="num"><circle cx="24" cy="1010" r="9"/><text x="24" y="1014">19</text></g>
+<path class="a" d="M595,1010 L488,1010"/><text class="l c" x="541" y="1003">재개</text>
+<g class="st"><rect x="800" y="990" width="186" height="38" rx="5"/><text class="m" x="810" y="1005">notified</text><text class="m" x="810" y="1021">안 읽히면 escalation_stale</text></g>
+<g class="num"><circle cx="24" cy="1056" r="9"/><text x="24" y="1060">20</text></g>
+<path class="a" d="M595,1056 L488,1056"/><text class="l c" x="541" y="1049">같은 질문 다시</text>
+<g class="num"><circle cx="24" cy="1096" r="9"/><text x="24" y="1100">21</text></g>
+<g class="rej"><rect x="408" y="1076" width="160" height="42" rx="6"/><text class="c" x="488" y="1094">재질문 게이트 거부</text><text class="c" x="488" y="1110">기존 답 + dNNN 반환</text></g>
+<g class="st"><rect x="800" y="1085" width="186" height="22" rx="5"/><text class="m" x="810" y="1100">거부: event 없음</text></g>
+
+<!-- E -->
+<g class="sec"><rect x="10" y="1130" width="980" height="24" rx="5"/><text x="20" y="1147">완료 보고</text></g>
+<g class="num"><circle cx="24" cy="1180" r="9"/><text x="24" y="1184">22</text></g>
+<path class="a w" d="M702,1180 L274,1180"/><text class="l c" x="488" y="1173">닫기 제안 (머지 뒤에도 열린 항목만)</text>
+<g class="st"><rect x="800" y="1169" width="186" height="22" rx="5"/><text class="m" x="810" y="1184">close_suggested</text></g>
+<g class="num"><circle cx="24" cy="1219" r="9"/><text x="24" y="1223">23</text></g>
+<g class="llm"><rect x="164" y="1196" width="220" height="42" rx="6"/><text class="c" x="274" y="1214">머지 뒤에도 열린 항목만</text><text class="c" x="274" y="1230">닫기 → completed ✅</text></g>
+<g class="st"><rect x="800" y="1208" width="186" height="22" rx="5"/><text class="m" x="810" y="1223">item_transition</text></g>
+<g class="num"><circle cx="24" cy="1266" r="9"/><text x="24" y="1270">24</text></g>
+<path class="a" d="M274,1266 L60,1266"/><text class="l c" x="167" y="1259">완료 보고 (현황)</text>
+<g class="st"><rect x="800" y="1255" width="186" height="22" rx="5"/><text class="m" x="810" y="1270">읽기만: sangsoe brief</text></g>
+</svg>
