@@ -6,7 +6,7 @@ Orchestration for Claude Code sessions on Orca. Work in progress: pre-releases (
 
 macOS with Homebrew, Claude Code, Orca and an authenticated `gh`. Run these in order.
 
-1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.0-rc.3`.
+1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.0-rc.4`.
 2. `sangsoe install` registers the Claude Code plugin and the Orca plugin, then runs `sangsoe doctor`. It is safe to re-run. On a first install it prints:
 
    ```
@@ -22,7 +22,15 @@ macOS with Homebrew, Claude Code, Orca and an authenticated `gh`. Run these in o
    - Orca asks for exactly `local.sangsoe` at this folder.
 
    Run `sangsoe plugin approve --dry-run` first. It prints each check and the `orca plugin enable` command without running it. When the review is not recorded yet, its `FAIL merged_with_clean_review: no review evidence for PR #<n> head <sha>` line names the PR and head to pass to `sangsoe review record`. On success approve prints `recorded plugin_approved (seq N)` and `enabled`.
-4. `sangsoe doctor` now prints `ok` on every row and exits 0. That includes `orca plugin: local.sangsoe <version>, running` and `orca-plugin-content: 내용 … = 빌드 커밋 … = 리뷰된 head …`.
+4. `sangsoe doctor` now prints `ok` on every row and exits 0. That includes `orca plugin: local.sangsoe <version>, running` and `orca-plugin-content: 내용 … = 빌드 커밋 … = 리뷰된 head …`. The one exception is the `reaper-config` row, described next.
+
+**REAPER.** REAPER, the Orca plugin's cleanup round, only marks finished cards and never removes them until `~/.config/sangsoe/config.json` has a `reaper` section. Until then doctor prints `notice   reaper-config: REAPER 는 표시만 하고 정리하지 않는다 …` and still exits 0. To let it remove finished cards (worktree and branch, after two rounds and a 30-minute grace, and only when the work is committed and pushed), add this to the file, listing the cards to keep by instance id, path or branch:
+
+```json
+{ "reaper": { "protect": [] } }
+```
+
+Optional `grace_minutes` (default 30) and `min_gap_minutes` (default 10) sit beside `protect`. Doctor then prints `ok       reaper-config: REAPER 정리 켜짐: 보호 0개, 유예 30분`. `sangsoe install` never writes this section.
 
 Open a new Claude Code session to pick up the plugin.
 
@@ -42,7 +50,7 @@ Every `brew upgrade sangsoe` needs a new review record and a new approval. Each 
    and `warn orca-plugin-version` may appear with the same fix. Every other row should be `ok`, `orca-plugin-content` included: the new folder equals its build commit and reviewed head before anything is enabled.
 3. Whoever reviewed the new build's pull request records it on this machine: `sangsoe review record --pr <n> --head <full sha> --act-on 0 --reviewer <name>`. The previous version's record does not carry over: it names another pull request and head.
 4. `sangsoe plugin approve --dry-run`, then `sangsoe plugin approve`. It prints `recorded plugin_approved (seq N)` and `enabled`.
-5. `sangsoe doctor` prints `ok` on every row and exits 0, with `orca plugin: local.sangsoe <new version>, running`.
+5. `sangsoe doctor` prints `ok` on every row and exits 0, with `orca plugin: local.sangsoe <new version>, running` (and the `reaper-config` notice while no `reaper` section is set).
 
 The approval covers the core the Orca plugin runs. A release packs a copy of `core/` into `orca-plugin/vendor/`, the plugin loads only that copy, and approve and doctor compare the whole folder, the copy included, with the reviewed source. A changed file anywhere in the installed folder turns `orca-plugin-content` into `FAIL`, with `sangsoe plugin approve` as the fix.
 
