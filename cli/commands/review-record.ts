@@ -40,6 +40,7 @@ export default {
   name: "review record",
   summary: "record one independent review's verdict on a PR head (decision 111)",
   usage: USAGE,
+  required: REQUIRED,
   options: { pr: { type: "string" }, head: { type: "string" }, "act-on": { type: "string" }, reviewer: { type: "string" }, repo: { type: "string" } },
   run: ({ values }) => reviewRecord(values),
 } satisfies CommandDef;

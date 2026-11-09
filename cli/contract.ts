@@ -27,6 +27,8 @@ export type CommandDef = {
   usage: string;
   /** Parsed strictly by the router: an option not listed here is a usage error and run() is never called. */
   options?: ParseArgsOptionsConfig;
+  /** Options that must be given; a missing one is a usage error and run() is never called. */
+  required?: readonly string[];
   /** Upper bound on positionals; default 0. */
   maxPositionals?: number;
   run(args: CommandArgs): Outcome | Report | Promise<Outcome | Report>;

@@ -27,12 +27,15 @@ test("a non-numeric PR or count is refused before GitHub is asked", async () => 
   assert.match(r.ok ? "" : r.refusal.reason, /pr must be a PR number/);
   const negative = await reviewRecord({ pr: "-1", head: HEAD, "act-on": "0", reviewer: "codex" }, untouched);
   assert.equal(negative.ok ? "" : negative.refusal.code, "review_refused");
+  const count = await reviewRecord({ pr: "7", head: HEAD, "act-on": "2.5", reviewer: "codex" }, untouched);
+  assert.match(count.ok ? "" : count.refusal.reason, /act-on must be a count/);
 });
 
-test("the router: --json gives the refusal object, an unknown flag or a dash-led value is a usage error", async () => {
+test("the router: a missing, unknown or dash-led flag is a usage error (exit 2) with the refusal object", async () => {
   const missing = await run(["review", "record", "--pr", "7", "--head", HEAD, "--json"]);
-  assert.equal(missing.code, 1);
-  assert.equal(JSON.parse(missing.out).code, "invalid_input");
+  assert.equal(missing.code, 2);
+  assert.deepEqual(JSON.parse(missing.out).code, "invalid_input");
+  assert.match(JSON.parse(missing.out).reason, /missing --act-on, --reviewer/);
   const nan = await run(["review", "record", "--pr=-1", "--head", HEAD, "--act-on", "0", "--reviewer", "codex", "--json"]);
   assert.deepEqual([nan.code, JSON.parse(nan.out).code], [1, "review_refused"]);
   assert.equal((await run(["review", "record", "--bogus", "x"])).code, 2);
