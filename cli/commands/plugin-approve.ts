@@ -2,6 +2,25 @@ import { existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type ApprovePorts, type ApproveResult, approvePlugin, nodePorts, resolveCommit } from "../../core/index.ts";
+import type { CommandDef } from "../contract.ts";
+
+// The router has already rejected unknown options and handled --help; pluginApprove re-reads
+// the same three options from argv so its own tests keep driving it directly.
+export default {
+  name: "plugin approve",
+  summary: "check review and build, then enable the Orca plugin (--dry-run only checks)",
+  usage: "[--dry-run] [--dir <orca plugin folder>] [--commit <sha>]",
+  options: { "dry-run": { type: "boolean" }, dir: { type: "string" }, commit: { type: "string" } },
+  run: async ({ values }) => {
+    const argv = [
+      ...(values["dry-run"] === true ? ["--dry-run"] : []),
+      ...(typeof values.dir === "string" ? ["--dir", values.dir] : []),
+      ...(typeof values.commit === "string" ? ["--commit", values.commit] : []),
+    ];
+    const { code, out } = await pluginApprove(argv, (line) => process.stdout.write(`${line}\n`));
+    return { code, lines: [out] };
+  },
+} satisfies CommandDef;
 
 export const USAGE = `usage: sangsoe plugin approve [--dry-run] [--dir <orca plugin folder>] [--commit <sha>]
 
