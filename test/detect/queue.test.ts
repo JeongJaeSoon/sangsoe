@@ -154,6 +154,31 @@ test("decision_moot_closed (detection side): a waiter's PR closed unmerged moots
   assert.match(w.sends[0]?.body ?? "", /sangsoe decision moot --decision d001/);
 });
 
+test("a PR closed before the decision opened, or one with a newer open PR beside it, moots nothing", async () => {
+  const w = createWorld([
+    { id: T1, run: RUN, status: "dispatched", dispatchId: D1 },
+    { id: T2, run: RUN, status: "dispatched", dispatchId: "ctx_000000000002" },
+  ]);
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#3", task: T1 } });
+  w.store.append({ type: "pr_closed", source: "pr-monitor", payload: { pr: "acme/api#3" } });
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#4", task: T1 } });
+  const d = await openDecision(w, [
+    { task: T1, run: RUN },
+    { task: T2, run: RUN },
+  ]);
+  await queue(deps(w.store, w.orca));
+  assert.equal(w.store.events({ type: "decision_closed" }).length, 0, "#3 closed before d001 opened");
+
+  w.store.append({ type: "pr_closed", source: "pr-monitor", payload: { pr: "acme/api#4" } });
+  await queue(deps(w.store, w.orca));
+  assert.equal(w.store.events({ type: "decision_closed" }).length, 0, "T2 still waits with no closed PR");
+
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#5", task: T2 } });
+  w.store.append({ type: "pr_closed", source: "pr-monitor", payload: { pr: "acme/api#5" } });
+  await queue(deps(w.store, w.orca));
+  assert.deepEqual(w.store.events({ type: "decision_closed" }).map((e) => e.payload), [{ decision: d, reason: "moot", evidence: "pr_closed:acme/api#4" }]);
+});
+
 test("ready, todo_due and ⚠️ trigger_unclear: once each, item_ready only after the lead was told", async () => {
   const w = createWorld(
     [
