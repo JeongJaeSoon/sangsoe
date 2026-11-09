@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "result": {
+    "workers": [
+      {
+        "dispatchId": "ctx_000000000001",
+        "taskId": "task_000000000001",
+        "state": "ready",
+        "outcome": "in_progress",
+        "liveness": "live",
+        "agent": "claude",
+        "terminal": "term_00000000-0000-4000-8000-000000000001",
+        "terminalState": "retained",
+        "workspace": "repo-0001::/home/dev/workspaces/api/feature-a",
+        "host": "local"
+      },
+      {
+        "dispatchId": "ctx_000000000002",
+        "taskId": "task_000000000002",
+        "state": "settled",
+        "outcome": "succeeded",
+        "liveness": "gone",
+        "agent": "claude",
+        "terminal": "term_00000000-0000-4000-8000-000000000002",
+        "terminalState": "released",
+        "workspace": "repo-0001::/home/dev/workspaces/api/feature-b",
+        "host": "local"
+      }
+    ],
+    "scope": { "source": "all" },
+    "nextCursor": "cursor-0002",
+    "warnings": ["Showing 2 of 9 Dispatches, newest first; more are on later pages. Follow page.nextCursor with --cursor."]
+  }
+}

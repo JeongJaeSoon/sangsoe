@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "runtime_unavailable",
+    "message": "Orca is not running. Run orca open to launch it."
+  }
+}

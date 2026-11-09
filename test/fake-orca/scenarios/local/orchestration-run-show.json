@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "result": {
+    "runId": "run_000000000001",
+    "objective": "acme/api: ship the export endpoint",
+    "removedWork": {
+      "coverage": "complete",
+      "recordedSince": "2026-11-03T18:13:34Z",
+      "tasks": 0,
+      "dispatches": 0,
+      "workers": 0,
+      "terminals": 0,
+      "activeWorkersAtRemoval": 0,
+      "lastRemovedAt": null
+    }
+  }
+}

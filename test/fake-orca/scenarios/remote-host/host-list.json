@@ -1,0 +1,11 @@
+{
+  "id": "local",
+  "ok": true,
+  "result": {
+    "hosts": [
+      { "kind": "local", "name": "this machine", "id": "local", "selector": "--host local", "platform": "darwin" },
+      { "kind": "ssh", "name": "build-box", "id": "ssh-0000000000001-aaaaaa", "selector": "--host ssh:ssh-0000000000001-aaaaaa", "platform": "linux", "connected": true },
+      { "kind": "ssh", "name": "old-box", "id": "ssh-0000000000003-cccccc", "selector": "--host ssh:ssh-0000000000003-cccccc", "connected": false }
+    ]
+  }
+}
