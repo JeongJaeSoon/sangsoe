@@ -13,6 +13,6 @@ export const sleepLoop: Gate = (call) => {
     gate: "sleep-loop",
     reason:
       "[gate:sleep-loop] A foreground sleep loop holds the turn. Run the same command with run_in_background: true " +
-      "(its completion wakes you), or wait for an Orca message with `orca orchestration check --wait`.",
+      "(its completion wakes you), or end the turn and let an Orca message wake you.",
   };
 };
