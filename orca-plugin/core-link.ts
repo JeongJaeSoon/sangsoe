@@ -1,7 +1,7 @@
-// The one place the worker reaches the shared core (decisions 132, 136). The design has the worker
-// import the core directly (decision 75 나), but Orca approves and hashes only this folder, so no static
-// import may leave it. The core is found at run time beside the folder: `dist/` in the installed
-// tree (libexec/orca-plugin next to libexec/dist), the TypeScript source in a checkout.
+// The one place the worker reaches the shared core (decisions 132, 136, 152). Orca approves and
+// hashes only this folder, so no static import may leave it. A release stages the core source into
+// `vendor/` inside the folder, under the hash, and an installed tree loads only that copy; only a
+// git checkout (no copy, a `.git` beside the folder) loads the source core beside it.
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -25,19 +25,18 @@ export type PanelCore = {
 
 type CoreModule = { openMonitors(o?: { dryRun?: boolean }): MonitorRunner; openPanelCore(): PanelCore };
 
-const CANDIDATES = ["../dist/core/index.js", "../core/index.ts"];
+const STAGED = "./vendor/core/index.ts";
+const CHECKOUT = "../core/index.ts";
 
 export function coreUrl(base: string = import.meta.url): URL | null {
-  for (const rel of CANDIDATES) {
-    const url = new URL(rel, base);
-    if (existsSync(fileURLToPath(url))) return url;
-  }
-  return null;
+  const has = (rel: string) => existsSync(fileURLToPath(new URL(rel, base)));
+  const rel = has(STAGED) ? STAGED : has("../.git") && has(CHECKOUT) ? CHECKOUT : null;
+  return rel ? new URL(rel, base) : null;
 }
 
 async function open<T>(pick: (core: CoreModule) => T): Promise<T | string> {
   const url = coreUrl();
-  if (!url) return `core not found beside the plugin folder (${CANDIDATES.join(", ")})`;
+  if (!url) return `core not found: no ${STAGED} in the plugin folder, and not a git checkout with ${CHECKOUT}`;
   try {
     return pick((await import(url.href)) as CoreModule);
   } catch (e) {
