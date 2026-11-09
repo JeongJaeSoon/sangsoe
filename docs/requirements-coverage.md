@@ -4,7 +4,7 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 
 상태: 🟢 그 시험이 요구 전체를 main 에서 지킨다 · 🟡 일부만 지킨다(빠진 것을 적었다) · 🔴 지키는 시험이 없다 · `PR #N`/`U<번호>` 그 단위가 가져온다.
 
-집계: R 23행 · 🟢 11 · 🟡 8 · 🔴 3 · 단위 1
+집계: R 23행 · 🟢 9 · 🟡 10 · 🔴 3 · 단위 1
 
 ## R-01–R-23
 
@@ -19,10 +19,10 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 | R-07 | 상태는 구조 신호가 정본, 판별 못 하면 행동 0, 시작 실패와 일부러 쉼을 구분 | `core/detect/orca/judge.test.ts` | 🟢 |
 | R-08 | 보낸 쪽이 잘림·수신자 없음 실패를 받음, 받는 쪽 하나에 소비자 하나, 재개 시 대기를 다시 붙임 | `test/decision/notify.test.ts`, `test/orca-boundary.test.ts`, `test/session/hooks.test.ts` | 🟢 |
 | R-09 | hook 은 이벤트당 프로세스 하나, 합치기 표 시험, 실제 명령 모음으로 오탐·미탐 | `core/gates/merge.test.ts`, `core/gates/gates.test.ts`, `cli/commands/hook.test.ts` | 🟢 |
-| R-10 | 권한 결정은 한 곳, 거부는 event, 거부된 행동을 다른 경로로 재시도하지 않음 | `cli/commands/hook.test.ts`, `core/gates/gates.test.ts` | 🟢 |
+| R-10 | 권한 결정은 한 곳, 거부는 event, 거부된 행동을 다른 경로로 재시도하지 않음 | `cli/commands/hook.test.ts`, `core/gates/gates.test.ts` | 🟡 한 곳 결정과 거부 event(`gate_denied`)는 시험한다. 거부된 행동을 다른 경로로 재시도하지 않는 것은 규칙 문장뿐이고 지키는 시험이 없다 |
 | R-11 | 호스트 상태·시계 주입, CI 시간 상한·병렬, 제외 시험과 재실행 flake 를 숨기지 않음 | `core/install/install.test.ts`, `core/contract/contract.test.ts` | 🟡 주입은 있다. CI job 에 시간 상한이 없고 건너뛴 시험 수를 따로 보이지 않는다 |
 | R-12 | 만든 자원은 기록하고 그 기록으로만 치움, 목록이 비면 지우지 않음 | — | U18 |
-| R-13 | 부하 판정은 한 기준, 무거운 작업 슬롯은 CPU 에 맞춤 | `core/capacity/capacity.test.ts`, `core/gates/gates.test.ts` | 🟢 |
+| R-13 | 부하 판정은 한 기준, 무거운 작업 슬롯은 CPU 에 맞춤 | `core/capacity/capacity.test.ts`, `core/gates/gates.test.ts` | 🟡 부하 판정은 한 함수이고 CPU 수에 비춰 본다. 슬롯 상한(`limit`)은 설정값이라 CPU 수에 맞추지 않는다 |
 | R-14 | 항목은 담당·원문·끝나는 조건을 함께 가짐, 닫는 길 없는 파생 항목 없음 | `core/start/item.test.ts`, `cli/commands/item-new.test.ts`, `test/migrate/migrate.test.ts` | 🟢 |
 | R-15 | 오너 항목은 에이전트가 못 하는 행동에만, 이유 한 줄 | `test/owner/scenarios.test.ts`, `test/owner/owner-todo.test.ts` | 🟡 오너 항목이 관찰한 사실·기록된 답으로만 닫히는 것은 시험한다. "에이전트가 못 하는 행동에만"과 이유 한 줄(`why_owner`)을 올리기 전에 거르는 시험은 없다 |
 | R-16 | 모든 CLI 는 `--help`·모르는 인자에서 무변경, 모르는 명령은 맞는 형태를 보임 | `cli/main.test.ts`, `test/boundaries/adapters.test.ts` | 🟢 |
