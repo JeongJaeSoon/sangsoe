@@ -10,7 +10,7 @@
   "main": "main.ts",
   "capabilities": [{ "kind": "workspace:read" }, { "kind": "agent:read" }],
   "contributes": {
-    "panels": [{ "id": "probe", "title": "sangsoe", "icon": "layers", "entry": "panel/probe.ts", "ui": "html" }],
+    "panels": [{ "id": "brief", "title": "sangsoe", "icon": "layers", "entry": "panel/index.ts", "ui": "html" }],
     "commands": [{ "id": "sangsoe.open", "title": "sangsoe: open panel" }],
     "events": [
       { "on": "workspace.created" },
