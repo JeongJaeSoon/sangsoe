@@ -9,6 +9,22 @@ export { group_brief, group_items } from "./group.ts";
 export { type ItemFacts, itemFacts, item_status } from "./item_status.ts";
 export { briefRuns, type LoadOptions, loadBriefInput, readSnapshot } from "./load.ts";
 export { owner_todo } from "./owner_todo.ts";
+export {
+  type OwnerDoneFn,
+  openPanelCore,
+  PANEL_RUN,
+  type PanelAct,
+  type PanelActed,
+  type PanelCore,
+  type PanelPorts,
+  type PanelTarget,
+  type PanelView,
+  panelCore,
+  panelView,
+  STATUS_TEXT_MAX,
+  type StatusBarItem,
+  statusBarItem,
+} from "./panel.ts";
 export { type RenderOptions, renderMarkdown, renderTodo } from "./render.ts";
 export { replayJsonl } from "./replay.ts";
 export type * from "./types.ts";
