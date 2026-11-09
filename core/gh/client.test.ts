@@ -80,6 +80,12 @@ test("a secondary rate limit 403 with budget left is rate_limited a minute out",
   assert.deepEqual(r, { kind: "rate_limited", resource: "core", resetAt: NOW / 1000 + 60 });
 });
 
+test("a response with no headers still yields its body", async () => {
+  const s = scripted({ code: 1, stdout: 'HTTP/2.0 403 Forbidden\n\n{"message":"You have exceeded a secondary rate limit."}', stderr: "" });
+  const r = await createGhClient({ exec: s.exec, cache: memoryGhCache(), now: () => NOW }).get("repos/acme/api");
+  assert.deepEqual(r, { kind: "rate_limited", resource: "core", resetAt: NOW / 1000 + 60 });
+});
+
 test("a 403 with budget left is an error, not rate_limited", async () => {
   const s = scripted(http("403 Forbidden", RATE, '{"message":"Resource not accessible by integration"}'));
   const r = await createGhClient({ exec: s.exec, cache: memoryGhCache(), now: () => NOW }).get("repos/acme/api/branches/main/protection");

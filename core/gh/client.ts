@@ -51,7 +51,7 @@ type Raw = { status: number; headers: Map<string, string>; body: string };
 
 /** `gh api -i` prints the status line, headers, a blank line, then the body. */
 export function parseIncluded(stdout: string): Raw | undefined {
-  const m = /^HTTP\/[\d.]+ (\d{3})[^\n]*\r?\n([\s\S]*?)\r?\n\r?\n([\s\S]*)$/.exec(stdout);
+  const m = /^HTTP\/[\d.]+ (\d{3})[^\n]*\r?\n(?:([\s\S]*?)\r?\n)?\r?\n([\s\S]*)$/.exec(stdout);
   if (!m) {
     const head = /^HTTP\/[\d.]+ (\d{3})[^\n]*\r?\n([\s\S]*)$/.exec(stdout);
     if (!head) return undefined;

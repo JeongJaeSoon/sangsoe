@@ -25,6 +25,13 @@ test("on the recorded local Orca every check is green and the start prints nothi
   assert.equal(doctorReport(rs).exitCode, 0);
 });
 
+test("rows without the fields a check reads give a result, not an exception", async () => {
+  const rs = await check("local", { "agent-context": { commands: [{}] }, "plugin-list": { ok: true, result: { plugins: [{}] } } });
+  for (const id of ["orca-commands", "orca-plugin-version"]) {
+    assert.doesNotMatch(byId(rs, id)?.summary ?? "", /예외로 끝났다/, id);
+  }
+});
+
 test("a missing capability refuses the start", async () => {
   const rs = await check("missing-capability");
   const cap = byId(rs, "orca-capabilities");

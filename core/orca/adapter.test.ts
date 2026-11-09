@@ -175,6 +175,21 @@ test("malformed rows and fields stay inside OrcaResult", async () => {
   }
 });
 
+test("rows missing the fields callers read are unexpected_shape", async () => {
+  const fake = createFakeOrca({
+    replies: {
+      "agent-context": { commands: [{}] },
+      "plugin-list": { ok: true, result: { plugins: [{}] } },
+      "orchestration-worker-list": { ok: true, result: { workers: [{ host: "local" }] } },
+      status: { ok: true, result: { runtime: { capabilities: [1] } } },
+    },
+  });
+  const orca = createOrcaAdapter(fake.exec);
+  for (const r of [await orca.agentContext(), await orca.pluginList(), await orca.workerList({}), await orca.status()]) {
+    assert.equal(!r.ok && r.error.code, "unexpected_shape");
+  }
+});
+
 test("first writes never mint a request id", async () => {
   const fake = createFakeOrca();
   await createOrcaAdapter(fake.exec).taskCreate({ spec: "do it", deps: ["task_1"] });
