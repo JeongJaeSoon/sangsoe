@@ -4,7 +4,7 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 
 상태: 🟢 그 시험이 요구 전체를 main 에서 지킨다 · 🟡 일부만 지킨다(빠진 것을 적었다) · 🔴 지키는 시험이 없다 · `PR #N`/`U<번호>` 그 단위가 가져온다.
 
-집계: R 23행 · 🟢 11 · 🟡 7 · 🔴 3 · 단위 2
+집계: R 23행 · 🟢 11 · 🟡 8 · 🔴 3 · 단위 1
 
 ## R-01–R-23
 
@@ -24,7 +24,7 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 | R-12 | 만든 자원은 기록하고 그 기록으로만 치움, 목록이 비면 지우지 않음 | — | U18 |
 | R-13 | 부하 판정은 한 기준, 무거운 작업 슬롯은 CPU 에 맞춤 | `core/capacity/capacity.test.ts`, `core/gates/gates.test.ts` | 🟢 |
 | R-14 | 항목은 담당·원문·끝나는 조건을 함께 가짐, 닫는 길 없는 파생 항목 없음 | `core/start/item.test.ts`, `cli/commands/item-new.test.ts`, `test/migrate/migrate.test.ts` | 🟢 |
-| R-15 | 오너 항목은 에이전트가 못 하는 행동에만, 이유 한 줄 | — | PR #23 |
+| R-15 | 오너 항목은 에이전트가 못 하는 행동에만, 이유 한 줄 | `test/owner/scenarios.test.ts`, `test/owner/owner-todo.test.ts` | 🟡 오너 항목이 관찰한 사실·기록된 답으로만 닫히는 것은 시험한다. "에이전트가 못 하는 행동에만"과 이유 한 줄(`why_owner`)을 올리기 전에 거르는 시험은 없다 |
 | R-16 | 모든 CLI 는 `--help`·모르는 인자에서 무변경, 모르는 명령은 맞는 형태를 보임 | `cli/main.test.ts`, `test/boundaries/adapters.test.ts` | 🟢 |
 | R-17 | Orca 가 하는 일은 Orca 로, 기대 동작은 버전 변경 시 시험, 호환 경로 없음 | `core/checks/checks.test.ts`, `test/orca-boundary.test.ts`, `test/lineage/real-orca.test.ts` | 🟢 |
 | R-18 | 감시는 할 일이 생기는 전이에만 깨움, 자동화마다 목적·사용 증거·비용·끄는 명령 | `core/detect/run.test.ts`, `core/detect/orca/judge.test.ts` | 🟡 전이마다 한 번(에피소드·멈춤 키)은 시험한다. monitor 마다 목적·사용 증거·비용·끄는 명령을 한 목록에 두고 세는 시험이 없다 |
