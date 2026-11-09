@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { run } from "../main.ts";
-import { parseArgs, reviewRecord } from "./review-record.ts";
+import { reviewRecord } from "./review-record.ts";
 
 const HEAD = "b".repeat(40);
 const untouched = {
@@ -9,35 +9,32 @@ const untouched = {
   openStore: () => assert.fail("must not open the store"),
 };
 
-test("review record parses its four flags and defaults the repo", () => {
-  assert.deepEqual(parseArgs(["--pr", "7", "--head", HEAD, "--act-on", "0", "--reviewer", "codex"]), {
-    repo: "JeongJaeSoon/sangsoe",
-    pr: 7,
-    head: HEAD,
-    actOn: 0,
-    reviewer: "codex",
+test("a missing flag is an invalid_input refusal and touches nothing", async () => {
+  const r = await reviewRecord({ pr: "7", head: HEAD }, untouched);
+  assert.deepEqual(r, {
+    ok: false,
+    refusal: {
+      code: "invalid_input",
+      reason: "missing --act-on, --reviewer",
+      fix: "sangsoe review record --pr <N> --head <sha> --act-on <N> --reviewer <name> [--repo <owner/name>]",
+    },
   });
-  assert.equal((parseArgs(["--pr", "7", "--head", HEAD, "--act-on", "0", "--reviewer", "x", "--repo", "acme/api"]) as { repo: string }).repo, "acme/api");
-});
-
-test("help, a missing flag or an unknown one touch nothing", async () => {
-  assert.equal((await reviewRecord(["--help"], untouched)).code, 0);
-  const missing = await reviewRecord(["--pr", "7", "--head", HEAD], untouched);
-  assert.equal(missing.code, 2);
-  assert.match(missing.out, /missing --act-on, --reviewer/);
-  assert.equal((await reviewRecord(["--pr", "7", "--bogus", "x"], untouched)).code, 2);
-  assert.equal((await reviewRecord(["--pr"], untouched)).code, 2);
-});
-
-test("the router finds review record and refuses a missing or unknown flag before it runs", async () => {
-  const missing = await run(["review", "record", "--pr", "7", "--head", HEAD]);
-  assert.equal(missing.code, 2);
-  assert.match(missing.out, /missing --act-on, --reviewer/);
-  assert.equal((await run(["review", "record", "--bogus", "x"])).code, 2);
 });
 
 test("a non-numeric PR or count is refused before GitHub is asked", async () => {
-  const r = await reviewRecord(["--pr", "x7", "--head", HEAD, "--act-on", "0", "--reviewer", "codex"], untouched);
-  assert.equal(r.code, 1);
-  assert.match(r.out, /pr must be a PR number/);
+  const r = await reviewRecord({ pr: "x7", head: HEAD, "act-on": "0", reviewer: "codex" }, untouched);
+  assert.equal(r.ok, false);
+  assert.match(r.ok ? "" : r.refusal.reason, /pr must be a PR number/);
+  const negative = await reviewRecord({ pr: "-1", head: HEAD, "act-on": "0", reviewer: "codex" }, untouched);
+  assert.equal(negative.ok ? "" : negative.refusal.code, "review_refused");
+});
+
+test("the router: --json gives the refusal object, an unknown flag or a dash-led value is a usage error", async () => {
+  const missing = await run(["review", "record", "--pr", "7", "--head", HEAD, "--json"]);
+  assert.equal(missing.code, 1);
+  assert.equal(JSON.parse(missing.out).code, "invalid_input");
+  const nan = await run(["review", "record", "--pr=-1", "--head", HEAD, "--act-on", "0", "--reviewer", "codex", "--json"]);
+  assert.deepEqual([nan.code, JSON.parse(nan.out).code], [1, "review_refused"]);
+  assert.equal((await run(["review", "record", "--bogus", "x"])).code, 2);
+  assert.equal((await run(["review", "record", "--pr", "-1"])).code, 2, "the router's rule for every command: a value starting with - needs --flag=value");
 });

@@ -1,66 +1,45 @@
 import { type ApproveExec, approveExec, recordReviewVerdict, SANGSOE_REPO, Store } from "../../core/index.ts";
-import type { CommandDef } from "../contract.ts";
+import type { CommandArgs, CommandDef, Outcome } from "../contract.ts";
 
-const OPTIONS = ["pr", "head", "act-on", "reviewer", "repo"] as const;
+const REQUIRED = ["pr", "head", "act-on", "reviewer"] as const;
+const USAGE = "--pr <N> --head <sha> --act-on <N> --reviewer <name> [--repo <owner/name>]";
 
-// The router has already rejected unknown options and handled --help; reviewRecord re-reads the
-// same options from argv so its own tests keep driving it directly.
+type Deps = { exec: ApproveExec; openStore: () => Store };
+
+// An Outcome, not a Report: the later MCP tool wraps the same core function and both entrances
+// must decode to the same value or refusal.
+export async function reviewRecord(
+  values: CommandArgs["values"],
+  deps: Deps = { exec: approveExec, openStore: () => Store.open() },
+): Promise<Outcome<string>> {
+  const missing = REQUIRED.filter((o) => typeof values[o] !== "string");
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      refusal: { code: "invalid_input", reason: `missing ${missing.map((o) => `--${o}`).join(", ")}`, fix: `sangsoe review record ${USAGE}` },
+    };
+  }
+  const text = (o: string) => String(values[o]);
+  const num = (o: string) => (/^[0-9]+$/.test(text(o)) ? Number(text(o)) : Number.NaN);
+  const r = await recordReviewVerdict(
+    {
+      repo: typeof values.repo === "string" ? values.repo : SANGSOE_REPO,
+      pr: num("pr"),
+      head: text("head"),
+      actOn: num("act-on"),
+      reviewer: text("reviewer"),
+    },
+    deps,
+  );
+  return r.ok
+    ? { ok: true, value: r.note }
+    : { ok: false, refusal: { code: "review_refused", reason: r.note, fix: "check --pr, --head (the PR's current head) and --reviewer (not the author)" } };
+}
+
 export default {
   name: "review record",
   summary: "record one independent review's verdict on a PR head (decision 111)",
-  usage: "--pr <N> --head <sha> --act-on <N> --reviewer <name> [--repo <owner/name>]",
-  options: Object.fromEntries(OPTIONS.map((o) => [o, { type: "string" }])),
-  run: async ({ values }) => {
-    const argv = OPTIONS.flatMap((o) => (typeof values[o] === "string" ? [`--${o}`, values[o]] : []));
-    const { code, out } = await reviewRecord(argv);
-    return { code, lines: [out] };
-  },
+  usage: USAGE,
+  options: { pr: { type: "string" }, head: { type: "string" }, "act-on": { type: "string" }, reviewer: { type: "string" }, repo: { type: "string" } },
+  run: ({ values }) => reviewRecord(values),
 } satisfies CommandDef;
-
-export const USAGE = `usage: sangsoe review record --pr <N> --head <sha> --act-on <N> --reviewer <name> [--repo <owner/name>]
-
-Records one independent review's verdict on one PR head (review_verdict, decision 111). The only
-writer of that event; \`sangsoe plugin approve\` reads review evidence from it. The PR's author is
-read from GitHub and a reviewer equal to it is refused. --repo defaults to ${SANGSOE_REPO}.`;
-
-type Parsed =
-  | { repo: string; pr: number; head: string; actOn: number; reviewer: string }
-  | { help: true }
-  | { error: string };
-
-const FLAGS = ["--pr", "--head", "--act-on", "--reviewer", "--repo"] as const;
-
-export function parseArgs(args: readonly string[]): Parsed {
-  const v: Partial<Record<(typeof FLAGS)[number], string>> = {};
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i] ?? "";
-    if (a === "--help" || a === "-h") return { help: true };
-    const next = args[i + 1];
-    if (!(FLAGS as readonly string[]).includes(a) || next === undefined || next.startsWith("--")) {
-      return { error: `unknown or incomplete argument: ${a}` };
-    }
-    v[a as (typeof FLAGS)[number]] = next;
-    i++;
-  }
-  const missing = FLAGS.filter((f) => f !== "--repo" && v[f] === undefined);
-  if (missing.length > 0) return { error: `missing ${missing.join(", ")}` };
-  const num = (s: string | undefined) => (s !== undefined && /^[0-9]+$/.test(s) ? Number(s) : Number.NaN);
-  return {
-    repo: v["--repo"] ?? SANGSOE_REPO,
-    pr: num(v["--pr"]),
-    head: v["--head"] ?? "",
-    actOn: num(v["--act-on"]),
-    reviewer: v["--reviewer"] ?? "",
-  };
-}
-
-export async function reviewRecord(
-  args: readonly string[],
-  deps: { exec: ApproveExec; openStore: () => Store } = { exec: approveExec, openStore: () => Store.open() },
-): Promise<{ code: number; out: string }> {
-  const p = parseArgs(args);
-  if ("help" in p) return { code: 0, out: USAGE };
-  if ("error" in p) return { code: 2, out: `${p.error}\n${USAGE}` };
-  const r = await recordReviewVerdict(p, deps);
-  return { code: r.ok ? 0 : 1, out: r.note };
-}
