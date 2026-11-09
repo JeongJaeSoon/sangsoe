@@ -1,0 +1,56 @@
+{
+  "id": "00000000-0000-4000-8000-000000000011",
+  "ok": true,
+  "result": {
+    "worktrees": [
+      {
+        "workspaceKind": "git",
+        "worktreeId": "repo-0001::/home/dev/workspaces/api/feature-a",
+        "repoId": "repo-0001",
+        "hostId": "local",
+        "terminalPlatform": "darwin",
+        "repo": "api",
+        "path": "/home/dev/workspaces/api/feature-a",
+        "branch": "refs/heads/feature-a",
+        "isArchived": false,
+        "isMainWorktree": false,
+        "cliCreated": true,
+        "parentWorktreeId": "repo-0001::/home/dev/src/api",
+        "childWorktreeIds": [],
+        "displayName": "feature-a",
+        "workspaceStatus": "in-progress",
+        "lastActivityAt": 1794236099227,
+        "createdAt": 1790267914822,
+        "linkedPR": null,
+        "comment": "",
+        "isActive": true,
+        "unread": false,
+        "liveTerminalCount": 1,
+        "hasAttachedPty": true,
+        "unverifiableTerminalCount": 0,
+        "lastOutputAt": 1794236299259,
+        "status": "active",
+        "agents": [
+          {
+            "paneKey": "pane-0001:tab-0001",
+            "parentPaneKey": null,
+            "state": "done",
+            "agentType": "claude",
+            "conversationName": "feature-a",
+            "interrupted": false,
+            "stateStartedAt": 1794236097175,
+            "updatedAt": 1794236292390,
+            "hasLivePty": true,
+            "agentWait": null
+          }
+        ],
+        "sidebarStatus": "done",
+        "terminalVerdict": "live"
+      }
+    ],
+    "hostScope": { "hostIds": ["local"], "omittedHostIds": [] },
+    "totalCount": 1,
+    "truncated": false
+  },
+  "_meta": { "runtimeId": "00000000-0000-4000-8000-000000000001" }
+}

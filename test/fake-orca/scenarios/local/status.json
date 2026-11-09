@@ -1,0 +1,29 @@
+{
+  "id": "local-status",
+  "ok": true,
+  "result": {
+    "target": { "kind": "local" },
+    "app": { "running": true, "pid": 1000, "desktopWindowStatus": "available" },
+    "runtime": {
+      "state": "ready",
+      "reachable": true,
+      "connectionState": "connected",
+      "runtimeId": "00000000-0000-4000-8000-000000000001",
+      "appVersion": "1.4.250",
+      "capabilities": [
+        "orchestration.contract.v1",
+        "orchestration.worker-auto-release.v1",
+        "orchestration.worker-keep-open.v1",
+        "orchestration.worker-start-implicit-run.v1",
+        "orchestration.ask-returns-at-once.v1",
+        "worktree.linked-items.v1",
+        "worktree.create-idempotency.v1",
+        "worktree.archive-failure-blocking.v1",
+        "worktree.remove-branch-policy.v1",
+        "worktree.visibility-defaults.v1"
+      ]
+    },
+    "graph": { "state": "ready" }
+  },
+  "_meta": { "runtimeId": "00000000-0000-4000-8000-000000000001" }
+}

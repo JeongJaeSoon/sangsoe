@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "result": {
+    "dispatchId": "ctx_000000000001",
+    "taskId": "task_000000000001",
+    "runId": "run_000000000001",
+    "state": "ready",
+    "stage": "input_accepted",
+    "liveness": "live",
+    "terminal": "term_00000000-0000-4000-8000-000000000001",
+    "terminalState": "retained",
+    "workspace": "repo-0001::/home/dev/workspaces/api/feature-a"
+  }
+}

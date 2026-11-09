@@ -1,0 +1,15 @@
+{
+  "id": "local",
+  "ok": true,
+  "result": {
+    "enabled": true,
+    "settingsPath": "/home/dev/.orca/settings.json",
+    "appliedBy": "offline",
+    "statuses": [
+      { "agent": "claude", "state": "installed", "configPath": "/home/dev/.claude/settings.json", "managedHooksPresent": true, "detail": null },
+      { "agent": "codex", "state": "installed", "configPath": "/home/dev/.codex/hooks.json", "managedHooksPresent": true, "detail": null },
+      { "agent": "openclaude", "state": "not_installed", "configPath": "/home/dev/.openclaude/settings.json", "managedHooksPresent": false, "detail": null }
+    ]
+  },
+  "_meta": { "runtimeId": "local" }
+}

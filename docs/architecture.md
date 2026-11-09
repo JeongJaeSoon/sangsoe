@@ -11,6 +11,8 @@
 | 실행 | `core/` | X | ④ 공유 코어 | 판단 함수(GRAPH · ready · capacity · land · verify_tier · decision_* · notify · restart_due · recover_plan · 시작 점검) |
 | 실행 | `core/store/` | X | ④ 공유 코어 | sqlite event 표와 뷰 |
 | 실행 | `core/orca/` | X | ④ 공유 코어 | Orca CLI 어댑터(① 을 부르는 유일한 자리) |
+| 실행 | `core/gh/` | X | ④ 공유 코어 | GitHub 클라이언트(한도·ETag 캐시 인터페이스, 결정 81 의 조건 넷 읽기) |
+| 실행 | `core/checks/` | X | ④ 공유 코어 | 시작 점검과 `doctor` 의 점검 함수(점검 하나 = 파일 하나) |
 | 실행 | `core/install/` | X | ④ 공유 코어 | install · uninstall · doctor |
 | 실행 | `core/approve/` | X | ④ 공유 코어 | `sangsoe plugin approve` 의 세 조건 검사와 `orca plugin enable` 을 부르는 유일한 자리 |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
@@ -53,6 +55,35 @@
 - 버린 꼴: 최상위를 `token-free/`·`token-using/` 으로 가르는 안. 토큰 구분은 가장 잘 보이지만 한 plugin(③)이 두 뿌리로 찢어져 매니페스트가 가리킬 폴더가 둘이 된다.
 
 결정 번호와 이유는 `decisions-impl/`(결정 96–101).
+
+## Orca·GitHub 어댑터와 점검 (U2)
+
+코어가 Orca 와 GitHub 을 부르는 길은 둘뿐이다: `core/orca/` 와 `core/gh/`. 뒤 단위는 `core/index.ts` 에서 아래 계약만 쓴다.
+
+```ts
+// core/contract/orca.ts
+type Exec = (file: string, args: readonly string[]) => Promise<ExecResult>;
+type OrcaResult<T> = { ok: true; value: T; requestId?: string } | { ok: false; error: OrcaError; requestId?: string };
+type LocalRows<T> = { rows: T[]; nonLocal: { rows: number; hostIds: string[] }; omittedHostIds: string[]; truncated: boolean };
+interface OrcaAdapter { taskCreate(…); taskList(…); …; worktreeList(…): Promise<OrcaResult<LocalRows<WorktreeRow>>>; … }
+createOrcaAdapter(exec: Exec): OrcaAdapter;
+recoverWrite(orca, requestId, replay): Promise<OrcaResult<T>>;
+
+// core/gh
+createGhClient({ exec, cache: GhCache, now }): GhClient;   // get(path, { conditional? }) → ok | not_modified | rate_limited | error
+readMergeConditions(gh, { repo, base, pr, protectedPaths }): MergeConditions;
+
+// core/checks
+type Check = { id: string; run(ctx: CheckContext): Promise<CheckResult> };
+type CheckResult = { id: string; status: "ok" | "notice" | "warn" | "fail"; summary: string; fix?: string };
+runChecks(START_CHECKS, ctx) → startReport(results) | doctorReport(results)
+```
+
+- **명령 표 하나.** `core/orca/commands.ts` 의 `ORCA_COMMANDS` 가 래퍼의 argv 와 시작 점검 `orca-commands` 의 대조 대상을 같이 정한다. 설계 2절 첫째 칸 표의 명령마다 한 행이 있고, 표에 없는 옵션은 래퍼가 넘기지 못한다.
+- **호스트.** 호스트를 가진 행(`worktree list`·`worktree ps`·`worker-list`)은 로컬 행만 어댑터 밖으로 나가고 나머지는 수만 남는다(결정 88).
+- **요청 id.** 첫 호출에는 id 를 만들지 않는다. Orca 가 알려 준 id 를 결과에 싣고, 응답을 잃으면 `recoverWrite` 가 `request-show` 뒤에만 같은 id 로 다시 보낸다(결정 60, 결정 103).
+- **가짜 Orca.** `test/fake-orca/` 의 `createFakeOrca({ scenario, replies })` 가 `Exec` 을 준다. 이 Mac 에서 읽기 전용으로 녹화한 JSON 을 일반 이름으로 바꿔 `scenarios/local/` 에 두었고, 다른 시나리오 폴더는 바뀌는 파일만 갖는다. `ORCA_COMMANDS` 밖의 명령은 거부한다.
+- **고르지 않은 꼴.** 명령 이름으로 부르는 범용 함수 하나(`call("worktree list", …)`): 겉면은 작지만 부르는 쪽이 argv 와 결과 모양을 알아야 한다. 메서드마다 타입을 가진 인터페이스를 고르고, 안에서는 같은 표 하나로 argv 를 만든다.
 
 ## Orca plugin 골격 (U3)
 
