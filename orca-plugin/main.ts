@@ -85,7 +85,11 @@ export default function activate(
     },
   };
   const rounds = startRounds([statusRound], clock);
-  orca.panels.handle("panel.brief", panel["panel.brief"]);
+  // A panel refresh is one of the two things that run the stall check (decision 83).
+  orca.panels.handle("panel.brief", (input) => {
+    stall?.poke();
+    return panel["panel.brief"](input);
+  });
   orca.panels.handle("panel.act", panel["panel.act"]);
   stopRounds = () => {
     stopped = true;

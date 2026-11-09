@@ -471,6 +471,7 @@ test("the stall check runs on Orca events and panel refreshes, never on a timer,
   activate(w.orca, {
     clock,
     exec: async (cmd) => ok(cmd, ""),
+    panel: fakePanel().load,
     monitors: async () => ({
       run: async () => ({ planned: [], written: [], unseen: [], aborted: false }),
       stall: async () => {
@@ -493,6 +494,10 @@ test("the stall check runs on Orca events and panel refreshes, never on a timer,
     await settle();
     assert.equal(checks, 2, "a panel refresh checks too");
     assert.equal(report.monitors.stall.checks, 2);
+    await advance(60_000);
+    await w.handlers.get("panel.brief")?.({});
+    await settle();
+    assert.equal(checks, 3, "so does the panel's own brief request");
   } finally {
     deactivate();
   }
