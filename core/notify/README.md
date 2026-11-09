@@ -5,4 +5,5 @@
 
 - `notify.ts` — `notify`: Task·Run·Dispatch id 만 받아 주소를 `dispatch:<id>` · `run:<id>` 두 꼴로 만든다. 받는 순서(워커 → 소유 리드 → 오케스트레이터)를 어기는 보내기, `term_` 주소, 이미 만든 주소 문자열은 거부한다. 같은 키로 이미 `notified` 가 있으면 보내지 않는다.
 - `address.ts` — `reportAddress`: 브리프·보고 주소의 모양 검사(`term_` 거부, 결정 80 N8).
+- `receipt.ts` — Orca 쓰기 영수증에서 새 id(게이트·Task·메시지)를 찾는다. 영수증 모양은 아직 기록된 적이 없다(결정 60).
 - `result.ts` — 코어 함수가 돌려주는 `Result`·`Refusal` 꼴.
