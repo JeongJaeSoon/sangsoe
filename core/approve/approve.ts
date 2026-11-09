@@ -168,6 +168,7 @@ export async function approvePlugin(input: ApproveInput, ports: ApprovePorts): P
     return result;
   }
   // Orca binds a dev approval to the path, not the bytes, so re-read them just before enabling.
+  // This narrows the window but cannot close it; the snapshot fix is deferred to U4 (decision 0105).
   if ((await contentHash(ports.exec, input.dir)) !== here) {
     result.note = "not enabled: the folder changed while it was being checked";
     return result;

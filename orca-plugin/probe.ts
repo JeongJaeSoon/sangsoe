@@ -58,12 +58,19 @@ export function probeExec(cmd: string, args: readonly string[], timeoutMs = 8000
 }
 
 export function ownKey(listJson: string): string | null {
-  let parsed: { result?: { plugins?: { pluginKey: string }[] } };
+  let parsed: unknown;
   try {
     parsed = JSON.parse(listJson);
   } catch {
     return null;
   }
-  const keys = (parsed.result?.plugins ?? []).map((p) => p.pluginKey).filter((k) => k.endsWith(".sangsoe"));
+  const plugins = (parsed as { result?: { plugins?: unknown } } | null)?.result?.plugins;
+  if (!Array.isArray(plugins)) return null;
+  const keys: string[] = [];
+  for (const p of plugins) {
+    const key = (p as { pluginKey?: unknown } | null)?.pluginKey;
+    if (typeof key !== "string") return null;
+    if (key.endsWith(".sangsoe")) keys.push(key);
+  }
   return keys.length === 1 ? (keys[0] ?? null) : null;
 }

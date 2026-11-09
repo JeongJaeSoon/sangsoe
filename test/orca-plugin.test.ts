@@ -37,6 +37,9 @@ test("ownKey picks the one sangsoe key and refuses ambiguity", () => {
   assert.equal(ownKey(list("acme.monitor")), null);
   assert.equal(ownKey(list("local.sangsoe", "acme.sangsoe")), null);
   assert.equal(ownKey(list("local.sangsoe").slice(0, 20)), null, "a cut-off list is not a crash");
+  for (const odd of ["null", '{"result":{"plugins":{}}}', '{"result":{"plugins":[null]}}', '{"result":{"plugins":[{}]}}']) {
+    assert.equal(ownKey(odd), null, odd);
+  }
 });
 
 test("probeExec keeps parseable output whole when asked", async () => {
