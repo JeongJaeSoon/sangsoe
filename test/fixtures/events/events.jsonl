@@ -1,0 +1,74 @@
+{"type":"capacity_free","source":"resource-monitor","payload":{"slots":2}}
+{"type":"ci_failed","source":"pr-monitor","payload":{"pr":"acme/api#12","head_sha":"a1b2c3d","run_id":"9001"}}
+{"type":"close_suggested","source":"queue-monitor","payload":{"task":"task_owner1","reason":"verified"}}
+{"type":"compacted","source":"PostCompact","payload":{"session":"sess-1"}}
+{"type":"decision_answered","source":"UserPromptSubmit","payload":{"decision":"d007","owner_action":1,"answer":"go with B","linked_by":"hook"}}
+{"type":"decision_closed","source":"decision_answer","payload":{"decision":"d007","reason":"answered"}}
+{"type":"decision_joined","source":"decision_open","payload":{"decision":"d007","waiter":"task_b2","gate":"gate_2"}}
+{"type":"decision_opened","source":"decision_open","dedupe_key":"decision:api-version-scheme","payload":{"decision":"d007","decision_key":"api-version-scheme","task":"task_a1","gate":"gate_1"}}
+{"type":"decision_untracked","source":"orca-monitor","payload":{"gate":"gate_9"}}
+{"type":"edge_added","source":"GRAPH","dedupe_key":"edge:task_a1:task_b2:blocks","payload":{"pred":"task_a1","succ":"task_b2","kind":"blocks"}}
+{"type":"edge_removed","source":"GRAPH","payload":{"pred":"task_a1","succ":"task_b2","kind":"blocks","reason":"scope changed"}}
+{"type":"escalation","source":"worker:u1","payload":{"to":"lead:api","msg_id":"msg_1","reason":"blocked on credentials"}}
+{"type":"escalation_stale","source":"queue-monitor","payload":{"ref":"msg_1","reason":"waiting_unreleased"}}
+{"type":"evidence","source":"worker:u1","payload":{"kind":"unit","head_sha":"a1b2c3d","exit_code":0,"not_verified":["e2e"]}}
+{"type":"flow_expanded","source":"GRAPH","payload":{"flow":"release","version":"1","parent":"task_a1","steps":["merge","dev","prod"]}}
+{"type":"flow_step_skipped","source":"lead:api","payload":{"step":"dev","reason":"no dev stage in this repo"}}
+{"type":"gate_denied","source":"PreToolUse","payload":{"gate":"self-land","command_file":"/tmp/orch-refusal/u1/1.txt"}}
+{"type":"item_created","source":"lead:api","payload":{"task":"task_a1","alias":"i031","who":"worker:u1","done_when":"npm test exits 0","owner_action":1}}
+{"type":"item_extra_set","source":"lead:api","payload":{"task":"task_a1","exec_by":"worker","priority":"P1","waits_on":"reviewer"}}
+{"type":"item_ready","source":"queue-monitor","dedupe_key":"ready:task_b2:3f9a","payload":{"task":"task_b2"}}
+{"type":"item_transition","source":"lead:api","payload":{"task":"task_a1","from":"ready","to":"in_progress","reason":"worker-start --task"}}
+{"type":"job_drift","source":"queue-monitor","payload":{"plugin":"sangsoe","expected":"sha256:aa","actual":"sha256:bb"}}
+{"type":"land_failed","source":"worker:u1","payload":{"pr":"acme/api#12","head_sha":"a1b2c3d","reason":"evidence_missing"}}
+{"type":"land_requested","source":"worker:u1","payload":{"pr":"acme/api#12","head_sha":"a1b2c3d"}}
+{"type":"loop_detected","source":"Stop","payload":{"reason":"stop block ceiling"}}
+{"type":"main_green","source":"pr-monitor","payload":{"repo":"acme/api","sha":"d4e5f6a","run_id":"9002"}}
+{"type":"main_red","source":"pr-monitor","payload":{"repo":"acme/api","sha":"d4e5f6a","run_id":"9003"}}
+{"type":"mention_new","source":"chat-monitor","payload":{"url":"https://chat.example/acme/1"}}
+{"type":"model_changed","source":"lead:api","payload":{"from":"standard","to":"deep","reason":"risky migration"}}
+{"type":"notified","source":"notify","target":"lead:api","dedupe_key":"notify:lead:api:item_ready:task_b2","payload":{"msg_id":"msg_2","to":"run:run_1","msg_type":"status"}}
+{"type":"observed_change","source":"orca-monitor","payload":{"task":"task_a1","field":"lastOutputAt"}}
+{"type":"owner_act_unlinked","source":"pr-monitor","payload":{"act":"merged acme/api#13 on GitHub"}}
+{"type":"owner_action","source":"UserPromptSubmit","payload":{"origin":"chat","summary":"start the api version work","hash":"sha256:0f1e","cc_session":"sess-1","cc_message":"uuid-1"}}
+{"type":"owner_class","source":"orchestrator","subject":"owner_action:1","payload":{"class":"새 일"}}
+{"type":"owner_text_redacted","source":"owner-text redact","payload":{"seq":1,"reason":"a token leaked past masking"}}
+{"type":"pr_base_changed","source":"pr-monitor","payload":{"pr":"acme/api#12","from":"feature-a","to":"main"}}
+{"type":"pr_changes_requested","source":"pr-monitor","payload":{"pr":"acme/api#12","reviewer":"octocat"}}
+{"type":"pr_closed","source":"pr-monitor","payload":{"pr":"acme/api#14"}}
+{"type":"pr_merged","source":"pr-monitor","payload":{"pr":"acme/api#12","merge_sha":"d4e5f6a"}}
+{"type":"pr_opened","source":"pr-monitor","payload":{"pr":"acme/api#12","task":"task_a1"}}
+{"type":"pr_ready_to_merge","source":"pr-monitor","payload":{"pr":"acme/api#12"}}
+{"type":"pr_review_requested","source":"pr-monitor","payload":{"pr":"acme/api#12","reviewer":"octocat"}}
+{"type":"pressure_high","source":"resource-monitor","payload":{"reason":"load 12 on 8 cores"}}
+{"type":"priority_set","source":"owner","payload":{"subject":"lead:api","value":"P0"}}
+{"type":"rate_limited","source":"pr-monitor","payload":{"kind":"core","reset_at":"2026-11-10T01:00:00Z"}}
+{"type":"reap_blocked","source":"REAPER","payload":{"kind":"worktree","ref":"wt_7","reason":"unpushed"}}
+{"type":"reap_candidate","source":"REAPER","payload":{"kind":"worktree","ref":"wt_7","round":4,"state":"seen"}}
+{"type":"reap_done","source":"REAPER","payload":{"kind":"docker_container","ref":"3f2a9c"}}
+{"type":"reap_round","source":"REAPER","payload":{"trigger":"timer","roots_ok":true,"round":4,"cards":6,"candidates":1,"reaped":0}}
+{"type":"refusal_report","source":"worker:u1","payload":{"act":"merge","category":"no verdict","command_file":"/tmp/orch-refusal/u1/2.txt"}}
+{"type":"resource","source":"worker:u1","payload":{"action":"created","kind":"compose","owner":"worker:u1","ref":"acme-api-verify"}}
+{"type":"resource_adopted","source":"REAPER","payload":{"kind":"worktree","ref":"wt_8","basis":"card list"}}
+{"type":"resource_leak","source":"resource-monitor","payload":{"kind":"process","ref":"pid 4242"}}
+{"type":"review_ask_sent","source":"review_ask_record","payload":{"pr":"acme/api#12","reviewer":"octocat"}}
+{"type":"review_commented","source":"pr-monitor","payload":{"pr":"acme/api#12","reviewer":"octocat"}}
+{"type":"review_replied","source":"pr-monitor","payload":{"pr":"acme/api#12","by":"worker:u1"}}
+{"type":"run_stalled","source":"orca-monitor","payload":{"run":"run_1"}}
+{"type":"session_started","source":"SessionStart","payload":{"session":"sess-1","role":"worker","tier":"standard","model":"model-x","effort":"high"}}
+{"type":"signal","source":"lead:api","payload":{"kind":"main_flake","reason":"rerun passed"}}
+{"type":"stage_recorded","source":"lead:api","payload":{"pr":"acme/api#12","stage":"dev","sha":"d4e5f6a"}}
+{"type":"timer_stalled","source":"timer-watch","payload":{"kind":"reaper","reason":"last timer round older than 3 intervals"}}
+{"type":"todo_due","source":"queue-monitor","payload":{"task":"task_owner1"}}
+{"type":"trigger_unclear","source":"queue-monitor","dedupe_key":"trigger_unclear:task_c3","payload":{"task":"task_c3"}}
+{"type":"turn_ended","source":"Stop","payload":{"session":"sess-1"}}
+{"type":"unmapped_reviewer","source":"review_ask_record","payload":{"reviewer":"hubot"}}
+{"type":"verify_tier_set","source":"pr-monitor","payload":{"pr":"acme/api#12","head_sha":"a1b2c3d","computed":"V2","effective":"V2","actor":"pr-monitor","accepted":true,"reason":"api change"}}
+{"type":"waiting_decision","source":"orca-monitor","payload":{"decision":"d007"}}
+{"type":"waiting_human","source":"Notification","payload":{"session":"sess-1","tool":"Bash"}}
+{"type":"waiting_released","source":"PostToolUse","dedupe_key":"waiting_released:68","payload":{"ref":"68","outcome":"answered","by":"owner","evidence":"PostToolUse Bash"}}
+{"type":"wake_unconfirmed","source":"orca-monitor","payload":{"msg_id":"msg_2"}}
+{"type":"worker_dead","source":"StopFailure","payload":{"reason":"stop_failure"}}
+{"type":"worker_done","source":"worker:u1","payload":{"dispatch":"ctx_1","task":"task_a1","outcome":"succeeded"}}
+{"type":"worker_idle","source":"Stop","payload":{"session":"sess-1"}}
+{"type":"worker_stuck","source":"orca-monitor","payload":{"reason":"no_role_line"}}
