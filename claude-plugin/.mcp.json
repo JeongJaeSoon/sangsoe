@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "sangsoe": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "s=\"${CLAUDE_PLUGIN_ROOT}/../dist/claude-plugin/mcp/server.js\"; [ -f \"$s\" ] || s=\"$(dirname \"$(readlink -f \"$(command -v sangsoe)\")\")/../libexec/dist/claude-plugin/mcp/server.js\"; exec node \"$s\""
+      ]
+    }
+  }
+}
