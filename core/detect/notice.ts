@@ -17,38 +17,48 @@ export async function sendNotice(d: Pick<MonitorDeps, "core">, input: NotifyInpu
 /** Worker-list pages read at most to find the Dispatch running a Run's coordinator. */
 const MAX_PAGES = 20;
 
-export type RunAbove = (run: string) => Promise<string | undefined>;
+/** `top`: Orca was read in full and no Dispatch runs the Run's coordinator. `unknown`: something was not read. */
+export type Above = { kind: "above"; run: string } | { kind: "top" } | { kind: "unknown" };
+export type RunAbove = (run: string) => Promise<Above>;
+
+const UNKNOWN: Above = { kind: "unknown" };
+/** A terminal two Dispatches name cannot say which Run is above. */
+const AMBIGUOUS = "";
 
 /**
  * The Run of the session above `run`, read from Orca only (decision 154): `run-show --full` names the
  * terminal coordinating `run`; the Dispatch whose worker runs in that terminal belongs to the Run
- * above. No Dispatch, an unread page or a missing field is unknown. Memoized per call site; the
- * worker list is read lazily, once, and only when asked.
+ * above. A failed read, a missing field, a list cut short or missing another host's rows, or a
+ * terminal two Dispatches name is unknown, never `top`. Memoized per call site; the worker list is
+ * read lazily, once, and only when asked.
  */
 export function runAbove(orca: OrcaAdapter): RunAbove {
   let byTerminal: Promise<Map<string, string> | undefined> | undefined;
-  const memo = new Map<string, Promise<string | undefined>>();
+  const memo = new Map<string, Promise<Above>>();
   const terminals = async (): Promise<Map<string, string> | undefined> => {
     const out = new Map<string, string>();
     let cursor: string | undefined;
     for (let page = 0; page < MAX_PAGES; page++) {
       const r = await orca.workerList({ limit: 100, ...(cursor ? { cursor } : {}) });
-      if (!r.ok) return undefined;
-      for (const w of r.value.rows) if (w.terminal) out.set(w.terminal, w.dispatchId);
+      if (!r.ok || r.value.nonLocal.rows > 0 || r.value.omittedHostIds.length > 0) return undefined;
+      for (const w of r.value.rows) if (w.terminal) out.set(w.terminal, out.has(w.terminal) ? AMBIGUOUS : w.dispatchId);
       cursor = r.value.nextCursor;
       if (!cursor) return out;
     }
-    return out;
+    return undefined;
   };
-  const find = async (run: string): Promise<string | undefined> => {
+  const find = async (run: string): Promise<Above> => {
     const shown = await orca.runShow({ id: run });
     const handle = shown.ok ? shown.value.coordinatorHandle : undefined;
-    if (!handle) return undefined;
+    if (!handle) return UNKNOWN;
     byTerminal ??= terminals();
-    const dispatch = (await byTerminal)?.get(handle);
-    if (!dispatch) return undefined;
+    const map = await byTerminal;
+    if (!map) return UNKNOWN;
+    const dispatch = map.get(handle);
+    if (dispatch === undefined) return { kind: "top" };
+    if (dispatch === AMBIGUOUS) return UNKNOWN;
     const w = await orca.workerShow({ dispatch });
-    return w.ok && w.value.runId && w.value.runId !== run ? w.value.runId : undefined;
+    return w.ok && w.value.runId && w.value.runId !== run ? { kind: "above", run: w.value.runId } : UNKNOWN;
   };
   return (run) => {
     const p = memo.get(run) ?? find(run);
@@ -57,16 +67,25 @@ export function runAbove(orca: OrcaAdapter): RunAbove {
   };
 }
 
+const MAX_DEPTH = 5;
+
 /**
  * The orchestrator's Run when no lead Run is at hand (timer_stalled): the top of the chain above
- * every Run the store's events name. None, or two different tops, is unknown.
+ * every Run the store's events name. Any hop unknown, a chain past the depth cap, no top, or two
+ * different tops is unknown.
  */
 export async function orchestratorRun(events: readonly StoredEvent[], above: RunAbove): Promise<string | undefined> {
   const tops = new Set<string>();
   for (const run of briefRuns(events, null)) {
-    let top: string | undefined;
-    for (let at: string | undefined = await above(run), depth = 0; at && depth < 5; at = await above(at), depth++) top = at;
-    if (top) tops.add(top);
+    let at = run;
+    let a = await above(at);
+    for (let depth = 0; a.kind === "above"; depth++) {
+      if (depth >= MAX_DEPTH) return undefined;
+      at = a.run;
+      a = await above(at);
+    }
+    if (a.kind === "unknown") return undefined;
+    if (at !== run) tops.add(at);
   }
   return tops.size === 1 ? [...tops][0] : undefined;
 }

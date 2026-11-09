@@ -16,6 +16,9 @@ export type FakeOrca = {
 /** Writes Orca keeps no request receipt for, so ORCA_COMMANDS does not mark them `write`. */
 const UNTRACKED_WRITES = new Set(["worktree-set", "worktree-rm", "reference-add"]);
 
+/** `orchestration send --help`: "Valid --type values". Real Orca refuses any other. */
+export const SEND_TYPES: ReadonlySet<string> = new Set(["status", "dispatch", "worker_done", "merge_ready", "escalation", "handoff", "decision_gate", "question", "heartbeat"]);
+
 /** The adapter row whose path starts argv; the longest path wins. */
 function specFor(args: readonly string[]): [string, CommandSpec] | undefined {
   let best: [string, CommandSpec] | undefined;
@@ -62,6 +65,10 @@ export function createFakeOrca(o: { scenario?: string; replies?: Record<string, 
     const found = specFor(args);
     if (!found) throw new Error(`fake orca: orca ${args.join(" ")} is not in ORCA_COMMANDS`);
     const [key, spec] = found;
+    const type = args[args.indexOf("--type") + 1];
+    if (key === "orchestration-send" && args.includes("--type") && !SEND_TYPES.has(type ?? "")) {
+      return reply({ ok: false, error: { code: "invalid_argument", message: `--type ${type} is not a message type` } }, args);
+    }
     const unlisted = args.filter((a) => a.startsWith("--") && !spec.flags.includes(a.slice(2)));
     if (unlisted.length > 0) throw new Error(`fake orca: ${unlisted.join(" ")} is not in ORCA_COMMANDS for ${key}`);
     const doc = o.replies?.[key] ?? recorded(scenario, key);

@@ -61,7 +61,11 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
       calls.push(`reference add ${a.urls.join(" ")} ${a.worktree}`);
       return { ok: true, value: {} };
     },
-    send: async (m: { to: string; subject: string }) => {
+    send: async (m: { to: string; subject: string; type?: string }) => {
+      // Orca's closed `send --type` set (`orchestration send --help`).
+      if (!["status", "dispatch", "worker_done", "merge_ready", "escalation", "handoff", "decision_gate", "question", "heartbeat"].includes(m.type ?? "")) {
+        return { ok: false, error: { code: "invalid_argument", message: `--type ${m.type}` } };
+      }
       calls.push(`send ${m.to} ${m.subject}`);
       return { ok: true, value: { message: { id: `msg_${calls.length}` } } };
     },

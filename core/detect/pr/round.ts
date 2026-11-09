@@ -300,7 +300,7 @@ async function readyToMerge(r: Reads, repo: string, p: ListedPull, link: Link | 
         chain: { leadRun: lead },
         subject: `🟢 머지 가능: ${ref}`,
         body: `${ref} 가 승인과 필수 검사를 채웠다(head ${p.head.sha.slice(0, 7)}). sangsoe land 를 다시 불러 머지한다.`,
-        msgType: "pr_ready_to_merge",
+        msgType: "status",
         source: SOURCE,
       });
       return { ...n, planned: [] };

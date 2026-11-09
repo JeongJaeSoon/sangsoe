@@ -26,6 +26,7 @@ import {
   type VerifySpec,
 } from "../../core/index.ts";
 import { createWorld, ownerSays, type World } from "../decision/world.ts";
+import { SEND_TYPES } from "../fake-orca/index.ts";
 import { later, RUN as OWNER_RUN, type OwnerWorld, ownerWorld, T0 } from "../owner/world.ts";
 
 // queue-monitor scenarios (split §2 U17): the detection side of the decision loop and the owner
@@ -145,7 +146,7 @@ test("answer_gate_unresolved: no Dispatch runs the lead's coordinator, so no Run
   await queue(deps(w.store, w.orca));
   const r = await queue(deps(w.store, w.orca, { now: Date.now() + 31 * MIN }));
   assert.equal(w.store.events({ type: "escalation_stale" }).length, 1);
-  assert.ok(r.unseen.includes(`Run above ${RUN}`), r.unseen.join("\n"));
+  assert.ok(r.unseen.includes(`Run above ${RUN}: none, its coordinator is no Dispatch`), r.unseen.join("\n"));
   assert.deepEqual(w.sends.map((s) => s.to), [`run:${RUN}`], "the handoff only");
 });
 
@@ -254,10 +255,10 @@ test("ready, todo_due and ⚠️ trigger_unclear: once each, item_ready only aft
 
   const live = await queue(deps(w.store, w.orca));
   assert.deepEqual(live.written.map((e) => e.type).filter((t) => t !== "job_drift"), ["todo_due", "trigger_unclear", "item_ready"]);
-  assert.deepEqual(w.sends.map((s) => [s.to, s.type]), [
-    [`run:${RUN}`, "status"],
-    [`run:${RUN}`, "todo_due"],
-    [`run:${RUN}`, "trigger_unclear"],
+  assert.deepEqual(w.sends.map((s) => [s.to, s.type, s.subject.split(":")[0]]), [
+    [`run:${RUN}`, "status", "🟢 준비됨"],
+    [`run:${RUN}`, "status", "📅 todo_due"],
+    [`run:${RUN}`, "status", "⚠️ trigger_unclear"],
   ]);
   const again = await queue(deps(w.store, w.orca));
   assert.deepEqual(again.planned.filter((e) => e.type !== "job_drift"), [], "nothing twice");
@@ -412,6 +413,7 @@ test("verify_unconfirmed goes to the item's owning lead (decision 91② row 11),
     get: (t, k: string) =>
       k === "send"
         ? async (m: { to: string; type?: string }) => {
+            assert.ok(SEND_TYPES.has(m.type ?? ""), `orca refuses --type ${m.type}`);
             sent.push(`${m.to} ${m.type}`);
             return { ok: true, value: { message: { id: `msg_${sent.length}` } } };
           }
@@ -424,7 +426,7 @@ test("verify_unconfirmed goes to the item's owning lead (decision 91② row 11),
   await queue(ownerDeps(w, withSend));
   w.at(later(T0, 45));
   await queue(ownerDeps(w, withSend));
-  assert.deepEqual(sent.filter((s) => !s.endsWith(" status")), [`run:${OWNER_RUN} escalation_stale`], "the ready notice aside");
+  assert.deepEqual(sent.filter((s) => !s.endsWith(" status")), [`run:${OWNER_RUN} escalation`], "the ready notice aside");
 });
 
 test("probeRound honours gh_budget: below 10% no gh probe is read, above it they are", async () => {
@@ -528,11 +530,43 @@ test("orchestratorRun: the one top above every named Run; two different tops are
   assert.equal(await orchestratorRun(chain.store.events(), runAbove(chain.orca)), ORCH_RUN, "a sub-lead's Run climbs to the top");
 });
 
+test("runAbove fails closed: an unread hop, a list cut short, another host's rows or a shared terminal is unknown, never the top", async () => {
+  type Opts = { showFails?: string; pages?: number; nonLocal?: number; dupe?: boolean };
+  // RUN's coordinator runs under RUN2's Dispatch; RUN2's under ORCH_RUN's.
+  const stub = (o: Opts = {}) =>
+    ({
+      runShow: async ({ id }: { id: string }) =>
+        id === o.showFails ? { ok: false, error: { code: "x", message: "x" } } : { ok: true, value: { runId: id, objective: "", coordinatorHandle: `term_${id}` } },
+      workerList: async ({ cursor }: { cursor?: string }) => {
+        const page = Number(cursor ?? 0);
+        const rows = page === 0 ? [{ dispatchId: "ctx_a", terminal: `term_${RUN}` }, { dispatchId: "ctx_b", terminal: `term_${RUN2}` }, ...(o.dupe ? [{ dispatchId: "ctx_c", terminal: `term_${RUN}` }] : [])] : [];
+        const more = page + 1 < (o.pages ?? 1);
+        return { ok: true, value: { rows, nonLocal: { rows: o.nonLocal ?? 0, hostIds: [] }, omittedHostIds: [], truncated: more, ...(more ? { nextCursor: String(page + 1) } : {}) } };
+      },
+      workerShow: async ({ dispatch }: { dispatch: string }) => ({ ok: true, value: { dispatchId: dispatch, taskId: "t", runId: dispatch === "ctx_a" ? RUN2 : ORCH_RUN, state: "ready" } }),
+    }) as unknown as OrcaAdapter;
+  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: D1 }]);
+  await openDecision(w);
+  const events = w.store.events();
+  assert.equal(await orchestratorRun(events, runAbove(stub())), ORCH_RUN);
+  assert.deepEqual(await runAbove(stub())(ORCH_RUN), { kind: "top" });
+  assert.equal(await orchestratorRun(events, runAbove(stub({ showFails: RUN2 }))), undefined, "RUN2 unread is not RUN2 on top");
+  assert.equal(await orchestratorRun(events, runAbove(stub({ showFails: ORCH_RUN }))), undefined);
+  assert.equal(await orchestratorRun(events, runAbove(stub({ pages: 21 }))), undefined, "past 20 pages");
+  assert.equal(await orchestratorRun(events, runAbove(stub({ pages: 3 }))), ORCH_RUN, "a few pages are read in full");
+  assert.equal(await orchestratorRun(events, runAbove(stub({ nonLocal: 1 }))), undefined, "another host's rows");
+  assert.deepEqual(await runAbove(stub({ dupe: true }))(RUN), { kind: "unknown" }, "two Dispatches on one terminal");
+});
+
 test("one notify path: core/detect and the plugin's monitors reach notify only through sendNotice", () => {
   const roots = ["core/detect", "orca-plugin"];
-  const files = roots.flatMap((r) => readdirSync(r, { recursive: true, encoding: "utf8" }).map((f) => join(r, f))).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
+  // vendor/ is the gitignored core copy `npm pack` stages into the plugin, not source.
+  const files = roots
+    .flatMap((r) => readdirSync(r, { recursive: true, encoding: "utf8" }).map((f) => join(r, f)))
+    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.includes("/vendor/"));
   const callers = files.filter((f) => /from\s+"[./]*notify\/notify\.ts"|\bnotify\(/.test(readFileSync(f, "utf8")));
   assert.deepEqual(callers, ["core/detect/notice.ts"]);
+  assert.deepEqual(files.filter((f) => /\.send\(/.test(readFileSync(f, "utf8"))), [], "no Orca send beside notify");
   const users = files.filter((f) => readFileSync(f, "utf8").includes("sendNotice("));
   assert.deepEqual(users.sort(), ["core/detect/notice.ts", "core/detect/pr/round.ts", "core/detect/queue/round.ts"]);
 });

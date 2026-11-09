@@ -116,13 +116,17 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   }
 
   const above = runAbove(d.orca);
+  const told = new Set(events.flatMap((e) => (e.type === "notified" && e.dedupe_key ? [e.dedupe_key] : [])));
   for (const s of j.stale) {
     planned.push(s.event);
-    const up = await above(s.run);
-    if (!up) {
-      unseen.push(`Run above ${s.run}`);
+    // Raised already: the gate stays open, but the Run lookup (a paged worker list) is not read again.
+    if (told.has(`${s.handoffKey}:${dedupeSegment("orchestrator")}`)) continue;
+    const a = await above(s.run);
+    if (a.kind !== "above") {
+      unseen.push(`Run above ${s.run}${a.kind === "top" ? ": none, its coordinator is no Dispatch" : ""}`);
       continue;
     }
+    const up = a.run;
     const r = await sendNotice(d, {
       key: { target: s.task, dedupe_key: s.handoffKey },
       to: "orchestrator",
@@ -176,7 +180,8 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   return { planned: fresh, unseen, calls, acts };
 }
 
-type LeadNotice = { task: string; key: string; subject: string; body: string; msgType: string };
+/** `msgType` is one of Orca's closed `send --type` set; the event name rides in the subject. */
+type LeadNotice = { task: string; key: string; subject: string; body: string; msgType: "status" | "escalation" };
 
 /**
  * The rows whose notice goes to the item's owning lead (decision 154): todo_due and trigger_unclear
@@ -191,13 +196,13 @@ function leadNotice(e: Planned): LeadNotice | undefined {
     const cond = (e.dedupe_key ?? "").split(":").slice(2);
     const key = [`notify:${seg(task)}`, e.type, ...cond].join(":");
     return e.type === "todo_due"
-      ? { task, key, subject: `📅 todo_due: ${task}`, body: `The owner item ${task} has reached its date; bring it to the owner.`, msgType: "todo_due" }
-      : { task, key, subject: `⚠️ trigger_unclear: ${task}`, body: `The trigger of ${task} is text a script cannot read; decide whether it has come.`, msgType: "trigger_unclear" };
+      ? { task, key, subject: `📅 todo_due: ${task}`, body: `The owner item ${task} has reached its date; bring it to the owner.`, msgType: "status" }
+      : { task, key, subject: `⚠️ trigger_unclear: ${task}`, body: `The trigger of ${task} is text a script cannot read; decide whether it has come.`, msgType: "status" };
   }
   if (e.type === "escalation_stale" && p.reason === "verify_unconfirmed") {
     const task = String(p.ref);
     const key = `notify:${seg(task)}:verify_unconfirmed:${(e.dedupe_key ?? "").split(":").pop() ?? ""}`;
-    return { task, key, subject: `🔍 verify_unconfirmed: ${task}`, body: `The owner's input on ${task} is still not verified by its probe; check it or ask the owner.`, msgType: "escalation_stale" };
+    return { task, key, subject: `🔍 verify_unconfirmed: ${task}`, body: `The owner's input on ${task} is still not verified by its probe; check it or ask the owner.`, msgType: "escalation" };
   }
   return undefined;
 }
