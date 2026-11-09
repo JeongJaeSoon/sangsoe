@@ -60,6 +60,27 @@ Reinstalling the same version (`brew reinstall sangsoe`, then `sangsoe install`)
 
 Run `sangsoe uninstall` first. It prints `claude: uninstalled sangsoe@sangsoe`, `claude: removed marketplace sangsoe`, `orca: unloaded local.sangsoe` and ``kept: ~/.local/share/sangsoe (data) and ~/.config/sangsoe (settings); `brew uninstall sangsoe` removes the tree``. A registration that is already gone prints `was not installed`, `was not added` or `no sangsoe development plugin loaded` instead, and is not an error. Then run `brew uninstall sangsoe`. Neither deletes `~/.local/share/sangsoe` (data) or `~/.config/sangsoe` (settings). `brew uninstall` also removes `node` if `node` was only installed for sangsoe.
 
+## Land
+
+`sangsoe land --pr <n> [--repo <owner/name>] [--dry-run]` is the only way sangsoe merges a pull request. It schedules `gh pr merge --auto` when the repository's settings enforce review and CI (decision 81), and otherwise records `merge_on_approval` and merges once someone other than the author approves on GitHub.
+
+On a repository with a single GitHub account, nobody but the author can approve, so that approval never comes. Such a repository can opt in to counting a recorded independent review instead. Add it to `~/.config/sangsoe/config.json`:
+
+```json
+{
+  "verdict_merge_repos": ["acme/api"]
+}
+```
+
+For a listed repository, land merges at once (`gh pr merge --squash --match-head-commit <head>`, or the first method the repository allows) when all of these hold at the pull request's current head:
+
+- a verdict recorded with `sangsoe review record --pr <n> --head <head> --act-on 0 --reviewer <name>` at exactly that head, by a reviewer who is not the author;
+- the evidence the change's tier requires (decision 85);
+- every required check passed, or every check when GitHub reports none as required, and at least one check ran;
+- no unresolved review thread, and GitHub calls the pull request mergeable.
+
+A V3 change or one touching `protected_paths` still waits for the owner's approval. Anything land cannot read refuses the merge. `sangsoe land --dry-run` prints the path it would take without merging. Without the key, land behaves as before. See `docs/decisions-impl/0158-verdict-approval-merge.md`.
+
 ## Layout
 
 One repository, four slots (see `docs/architecture.md` for the full map):
