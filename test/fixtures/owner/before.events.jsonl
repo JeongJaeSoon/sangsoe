@@ -1,0 +1,5 @@
+{"ts":"2026-11-10T09:00:00.000Z","type":"item_created","source":"core:item","payload":{"task":"task_000000000001","alias":"i001","who":"owner","done_when":"prod promoted","owner_action":0},"entity":"task","entity_id":"task_000000000001"}
+{"ts":"2026-11-10T09:00:00.000Z","type":"item_extra_set","source":"core:item","payload":{"task":"task_000000000001","verify":{"kind":"pr_merged","pr":"acme/api#40"},"cmd_hint":"gh pr merge 40","why_owner":"merge rights"},"entity":"task","entity_id":"task_000000000001"}
+{"ts":"2026-11-10T09:00:00.000Z","type":"item_created","source":"core:item","payload":{"task":"task_000000000002","alias":"i002","who":"owner","done_when":"plugin approved","owner_action":0},"entity":"task","entity_id":"task_000000000002"}
+{"ts":"2026-11-10T09:00:00.000Z","type":"item_extra_set","source":"core:item","payload":{"task":"task_000000000002","verify":{"kind":"plugin_approved","key":"local.sangsoe"},"why_owner":"approval"},"entity":"task","entity_id":"task_000000000002"}
+{"ts":"2026-11-10T09:30:00.000Z","type":"owner_action","source":"UserPromptSubmit","payload":{"origin":"chat","summary":"i001 머지했어","hash":"h1"},"text":"i001 머지했어"}

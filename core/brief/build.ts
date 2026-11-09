@@ -1,5 +1,6 @@
 import type { ItemState, OwnerTodoRow, WaitsOn } from "../contract/index.ts";
 import { STATE_LABEL } from "../contract/index.ts";
+import { linkedActs } from "../owner/link.ts";
 import { item_timeline } from "../store/views/item_timeline.ts";
 import { depsGraph, type GraphRead } from "./graph.ts";
 import { groupBriefFrom } from "./group.ts";
@@ -100,8 +101,9 @@ const inGroupOrder = (a: ItemFacts, b: ItemFacts) =>
 
 function unlinkedActs(input: BriefInput, showHours: number): UnlinkedAct[] {
   const cutoff = Date.parse(input.now) - showHours * 3_600_000;
+  const linked = linkedActs(input.events);
   return input.events
-    .filter((e) => e.type === "owner_act_unlinked" && Date.parse(e.ts) > cutoff && Date.parse(e.ts) <= Date.parse(input.now))
+    .filter((e) => e.type === "owner_act_unlinked" && !linked.has(e.seq) && Date.parse(e.ts) > cutoff && Date.parse(e.ts) <= Date.parse(input.now))
     .map((e) => {
       const act = String(e.payload.act);
       const ref = PR_REF.exec(act)?.[1]?.toLowerCase() ?? null;

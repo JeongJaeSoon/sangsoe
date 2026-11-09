@@ -1,5 +1,6 @@
 import type { ItemState, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, WaitsOn } from "../contract/index.ts";
 import { waiterReading } from "../decision/held.ts";
+import { countsAsEvidence } from "../owner/marks.ts";
 import { decision } from "../store/views/decision.ts";
 import { depsGraph, type GraphRead } from "./graph.ts";
 import type { BriefTask } from "./types.ts";
@@ -86,7 +87,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = depsGraph): ItemF
     } else if (e.type === "pr_merged" || e.type === "pr_closed") {
       const t = prTask.get(String(p.pr));
       if (t && prOpen.get(t) === p.pr) prOpen.delete(t);
-    } else if (e.type === "evidence" && e.entity === "task" && e.entity_id) evidence.add(e.entity_id);
+    } else if (countsAsEvidence(e) && e.entity === "task" && e.entity_id) evidence.add(e.entity_id);
     else if (e.type === "trigger_unclear") unclear.set(String(p.task), e.seq);
     if (ALARMS.has(e.type)) {
       const t = taskOf(e, prTask);
