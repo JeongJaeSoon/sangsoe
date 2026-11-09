@@ -42,6 +42,26 @@ async function write(orca: OrcaAdapter, first: Promise<OrcaResult<Receipt>>, aga
   return recoverWrite(orca, r.requestId, again);
 }
 
+const MAX_WORKER_PAGES = 50;
+
+/**
+ * A lead also holds its own Run, so "no taskId" and run-current alone cannot tell it from the
+ * orchestrator. What can: the orchestrator's worktree carries no live Dispatch. worker-list spans
+ * every Run, newest first; an unreadable or unfinished scan is a problem, never a pass.
+ */
+async function liveDispatchIn(orca: OrcaAdapter, worktreeId: string): Promise<string | null> {
+  let cursor: string | undefined;
+  for (let page = 0; page < MAX_WORKER_PAGES; page++) {
+    const r = await orca.workerList({ limit: 100, ...(cursor ? { cursor } : {}) });
+    if (!r.ok) return `오케스트레이터 worktree 의 Dispatch 를 확인하지 못했다 (${r.error.code})`;
+    const own = r.value.rows.find((w) => w.workspace === worktreeId && w.liveness === "live");
+    if (own) return `오케스트레이터라고 밝혔지만 이 worktree 에 살아 있는 Dispatch ${own.dispatchId} 가 있다(리드·워커 세션)`;
+    cursor = r.value.nextCursor;
+    if (!cursor) return null;
+  }
+  return "오케스트레이터 worktree 의 Dispatch 확인이 페이지 상한에서 끝나지 않았다";
+}
+
 function firstPrompt(role: Role, t: NewTask): string {
   const lines = [roleLine(role), t.spec];
   if (t.lateAnswers?.length) lines.push("", "늦게 도착한 답(결정 91 ④):", ...t.lateAnswers.map((a) => `- ${a}`));
@@ -109,6 +129,8 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     }
   } else if (requester.taskId) {
     lineageProblem = "오케스트레이터는 Dispatch 를 가진 세션이 아니다";
+  } else {
+    lineageProblem = await liveDispatchIn(orca, requester.worktreeId);
   }
 
   // ① capability_missing

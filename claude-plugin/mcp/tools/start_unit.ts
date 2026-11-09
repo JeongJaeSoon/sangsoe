@@ -2,6 +2,7 @@ import { createOrcaAdapter, nodeExec, type Role, runSlots, type StartPorts, Stor
 
 // Picked up by file name once the MCP server (U5) lands; the shape is its ToolDef.
 const DEFAULT_LIMIT = 4;
+const ROLES: readonly Role[] = ["orchestrator", "lead", "worker"];
 
 /** The handler's body with its ports passed in, so tests drive the tool with a fake Orca. */
 export async function handle(input: Record<string, unknown>, ports: StartPorts) {
@@ -13,13 +14,22 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts) 
   if (!task && !spec) {
     return { ok: false, refusal: { code: "invalid_input", reason: "task 도 spec 도 없다", fix: "task 에 Task id 를 주거나 spec 으로 새 Task 를 만든다" } };
   }
+  const role = s("role");
+  const childRole = s("childRole");
+  if (!ROLES.includes(role as Role) || (childRole !== "lead" && childRole !== "worker")) {
+    return { ok: false, refusal: { code: "invalid_input", reason: `role "${role}" 또는 childRole "${childRole}" 이 정해진 값이 아니다`, fix: "role: orchestrator|lead|worker, childRole: lead|worker" } };
+  }
   const title = s("title");
   const deps = list("deps");
   const lateAnswers = list("lateAnswers");
+  // An existing Task's spec is already written; the answers would be dropped, so say so.
+  if (task && lateAnswers?.length) {
+    return { ok: false, refusal: { code: "invalid_input", reason: "lateAnswers 는 새 Task 의 첫 프롬프트에만 실린다", fix: "task 없이 spec 과 lateAnswers 로 새 Task 를 만들어 시작한다" } };
+  }
   const references = list("references");
   const out = await startUnit(ports, {
-    requester: { role: s("role") as Role, worktreeId: s("worktreeId") ?? "", runId: s("runId") ?? "", ...(taskId ? { taskId } : {}) },
-    childRole: s("childRole") === "lead" ? "lead" : "worker",
+    requester: { role: role as Role, worktreeId: s("worktreeId") ?? "", runId: s("runId") ?? "", ...(taskId ? { taskId } : {}) },
+    childRole,
     task: task
       ? { id: task }
       : { spec: spec ?? "", ...(title ? { title } : {}), ...(deps ? { deps } : {}), ...(lateAnswers ? { lateAnswers } : {}) },
@@ -55,7 +65,7 @@ export default {
       spec: { type: "string" as const, description: "The new Task's brief, acceptance criteria included. A /goal line in it does not take effect on a worker." },
       title: { type: "string" as const },
       deps: { type: "array" as const, items: { type: "string" as const } },
-      lateAnswers: { type: "array" as const, items: { type: "string" as const }, description: "Answers that arrived after the last worker ended; added to the first prompt once." },
+      lateAnswers: { type: "array" as const, items: { type: "string" as const }, description: "Answers that arrived after the last worker ended; only with spec (a new Task), added to its first prompt." },
       references: { type: "array" as const, items: { type: "string" as const }, description: "Ticket URLs." },
       agent: { type: "string" as const, description: "Orca agent id, default claude." },
     },

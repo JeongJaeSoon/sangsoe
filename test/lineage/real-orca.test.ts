@@ -6,7 +6,8 @@ import { checkLineage, createOrcaAdapter, nodeExec, Store, startUnit } from "../
 // started on a Run; the throwaway start opens one worker through startUnit and is released by hand.
 //   SANGSOE_REAL_RUN=<run id> SANGSOE_REAL_PARENT=<worktree id the Run's workers hang under>
 //   SANGSOE_REAL_START=1 SANGSOE_REAL_WORKTREE=<requester's worktree> and either SANGSOE_REAL_TASK=<the
-//   requester's own Task, a lead's> or SANGSOE_REAL_ROLE=orchestrator (a session holding the Run with no Dispatch)
+//   requester's own Task, a lead's> or SANGSOE_REAL_ROLE=orchestrator (a session holding the Run whose worktree has no live Dispatch;
+//   a lead making that claim is now refused lineage_invalid)
 const env = process.env;
 const run = env.SANGSOE_REAL_RUN;
 const parent = env.SANGSOE_REAL_PARENT;

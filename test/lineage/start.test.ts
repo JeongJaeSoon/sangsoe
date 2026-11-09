@@ -45,8 +45,19 @@ type Setup = {
   newDispatch?: "missing";
   taskList?: () => ExecResult;
   workerStart?: () => ExecResult;
+  /** A live Dispatch in the requester's worktree, on worker-list's second page (a lead claiming orchestrator). */
+  liveDispatchInParent?: boolean;
   replies?: Record<string, FakeReply>;
 };
+
+const workerRow = (dispatchId: string, workspace: string, liveness: string) => ({
+  dispatchId,
+  taskId: `task_${dispatchId.slice(4)}`,
+  state: liveness === "live" ? "ready" : "settled",
+  liveness,
+  workspace,
+  host: "local",
+});
 
 // The fake prints a plain value as the JSON document; an ExecResult has to come from a function.
 const asReplies = (r: Record<string, FakeReply>) =>
@@ -73,6 +84,14 @@ function harness(s: Setup = {}) {
         state: "ready",
         workspace: s.requesterWorkspace ?? PARENT_TREE,
       }),
+      "orchestration-worker-list": (args: readonly string[]) =>
+        args.includes("--cursor")
+          ? ok({ workers: s.liveDispatchInParent ? [workerRow("ctx_lead", PARENT_TREE, "live")] : [], scope: { source: "all" } })
+          : ok({
+              workers: [workerRow("ctx_000000000001", CHILD_TREE, "live"), workerRow("ctx_000000000003", PARENT_TREE, "gone")],
+              scope: { source: "all" },
+              nextCursor: "cursor-0002",
+            }),
       "orchestration-run-current": ok({ runId: s.heldRun === undefined ? RUN : s.heldRun }),
       "orchestration-task-create": ok({ task: { id: NEW_TASK } }),
       "orchestration-task-list": () =>
@@ -182,6 +201,24 @@ test("lineage_invalid: an orchestrator holding a Task is refused; an orchestrato
   const esc = h.store.events({ type: "escalation" });
   assert.equal(esc.length, 1);
   assert.deepEqual(esc[0]?.payload, { to: "owner", reason: "start_refused:lineage_invalid" });
+});
+
+test("lineage_invalid: a lead claiming to be the orchestrator is refused by its own live Dispatch", async () => {
+  // A lead holds its own Run, so run-current passes; its worktree's live Dispatch gives it away.
+  const h = harness({ liveDispatchInParent: true });
+  const out = await start(h, request({ requester: orchestrator, childRole: "lead" }));
+  assertRefused(h, out, "lineage_invalid");
+  assert.match(out.kind === "refused" ? out.detail : "", /ctx_lead/);
+  assert.equal(h.called("worker-list").length, 2, "followed the cursor past the first page");
+  assert.equal(h.called("task-create").length, 0);
+  // The same worktree with only settled Dispatches is the orchestrator's.
+  const clean = harness();
+  assert.equal((await start(clean, request({ requester: orchestrator, childRole: "lead" }))).kind, "started");
+});
+
+test("lineage_invalid: an unreadable worker-list is not a pass for the orchestrator", async () => {
+  const h = harness({ replies: { "orchestration-worker-list": () => fail("runtime_unavailable") } });
+  assertRefused(h, await start(h, request({ requester: orchestrator })), "lineage_invalid");
 });
 
 test("depth_exceeded: an orchestrator does not start a lead that could not start workers", async () => {
@@ -335,6 +372,21 @@ test("the start_unit MCP tool carries late answers into the first prompt", async
   );
   assert.equal(r.ok, true);
   assert.match(flag(h.called("task-create")[0] ?? [], "spec") ?? "", /d002: no/);
+});
+
+test("MCP start_unit refuses input it would otherwise drop or misread, before calling Orca", async () => {
+  const base = { worktreeId: PARENT_TREE, taskId: "task_lead", runId: RUN };
+  const cases = [
+    { ...base, role: "lead", childRole: "worker", task: "task_000000000002", lateAnswers: ["d002: no"] },
+    { ...base, childRole: "lead", spec: "brief" },
+    { ...base, role: "lead", childRole: "boss", spec: "brief" },
+  ];
+  for (const input of cases) {
+    const h = harness();
+    const r = await handle(input, { orca: h.orca, store: h.store, slots: () => 1 });
+    assert.equal(r.ok === false && r.refusal.code, "invalid_input", JSON.stringify(input));
+    assert.equal(h.fake.calls.length, 0);
+  }
 });
 
 // ---- unit_lineage_complete on fake Orca ----

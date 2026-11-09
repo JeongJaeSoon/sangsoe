@@ -49,12 +49,18 @@ test("no code opens a session outside the core start function", () => {
   assert.deepEqual(hits, []);
 });
 
+/** The adapter method, or the raw command beside the adapter's own command table. */
+const WORKER_START = /\.workerStart\(|["'`]orchestration["'`]\s*,\s*["'`]worker-start["'`]|orchestration\s+worker-start\b/;
+const MAY_START = (rel: string) =>
+  rel.startsWith("core/start/") || rel.startsWith("test/") || rel.endsWith(".test.ts") || rel === "core/orca/commands.ts";
+
 test("worker-start is called only from core/start/", () => {
-  const callers = lines
-    .filter(({ text }) => /\.workerStart\(/.test(text))
-    .map(({ rel }) => rel)
-    .filter((rel) => !rel.startsWith("core/start/") && !rel.startsWith("test/"));
-  assert.deepEqual([...new Set(callers)], []);
+  const callers = files
+    .filter(({ rel, text }) => !MAY_START(rel) && WORKER_START.test(flat(text)))
+    .map(({ rel }) => rel);
+  assert.deepEqual(callers, []);
+  assert.ok(WORKER_START.test(`exec("orca", ["orchestration", "worker-start", "--task", id])`));
+  assert.ok(WORKER_START.test(flat(`execFile(\n  "orca",\n  ["orchestration",\n   "worker-start"],\n)`)));
 });
 
 test("the patterns catch what they are meant to", () => {
