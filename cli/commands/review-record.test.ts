@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { run } from "../main.ts";
 import { parseArgs, reviewRecord } from "./review-record.ts";
 
 const HEAD = "b".repeat(40);
@@ -26,6 +27,13 @@ test("help, a missing flag or an unknown one touch nothing", async () => {
   assert.match(missing.out, /missing --act-on, --reviewer/);
   assert.equal((await reviewRecord(["--pr", "7", "--bogus", "x"], untouched)).code, 2);
   assert.equal((await reviewRecord(["--pr"], untouched)).code, 2);
+});
+
+test("the router finds review record and refuses a missing or unknown flag before it runs", async () => {
+  const missing = await run(["review", "record", "--pr", "7", "--head", HEAD]);
+  assert.equal(missing.code, 2);
+  assert.match(missing.out, /missing --act-on, --reviewer/);
+  assert.equal((await run(["review", "record", "--bogus", "x"])).code, 2);
 });
 
 test("a non-numeric PR or count is refused before GitHub is asked", async () => {

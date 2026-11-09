@@ -1,4 +1,21 @@
 import { type ApproveExec, approveExec, recordReviewVerdict, SANGSOE_REPO, Store } from "../../core/index.ts";
+import type { CommandDef } from "../contract.ts";
+
+const OPTIONS = ["pr", "head", "act-on", "reviewer", "repo"] as const;
+
+// The router has already rejected unknown options and handled --help; reviewRecord re-reads the
+// same options from argv so its own tests keep driving it directly.
+export default {
+  name: "review record",
+  summary: "record one independent review's verdict on a PR head (decision 111)",
+  usage: "--pr <N> --head <sha> --act-on <N> --reviewer <name> [--repo <owner/name>]",
+  options: Object.fromEntries(OPTIONS.map((o) => [o, { type: "string" }])),
+  run: async ({ values }) => {
+    const argv = OPTIONS.flatMap((o) => (typeof values[o] === "string" ? [`--${o}`, values[o]] : []));
+    const { code, out } = await reviewRecord(argv);
+    return { code, lines: [out] };
+  },
+} satisfies CommandDef;
 
 export const USAGE = `usage: sangsoe review record --pr <N> --head <sha> --act-on <N> --reviewer <name> [--repo <owner/name>]
 
