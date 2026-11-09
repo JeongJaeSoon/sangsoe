@@ -146,15 +146,21 @@ export function inEdges(task: string, facts: Facts, tasks: ReadonlyMap<string, V
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z)?$/;
 const PR_REF = /^[a-z0-9_.-]+\/[a-z0-9_.-]+#[1-9][0-9]*$/;
 
+/** Decision 32: a trigger is a date or a PR merge; anything else is text no script reads (⚠️). */
+export function triggerKind(trigger: string): "date" | "pr" | "text" {
+  return ISO_DATE.test(trigger) ? "date" : PR_REF.test(trigger) ? "pr" : "text";
+}
+
 /** Decision 32: a trigger is a date or a PR merge. Anything else is unknown, so not ready. */
 export function triggerOk(trigger: string | undefined, facts: Facts, now: string): EdgeState | null {
   if (trigger === undefined || trigger === "") return null;
-  if (ISO_DATE.test(trigger)) {
+  const kind = triggerKind(trigger);
+  if (kind === "date") {
     return trigger <= now
       ? { ok: 1, predState: `${trigger} 지남`, dangling: false, todo: "" }
       : { ok: 0, predState: `${trigger} 전`, dangling: false, todo: "그 날짜를 기다린다" };
   }
-  if (PR_REF.test(trigger)) {
+  if (kind === "pr") {
     const s = prState(trigger, facts);
     if (s.merged) return { ok: 1, predState: "머지됨", dangling: false, todo: "" };
     if (!s.known) return { ok: null, predState: "모름: PR 상태를 읽지 못했다", dangling: false, todo: "PR 상태를 다시 읽는다" };

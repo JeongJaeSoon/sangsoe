@@ -113,6 +113,11 @@ export { type ChatProvider, nullChatProvider } from "./detect/chat/provider.ts";
 export { parseWatch, readWatchConfig, type WatchConfig } from "./detect/pr/config.ts";
 export { classifyMain, type MainRun, type MainVerdict } from "./detect/pr/judge.ts";
 export { linkOf, type LinkedTask, prRound } from "./detect/pr/round.ts";
+export { judgeQueue, type Moot, QUEUE_SOURCE, type QueueJudgment, type ReadyItem, type Reanswer, type StaleAnswer } from "./detect/queue/judge.ts";
+export { judgeDrift } from "./detect/queue/drift.ts";
+export { judgeStall, STALL_SOURCE } from "./detect/queue/stall.ts";
+export { QUEUE_CALLER, queueRound, type StallReport, stallCheck } from "./detect/queue/round.ts";
+export { orcaPluginDrift, type PluginDrift } from "./checks/orca-plugin-version.ts";
 
 export {
   type LandAction,

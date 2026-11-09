@@ -5,6 +5,7 @@ import { notify } from "../notify/notify.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { Store } from "../store/store.ts";
+import { VERSION } from "../version.ts";
 import { nullChatProvider } from "./chat/provider.ts";
 import { chatRound } from "./chat/round.ts";
 import {
@@ -19,6 +20,7 @@ import {
 import { orcaRound } from "./orca/round.ts";
 import { readWatchConfig } from "./pr/config.ts";
 import { prRound } from "./pr/round.ts";
+import { queueRound, type StallReport, stallCheck } from "./queue/round.ts";
 import { resourceRound } from "./resource/round.ts";
 
 /** The one table both entrances run: the worker's timer rounds and `sangsoe monitor run <name>`. */
@@ -27,6 +29,7 @@ export const MONITORS: Record<MonitorName, (d: MonitorDeps, signal: AbortSignal)
   resource: resourceRound,
   chat: chatRound,
   pr: prRound,
+  queue: queueRound,
 };
 
 /**
@@ -34,7 +37,7 @@ export const MONITORS: Record<MonitorName, (d: MonitorDeps, signal: AbortSignal)
  * the round's Orca writes in order, each followed by the events it returned. A dry run does neither.
  */
 export async function runMonitor(name: MonitorName, d: MonitorDeps, signal: AbortSignal = new AbortController().signal): Promise<MonitorReport> {
-  const { planned, unseen, acts = [] } = await MONITORS[name](d, signal);
+  const { planned, unseen, acts = [], calls = [] } = await MONITORS[name](d, signal);
   const written: Written[] = [];
   const write = (e: Planned) => {
     if (!d.append) return;
@@ -51,15 +54,17 @@ export async function runMonitor(name: MonitorName, d: MonitorDeps, signal: Abor
       for (const e of r.planned) write(e);
     }
   }
-  return { monitor: name, planned, written, unseen, aborted: signal.aborted, acts: report };
+  return { monitor: name, planned, written, unseen, calls, aborted: signal.aborted, acts: report };
 }
 
 export type MonitorRunner = {
   run(name: MonitorName, signal?: AbortSignal): Promise<MonitorReport>;
+  /** The timer-stall check; the worker calls it on Orca events and panel refreshes. */
+  stall(): Promise<StallReport>;
   close(): void;
 };
 
-/** Real deps over one open store. `dryRun` reads the store but never appends nor writes to Orca. */
+/** Real deps over one open store. `dryRun` reads the store but never appends, writes to Orca nor calls a writing function. */
 export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: string } = {}): MonitorRunner {
   const store = Store.open(o.dbPath ? { path: o.dbPath } : o.home ? { home: o.home } : {});
   const exec = nodeExec(30_000);
@@ -70,7 +75,7 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
     orca,
     exec,
     events: (f) => store.events(f),
-    ...(o.dryRun ? {} : { append: (e) => store.append(e), notify: (input) => notify({ store, orca }, input) }),
+    ...(o.dryRun ? {} : { append: (e) => store.append(e), notify: (input) => notify({ store, orca }, input), core: { store, orca } }),
     now: () => Date.now(),
     config: DEFAULT_MONITOR_CONFIG,
     chat: nullChatProvider,
@@ -79,6 +84,7 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
     ghBudget: () => ghCache.budget("core"),
     watch: () => readWatchConfig(o.home),
     tier: () => readLandConfig(o.home).tier,
+    coreVersion: VERSION,
   };
-  return { run: (name, signal) => runMonitor(name, deps, signal), close: () => store.close() };
+  return { run: (name, signal) => runMonitor(name, deps, signal), stall: () => stallCheck(deps), close: () => store.close() };
 }

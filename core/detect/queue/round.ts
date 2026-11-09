@@ -1,0 +1,184 @@
+import { itemFacts } from "../../brief/item_status.ts";
+import { briefRuns } from "../../brief/load.ts";
+import { dedupeSegment, type ViewGate, type ViewInput } from "../../contract/index.ts";
+import { decisionAnswer } from "../../decision/answer.ts";
+import { decisionMoot } from "../../decision/moot.ts";
+import { isOpenGate } from "../../decision/waiters.ts";
+import type { GhClient } from "../../gh/client.ts";
+import { notifyReady } from "../../graph/notify-ready.ts";
+import { readSnapshot } from "../../graph/snapshot.ts";
+import { syncGraph } from "../../graph/sync.ts";
+import { notify } from "../../notify/notify.ts";
+import { probeRound } from "../../owner/probe.ts";
+import { recordUnreleased, unreleasedWaits } from "../../owner/release.ts";
+import { OWNER_DEFAULTS } from "../../owner/types.ts";
+import type { Appended } from "../../store/store.ts";
+import type { MonitorDeps, Planned, Reading } from "../monitor.ts";
+import { judgeDrift } from "./drift.ts";
+import { judgeQueue, QUEUE_SOURCE } from "./judge.ts";
+import { judgeStall } from "./stall.ts";
+
+/**
+ * The Run the queue-monitor passes as its caller: none. The plugin worker holds no Run, and
+ * gate-resolve works only inside the gate's own Run (decision 77 라), so `release` hands every open
+ * gate to the session holding its Run, which resolves it with the same call (decision 0148).
+ */
+export const QUEUE_CALLER = "monitor:queue";
+
+const NO_GH: GhClient = { get: async () => ({ kind: "error", status: null, message: "no gh client in this round" }) };
+
+/**
+ * One queue-monitor round (decision 91, design #monitors): reads the Runs events name, judges, then
+ * calls the core functions that own each rule. It writes signals and suggestions only: no Task is
+ * closed or updated here, and a gate is resolved only by a function's own rules (decision 76 rule 6).
+ * Without `d.core` (a dry run) it reads everything and names each call it would make.
+ */
+export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<Reading> {
+  const planned: Planned[] = [];
+  const unseen: string[] = [];
+  const calls: string[] = [];
+  const events = d.events();
+  // The same Runs the brief reads: the caller's current Run (none in the plugin worker) and every Run an event names.
+  const current = await d.orca.runCurrent();
+  const runs = briefRuns(events, current.ok ? current.value.runId : null);
+  const snap = await readSnapshot(d.orca, runs);
+  for (const u of snap.unread) unseen.push(`task-list ${u.run}`);
+  const gates: ViewGate[] = [];
+  for (const run of runs) {
+    if (signal.aborted) break;
+    const g = await d.orca.gateList({ run });
+    if (!g.ok) unseen.push(`gate-list ${run}`);
+    else gates.push(...g.value.map((x) => ({ id: x.id, taskId: x.taskId ?? "", open: isOpenGate(x) })));
+  }
+  const input: ViewInput = { orca: { tasks: snap.snapshot.tasks, gates }, events, now: new Date(d.now()).toISOString() };
+  const j = judgeQueue(input, d.config);
+  planned.push(...j.planned);
+  // Probe and wait writers take a store's append; the round collects their rows so a dry run shows them.
+  const collect = {
+    append: (e: Planned): Appended => {
+      planned.push(e);
+      return { seq: 0, inserted: true };
+    },
+  };
+  const core = d.core;
+
+  if (core) {
+    const s = syncGraph(core, input.orca);
+    calls.push(`graph sync: added ${s.added.length}, reland ${s.relandPrs.length}, dangling ${s.dangling.length}, refused ${s.refused.length}`);
+  } else calls.push("would call graph sync");
+
+  if (j.ready.length > 0) {
+    const runOf = new Map(input.orca.tasks.map((t) => [t.id, t.runId]));
+    if (core && !signal.aborted) {
+      const notices = await notifyReady(core, input, (task) => {
+        const run = runOf.get(task);
+        return run ? { leadRun: run } : undefined;
+      });
+      const told = new Set(notices.filter((n) => n.status === "sent" || n.status === "already").map((n) => n.task));
+      planned.push(...j.ready.filter((r) => told.has(r.task)).map((r) => r.event));
+      calls.push(...notices.map((n) => `notifyReady ${n.item}: ${n.status}${n.detail ? ` ${n.detail}` : ""}`));
+    } else {
+      planned.push(...j.ready.map((r) => r.event));
+      calls.push(...j.ready.map((r) => `would call notifyReady ${r.item} (lead of ${runOf.get(r.task) ?? "?"})`));
+    }
+  }
+
+  const probes = await probeRound({ orca: d.orca, gh: d.gh ?? NO_GH }, collect, input, itemFacts(input), OWNER_DEFAULTS, QUEUE_SOURCE);
+  calls.push(`probeRound: read ${probes.read}, passed ${probes.passed.length}, skipped ${probes.skipped.length}`);
+  if (!d.gh) unseen.push("gh client");
+
+  // waiting_human rows come from this machine's hooks, so each session they name is local (decision 88).
+  const waits = unreleasedWaits(input, () => true, OWNER_DEFAULTS);
+  for (const w of waits) recordUnreleased(collect, w, undefined, QUEUE_SOURCE);
+  if (waits.length > 0) unseen.push("screen excerpt: the Orca adapter has no terminal read");
+
+  for (const m of j.moot) {
+    if (signal.aborted) break;
+    const ev = m.evidence.kind === "pr_closed" ? `pr_closed:${m.evidence.pr}` : "tasks_closed";
+    if (!core) {
+      calls.push(`would call decision_moot ${m.decision} (${ev})`);
+      continue;
+    }
+    const r = await decisionMoot(core, { decision: m.decision, evidence: m.evidence, callerRun: QUEUE_CALLER });
+    calls.push(`decision_moot ${m.decision} (${ev}): ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}` : r.refusal.code}`);
+  }
+
+  for (const a of j.reanswer) {
+    if (signal.aborted) break;
+    if (!core) {
+      calls.push(`would call decision_answer ${a.decision} again (gate still open)`);
+      continue;
+    }
+    const r = await decisionAnswer(core, { ...a, callerRun: QUEUE_CALLER });
+    calls.push(`decision_answer ${a.decision} again: ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}, told ${r.value.notified.length}` : r.refusal.code}`);
+  }
+
+  const orchestratorRun = d.config.orchestratorRun;
+  for (const s of j.stale) {
+    planned.push(s.event);
+    if (!core || !orchestratorRun) {
+      calls.push(`would raise ${s.decision} on ${s.task} to the orchestrator`);
+      continue;
+    }
+    const r = await notify(core, {
+      key: { target: s.task, dedupe_key: s.handoffKey },
+      to: "orchestrator",
+      chain: { leadRun: s.run, orchestratorRun },
+      subject: `${s.decision}: answer not delivered`,
+      body: `${s.decision} is answered but the gate on ${s.task} in ${s.run} is still open after the handoff to that Run.`,
+      escalate: true,
+      source: QUEUE_SOURCE,
+    });
+    calls.push(`raise ${s.decision} on ${s.task}: ${r.ok ? r.value.status : r.refusal.code}`);
+  }
+  if (j.stale.length > 0 && !orchestratorRun) unseen.push("orchestrator Run");
+
+  if (d.coreVersion) {
+    const pl = await d.orca.pluginList();
+    if (!pl.ok) unseen.push("plugin list");
+    else {
+      const drift = judgeDrift(pl.value, d.coreVersion);
+      if (drift) planned.push(drift);
+    }
+  } else unseen.push("core version");
+
+  const have = new Set(events.flatMap((e) => (e.dedupe_key ? [e.dedupe_key] : [])));
+  return { planned: planned.filter((e) => !e.dedupe_key || !have.has(e.dedupe_key)), unseen, calls };
+}
+
+export type StallReport = { planned: Planned[]; written: { type: string; seq: number; inserted: boolean }[]; calls: string[] };
+
+/**
+ * The timer-stall check (decision 83). Run from Orca events and panel refreshes, never from a timer,
+ * so a stopped timer cannot hide its own stall. Each stall is written once and the orchestrator is
+ * told once under a key bound to it; a re-check after a crash finishes the notice.
+ */
+export async function stallCheck(d: MonitorDeps): Promise<StallReport> {
+  const planned = judgeStall(d.events({ type: "reap_round" }), d.now(), d.config.reaperIntervalMinutes * 60_000);
+  const written: StallReport["written"] = [];
+  const calls: string[] = [];
+  for (const e of planned) {
+    const reason = String((e.payload as { reason?: unknown }).reason);
+    if (!d.append) {
+      calls.push(`would tell the orchestrator: ${reason}`);
+      continue;
+    }
+    const a = d.append(e);
+    written.push({ type: e.type, seq: a.seq, inserted: a.inserted });
+    const orchestratorRun = d.config.orchestratorRun;
+    if (!d.core || !orchestratorRun) {
+      calls.push("orchestrator Run unknown: timer_stalled written only");
+      continue;
+    }
+    const r = await notify(d.core, {
+      key: { target: "reaper", dedupe_key: `notify:${dedupeSegment("reaper")}:stalled:${a.seq}` },
+      to: "orchestrator",
+      chain: { orchestratorRun },
+      subject: "timer_stalled: reaper",
+      body: reason,
+      source: "monitor:stall",
+    });
+    calls.push(`tell orchestrator: ${r.ok ? r.value.status : r.refusal.code}`);
+  }
+  return { planned, written, calls };
+}
