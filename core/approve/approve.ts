@@ -1,6 +1,8 @@
 // `sangsoe plugin approve`: the one code path that enables the sangsoe Orca plugin (decision 77).
 // It enables only when all three conditions hold, and records `plugin_approved` (decision 0104).
-import type { PluginApproved } from "./plugin-approved.ts";
+import type { PayloadOf } from "../contract/index.ts";
+
+export type PluginApproved = { readonly type: "plugin_approved" } & PayloadOf<"plugin_approved">;
 
 // The trust roots live here, never in the folder being approved.
 export const SANGSOE_REPO = "JeongJaeSoon/sangsoe";
@@ -15,9 +17,8 @@ export type ApprovePorts = {
   exec: Exec;
   // The plugin folder of `commit` as a local folder; `dispose` removes the download.
   fetchPluginTree(repo: string, commit: string): Promise<{ dir: string; dispose(): Promise<void> }>;
-  // TODO(U1): read the review `evidence` event for the PR head from the core store.
+  // The `review_verdict` rows for the PR head (decision 111); null when there is none.
   reviewEvidence(repo: string, pr: number, headSha: string): Promise<ReviewEvidence | null>;
-  // TODO(U1): append to the core store's event table.
   record(event: PluginApproved): Promise<void>;
   readManifest(dir: string): Promise<{ id: string; version: string }>;
   now(): number;

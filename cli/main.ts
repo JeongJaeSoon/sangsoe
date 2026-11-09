@@ -54,6 +54,8 @@ export async function run(
     if (parsed.positionals.length > (cmd.maxPositionals ?? 0)) {
       throw new Error(`unexpected argument "${parsed.positionals[cmd.maxPositionals ?? 0]}"`);
     }
+    const missing = (cmd.required ?? []).filter((o) => parsed.values[o] === undefined);
+    if (missing.length > 0) throw new Error(`missing ${missing.map((o) => `--${o}`).join(", ")}`);
   } catch (e) {
     const refusal: Refusal = { code: "invalid_input", reason: (e as Error).message, fix: form };
     return { code: 2, out: json ? JSON.stringify(refusal) : `${form}\n${refusal.reason}` };

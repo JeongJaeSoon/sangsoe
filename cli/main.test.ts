@@ -34,7 +34,7 @@ const touchless = (): Host => ({
 });
 const noChecks = () => assert.fail("must not build the start-check context");
 
-for (const argv of [["install", "--help"], ["uninstall", "-h"], ["doctor", "--help"], ["plugin", "approve", "--help"], ["--help"]]) {
+for (const argv of [["install", "--help"], ["uninstall", "-h"], ["doctor", "--help"], ["plugin", "approve", "--help"], ["review", "record", "--help"], ["--help"]]) {
   test(`${argv.join(" ")} prints usage and touches nothing`, async () => {
     const r = await run(argv, { host: touchless(), checkContext: noChecks });
     assert.equal(r.code, 0);
