@@ -52,6 +52,8 @@ export {
   parseDecisionOpen,
 } from "./decision/input.ts";
 
+export * from "./session/index.ts";
+
 export type * from "./contract/orca.ts";
 export { createOrcaAdapter, recoverWrite } from "./orca/adapter.ts";
 export { type CommandName, type CommandSpec, ORCA_COMMANDS } from "./orca/commands.ts";
@@ -91,6 +93,22 @@ export * from "./graph/index.ts";
 export * from "./brief/index.ts";
 // Both declare the same four-kind union; GRAPH's is the source.
 export type { EdgeKind } from "./graph/index.ts";
+
+export {
+  DEFAULT_MONITOR_CONFIG,
+  isMonitorName,
+  MONITOR_NAMES,
+  type MonitorConfig,
+  type MonitorDeps,
+  type MonitorName,
+  type MonitorReport,
+  type Planned,
+  type Reading,
+} from "./detect/monitor.ts";
+export { MONITORS, type MonitorRunner, openMonitors, runMonitor } from "./detect/run.ts";
+export { judgeOrca, type OrcaReads, type SessionActivity, sessionActivity } from "./detect/orca/judge.ts";
+export { judgeResource, type ResourceReads, withDiagnostics } from "./detect/resource/judge.ts";
+export { type ChatProvider, nullChatProvider } from "./detect/chat/provider.ts";
 
 export {
   type LandAction,

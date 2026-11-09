@@ -66,7 +66,16 @@ test("unreadable input exits non-zero, which onFailure block turns into a refusa
   const r = hook(home, "not json");
   assert.equal(r.code, 2);
   assert.match(r.stderr, /not JSON/);
-  assert.equal(hook(home, "{}", ["hook", "session-start"]).code, 2);
+  assert.equal(hook(home, "{}", ["hook", "no-such-event"]).code, 2);
+});
+
+test("a recording hook fails open: unreadable input or no Orca exits 0 and injects nothing", () => {
+  const home = mkdtempSync(join(tmpdir(), "sangsoe-hook-"));
+  for (const input of ["not json", "{}", JSON.stringify({ cwd: "/" })]) {
+    assert.deepEqual(Object.values(hook(home, input, ["hook", "session-start"])).slice(0, 2), [0, ""]);
+  }
+  const r = hook(home, JSON.stringify({ session_id: "s1", cwd: home, prompt: "d001 yes" }), ["hook", "user-prompt-submit"]);
+  assert.deepEqual([r.code, r.stdout], [0, ""]);
 });
 
 test("--replay measures the fixture and exits 0 only with no false positive or negative", () => {

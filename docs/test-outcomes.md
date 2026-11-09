@@ -20,9 +20,10 @@
 | P5 | U22 | | | | | |
 | P6 | U18 | | | | | |
 | P7 | U20 | | | | | |
-| P8 | U15 | | | | | |
-| P9 | U13 | | | | | |
-| P10 | U15 | | | | | |
-| P11 | U15 | | | | | |
-| P12 | U13 | | | | | |
-| P13 | U13 | | | | | |
+| T2 2차(실제 monitor) | U15 | 2026-11-10 | `node cli/main.ts monitor run orca\|resource\|chat --dry-run --db <scratch> --json` (실제 Orca, 읽기만) · 라운드 틀은 `test/orca-plugin.test.ts` 의 가짜 시계 | 세 monitor 의 라운드가 실제 Orca 에서 끝까지 돎: orca `planned: []`, `unseen: ["worker-list truncated"]`(worker-list·worker-show·`worker-list --run`·gate-list·inbox·worktree ps 모두 읽힘. 전체 이력이 3 쪽을 넘을 뿐 Run 별 판정은 됨), resource `resource_leak` 268(컨테이너 2·볼륨 266, 기록 없는 Docker 자원), `pressure_high` 없음(load/CPU 0.66, 메모리 여유 70%), chat `planned: []`(null 제공자) | 부분 통과: 판정 함수는 실제 Orca 에서 돎. Orca 안의 worker 타이머로 돈 것은 미실행 — 돌고 있는 `local.sangsoe`(오너의 rc.3)를 이 브랜치로 다시 싣는 일은 승인 범위 밖이다 | 없음(worker `setInterval` 이 기본 경로, U3 T2 통과) |
+| P8 | U15 | 2026-11-10 | — | — | 미실행: 쉬는 워커에게 `send` 를 보내는 쓰기가 필요하고 이 카드는 읽기 전용 확인만 한다. `wake_unconfirmed` 는 `inbox` 의 `handled` 로만 판정하므로 깨어나지 않으면 그대로 위로 오른다(가짜 시험). `inbox` 행에 시각 칸이 없어 보낸 시각은 `notified` 줄의 `ts` 에서 센다 | 없음 |
+| P9 | U13 | 2026-11-10 | 입력을 JSONL 로 적는 일회용 plugin 을 `claude -p --plugin-dir <scratch>` 로 싣고 startup · `/compact` · resume · `/clear` 를 돌림(Claude Code 2.1.319) | SessionStart(startup) 에 `model` 없음, compact 에는 있음, resume 에 `context_tokens`. UserPromptSubmit `prompt_id`·`prompt`. PostToolUse `tool_name`·`tool_use_id`. Stop `last_assistant_message`·`stop_hook_active`. PostCompact `trigger`·`compact_summary`(토큰 수 없음) — transcript 의 `compact_boundary` 기록에 `compactMetadata.preTokens`. `/clear` → 옛 세션 SessionEnd `reason: "clear"`, 새 `session_id` 로 SessionStart `source: "clear"` | 통과(자기 Run 우편함 handoff 보내기·읽기는 미실행: 워커는 Run 을 쥐지 않아 같은 Run 으로 잴 수 없음. 가짜 Orca 시험으로 대신) | 130 |
+| P10 | U15 | 2026-11-10 | `orca worktree ps --agent-wait --json` 를 약 10 분 사이 두 번(읽기만), 살아 있는 터미널이 있는 행 아홉을 비교 | 일하는 세션 6: `lastOutputAt` 움직임 6/6, `lastActivityAt` 움직임 0/6. `done` 인 세션 1: `lastOutputAt` 움직임. 터미널 둘(`done` 옛 탭 + `working`)인 세션 1: 두 값 모두 그대로, 에이전트 `updatedAt` 52 분 전. 에이전트 행에 세션 id 칸이 없다 | 부분 통과: `lastOutputAt` 은 출력을 따라감, `lastActivityAt` 은 따라가지 않음. 프롬프트 다시 그리기·UI 활동이 값을 바꾸는지는 미측정 | 결정 133: `lastActivityAt` 을 판정에서 뺌(`lastOutputAt` + `stateStartedAt` 하한), 세션 = 워크스페이스 |
+| P11 | U15 | 2026-11-10 | — | — | 미실행 + 필터는 U2 시험으로: relay 연결을 켤 수 없다(§8 Q6). 어댑터가 `hostId`/`host` 가 `local` 인 행만 내보내므로 orca-monitor 는 비로컬 행을 받지 않는다(`core/orca/host-filter.test.ts`, 가짜 `remote-host` 시나리오) | 없음 |
+| P12 | U13 | 2026-11-10 | 같은 일회용 plugin 으로 `claude -p` 세션 | Notification 과 PostCompact(auto) 는 `-p` 모드에서 나오지 않음 | 미실행(대화형 세션의 권한 묻기가 필요. 워커 세션이 띄울 수 없음) | 131(결정 91 의 되돌아갈 곳: `notification_type` 과 메시지로 대기 판정, 리드 알림) |
+| P13 | U13 | 2026-11-10 | 기존 세션 transcript(Claude Code 2.1.310) 에서 `<bash-input>` 기록 읽기 | `!` 입력은 내용이 `<bash-input>…</bash-input>` 인 user 기록(`uuid`·`promptId`), 자식 기록(`parentUuid` = 입력 uuid)에 `<bash-stdout>…</bash-stdout><bash-stderr>…</bash-stderr>`. 종료 코드 없음 | 통과(형식). `!` 입력 때 어느 hook 이 부르는지는 미실행(대화형 필요) → UserPromptSubmit·Stop·SessionEnd 마다 꼬리를 다시 읽음 | 131(결정 91 ④ 나: stderr → failed, stdout URL → seen) |
