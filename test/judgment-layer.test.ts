@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { evaluate, type Facts } from "../core/gates/index.ts";
+import { evaluate, type GateFacts } from "../core/index.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
@@ -72,7 +72,7 @@ test("the delegate gate lets the orchestrator read each sangsoe resource its age
   const servers = Object.keys((JSON.parse(read("claude-plugin/.mcp.json")) as { mcpServers: object }).mcpServers);
   const named = [...read("claude-plugin/agents/orchestrator.md").matchAll(/resource `([a-z_]+)`/g)].map((m) => m[1] ?? "");
   assert.ok(named.length > 0, "orchestrator.md names no resource");
-  const role: Facts = { role: () => "orchestrator", load: () => ({ level: "ok", reasons: [] }), ownOpenPrs: () => undefined, readScript: () => undefined };
+  const role: GateFacts ={ role: () => "orchestrator", load: () => ({ level: "ok", reasons: [] }), ownOpenPrs: () => undefined, readScript: () => undefined };
   const verdict = (tool: string, input: Record<string, unknown>) =>
     evaluate({ tool, input, cwd: "/work/acme", subagent: false }, role).decision;
   for (const key of servers) {
