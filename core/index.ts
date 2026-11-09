@@ -87,6 +87,10 @@ export {
   sampleLoad,
 } from "./capacity/capacity.ts";
 export { type RecoverPlan, type RecoverRow, recoverPlan, renderRecover } from "./recover/recover.ts";
+export * from "./graph/index.ts";
+export * from "./brief/index.ts";
+// Both declare the same four-kind union; GRAPH's is the source.
+export type { EdgeKind } from "./graph/index.ts";
 
 export {
   DEFAULT_MONITOR_CONFIG,
