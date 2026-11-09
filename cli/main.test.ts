@@ -32,10 +32,11 @@ const touchless = (): Host => ({
   env: {},
   nodeVersion: "26.0.0",
 });
+const noChecks = () => assert.fail("must not build the start-check context");
 
 for (const argv of [["install", "--help"], ["uninstall", "-h"], ["doctor", "--help"], ["plugin", "approve", "--help"], ["--help"]]) {
   test(`${argv.join(" ")} prints usage and touches nothing`, async () => {
-    const r = await run(argv, { host: touchless() });
+    const r = await run(argv, { host: touchless(), checkContext: noChecks });
     assert.equal(r.code, 0);
     assert.match(r.out, /^usage:/);
   });
@@ -43,7 +44,21 @@ for (const argv of [["install", "--help"], ["uninstall", "-h"], ["doctor", "--he
 
 for (const argv of [["install", "--bogus"], ["uninstall", "now"], ["doctor", "--online"], ["plugin", "approve", "--bogus"], ["plugin", "approve", "--dir"]]) {
   test(`${argv.join(" ")} exits 2 and touches nothing`, async () => {
-    const r = await run(argv, { host: touchless() });
+    const r = await run(argv, { host: touchless(), checkContext: noChecks });
     assert.equal(r.code, 2);
+  });
+}
+
+// doctor and install reach Orca and gh only through the context the caller injects.
+for (const argv of [["doctor"], ["install"]]) {
+  test(`${argv.join(" ")} builds its start checks from the injected context`, async () => {
+    const roots: string[] = [];
+    const used = (root: string): never => {
+      roots.push(root);
+      throw new Error("injected context used");
+    };
+    const host = { ...touchless(), env: { SANGSOE_ROOT: "/fixture/tree" } };
+    await assert.rejects(run(argv, { host, checkContext: used }), /injected context used/);
+    assert.deepEqual(roots, ["/fixture/tree"]);
   });
 }
