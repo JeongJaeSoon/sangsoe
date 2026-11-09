@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { doctor, type Host, install, realHost, treeRoot, uninstall, VERSION } from "../core/index.ts";
 import { pluginApprove } from "./commands/plugin-approve.ts";
+import { reviewRecord } from "./commands/review-record.ts";
 
 const USAGE = [
   "usage: sangsoe <command>",
@@ -10,6 +11,8 @@ const USAGE = [
   "  doctor [--offline]   check the install; --offline checks only the installed tree",
   "  plugin approve [--dry-run] [--dir <path>] [--commit <sha>]",
   "                       check review and build, then enable the Orca plugin",
+  "  review record --pr <N> --head <sha> --act-on <N> --reviewer <name> [--repo <owner/name>]",
+  "                       record one independent review's verdict on a PR head",
 ].join("\n");
 
 export function run(argv: readonly string[], host: Host = realHost): { code: number; out: string } {
@@ -36,7 +39,9 @@ if (import.meta.main) {
   const { code, out } =
     argv[0] === "plugin" && argv[1] === "approve"
       ? await pluginApprove(argv.slice(2), (line) => process.stdout.write(`${line}\n`))
-      : run(argv);
+      : argv[0] === "review" && argv[1] === "record"
+        ? await reviewRecord(argv.slice(2))
+        : run(argv);
   (code === 0 ? process.stdout : process.stderr).write(`${out}\n`);
   process.exitCode = code;
 }

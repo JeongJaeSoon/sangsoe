@@ -8,8 +8,16 @@ export { doctor } from "./install/doctor.ts";
 export { type Host, realHost, treeRoot } from "./install/host.ts";
 export { install, type Outcome, uninstall } from "./install/install.ts";
 export { VERSION } from "./version.ts";
-export { type ApprovePorts, type ApproveResult, approvePlugin } from "./approve/approve.ts";
-export { nodePorts, resolveCommit } from "./approve/ports.ts";
+export {
+  type Exec as ApproveExec,
+  type ApprovePorts,
+  type ApproveResult,
+  approvePlugin,
+  type PluginApproved,
+  SANGSOE_REPO,
+} from "./approve/approve.ts";
+export { nodeExec as approveExec, nodePorts, resolveCommit } from "./approve/ports.ts";
+export { recordReviewVerdict, reviewEvidenceFrom } from "./approve/review-verdict.ts";
 
 export type * from "./contract/orca.ts";
 export { createOrcaAdapter, recoverWrite } from "./orca/adapter.ts";
