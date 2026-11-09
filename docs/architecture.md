@@ -78,13 +78,13 @@
 
 뒤 유닛(U7–U21)이 대고 짜는 계약이다. 코드는 `core/contract/`, 저장은 `core/store/` 이고 다른 칸은 `core/index.ts` 로 들어온다.
 
-**event.** type 하나가 `core/contract/events/<type>.ts` 파일 하나다(부록 `#signal-flow` 의 이름 전체, 74개). 파일은 `defineEvent(type, 칸 검증기, { dedupe?, dedupeRequired?, dedupeBound?, dedupeClosed?, sources?, storeOnly?, needs?, version?, upcast? })` 하나를 내보낸다. 쓰기는 `Store.append({ type, source, payload, target?, subject?, entity?, entity_id?, actor?, needs?, severity?, dedupe_key? })` 하나로만 하고, 이 함수가 type 등록·쓰는 쪽(`sources`, 간선은 GRAPH 만)·페이로드(새 쓰기는 정의에 없는 칸도 거부)·`dedupe_key`·전이표(`item_transition`)를 검사한 뒤 `BEGIN IMMEDIATE` 안에서 넣는다. 페이로드는 `after` 칸의 JSON 이다. `before` 칸은 비워 둔다.
+**event.** type 하나가 `core/contract/events/<type>.ts` 파일 하나다(부록 `#signal-flow` 의 이름 전체 74개와 결정 104·111 의 둘). 파일은 `defineEvent(type, 칸 검증기, { dedupe?, dedupeRequired?, dedupeBound?, dedupeClosed?, sources?, storeOnly?, needs?, version?, upcast? })` 하나를 내보낸다. 쓰기는 `Store.append({ type, source, payload, target?, subject?, entity?, entity_id?, actor?, needs?, severity?, dedupe_key? })` 하나로만 하고, 이 함수가 type 등록·쓰는 쪽(`sources`, 간선은 GRAPH 만)·페이로드(새 쓰기는 정의에 없는 칸도 거부)·`dedupe_key`·전이표(`item_transition`)를 검사한 뒤 `BEGIN IMMEDIATE` 안에서 넣는다. 페이로드는 `after` 칸의 JSON 이다. `before` 칸은 비워 둔다.
 
 - 읽는 쪽은 모르는 칸을 무시하고, 줄의 `schema_v` 가 type 의 `version` 보다 낮으면 `upcast` 로 올려 읽는다(`decodeRow`).
 - 페이로드 어디에든(중첩 포함) Orca 가 원본인 사실(`title`·`status`·`spec`·`deps`·`question`·`options`·`message_body`)이 있으면 type 과 상관없이 거부한다. sqlite 에는 Orca id 만 남는다.
 - `owner_action` 과 `owner_text_redacted` 는 `storeOnly` 라 `append` 의 인자 타입에서 빠지고 실행 중에도 거부된다. `appendOwnerAction`(원문과 한 트랜잭션, 원문은 비지 않은 문자열)과 `redactOwnerText`(비우기와 한 트랜잭션)만 쓴다.
 - Orca id 는 불투명한 값이라 sangsoe 는 형식을 따지지 않는다. 자원 줄(`resource`·`reap_*`·`resource_*`)은 `kind` 를 반드시 적고, `kind: worktree` 의 `ref` 는 경로가 아니라 Orca id 다(공백·`/`·`\` 거부). `item_extra_set.verify` 는 kind 별 합 타입 `VerifySpec` 이라 kind 마다 필요한 칸이 컴파일·실행 양쪽에서 걸린다(`orca_field` 는 target·field·value 등). `evidence{kind: probe:*}` 는 `observed` 가 있어야 한다.
-- `plugin_approved`(U3)·`start_refused`(U22, 결정 94)는 그 유닛이 파일을 더한다.
+- `plugin_approved`(결정 104)와 `review_verdict`(결정 111)도 이 폴더에 있다. `start_refused`(U22, 결정 94)는 그 유닛이 파일을 더한다.
 
 **`dedupe_key`(split Q13 을 여기서 정한다).** `<접두어>:<대상>[:<조건>…]`. 접두어는 type 이 선언한 것이고 기본은 type 이름이며, 설계가 이미 쓰는 넷만 짧다: `notified`→`notify`, `decision_opened`→`decision`, `item_ready`→`ready`, `edge_added`→`edge`. 접두어 하나는 type 하나의 것이라 다른 type 끼리 부딪히지 않고, 같은 조건을 쓰는 쪽이 둘이어도 `UNIQUE(dedupe_key)` 로 한 줄만 남는다. 키에 기대는 type(`notified`·`decision_opened`·`item_ready`·`edge_added`·`waiting_released`)은 키 없는 쓰기를 거부하고, 각 마디는 `dedupeSegment`(URI 인코딩)로 적어서 `:`·공백이 든 Orca id 도 마디를 가르지 않고, 다른 대상끼리 같은 키가 되지 않는다(`dedupeKey(def, target, ...조건)` 이 해 준다). 앞 마디가 줄에서 나오는 type 은 `dedupeBound` 가 그 마디를 내고 키는 인코딩한 그 마디로 시작해야 한다(`ready:<task>`·`decision:<decision_key>`·`notify:<target 칸>`). `dedupeClosed` 인 type 은 그 뒤에 조건을 붙이지 못한다(`edge:<pred>:<succ>:<kind>`·`waiting_released:<ref>`·`owner_text_redacted:<seq>`). 그래서 한 조건의 철자는 하나뿐이고, 인코딩하지 않은 철자는 거부된다. 두 번째 쓰기는 `{ seq: 첫 줄, inserted: false }` 를 받는다.
 
@@ -131,7 +131,10 @@ readMergeConditions(gh, { repo, base, pr, protectedPaths }): MergeConditions;
 type Check = { id: string; run(ctx: CheckContext): Promise<CheckResult> };
 type CheckResult = { id: string; status: "ok" | "notice" | "warn" | "fail"; summary: string; fix?: string };
 runChecks(START_CHECKS, ctx) → startReport(results) | doctorReport(results)
+DOCTOR_CHECKS = [...START_CHECKS, orcaPluginContent]   // sangsoe doctor·install 이 돌린다
 ```
+
+- **내용 해시 점검(`orca-plugin-content`).** 설치된 `orca-plugin/` 의 `contentHash` 를 그 폴더의 빌드 커밋 트리와 그 커밋을 머지한 PR 의 리뷰된 head 트리(`sangsoe plugin approve` 가 비교하는 바이트)와 다시 비교한다. 다르면 `fail` + `sangsoe plugin approve`, 잴 수 없으면 `warn`. 빌드 트리는 내려받아야 하므로 `CheckContext.pluginBuild` 포트로 들어오고, 시작 점검은 그 포트를 비워 `DOCTOR_CHECKS` 에만 든다(결정 112).
 
 - **명령 표 하나.** `core/orca/commands.ts` 의 `ORCA_COMMANDS` 가 래퍼의 argv 와 시작 점검 `orca-commands` 의 대조 대상을 같이 정한다. 설계 2절 첫째 칸 표의 명령마다 한 행이 있고, 표에 없는 옵션은 래퍼가 넘기지 못한다.
 - **호스트.** 호스트를 가진 행(`worktree list`·`worktree ps`·`worker-list`)은 로컬 행만 어댑터 밖으로 나가고 나머지는 수만 남는다(결정 88).
@@ -151,7 +154,7 @@ U15(monitor)·U18(REAPER)·U19(패널)가 대고 짜는 계약이다. 시험 결
 
 **패널과 상태 표시줄.** 패널은 `html` 패널(`panel/*.ts` 진입, Orca 가 페이지를 감싼다)이고 `orca.plugin.request(name)` 로 worker 처리기를 부른다. 패널에서 코어를 직접 부르지 않는다. 상태 표시줄은 worker 가 `host.call("statusBar.update", {id: "summary", text, tone})` 로만 바꾼다. 클릭은 명령 `sangsoe.open` 을 돌리고, 호스트 API 에 "자기 패널 열기"가 없어 명령이 `orca plugin open <key> --panel <id>` 를 부른다.
 
-**승인 흐름.** `sangsoe plugin approve`(④ `core/approve/`). 신뢰 기준(저장소 `JeongJaeSoon/sangsoe`, 키 `local.sangsoe`)은 코어 상수이고 승인할 폴더에서 읽지 않는다. 커밋은 40자 SHA 만 받는다. 순서: 읽기 전용 검사 먼저 — (1) 빌드 커밋이 main 에 있고 그것을 실은, main 으로 머지된 PR 하나의 머지된 head 에 대한 리뷰 증거가 작성자 아닌 리뷰어의 Act-on 0 (2) 폴더 `contentHash` = main 커밋 트리 = 리뷰된 head 트리(결정 105) → 그다음에야 `orca plugin dev reload <폴더> --json` 으로 Orca 가 원하는 키·지문을 읽고(켜지 않는다) (3) 키가 `local.sangsoe` 이고 `contentIdentity` 가 그 폴더 → 켜기 직전에 내용 해시를 다시 재서 같을 때만 `orca plugin enable <key> --approve <지문>` → `plugin_approved`(결정 104). 이미 승인된 폴더도 같은 검사를 지나야 통과로 보인다. `--dry-run` 은 명령만 보인다. plugin 코드는 폴더 밖을 import 하지 않는다(승인과 내용 해시가 폴더만 덮는다, `test/orca-plugin.test.ts`). 리뷰 증거와 event 기록은 U1 의 저장소가 올 때까지 포트로 비워 두어 (1) 은 닫힌 채 실패한다.
+**승인 흐름.** `sangsoe plugin approve`(④ `core/approve/`). 신뢰 기준(저장소 `JeongJaeSoon/sangsoe`, 키 `local.sangsoe`)은 코어 상수이고 승인할 폴더에서 읽지 않는다. 커밋은 40자 SHA 만 받는다. 순서: 읽기 전용 검사 먼저 — (1) 빌드 커밋이 main 에 있고 그것을 실은, main 으로 머지된 PR 하나의 머지된 head 에 대한 리뷰 증거가 작성자 아닌 리뷰어의 Act-on 0 (2) 폴더 `contentHash` = main 커밋 트리 = 리뷰된 head 트리(결정 105) → 그다음에야 `orca plugin dev reload <폴더> --json` 으로 Orca 가 원하는 키·지문을 읽고(켜지 않는다) (3) 키가 `local.sangsoe` 이고 `contentIdentity` 가 그 폴더 → 켜기 직전에 내용 해시를 다시 재서 같을 때만 `orca plugin enable <key> --approve <지문>` → `plugin_approved`(결정 104). 이미 승인된 폴더도 같은 검사를 지나야 통과로 보인다. `--dry-run` 은 명령만 보인다. plugin 코드는 폴더 밖을 import 하지 않는다(승인과 내용 해시가 폴더만 덮는다, `test/orca-plugin.test.ts`). 리뷰 증거는 store 의 `review_verdict` 줄로만 읽고(그 head 에 Act-on 이 남은 판정이 하나라도 있으면 실패, store 를 못 열면 증거 없음), `plugin_approved` 는 store 에 쓴다. `review_verdict` 를 쓰는 곳은 `sangsoe review record` 하나다(작성자는 GitHub 에서 읽고 리뷰어와 같으면 거부, 결정 111).
 
 ## 설치와 릴리스
 
@@ -161,6 +164,6 @@ U15(monitor)·U18(REAPER)·U19(패널)가 대고 짜는 계약이다. 시험 결
 - **formula.** 탭 저장소의 `Formula/sangsoe.rb`: `url`(릴리스 자산)·`sha256`·`depends_on "node"`·`libexec.install Dir["*"], ".claude-plugin"`(`Dir["*"]` 는 점 폴더를 뺀다)·`bin/sangsoe` sh 래퍼(`SANGSOE_ROOT=<opt_libexec>` 를 두고 브루의 `node` 로 `dist/cli/main.js` 실행)·`test do`(`--version` 과 `doctor --offline`). `post_install` 은 없다.
 - **`sangsoe install`(멱등).** 상태를 읽고 고른다: 마켓플레이스 `sangsoe` 가 없으면 `claude plugin marketplace add <트리> --scope user`, 있으면 `update`, 다른 경로를 가리키면 `remove` 뒤 `add` → plugin `sangsoe@sangsoe` 가 없으면 `claude plugin install … --scope user`, 있으면 `update` → `orca-plugin/orca-plugin.json` 이 트리에 있으면 `orca plugin dev load <트리>/orca-plugin --json`(종료 코드 3 은 승인 대기, 지문을 보여 주고 `sangsoe plugin approve` 를 안내), 없으면 한 줄로 건너뛴다 → `doctor`. `<트리>` 는 `$(brew --prefix)/opt/sangsoe/libexec` 이라 `brew upgrade` 뒤에도 같다.
 - **`sangsoe uninstall`.** 있는 것만 지운다: `claude plugin uninstall sangsoe@sangsoe --scope user --keep-data` · `claude plugin marketplace remove sangsoe --scope user` · `orca plugin list --json` 에 sangsoe 개발 plugin 이 있으면 `orca plugin dev unload <키>`. 목록을 읽지 못하면 없는 것으로 치지 않고 종료 코드 1 이다. sqlite·설정은 남긴다.
-- **`sangsoe doctor [--offline]`.** 항목마다 `ok` · `FAIL … — fix: <명령>` · `not yet`(아직 없는 부분). `FAIL` 이 하나라도 있으면 종료 코드 1. `--offline` 은 트리(매니페스트 버전 일치·Node 하한)만 본다.
+- **`sangsoe doctor [--offline]`.** 트리 · Claude Code 실행과 마켓플레이스 · Orca plugin 로드 상태 다음에 `DOCTOR_CHECKS`(시작 점검 + 내용 해시)를 같은 줄 모양으로 잇는다. 항목마다 `ok` · `FAIL … — fix: <명령>` · `warn`/`notice … — fix: <명령>` · `not yet`(아직 없는 부분). `FAIL` 이 하나라도 있으면 종료 코드 1, `warn`·`notice` 는 0. Claude Code plugin 행은 시작 점검 `claude-plugin-version` 하나뿐이다. `--offline` 은 트리(매니페스트 버전 일치·Node 하한)만 본다. `sangsoe install` 은 끝에 같은 doctor 를 돌려 그 종료 코드를 낸다.
 
 고른 꼴과 버린 꼴: (A, 고름) `tsc` 출력 + `npm pack` + 래퍼가 트리 경로를 환경 변수로 건넴. 선언 하나(`files`)가 자산을 정하고 시험이 그것을 읽는다. (B) 진입점별 esbuild 번들 + `packaging/` 의 묶음 스크립트 + 실행 경로의 Cellar→opt 변환. 번들은 런타임 의존이 없는 지금 얻는 것이 없고, 파일을 실행 중에 찾는 라우터·MCP 수집기를 깨며, 경로 변환은 브루 내부 배치에 기대므로 버렸다.

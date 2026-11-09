@@ -1,5 +1,5 @@
 import type { ParseArgsOptionsConfig } from "node:util";
-import type { Host } from "../core/index.ts";
+import type { CheckContext, Host } from "../core/index.ts";
 
 // Refusal and Outcome mirror claude-plugin/mcp/contract.ts (the two slots do not import each
 // other); test/boundaries/contract.test.ts fails if they drift apart.
@@ -16,6 +16,8 @@ export type CommandArgs = {
   positionals: string[];
   /** The machine the command may touch; tests pass a fake (R-11). */
   host: Host;
+  /** Orca and gh for the start checks of the tree at `root`; tests pass the fake Orca. Built only when called. */
+  checkContext: (root: string) => CheckContext;
 };
 
 export type CommandDef = {
@@ -27,6 +29,8 @@ export type CommandDef = {
   usage: string;
   /** Parsed strictly by the router: an option not listed here is a usage error and run() is never called. */
   options?: ParseArgsOptionsConfig;
+  /** Options that must be given; a missing one is a usage error and run() is never called. */
+  required?: readonly string[];
   /** Upper bound on positionals; default 0. */
   maxPositionals?: number;
   run(args: CommandArgs): Outcome | Report | Promise<Outcome | Report>;

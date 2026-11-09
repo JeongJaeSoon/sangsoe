@@ -40,6 +40,7 @@ import pr_closed from "./events/pr_closed.ts";
 import pr_merged from "./events/pr_merged.ts";
 import pr_opened from "./events/pr_opened.ts";
 import pr_ready_to_merge from "./events/pr_ready_to_merge.ts";
+import plugin_approved from "./events/plugin_approved.ts";
 import pr_review_requested from "./events/pr_review_requested.ts";
 import pressure_high from "./events/pressure_high.ts";
 import priority_set from "./events/priority_set.ts";
@@ -55,6 +56,7 @@ import resource_leak from "./events/resource_leak.ts";
 import review_ask_sent from "./events/review_ask_sent.ts";
 import review_commented from "./events/review_commented.ts";
 import review_replied from "./events/review_replied.ts";
+import review_verdict from "./events/review_verdict.ts";
 import run_stalled from "./events/run_stalled.ts";
 import session_started from "./events/session_started.ts";
 import signal from "./events/signal.ts";
@@ -124,6 +126,7 @@ export const EVENTS = {
   pr_merged,
   pr_opened,
   pr_ready_to_merge,
+  plugin_approved,
   pr_review_requested,
   pressure_high,
   priority_set,
@@ -139,6 +142,7 @@ export const EVENTS = {
   review_ask_sent,
   review_commented,
   review_replied,
+  review_verdict,
   run_stalled,
   session_started,
   signal,

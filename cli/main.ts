@@ -3,7 +3,7 @@ import { readdirSync } from "node:fs";
 import { basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { type Host, realHost } from "../core/index.ts";
+import { type CheckContext, type Host, realCheckContext, realHost } from "../core/index.ts";
 import type { CommandDef, Outcome, Refusal, Report } from "./contract.ts";
 
 export type Result = { code: number; out: string };
@@ -30,7 +30,7 @@ export async function collectCommands(dir: URL): Promise<Map<string, CommandDef>
 
 export async function run(
   argv: readonly string[],
-  opts: { commands?: URL; host?: Host } = {},
+  opts: { commands?: URL; host?: Host; checkContext?: (root: string) => CheckContext } = {},
 ): Promise<Result> {
   const commands = await collectCommands(opts.commands ?? new URL("./commands/", import.meta.url));
   const json = argv.includes("--json");
@@ -54,13 +54,16 @@ export async function run(
     if (parsed.positionals.length > (cmd.maxPositionals ?? 0)) {
       throw new Error(`unexpected argument "${parsed.positionals[cmd.maxPositionals ?? 0]}"`);
     }
+    const missing = (cmd.required ?? []).filter((o) => parsed.values[o] === undefined);
+    if (missing.length > 0) throw new Error(`missing ${missing.map((o) => `--${o}`).join(", ")}`);
   } catch (e) {
     const refusal: Refusal = { code: "invalid_input", reason: (e as Error).message, fix: form };
     return { code: 2, out: json ? JSON.stringify(refusal) : `${form}\n${refusal.reason}` };
   }
 
   const host = opts.host ?? realHost;
-  return render(cmd, await cmd.run({ values: parsed.values, positionals: parsed.positionals, host }), json);
+  const checkContext = opts.checkContext ?? realCheckContext;
+  return render(cmd, await cmd.run({ values: parsed.values, positionals: parsed.positionals, host, checkContext }), json);
 }
 
 function render(cmd: CommandDef, o: Outcome | Report, json: boolean): Result {
