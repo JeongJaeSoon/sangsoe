@@ -16,5 +16,6 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["core", "cli", "orca-plugin", "claude-plugin", "test", "package.json"]
+  "include": ["core", "cli", "orca-plugin", "claude-plugin", "test", "scripts", "package.json"],
+  "exclude": ["orca-plugin/vendor"]
 }

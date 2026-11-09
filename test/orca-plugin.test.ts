@@ -399,7 +399,7 @@ test("the open command parses stdout only, so stderr noise does not break it", a
 
 test("plugin code imports nothing outside orca-plugin/, and only core-link.ts names the core", () => {
   const dir = new URL("orca-plugin/", root);
-  const files = readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(m?ts|m?js|tsx)$/.test(f));
+  const files = readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(m?ts|m?js|tsx)$/.test(f) && !f.startsWith("vendor/"));
   for (const f of files) {
     const depth = f.split("/").length - 1;
     const text = readFileSync(new URL(f, dir), "utf8");
@@ -407,15 +407,15 @@ test("plugin code imports nothing outside orca-plugin/, and only core-link.ts na
       const ups = (m[1] ?? "").split("/").filter((s) => s === "..").length;
       assert.ok(ups <= depth, `${f} reaches outside the plugin folder: ${m[1]}`);
     }
-    // Decision 132: the one run-time path to the core, resolved beside the folder.
+    // Decisions 132, 152: the one run-time path outside the folder, a checkout's source core.
     const outside = [...text.matchAll(/["'](\.\.\/[^"']*)["']/g)].map((m) => m[1]).filter((s) => (s ?? "").split("/").filter((x) => x === "..").length > depth);
-    if (f === "core-link.ts") assert.deepEqual(outside, ["../dist/core/index.js", "../core/index.ts"]);
+    if (f === "core-link.ts") assert.deepEqual(outside, ["../core/index.ts", "../.git"]);
     else assert.deepEqual(outside, [], `${f} names a path outside the plugin folder`);
   }
 });
 
-test("core-link prefers the built core, falls back to the source core, and finds nothing in an empty tree", () => {
-  // Trees of its own, so a dist/ left in the checkout does not change the answer.
+test("core-link loads only the core inside the approved folder in an installed tree, the source core in a checkout (decision 152)", () => {
+  // Trees of its own, so a dist/ or vendor/ left in the checkout does not change the answer.
   const dir = mkdtempSync(join(tmpdir(), "sangsoe-link-"));
   const tree = (name: string, files: readonly string[]) => {
     for (const f of files) {
@@ -424,11 +424,14 @@ test("core-link prefers the built core, falls back to the source core, and finds
     }
     return pathToFileURL(join(dir, name, "orca-plugin/core-link.ts")).href;
   };
+  // A core changed beside the folder after approve is outside the hash: it must never be loaded.
+  const planted = ["build-info.json", "core/index.ts", "dist/core/index.js"];
   try {
-    const checkout = tree("checkout", ["core/index.ts"]);
-    const built = tree("built", ["core/index.ts", "dist/core/index.js"]);
+    const installed = tree("installed", [...planted, "orca-plugin/vendor/core/index.ts"]);
+    assert.equal(coreUrl(installed)?.href, pathToFileURL(join(dir, "installed/orca-plugin/vendor/core/index.ts")).href);
+    assert.equal(coreUrl(tree("unstaged", planted)), null, "no staged copy: nothing, not a core beside the folder");
+    const checkout = tree("checkout", [".git", "core/index.ts", "dist/core/index.js"]);
     assert.equal(coreUrl(checkout)?.href, pathToFileURL(join(dir, "checkout/core/index.ts")).href);
-    assert.equal(coreUrl(built)?.href, pathToFileURL(join(dir, "built/dist/core/index.js")).href);
     assert.equal(coreUrl(tree("empty", [])), null);
   } finally {
     rmSync(dir, { recursive: true });
