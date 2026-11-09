@@ -7,6 +7,7 @@ import { orcaPluginContent } from "./orca-plugin-content.ts";
 import { orcaPluginVersion } from "./orca-plugin-version.ts";
 import { orcaReachable } from "./orca-reachable.ts";
 import { remoteHosts } from "./remote-hosts.ts";
+import { sqliteVersion } from "./sqlite-version.ts";
 
 export * from "./check.ts";
 export { REQUIRED_CAPABILITIES } from "./orca-capabilities.ts";
@@ -22,5 +23,8 @@ export const START_CHECKS: readonly Check[] = [
   orcaPluginVersion,
 ];
 
-/** `doctor` adds what is too slow for every start: the content check downloads the reviewed build. */
-export const DOCTOR_CHECKS: readonly Check[] = [...START_CHECKS, orcaPluginContent];
+/**
+ * `doctor` adds what is too slow for every start (the content check downloads the reviewed build)
+ * and what the start already refuses elsewhere (`Store.open` checks the SQLite floor).
+ */
+export const DOCTOR_CHECKS: readonly Check[] = [...START_CHECKS, orcaPluginContent, sqliteVersion];

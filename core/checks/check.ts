@@ -27,7 +27,14 @@ export type PluginBuild = {
 };
 
 /** Host state comes in here, so tests run every check against the fake Orca. */
-export type CheckContext = { orca: OrcaAdapter; exec: Exec; coreVersion: string; pluginBuild?: PluginBuild };
+export type CheckContext = {
+  orca: OrcaAdapter;
+  exec: Exec;
+  coreVersion: string;
+  pluginBuild?: PluginBuild;
+  /** Defaults to this Node's `process.versions.sqlite`. */
+  sqliteVersion?: string;
+};
 
 /**
  * The doctor check function shape. One file per check under core/checks/; a unit adding a

@@ -1,6 +1,21 @@
 // The only module other slots may import from the core; see docs/architecture.md.
 export * from "./contract/index.ts";
 export * from "./store/checks.ts";
+export {
+  evaluate,
+  GATES,
+  type HookInput,
+  hookOutput,
+  type Merged as GateMerged,
+  mergeVerdicts,
+  parseHookInput,
+  roleOf,
+  START_TOOL_ID,
+} from "./gates/index.ts";
+export type { Facts as GateFacts, Gate, Verdict as GateVerdict, Role as SessionRole } from "./gates/types.ts";
+export { firstPrompt, hostFacts, openPrs } from "./gates/facts.ts";
+export { deniedDir, recordDenial } from "./gates/record.ts";
+export { type ReplayCounts, type ReplayRow, replay } from "./gates/replay.ts";
 export * from "./store/store.ts";
 export { decision } from "./store/views/decision.ts";
 export { item_timeline } from "./store/views/item_timeline.ts";
@@ -73,6 +88,32 @@ export {
 } from "./capacity/capacity.ts";
 export { type RecoverPlan, type RecoverRow, recoverPlan, renderRecover } from "./recover/recover.ts";
 export * from "./graph/index.ts";
+
+export {
+  type LandAction,
+  type LandConfig,
+  type LandDeps,
+  type LandInput,
+  type LandOutcome,
+  type LandStore,
+  type LandValue,
+  land,
+  type MergePort,
+} from "./land/land.ts";
+export { mergeConfirm } from "./land/github.ts";
+export { ghMerge, readLandConfig, realLandDeps } from "./land/ports.ts";
+export { type TierOfPr, tierOfPr } from "./land/tier.ts";
+export { type EvidenceGap, evidenceGaps, mergedItemMark } from "./verify/evidence.ts";
+export {
+  type DiffFile,
+  parseTierConfig,
+  requiredEvidence,
+  type Tier as VerifyTier,
+  type TierConfig,
+  type TierLabel,
+  type TierVerdict,
+  verifyTier,
+} from "./verify/verify-tier.ts";
 
 export {
   type Check,
