@@ -144,7 +144,9 @@ export class FakeGh implements GhClient {
     if (m) {
       const state = url.searchParams.get("state");
       const head = url.searchParams.get("head");
-      if (head) return ok(this.prs.filter((p) => `acme:${p.head.ref}` === head));
+      // Like GitHub, a head filter without a branch is ignored and the newest PRs come back.
+      if (head && !head.endsWith(":")) return ok(this.prs.filter((p) => `acme:${p.head.ref}` === head));
+      if (head) return ok([...this.prs].sort((a, b) => b.number - a.number));
       if (url.searchParams.get("page") !== "1") return ok([]);
       return ok(this.prs.filter((p) => state === "all" || p.state === state));
     }

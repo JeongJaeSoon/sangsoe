@@ -1,20 +1,64 @@
-import { dedupeKey, eventDef } from "../contract/index.ts";
+import { dedupeKey, eventDef, type StoredEvent } from "../contract/index.ts";
 import type { Exec } from "../contract/orca.ts";
 import type { Result } from "../notify/result.ts";
-import { type Appended, type NewEvent, Store } from "../store/store.ts";
-import { DOCKER_KINDS, type DockerRef, isDockerKind } from "./docker.ts";
+import { type Appended, type EventFilter, type NewEvent, Store } from "../store/store.ts";
+import { DOCKER_KINDS, type DockerKind, type DockerRef, isDockerKind } from "./docker.ts";
 
 export type ResourceInput = { kind: string; ref: string; owner: string; action?: "created" | "released" };
 export type ResourceRecorded = { kind: string; ref: string; owner: string; action: string; seq: number; inserted: boolean };
 
-type Appender = { append(e: NewEvent<"resource">): Appended };
+type Appender = { append(e: NewEvent<"resource">): Appended; events(f?: EventFilter): StoredEvent[] };
 
-const refusal = (reason: string, fix: string) => ({ ok: false, refusal: { code: "invalid_input", reason, fix } }) as const;
+const refusal = (reason: string, fix: string, code = "invalid_input") => ({ ok: false, refusal: { code, reason, fix } }) as const;
+
+/** Who holds one recorded Docker name now. `gen` counts how often it was let go, so a re-made name gets new keys. */
+export type Hold = { kind: DockerKind; ref: string; owner: string; held: boolean; gen: number; createdSeq: number };
+
+/**
+ * Folds the record of every Docker name in seq order. A hold ends when its owner releases it, when
+ * REAPER removes it or finds it gone, or when REAPER hands it to a person as in use: after that the
+ * name is no one's until someone records it again, so REAPER never retries an id it could not prove
+ * is still the recorded one.
+ */
+export function dockerHolds(events: readonly StoredEvent[]): Map<string, Hold> {
+  const holds = new Map<string, Hold>();
+  const rows = [...events].sort((a, b) => a.seq - b.seq);
+  for (const e of rows) {
+    const p = e.payload as { action?: string; kind: string; ref: string; owner?: string; reason?: string };
+    if (!isDockerKind(p.kind)) continue;
+    const k = `${p.kind}\n${p.ref}`;
+    const h = holds.get(k) ?? { kind: p.kind, ref: p.ref, owner: "", held: false, gen: 0, createdSeq: 0 };
+    holds.set(k, h);
+    const ends =
+      (e.type === "resource" && p.action === "released") ||
+      e.type === "reap_done" ||
+      (e.type === "reap_blocked" && p.reason === "in_use");
+    if (e.type === "resource" && p.action === "created" && !h.held) {
+      Object.assign(h, { owner: p.owner ?? "", held: true, createdSeq: e.seq });
+    } else if (ends && h.held) {
+      Object.assign(h, { held: false, gen: h.gen + 1 });
+    }
+  }
+  return holds;
+}
+
+export const holdEvents = (events: (f?: EventFilter) => StoredEvent[]) => [
+  ...events({ type: "resource" }),
+  ...events({ type: "reap_done" }),
+  ...events({ type: "reap_blocked" }),
+];
+
+const resourceKey = (kind: string, ref: string, action: string, gen: number) => {
+  const def = eventDef("resource");
+  if (!def) throw new Error("no event type resource");
+  return dedupeKey(def, kind, ref, action, `g${gen}`);
+};
 
 /**
  * The one way a resource gets an owner (R-12): whoever made it records it right after making it.
  * REAPER sweeps nothing without such a row. `owner` is the card's worktree instance id or the Orca
- * Task the work ran under.
+ * Task the work ran under. A name another owner still holds is refused, never silently merged:
+ * otherwise the first owner's sweep would take the second owner's object.
  */
 export function recordResource(store: Appender, input: ResourceInput): Result<ResourceRecorded> {
   const { kind, ref, owner } = input;
@@ -26,25 +70,45 @@ export function recordResource(store: Appender, input: ResourceInput): Result<Re
     if (typeof v !== "string" || v.trim() === "") return refusal(`${name} is empty`, `pass the Docker id as ref and the Task or worktree id as owner`);
   }
   if (action !== "created" && action !== "released") return refusal(`action ${action}`, "action is created or released");
-  const def = eventDef("resource");
-  if (!def) throw new Error("no event type resource");
+  const hold = dockerHolds(holdEvents((f) => store.events(f))).get(`${kind}\n${ref}`);
+  if (hold?.held && hold.owner !== owner) {
+    return refusal(
+      `${kind} ${ref} is already recorded for another owner`,
+      "use a name of your own (another compose project name), or have that owner release it first",
+      "held_by_other",
+    );
+  }
+  if (action === "released" && !hold?.held) return refusal(`${kind} ${ref} is not held`, "record it as created first");
+  const gen = hold?.gen ?? 0;
   const a = store.append({
     type: "resource",
     source: "resource_record",
     payload: { action, kind, owner, ref },
-    dedupe_key: dedupeKey(def, kind, ref, action),
+    dedupe_key: resourceKey(kind, ref, action, gen),
   });
   return { ok: true, value: { kind, ref, owner, action, seq: a.seq, inserted: a.inserted } };
 }
 
-/** Opens the store on the first write, so a refused record never touches it. */
+/** REAPER's own close of a hold: the recorded name no longer exists in Docker. */
+export function goneRow(h: Hold): NewEvent<"resource"> {
+  return {
+    type: "resource",
+    source: "reaper",
+    payload: { action: "released", kind: h.kind, owner: h.owner, ref: h.ref },
+    dedupe_key: resourceKey(h.kind, h.ref, "released", h.gen),
+  };
+}
+
+/** Opens the store on first use, so a refused record never touches it. */
 export function lazyStore(open: () => Store = () => Store.open()): Appender & { close(): void } {
   let store: Store | null = null;
+  const get = () => {
+    if (!store) store = open();
+    return store;
+  };
   return {
-    append(e) {
-      if (!store) store = open();
-      return store.append(e);
-    },
+    append: (e) => get().append(e),
+    events: (f) => get().events(f),
     close: () => store?.close(),
   };
 }

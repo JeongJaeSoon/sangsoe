@@ -7,8 +7,9 @@ import { settled } from "../recover/recover.ts";
 import type { Appended, EventFilter } from "../store/store.ts";
 import { preDelete } from "./checks.ts";
 import type { ReaperConfig } from "./config.ts";
-import { type DockerRef, dockerUp, isDockerKind, sweepDocker } from "./docker.ts";
+import { dockerUp, sweepDocker } from "./docker.ts";
 import { branchOf, type Finished, judgeFinished, repoOf } from "./finished.ts";
+import { dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
 
 /** The only Orca calls REAPER has: three reads and the one removal. No terminal call exists here. */
 export type ReaperOrca = Pick<OrcaAdapter, "worktreeList" | "worktreePs" | "workerList" | "worktreeRm">;
@@ -107,17 +108,6 @@ function lastSightings(events: readonly StoredEvent[]): Map<string, Sighting> {
   return last;
 }
 
-/** Recorded Docker ids not yet released or reaped, with their owner. */
-function openDocker(resources: readonly StoredEvent[], done: ReadonlySet<string>): (DockerRef & { owner: string })[] {
-  const last = new Map<string, DockerRef & { owner: string; held: boolean }>();
-  for (const e of resources) {
-    const p = e.payload as { action: string; kind: string; ref: string; owner: string };
-    if (!isDockerKind(p.kind)) continue;
-    last.set(`${p.kind}\n${p.ref}`, { kind: p.kind, ref: p.ref, owner: p.owner, held: p.action === "created" });
-  }
-  return [...last.values()].filter((r) => r.held && !done.has(`${r.kind}\n${r.ref}`));
-}
-
 /**
  * One REAPER round (decisions 82, 83, 86, 88): adopt unrecorded cards, read the roots, mark, record
  * candidates, then sweep only targets that pass every gate. A root that cannot be read ends the
@@ -199,7 +189,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   );
   const scope: (WorktreeRow & { instanceId: string })[] = [];
   for (const c of list.value.rows) {
-    if (c.isMainWorktree) continue;
+    if (c.isMainWorktree !== false) continue;
     if (!c.instanceId) {
       r.unknown.push(`worktree:${c.id}`);
       continue;
@@ -311,7 +301,13 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
 
   // Sweep: the pre-delete checks, then Orca's removal with the repository's archive hook.
   r.swept = true;
-  const reapedCards = new Set(d.events({ type: "reap_done" }).map((e) => (e.payload as { kind: string; ref: string }).ref));
+  const reapedCards = new Set(
+    d
+      .events({ type: "reap_done" })
+      .map((e) => e.payload as { kind: string; ref: string })
+      .filter((p) => p.kind === "worktree")
+      .map((p) => p.ref),
+  );
   const done = (kind: string, ref: string) => {
     r.reaped.push(`${kind}:${ref}`);
     write({ type: "reap_done", source: SOURCE, payload: { kind, ref }, dedupe_key: key("reap_done", kind, ref) });
@@ -335,27 +331,33 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     else r.unknown.push(`worktree:${card.instanceId}: rm ${rm.error.code}`);
   }
 
-  // Docker: recorded ids whose card is gone through REAPER, in decision 82 R6's order.
+  // Docker: recorded ids whose card is gone through REAPER, in decision 82 R6's order. Every outcome
+  // closes the hold (removed, gone, or handed to a person as in use), so no id is tried twice.
   const taskCard = new Map<string, string>();
   for (const w of workerRows) {
     const c = w.workspace ? byId.get(w.workspace) : undefined;
     if (c && !taskCard.has(w.taskId)) taskCard.set(w.taskId, c.instanceId);
   }
-  const doneDocker = new Set(
-    d.events({ type: "reap_done" }).map((e) => {
-      const p = e.payload as { kind: string; ref: string };
-      return `${p.kind}\n${p.ref}`;
-    }),
-  );
-  const docker = openDocker(d.events({ type: "resource" }), doneDocker).filter((x) =>
-    reapedCards.has(taskCard.get(x.owner) ?? x.owner),
-  );
+  const holds = dockerHolds(holdEvents(d.events));
+  const docker = [...holds.values()].filter((h) => h.held && reapedCards.has(taskCard.get(h.owner) ?? h.owner));
   if (docker.length > 0 && !signal.aborted) {
     if (!(await dockerUp(d.exec))) r.docker_skipped = true;
     else {
       for (const x of await sweepDocker(d.exec, docker)) {
-        if (x.result === "removed") done(x.kind, x.ref);
-        else if (x.result === "in_use") block(x.kind, x.ref, "in_use");
+        const h = holds.get(`${x.kind}\n${x.ref}`) as Hold;
+        const gen = `g${h.gen}`;
+        if (x.result === "removed") {
+          r.reaped.push(`${x.kind}:${x.ref}`);
+          write({ type: "reap_done", source: SOURCE, payload: { kind: x.kind, ref: x.ref }, dedupe_key: key("reap_done", x.kind, x.ref, gen) });
+        } else if (x.result === "in_use") {
+          r.blocked.push({ kind: x.kind, ref: x.ref, reason: "in_use" });
+          write({
+            type: "reap_blocked",
+            source: SOURCE,
+            payload: { kind: x.kind, ref: x.ref, reason: "in_use" },
+            dedupe_key: key("reap_blocked", x.kind, x.ref, "in_use", gen),
+          });
+        } else write(goneRow(h));
       }
     }
   }

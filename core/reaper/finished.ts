@@ -2,7 +2,7 @@ import type { WorkerRow, WorktreeRow } from "../contract/orca.ts";
 import type { GhClient } from "../gh/client.ts";
 import { settled } from "../recover/recover.ts";
 
-export type Pr = { number: number; state: string; merged_at: string | null; head: { sha: string; ref: string } };
+export type Pr = { number: number; state: string; merged_at: string | null; head: { sha: string; ref: string; label?: string } };
 
 /** `github:<owner>/<repo>` → `owner/repo`; anything else is a repository REAPER cannot ask about. */
 export function repoOf(card: Pick<WorktreeRow, "projectId">): string | null {
@@ -29,11 +29,15 @@ export async function judgeFinished(card: WorktreeRow, gh: GhClient, workers: re
   const repo = repoOf(card);
   if (!repo) return { state: "unknown", why: "not a GitHub repository" };
   if (!card.head) return { state: "unknown", why: "no HEAD on the card row" };
-  const owner = repo.split("/")[0];
-  const head = encodeURIComponent(`${owner}:${branchOf(card)}`);
-  const r = await gh.get<Pr[]>(`repos/${repo}/pulls?head=${head}&state=all&per_page=10`);
+  const branch = branchOf(card);
+  // GitHub drops a head filter it cannot use and lists the repository's newest PRs instead.
+  if (branch === "") return { state: "unknown", why: "no branch (detached HEAD)" };
+  const label = `${repo.split("/")[0]}:${branch}`;
+  const r = await gh.get<Pr[]>(`repos/${repo}/pulls?head=${encodeURIComponent(label)}&state=all&per_page=10`);
   if (r.kind !== "ok" || !Array.isArray(r.data)) return { state: "unknown", why: `PR lookup: ${r.kind}` };
-  const pr = [...r.data].sort((a, b) => b.number - a.number)[0];
+  const pr = r.data
+    .filter((p) => p.head?.ref === branch && (p.head.label === undefined || p.head.label === label))
+    .sort((a, b) => b.number - a.number)[0];
   if (pr) {
     if (pr.state === "open") return { state: "unfinished", why: `PR #${pr.number} is open` };
     if (pr.head.sha === card.head) return { state: "finished", carried: true, pr };

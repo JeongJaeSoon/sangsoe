@@ -201,6 +201,9 @@ test("reap_docker_order: recorded ids only, stopped containers → volumes → n
     ["worktree:inst-stack", "container:aaa111", "volume:stack_data", "network:stack_default", "image:sha256:img1"],
   );
   assert.equal(last.docker_skipped, false);
+  const before = w.docker.calls.length;
+  await rounds(w, 2);
+  assert.equal(w.docker.calls.length, before, "an id handed to a person as in use is never tried again");
 
   const off = world();
   finishedCard(off, "no-daemon");
@@ -211,6 +214,65 @@ test("reap_docker_order: recorded ids only, stopped containers → volumes → n
   assert.deepEqual(off.docker.calls, ["version --format {{.Server.Version}}"]);
   assert.equal(off.types("reap_round").at(-1)?.docker_skipped, true);
   assertNeverForbidden(w);
+  assertNeverForbidden(off);
+});
+
+test("reap_docker_order: a recorded id already gone closes its record and is not asked about again", async () => {
+  const w = world();
+  finishedCard(w, "gone");
+  recordResource(w.store, { kind: "volume", ref: "gone_data", owner: "inst-gone" });
+  await rounds(w, 3);
+  assert.deepEqual(w.docker.calls, ["version --format {{.Server.Version}}", "volume inspect gone_data"]);
+  assert.deepEqual(w.types("resource").at(-1), { action: "released", kind: "volume", owner: "inst-gone", ref: "gone_data" });
+  await rounds(w, 2);
+  assert.equal(w.docker.calls.length, 2, "a closed record is not swept again");
+
+  const again = recordResource(w.store, { kind: "volume", ref: "gone_data", owner: "inst-next" });
+  assert.ok(again.ok && again.value.inserted, "a released name can be recorded again by a new owner");
+});
+
+test("resource_record: a name another owner still holds is refused, not merged", () => {
+  const w = world();
+  assert.ok(recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-a" }).ok);
+  const other = recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-b" });
+  assert.equal(other.ok, false);
+  assert.equal(!other.ok && other.refusal.code, "held_by_other");
+  const same = recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-a" });
+  assert.ok(same.ok && !same.value.inserted, "the same owner recording twice is one row");
+  assert.ok(recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-a", action: "released" }).ok);
+  assert.ok(recordResource(w.store, { kind: "volume", ref: "shared_data", owner: "inst-b" }).ok, "free after release");
+  assert.equal(w.types("resource").length, 3);
+});
+
+test("reap_two_rounds_grace: a card on no branch is never judged finished from someone else's PR", async () => {
+  const w = world();
+  const repo = makeRepo("detached");
+  w.orca.cards.push(card("detached", repo, { branch: "" }));
+  w.gh.prs.push({ number: 7, state: "closed", merged_at: "2026-11-09T00:00:00Z", head: { sha: repo.head, ref: "someone-else" } });
+  w.gh.known.add(repo.head);
+  const last = await rounds(w, 4, 60);
+  assert.deepEqual(rms(w), []);
+  assert.ok(last.unseen.some((u) => u.includes("no branch")));
+});
+
+test("reap_two_rounds_grace: a failed round between two sightings restarts the count", async () => {
+  const w = world();
+  finishedCard(w, "interrupted");
+  await w.round();
+  w.clock.now += 40 * MIN;
+  w.gh.down = true;
+  await w.round();
+  w.gh.down = false;
+  w.clock.now += 40 * MIN;
+  await w.round();
+  assert.deepEqual(rms(w), [], "the sighting before the failed round does not count");
+  assert.deepEqual(
+    w.types("reap_candidate").map((r) => r.round),
+    [1, 3],
+  );
+  w.clock.now += 40 * MIN;
+  await w.round();
+  assert.equal(rms(w).length, 1);
 });
 
 test("reap_remote_host_once: a non-local card is blocked once, never adopted or removed", async () => {
@@ -231,9 +293,11 @@ test("reap_main_worktree_skipped: the main checkout is never adopted, a candidat
   w.orca.cards.push(main);
   w.gh.prs.push({ number: 1, state: "closed", merged_at: "2026-11-09T00:00:00Z", head: { sha: repo.head, ref: "main" } });
   w.gh.known.add(repo.head);
+  // Rows come from Orca's JSON; a row missing the field must not read as "not main".
+  w.orca.cards.push({ ...card("unsure", makeRepo("unsure")), isMainWorktree: undefined as unknown as boolean });
   const last = await rounds(w, 3);
   assert.deepEqual(last.candidates, []);
-  assert.deepEqual(w.types("resource_adopted"), []);
+  assert.deepEqual(w.types("resource_adopted"), [], "a row that does not say it is not the main checkout counts as one");
   assert.deepEqual(w.types("reap_candidate"), []);
   assert.deepEqual(rms(w), []);
 });
