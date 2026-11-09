@@ -3,7 +3,7 @@ import { decisionAnswer } from "../decision/answer.ts";
 import { readDecision } from "../decision/waiters.ts";
 import { notify } from "../notify/notify.ts";
 import type { CoreDeps } from "../notify/result.ts";
-import { openWaits, type ReleaseSignal, recordReleases } from "../owner/release.ts";
+import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
 import type { Store } from "../store/store.ts";
 import { hashOf, mask, summarize } from "./mask.ts";
 import { type SessionHookInput, type SessionRow, sessionOf } from "./session.ts";
@@ -61,7 +61,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
 /** Decision 91①: the session moving again, or ending, releases its waits; core/owner decides which. */
 const released = (store: Store, signal: ReleaseSignal, source: string) => {
   // Every tool call lands here: read only the rows a release looks at, in log order.
-  const events = ["waiting_human", "waiting_released", "owner_action"].flatMap((type) => store.events({ type })).sort((a, b) => a.seq - b.seq);
+  const events = RELEASE_READS.flatMap((type) => store.events({ type })).sort((a, b) => a.seq - b.seq);
   return recordReleases(store, { events }, signal, source);
 };
 

@@ -23,6 +23,9 @@ export interface Release {
   readonly evidence: string;
 }
 
+/** The only event types releasesFor reads, so a caller on every tool call can load just these. */
+export const RELEASE_READS = ["waiting_human", "waiting_released", "owner_action"] as const;
+
 /** waiting_human rows with no waiting_released yet. */
 export function openWaits(events: readonly StoredEvent[]): StoredEvent[] {
   const released = new Set(events.filter((e) => e.type === "waiting_released").map((e) => String(e.payload.ref)));
