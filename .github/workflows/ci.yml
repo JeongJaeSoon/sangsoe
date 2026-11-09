@@ -42,7 +42,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           # The declared minimum (package.json engines), so an API newer than it fails here.
-          node-version: 24.2.0
+          node-version: 24.15.0
           cache: npm
       - run: npm ci
       - run: npm test

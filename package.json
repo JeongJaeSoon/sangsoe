@@ -1,6 +1,6 @@
 {
   "name": "sangsoe",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0-rc.2",
   "description": "Orchestration for Claude Code sessions on Orca",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "!**/*.test.ts"
   ],
   "engines": {
-    "node": ">=24.2"
+    "node": ">=24.15"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
