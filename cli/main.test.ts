@@ -49,6 +49,12 @@ for (const argv of [["install", "--bogus"], ["uninstall", "now"], ["doctor", "--
   });
 }
 
+test("doctor --offline reads the tree and builds no start-check context", async () => {
+  const host = { ...touchless(), env: { SANGSOE_ROOT: "/fixture/tree" }, exists: () => false, readText: () => "" };
+  const r = await run(["doctor", "--offline"], { host, checkContext: noChecks });
+  assert.match(r.out, /^FAIL +tree: /);
+});
+
 // doctor and install reach Orca and gh only through the context the caller injects.
 for (const argv of [["doctor"], ["install"]]) {
   test(`${argv.join(" ")} builds its start checks from the injected context`, async () => {
