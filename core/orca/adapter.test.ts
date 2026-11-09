@@ -209,6 +209,24 @@ test("reads unwrap the recorded result", async () => {
   assert.equal(hooks.ok && hooks.value.enabled, true);
 });
 
+test("gate-list reads options from the JSON text Orca returns; anything else leaves them unknown", async () => {
+  const gate = (options: unknown) => ({ id: "gate_1", taskId: "task_1", status: "pending", question: "q", options });
+  const fake = createFakeOrca({
+    replies: {
+      "orchestration-gate-list": {
+        ok: true,
+        result: { runId: "run_1", gates: [gate('["exponential x3","none"]'), gate("[]"), gate("not json"), gate("[1]"), gate(null)] },
+      },
+    },
+  });
+  const r = await createOrcaAdapter(fake.exec).gateList({ run: "run_1" });
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(
+    r.value.map((g) => g.options),
+    [["exponential x3", "none"], [], undefined, undefined, undefined],
+  );
+});
+
 test("a result without the expected field is unexpected_shape, not undefined rows", async () => {
   const fake = createFakeOrca({ replies: { "orchestration-task-list": { ok: true, result: {} } } });
   const r = await createOrcaAdapter(fake.exec).taskList({ run: "run_1" });

@@ -147,43 +147,56 @@ const RUN = "run_000000000001";
 const T1 = "task_000000000001";
 
 /**
- * live: the brief input comes the way the worker reads it, through readSnapshot on the fake Orca.
- * Otherwise the snapshot carries the gate's options, as a `--orca` snapshot file can; readSnapshot
- * does not fill them yet, so live there is no recommended answer.
+ * The brief input comes the way the worker reads it: readSnapshot on the fake Orca, whose gate-list
+ * returns each gate's options as the JSON text real Orca does. `unreadable` and `blank-first` replace that text.
  */
-async function world(how: "live" | "with-options") {
+async function world(how: "options" | "no-options" | "unreadable" | "blank-first" = "options") {
   const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001", title: "webhook retry" }]);
   const opened = await decisionOpen(w, {
     subject: "item:i012",
     question: "Retry policy?",
-    options: ["exponential x3", "none"],
+    options: how === "no-options" ? [] : ["exponential x3", "none"],
     waiters: [{ task: T1, run: RUN }],
     callerRun: RUN,
   });
   assert.ok(opened.ok, JSON.stringify(opened));
+  const text = { unreadable: "exponential x3, none", "blank-first": JSON.stringify(["  ", "none"]) }[how as string];
+  if (text) for (const g of w.gates.values()) g.options = text;
   const load = async (now: string): Promise<Result<BriefInput>> => {
     const snap = await readSnapshot(w.orca, [RUN]);
-    if (!snap.ok) return snap;
-    const orca = how === "live" ? snap.value : { ...snap.value, gates: snap.value.gates.map((g) => ({ ...g, options: ["exponential x3", "none"] })) };
-    return { ok: true, value: { events: w.store.events(), orca, now } };
+    return snap.ok ? { ok: true, value: { events: w.store.events(), orca: snap.value, now } } : snap;
   };
   const core = panelCore({ orca: w.orca, withStore: (fn) => fn(w.store), now: () => NOW, load });
   return { w, core };
 }
 
-test("PN4 live: 추천대로 답 is refused while Orca's gates carry no options; nothing is written", async () => {
-  const { w, core } = await world("live");
-  const r = await core.act({ kind: "answer", decision: "d001", choice: "recommended" });
-  assert.deepEqual(r.ok ? null : r.refusal.code, "no_recommendation");
-  assert.equal(w.store.events({ type: "owner_action" }).length, 0);
+async function recommendButton(core: PanelCore): Promise<string> {
   const b = await core.brief({});
   assert.ok(b.ok, JSON.stringify(b));
   const html = renderStage(b.value as unknown as PanelView);
-  assert.match(html, /<button[^>]*disabled[^>]*>추천대로 답/);
+  const button = /<button[^>]*>추천대로 답/.exec(html)?.[0];
+  assert.ok(button, "the decision row has a 추천대로 답 button");
+  return button;
+}
+
+test("PN4 live: 추천대로 답 is enabled when Orca's gate has options, and the first is the recommendation", async () => {
+  const { w, core } = await world("options");
+  assert.doesNotMatch(await recommendButton(core), /disabled/);
+  assert.ok(!JSON.stringify(w.store.events()).includes("exponential x3"), "the options stay Orca's: the store keeps no copy");
 });
 
-test("PN4: 추천대로 답 → owner_action{button} → decisionAnswer, the same function the CLI and MCP call", async () => {
-  const { w, core } = await world("with-options");
+for (const how of ["no-options", "unreadable", "blank-first"] as const) {
+  test(`PN4 live: 추천대로 답 is disabled and refused when the gate's options are ${how}; nothing is written`, async () => {
+    const { w, core } = await world(how);
+    assert.match(await recommendButton(core), /disabled/);
+    const r = await core.act({ kind: "answer", decision: "d001", choice: "recommended" });
+    assert.deepEqual(r.ok ? null : r.refusal.code, "no_recommendation");
+    assert.equal(w.store.events({ type: "owner_action" }).length, 0);
+  });
+}
+
+test("PN4 live: 추천대로 답 → owner_action{button} → decisionAnswer, the same function the CLI and MCP call", async () => {
+  const { w, core } = await world("options");
   const r = await core.act({ kind: "answer", decision: "d001", choice: "recommended" });
   assert.ok(r.ok, JSON.stringify(r));
   const action = w.store.events({ type: "owner_action" });
@@ -197,7 +210,7 @@ test("PN4: 추천대로 답 → owner_action{button} → decisionAnswer, the sam
 });
 
 test("PN4 live: 다른 답 sends the typed words to the Run holding the gate", async () => {
-  const { w, core } = await world("live");
+  const { w, core } = await world();
   const r = await core.act({ kind: "answer", decision: "d001", text: "linear x5" });
   assert.ok(r.ok, JSON.stringify(r));
   assert.equal(w.store.events({ type: "decision_answered" })[0]?.payload.answer, "linear x5");
@@ -222,7 +235,7 @@ test("PN4: 완료 → U14 ownerDone closes a 🟢 owner item in Orca and the sto
 });
 
 test("다른 답 is masked before it is stored or handed to the Run", async () => {
-  const { w, core } = await world("live");
+  const { w, core } = await world();
   const secret = `ghp_${"a1B2c3D4e5".repeat(4)}`;
   const r = await core.act({ kind: "answer", decision: "d001", text: `use ${secret}` });
   assert.ok(r.ok, JSON.stringify(r));
