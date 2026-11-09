@@ -243,6 +243,26 @@ test("main CI judges only the repository's newest merge: an older sha's red neve
   assert.deepEqual(w.rows("main_red"), []);
 });
 
+test("main CI's newest merge is GitHub's merge time: an older merge first seen in a later round does not override", async () => {
+  const w = world();
+  w.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#2", merge_sha: SHA2, merged_at: "2026-11-10T10:05:00Z" } });
+  mainRuns(w, SHA2, [runAt(62, "success")]);
+  assert.deepEqual((await w.round()).written.map((x) => x.type), ["main_green"]);
+  w.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#1", merge_sha: SHA, merged_at: "2026-11-10T10:00:00Z" } });
+  mainRuns(w, SHA, [runAt(61, "failure", 2)]);
+  assert.deepEqual((await w.round()).written, [], "#1 merged before #2: main's state stays #2's green");
+});
+
+test("main CI: a red sha is read again, and a rerun that passes after the grace turns the repository green", async () => {
+  const w = world();
+  merge(w, 1, SHA);
+  mainRuns(w, SHA, [runAt(71, "failure", 2)]);
+  assert.deepEqual((await w.round()).written.map((x) => x.type), ["main_red"]);
+  assert.deepEqual((await w.round()).written, [], "the same red is not written twice");
+  mainRuns(w, SHA, [runAt(71, "success", 3)]);
+  assert.deepEqual((await w.round()).written.map((x) => x.type), ["main_green"]);
+});
+
 test("main CI: a cancelled run is not red and a 0-job failure (GitHub outage) is unknown", async () => {
   const w = world();
   merge(w, 1, SHA);
@@ -296,10 +316,46 @@ test("pr_ready_to_merge: a merge_on_approval PR approved and green wakes its own
 test("scope: watch.authors and linked_only; a branch workspace Orca has not linked gets reference add", async () => {
   const w = world({ watch: { authors: ["alice"] } });
   w.routes[OPEN] = ok([listed(20, { user: { login: "mallory" } }), listed(21), listed(22)]);
-  w.worktrees.push({ id: "repo1::/w/22", branch: "feature-22", isArchived: false, displayName: "card 22" });
+  w.worktrees.push({ id: "repo1::/w/22", branch: "refs/heads/feature-22", isArchived: false, displayName: "card 22" });
   const r = await w.round({ tier: () => null });
   assert.deepEqual(r.planned.filter((e) => e.type === "pr_opened").map((e) => e.payload.pr), ["acme/api#22"], "#20 another author, #21 linked nowhere");
-  assert.deepEqual(w.calls, [`reference add ${url(22)} id:repo1::/w/22`]);
+  assert.deepEqual(w.calls, [`reference add ${url(22)} id:repo1::/w/22`], "Orca's full ref matches GitHub's short head ref");
+});
+
+test("a fork's head or a head named like the base matches no workspace", async () => {
+  const w = world();
+  w.routes[OPEN] = ok([
+    listed(23, { head: { sha: HEAD, ref: "feature-23", repo: { full_name: "someone/api" } } }),
+    listed(24, { head: { sha: HEAD, ref: "main", repo: { full_name: REPO } } }),
+  ]);
+  w.worktrees.push(
+    { id: "repo1::/w/23", branch: "refs/heads/feature-23", isArchived: false, displayName: "x" },
+    { id: "repo1::/w/main", branch: "refs/heads/main", isArchived: false, displayName: "main" },
+  );
+  const r = await w.round({ tier: () => null });
+  assert.deepEqual(r.planned, []);
+  assert.deepEqual(w.calls, []);
+});
+
+test("the first recorded Task stays the item Task when another workspace becomes the only link", async () => {
+  const w = world();
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  w.link(7, "task_bystander", "dispatched");
+  w.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
+  w.merged(7, SHA);
+  const r = await w.round();
+  assert.deepEqual(w.calls, ["task-update task_item completed run=undefined"], "only the item Task is closed");
+  assert.deepEqual(r.written.map((x) => x.type), ["pr_merged", "close_suggested"]);
+});
+
+test("an owner's merge whose link could not be read is not called unlinked", async () => {
+  const w = world({ watch: { linkedOnly: false } });
+  w.routes[CLOSED] = ok([listed(8, { merged_at: "2026-11-10T11:00:00Z" })]);
+  w.merged(8, SHA, "owner1");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#8" } });
+  const r = await w.round({ orca: { ...w.deps.orca, referenceFind: async () => ({ ok: false, error: { code: "x", message: "" } }) } as typeof w.deps.orca });
+  assert.deepEqual(r.written.map((x) => x.type), ["pr_merged"]);
+  assert.ok(r.unseen.includes("reference find acme/api#8"));
 });
 
 test("gh_budget and rate_limited: an essential budget reads only merges and main, a limit stops the round with one row", async () => {

@@ -14,7 +14,7 @@ type ListedPull = {
   number: number;
   merged_at?: string | null;
   user: { login: string } | null;
-  head: { sha: string; ref: string };
+  head: { sha: string; ref: string; repo?: { full_name?: string } | null };
   base: { ref: string };
   labels?: { name: string }[];
 };
@@ -104,12 +104,14 @@ export async function linkOf(d: MonitorDeps, url: string, workers: () => Promise
   return { linked: local.length > 0, tasks: [...tasks.values()] };
 }
 
-/** The PR item's Task: the one `pr_opened` recorded, else the one Task Orca links. */
+/**
+ * The PR item's Task: the first `pr_opened` that recorded one (a later link, such as another
+ * workspace that printed the URL, never takes it over), else the one Task Orca links.
+ */
 function itemTask(r: Reads, ref: string, link: Link | null): string | undefined {
   const recorded = rowsOf(r, "pr_opened", ref)
     .map((e) => str(e.payload.task))
-    .filter((t) => t !== undefined)
-    .at(-1);
+    .find((t) => t !== undefined);
   if (recorded) return recorded;
   return link?.tasks.length === 1 ? link.tasks[0]?.task : undefined;
 }
@@ -169,7 +171,7 @@ async function onMerged(r: Reads, repo: string, p: ListedPull, link: Link | null
     type: "pr_merged",
     dedupe_key: key("pr_merged", ref),
     ...(by ? { actor: ownerMerge ? `owner:${by}` : by } : {}),
-    payload: { pr: ref, merge_sha: confirm.merge_sha },
+    payload: { pr: ref, merge_sha: confirm.merge_sha, ...(p.merged_at ? { merged_at: p.merged_at } : {}) },
   });
   if (task) r.acts.push(closeTask(ref, confirm.merge_sha, task, linked));
   else r.unseen.push(`item Task of ${ref}`);
@@ -186,7 +188,7 @@ async function onMerged(r: Reads, repo: string, p: ListedPull, link: Link | null
     }
   }
   // Decision 92 (나): only the GitHub side — an owner's merge no item or land request explains.
-  if (ownerMerge && !task && !link?.linked) {
+  if (ownerMerge && !task && link !== null && !link.linked) {
     plan(r, { type: "owner_act_unlinked", dedupe_key: key("owner_act_unlinked", ref, "merged"), actor: `owner:${by}`, payload: { act: `merged ${ref}` } });
   }
 }
@@ -195,7 +197,7 @@ async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, 
   const ref = prRef(repo, p.number);
   const opened = rowsOf(r, "pr_opened", ref);
   const task = link?.tasks.length === 1 ? link.tasks[0]?.task : undefined;
-  if (opened.length === 0 || (task && !opened.some((e) => e.payload.task === task))) {
+  if (opened.length === 0 || (task && !opened.some((e) => e.payload.task !== undefined))) {
     plan(r, {
       type: "pr_opened",
       dedupe_key: task ? key("pr_opened", ref, task) : key("pr_opened", ref),
@@ -225,7 +227,7 @@ async function addReference(r: Reads, repo: string, p: ListedPull): Promise<void
     r.unseen.push("worktree list");
     return;
   }
-  const ws = list.value.rows.filter((w) => w.branch === p.head.ref && !w.isArchived);
+  const ws = onBranchRows(list.value.rows, repo, p);
   if (ws.length !== 1 || !ws[0]) return;
   const worktree = `id:${ws[0].id}`;
   const url = prUrl(repo, p.number);
@@ -313,15 +315,24 @@ async function readyToMerge(r: Reads, repo: string, p: ListedPull, link: Link | 
 async function mainCi(r: Reads): Promise<void> {
   const now = r.d.now();
   const since = now - r.d.config.mainWatchHours * 3_600_000;
-  const settled = new Set(["main_green", "main_red"].flatMap((t) => (r.rows.get(t) ?? []).map((e) => `${e.payload.repo}@${e.payload.sha}`)));
+  const seen = (t: string) => new Set((r.rows.get(t) ?? []).map((e) => `${e.payload.repo}@${e.payload.sha}`));
+  // A red sha is read again: a rerun that passes after the grace turns it green.
+  const green = seen("main_green");
+  const red = seen("main_red");
   const failed = new Set((r.rows.get("ci_failed") ?? []).map((e) => e.dedupe_key));
+  // Newest by GitHub's merge time, not store order: a merge first seen late must not count as newest.
+  const at = (m: StoredEvent) => str(m.payload.merged_at) ?? m.ts;
   const newest = new Map<string, StoredEvent>();
-  for (const m of r.rows.get("pr_merged") ?? []) newest.set((str(m.payload.pr) ?? "").split("#")[0] ?? "", m);
+  for (const m of r.rows.get("pr_merged") ?? []) {
+    const repo = (str(m.payload.pr) ?? "").split("#")[0] ?? "";
+    const prev = newest.get(repo);
+    if (!prev || Date.parse(at(m)) >= Date.parse(at(prev))) newest.set(repo, m);
+  }
   for (const m of newest.values()) {
     const ref = str(m.payload.pr) ?? "";
     const repo = ref.split("#")[0] ?? "";
     const sha = str(m.payload.merge_sha) ?? "";
-    if (!r.watch.repos.includes(repo) || Date.parse(m.ts) < since || settled.has(`${repo}@${sha}`)) continue;
+    if (!r.watch.repos.includes(repo) || Date.parse(at(m)) < since || green.has(`${repo}@${sha}`)) continue;
     const listed = await get<{ workflow_runs?: Record<string, unknown>[] }>(r, `repos/${repo}/actions/runs?head_sha=${sha}&event=push&per_page=100`);
     if (!listed || !Array.isArray(listed.workflow_runs)) continue;
     const runs: MainRun[] = [];
@@ -337,7 +348,7 @@ async function mainCi(r: Reads): Promise<void> {
     }
     const v = classifyMain(runs, now, r.d.config.mainRerunMinutes * 60_000);
     if (v.kind === "unknown") r.unseen.push(`main CI of ${repo}@${sha.slice(0, 7)}: ${v.why}`);
-    if (v.kind === "green" || v.kind === "red") {
+    if (v.kind === "green" || (v.kind === "red" && !red.has(`${repo}@${sha}`))) {
       const type = v.kind === "green" ? "main_green" : "main_red";
       plan(r, { type, dedupe_key: key(type, repo, sha), payload: { repo, sha, run_id: String(v.run.id) } });
     }
@@ -387,7 +398,7 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal): Promise<Read
         // linked_only: Orca's link, a recorded pr_opened, or (open PRs) a workspace on its branch.
         if (watch.linkedOnly && !known && !link?.linked && !isOpen) continue;
         if (isOpen) {
-          if (watch.linkedOnly && !known && !link?.linked && !(await onBranch(d, p))) continue;
+          if (watch.linkedOnly && !known && !link?.linked && !(await onBranch(d, repo, p))) continue;
           await onOpen(r, repo, p, link, level);
         } else if (p.merged_at) {
           if (level !== "essential" && rowsOf(r, "pr_merged", ref).length === 0 && !known && link?.linked) {
@@ -411,7 +422,18 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal): Promise<Read
   return { planned: r.planned, unseen: r.unseen, acts: r.acts };
 }
 
-async function onBranch(d: MonitorDeps, p: ListedPull): Promise<boolean> {
+/**
+ * Workspaces on the PR's head branch. Orca lists full refs (`refs/heads/x`), GitHub the short name.
+ * Orca's repo id does not name the GitHub repository, so a fork's head and a head named like the
+ * base (`main` in every checkout) match nothing rather than every workspace on that name.
+ */
+export function onBranchRows<W extends { branch: string; isArchived: boolean }>(rows: readonly W[], repo: string, p: ListedPull): W[] {
+  const headRepo = p.head.repo?.full_name?.toLowerCase();
+  if ((headRepo !== undefined && headRepo !== repo.toLowerCase()) || p.head.ref === p.base.ref) return [];
+  return rows.filter((w) => w.branch.replace(/^refs\/heads\//, "") === p.head.ref && !w.isArchived);
+}
+
+async function onBranch(d: MonitorDeps, repo: string, p: ListedPull): Promise<boolean> {
   const list = await d.orca.worktreeList({ limit: 500 });
-  return list.ok && list.value.rows.some((w) => w.branch === p.head.ref && !w.isArchived);
+  return list.ok && onBranchRows(list.value.rows, repo, p).length === 1;
 }
