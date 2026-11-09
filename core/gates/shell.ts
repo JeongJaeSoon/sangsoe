@@ -73,15 +73,15 @@ export function parse(text: string, depth = 0): Parsed {
   // A trailing `&` backgrounds the whole and-or list before it, back to the last `;`, newline or `&`;
   // a group, loop, `if` or `case` closed just before it counts as one command.
   let listStart = 0;
-  const groups: { start: number; kind: string }[] = [];
-  // Inside a case, after `in` or an arm's `;;`, words up to `)` are a pattern: `|` and `(` there are not
-  // a pipe or a subshell.
-  let pattern = false;
-  const inPattern = () => pattern && groups.at(-1)?.kind === "case";
-  const open = (kind: string) => {
-    groups.push({ start: commands.length, kind });
-    if (kind === "case") pattern = true;
+  // `pattern`: inside a case, after `in` or an arm's `;;`, words up to `)` are a pattern, where `|` and
+  // `(` are not a pipe or a subshell. Kept per case, so a nested case leaves its outer one as it was.
+  const groups: { start: number; kind: string; pattern: boolean }[] = [];
+  const inPattern = () => groups.at(-1)?.kind === "case" && groups.at(-1)?.pattern === true;
+  const setPattern = (on: boolean) => {
+    const top = groups.at(-1);
+    if (top?.kind === "case") top.pattern = on;
   };
+  const open = (kind: string) => groups.push({ start: commands.length, kind, pattern: kind === "case" });
   const close = () => {
     const g = groups.pop();
     if (g) listStart = Math.min(listStart, g.start);
@@ -165,7 +165,7 @@ export function parse(text: string, depth = 0): Parsed {
       // An arm ends (`;;`, `;&`, `;;&`); the next words are a pattern.
       endList(false);
       i += s[i + 2] === "&" && n === ";" ? 2 : 1;
-      pattern = true;
+      setPattern(true);
     } else if (c === ";" || c === "\n") {
       endList(false);
     } else if (c === "|" && inPattern()) {
@@ -183,7 +183,7 @@ export function parse(text: string, depth = 0): Parsed {
       if (groups.at(-1)?.kind === "case") {
         // A case pattern: its words are not a command, and its `)` closes nothing.
         words = [];
-        pattern = false;
+        setPattern(false);
       } else {
         flushCommand();
         close();

@@ -76,7 +76,8 @@ function tmuxRunsClaude([sub, ...args]: string[]): boolean {
   if (!sub || !TMUX_RUN.has(sub)) return false;
   if (sub === "send-keys" || sub === "send") {
     const keys = operands(args, TMUX_KEYS_VALUED).rest;
-    return runsClaude(keys.map((k) => (ENTER_KEYS.has(k) ? "\n" : k)).join(" "));
+    // tmux types a trailing `\;` as a plain `;`.
+    return runsClaude(keys.map((k) => (ENTER_KEYS.has(k) ? "\n" : k.replace(/\\;$/, ";"))).join(" "));
   }
   return runsClaude(operands(args, TMUX_VALUED).rest.join(" "));
 }
