@@ -17,8 +17,8 @@ export const DEFAULT_MIN_GAP_MS = 10 * 60_000;
 const minutes = (v: unknown, fallback: number) => (typeof v === "number" && v > 0 ? v * 60_000 : fallback);
 
 /**
- * The `reaper` section of the config file, or null when it is absent or malformed. Null makes the
- * protect-list root unreadable, so a machine with no section only marks (decision 144).
+ * The `reaper` section of the config file, or null when it is absent or malformed. Null makes every
+ * round mark-only (decisions 144, 174); doctor's notice is the only alarm for it.
  */
 export function parseReaperConfig(raw: unknown): ReaperConfig | null {
   const section = (raw as { reaper?: unknown } | null)?.reaper;

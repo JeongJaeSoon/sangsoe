@@ -264,7 +264,7 @@
 | | 오너가 직접 한 일(머지·수동 sync 같은 사실)이 열린 어느 결정의 답에도 이어지지 않음(pr-monitor 가 쓰고 오케스트레이터에게 Orca 메시지로 알린다. 감시 목록에 든 `!` 명령이 어느 열린 오너 항목에도 안 맞을 때는 `!` 입력을 읽는 hook `H/owner_input.py` 가 쓴다. 현황 진행 중 절에서 `그 외` 리드 행 아래 PR 행으로 오르고, 오케스트레이터가 잇거나 `unlinked.show_hours`(기본 24)가 지나면 빠진다, 결정 91) | `owner_act_unlinked` | — |
 | | REAPER 결과 | `reap_done` · `reap_blocked` | — |
 | | REAPER 가 기록 없는 기존 카드나 Docker 자원을 기록에 올림(편입). 어떤 종류(`kind`)와 근거(카드 목록 · Docker 의 작업 폴더)로 올렸는지를 싣는다 | `resource_adopted` | — |
-| | REAPER 라운드 한 번의 기록: 시각 · `trigger`(`timer`·`hint`) · `roots_ok` · `round` · 읽은 카드 수 · 표시/후보/정리/모름 수 · Docker 건너뜀 여부(데몬 없음 한 줄) | `reap_round` | — |
+| | REAPER 라운드 한 번의 기록: 시각 · `trigger`(`timer`·`hint`) · `roots_ok` · `round` · `mark_only`(설정에 `reaper` 칸이 없어 표시만 한 라운드에만 true. 루트 실패가 아니다, 결정 174) · 읽은 카드 수 · 표시/후보/정리/모름 수 · Docker 건너뜀 여부(데몬 없음 한 줄) | `reap_round` | — |
 | | 후보 최초 관측과 해제. 유예와 연속 두 라운드를 세는 근거이고 REAPER 만 쓴다. 필드 `kind`·`ref`·`round`·`state`(`seen`·`cleared`) | `reap_candidate` | — |
 | | `trigger` = `timer` 인 마지막 라운드가 라운드 간격의 세 배보다 오래 없거나, `roots_ok` 거짓인 라운드가 연속 3회일 때 쓴다. 타이머 멈춤 감지가 멈춤 하나당 한 번 쓰고 `kind` 칸에 멈춘 일의 이름(`reaper`)을 싣는다. 오케스트레이터를 Orca 메시지로 깨운다 | `timer_stalled` | — |
 | | land 요청 결과: 판정이 통과해 머지를 예약했거나 "승인되면 머지"를 남겼다 · 거부되었거나 예약·대기열이 실패했다 | `land_requested` · `land_failed` | land_done(머지됐다는 사실은 `pr_merged`) |
