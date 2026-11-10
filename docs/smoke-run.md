@@ -85,19 +85,38 @@ units 1 · complete 1 · removed after completion 0 · broken 0
 
 ## 3. 실제 PR 에 sangsoe land, pr-monitor 실제 라운드
 
-판정: NOT VERIFIED (아직 실행 전)
+설치본(rc.4)의 land 는 smoke PR(`JeongJaeSoon/sangsoe-smoke#1`, private)을 읽지 못했다:
+
+```
+pr_unreadable — …: 404 Not Found
+```
+
+land 가 저장소 이름을 소문자로 바꾼 뒤 그 이름으로 GitHub 를 불렀고, fine-grained 토큰은 private 저장소를 다른 대소문자로 부르면 404 를 준다. 별도 PR(`JeongJaeSoon/sangsoe#45`, merge 5e0200d4, main CI 녹색)로 고쳤다. pr-monitor 도 저장된 소문자 이름으로 GitHub 를 읽어 같은 404 가 난다(리드가 U36 으로 넘김).
+
+머지 구간은 고친 소스(847db05)로 돌렸다. 설치본이 아닌 리허설이다. `~/.config/sangsoe/config.json` 은 원래 없었고, `{"verdict_merge_repos":["JeongJaeSoon/sangsoe-smoke"]}` 한 줄만 넣었다. 리드(작성자 아님)가 head 02056f2f 에 verdict 를 기록했고, 저장소는 `jeongjaesoon/sangsoe-smoke` 로 소문자 저장됐다. land 가 묻는 subject 도 소문자라 서로 맞았다.
+
+```
+node cli/main.ts land --repo JeongJaeSoon/sangsoe-smoke --pr 1 --dry-run --json
+{"code":"evidence_missing","reason":"evidence_missing:test — V3 (config unreadable) needs test, run, dev at 02056f2; test: no row; run: no row; dev: no row", …}
+```
+
+`readLandConfig` 는 같은 파일에서 등급 설정도 읽는다. `verify_tier` 목록이 모두 있어야 `parseTierConfig` 가 값을 돌려주므로, `verdict_merge_repos` 만 든 파일은 등급 설정이 null 이 되어 V3 으로 닫힌다(파일이 없을 때와 같다).
+
+리드의 결정으로 머지 구간은 여기서 멈췄다. 증거를 기록할 입구가 아직 없고(U36 이 만든다), 다른 길로 행을 쓰거나 돌리지 않은 test·run·dev 를 적으면 이 구간을 꾸미게 된다. smoke PR 은 열린 채 남았다. `config.json` 은 원래대로 없앴다(휴지통).
+
+판정: NOT VERIFIED (land 까지 갔으나 `evidence_missing` V3 로 거부됨: 증거 기록 입구 없음 + `verdict_merge_repos` 만 든 설정에서 등급 설정 null. pr-monitor 실제 라운드는 같은 소문자 404 때문에 돌리지 않음)
 
 ## 4. 실제 Orca 의 알림 (U29)
 
-판정: NOT VERIFIED (아직 실행 전)
+판정: NOT VERIFIED (리허설이 머지 구간에서 멈춰 알림을 따로 재지 않음. P2 본 실행 몫)
 
 ## 5. 실제 transcript 의 hook (U27 · U13)
 
-판정: NOT VERIFIED (아직 실행 전)
+판정: NOT VERIFIED (smoke 세션에서 `!` 줄 · handoff_save · review_ask_record 를 부르지 않음. P2 본 실행 몫)
 
 ## 6. queue 라운드 non-dry (U17)
 
-판정: NOT VERIFIED (아직 실행 전)
+판정: NOT VERIFIED (리허설에서 돌리지 않음. P2 본 실행 몫)
 
 ## 7. 패널 · 상태 표시줄 · `sangsoe todo` 숫자, 추천대로 답 (U28)
 
@@ -116,7 +135,14 @@ sangsoe brief: 현황 · 2026-11-10 14:05Z · 묶음 0 · 내가 할 일 0 … �
 
 ## 8. MCP resource 서버 이름, Run 없는 패널 버튼 보내기
 
-판정: NOT VERIFIED (아직 실행 전)
+이 카드 세션에서 `ListMcpResourcesTool` 의 서버 이름은 `plugin:sangsoe:sangsoe` 였고, 그 이름으로 `ReadMcpResourceTool` 이 읽혔다:
+
+```
+ListMcpResourcesTool(server: plugin:sangsoe:sangsoe) → sangsoe://brief, sangsoe://ready
+ReadMcpResourceTool(plugin:sangsoe:sangsoe, sangsoe://ready) → "준비된 항목 없음"
+```
+
+판정: NOT VERIFIED (서버 이름은 PASS. Run 없는 패널 버튼 보내기는 눌러 보지 않음)
 
 ## 9. 쓰는 migrate import (scratch 사본만)
 
@@ -155,4 +181,21 @@ U21 의 경계 경우: WAL `-shm`/`-wal` 파일 — 위처럼 `.backup` 사본�
 
 ## 10. 닫기: worker_done → release → 카드 닫힘, REAPER 표시
 
-판정: NOT VERIFIED (아직 실행 전)
+워커는 land 실패 뒤 `worker_done` failed 를 보냈고, 리드는 닫으라는 프롬프트를 받아 `sangsoe:end-session` 뒤 `worker_done` failed 를 한 번 보냈다(msg_d41eaed56eda). 오케스트레이터는 그 보고를 받았고 완료를 판정하지 않았다. 리드가 쓴 종료 근거("U23 lead's decision")가 자기 체인 밖에서 왔다고 짚었다. 실제로 이 프롬프트는 U23 카드가 리드 터미널에 직접 보냈다.
+
+```
+worker-release --dispatch ctx_496443fce0c2 → state released, closed_agent_terminal, transcript captured
+worker-release --dispatch ctx_abb4d99b3a9f → state released, closed_agent_terminal, transcript captured
+terminal close (오케스트레이터 · 빈 셸) → ptyKilled true ×2
+worktree rm --run-hooks --delete-branch: seanettle · tuskfish · smoke-orch → removed true ×3(지우기 전 셋 다 미커밋 0, 워커 커밋 02056f2 는 원격에 있음)
+```
+
+REAPER 표시 라운드(`sangsoe reap run --dry-run --mark-only`, worktree 를 지우기 전):
+
+```
+"roots_ok": false, "unseen": ["protect list: no reaper section in ~/.config/sangsoe/config.json", "open PRs of jeongjaesoon/sangsoe-smoke"], "cards": 22
+```
+
+REAPER 도 smoke 저장소의 열린 PR 을 소문자 이름으로 읽다 못 읽었다(같은 대소문자 결함). 루트를 못 읽어 정리 0 으로 닫힌 것은 설계대로다.
+
+판정: PASS (worker_done → release → worktree 제거까지 실제 Orca 에서 이어짐. REAPER 는 roots_ok=false 로 정리 0, 소문자 PR 읽기는 finding)
