@@ -43,7 +43,7 @@ const view = (target: { group?: string; item?: string }): PanelView => {
 const emptyOverview = (): PanelView => {
   const one = view({});
   if (one.model.stage !== 1) throw new Error("stage");
-  const none = (t: Table): Table => ({ ...t, rows: [], count: 0 });
+  const none = <T extends { rows: unknown[]; count: number }>(t: T): T => ({ ...t, rows: [], count: 0 });
   const m = one.model;
   return {
     todo: [],
