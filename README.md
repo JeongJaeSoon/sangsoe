@@ -90,6 +90,17 @@ For a listed repository, land merges at once (`gh pr merge --squash --match-head
 
 A V3 change or one touching `protected_paths` still waits for the owner's approval. Anything land cannot read refuses the merge. `sangsoe land --dry-run` prints the path it would take without merging. Without the key, land behaves as before. See decision 158 in `docs/decisions.md`.
 
+**Verify tier.** Land asks for the evidence of the pull request's tier (V0 to V3), computed from its diff and these lists in `~/.config/sangsoe/config.json`. All five lists must be there; with any one missing, every pull request is V3, `sangsoe verify-tier` prints `tier_source: none (fail-closed V3): …` naming the missing lists, and doctor prints a `tier-config` notice (decision 172):
+
+```json
+{
+  "protected_paths": ["infra/"],
+  "verify_tier": { "docs_globs": ["docs/"], "test_globs": ["test/"], "ui_globs": [], "v3_globs": [".github/", "package-lock.json"] }
+}
+```
+
+**Evidence.** Someone other than the pull request's author records each run at the current head: `sangsoe evidence record --pr <n> --head <head> --kind test|run|ui|dev --exit-code <n> --not-verified <what> --recorder <name>` (agents use the `evidence_record` tool). After the merge, `sangsoe stage record --pr <n> --stage merge|dev|prod --sha <sha> --recorder <name>` (the `stage_record` tool) records each stage a flow's deploy steps wait on. See decision 171.
+
 ## Layout
 
 One repository, four slots (see `docs/architecture.md` for the full map):

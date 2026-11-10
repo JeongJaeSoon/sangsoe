@@ -46,6 +46,8 @@ type World = {
   optIn?: boolean;
   protectedPaths?: string[];
   mergeNowOk?: boolean;
+  owners?: string[];
+  labelEvents?: unknown[];
 };
 
 function harness(w: World = {}) {
@@ -65,6 +67,7 @@ function harness(w: World = {}) {
     [`repos/${REPO}/rules/branches/main`]: ok(NO_RULES),
     [`repos/${REPO}/branches/main/protection`]: { kind: "error", status: 403, message: "Resource not accessible by integration" },
     [`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`]: ok([]),
+    [`repos/${REPO}/issues/12/events?per_page=100&page=1`]: ok(w.labelEvents ?? []),
   };
   const paths: string[] = [];
   const gh: GhClient = {
@@ -85,7 +88,7 @@ function harness(w: World = {}) {
       return { ok: true, message: "auto-merge enabled" };
     },
     config: () => ({
-      tier: TIER,
+      tier: { ...TIER, owners: w.owners ?? [] },
       protectedPaths: w.protectedPaths ?? [],
       ...(w.optIn === false ? {} : { verdictMergeRepos: [REPO] }),
     }),
@@ -270,6 +273,20 @@ test("protected paths and V3 stay the owner's: merge_on_approval, as today", asy
   assert.equal(refusal(r2), "ok:merge_on_approval");
   assert.match(r2.ok ? r2.value.note : "", /V3/);
   assert.deepEqual([prot.mergesNow, v3.mergesNow, prot.gateReads, v3.gateReads], [[], [], [], []]);
+});
+
+test("a V3 PR lowered by an owner's label still waits for the owner on this path (decision 172)", async () => {
+  const lowered = harness({
+    files: [{ filename: ".github/workflows/ci.yml", patch: "@@ -1 +1 @@\n-a\n+b" }],
+    pull: { labels: [{ name: "verify-tier:2" }] },
+    owners: ["alice"],
+    labelEvents: [{ event: "labeled", label: { name: "verify-tier:2" }, actor: { login: "alice" } }],
+  });
+  ready(lowered.store);
+  const r = await land(input(), lowered.deps);
+  assert.equal(refusal(r), "ok:merge_on_approval");
+  assert.equal(r.ok ? r.value.tier : "", "V2", "the label lowered the tier for evidence");
+  assert.deepEqual([lowered.mergesNow, lowered.gateReads], [[], []]);
 });
 
 test("the merge method is the repo's first allowed of squash, merge, rebase; none refuses", async () => {
