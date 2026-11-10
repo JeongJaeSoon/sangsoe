@@ -183,7 +183,7 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
 }
 
 /** `msgType` is one of Orca's closed `send --type` set; the event name rides in the subject. */
-type LeadNotice = { task: string; key: string; subject: string; body: string; msgType: "status" | "escalation" };
+type LeadNotice = { task: string; key: string; subject: string; body: string; msgType: "status" };
 
 /**
  * The rows whose notice goes to the item's owning lead (decision 154): todo_due and trigger_unclear
@@ -204,7 +204,8 @@ function leadNotice(e: Planned): LeadNotice | undefined {
   if (e.type === "escalation_stale" && p.reason === "verify_unconfirmed") {
     const task = String(p.ref);
     const key = `notify:${seg(task)}:verify_unconfirmed:${(e.dedupe_key ?? "").split(":").pop() ?? ""}`;
-    return { task, key, subject: `🔍 verify_unconfirmed: ${task}`, body: `The owner's input on ${task} is still not verified by its probe; check it or ask the owner.`, msgType: "escalation" };
+    // status, not escalation: queue-monitor holds no Dispatch, and Orca refuses an escalation from such a sender (decision 197).
+    return { task, key, subject: `🔍 verify_unconfirmed: ${task}`, body: `The owner's input on ${task} is still not verified by its probe; check it or ask the owner.`, msgType: "status" };
   }
   return undefined;
 }

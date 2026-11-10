@@ -242,7 +242,8 @@ export type PortRow = {
 /** The receipt shape of a write is Orca's; the core reads ids from it and keeps the rest opaque. */
 export type Receipt = Record<string, unknown>;
 
-export type WorkerPlacement = "current" | "new-child" | { existing: string };
+/** `new-top-level` only for an orchestrator in no Orca worktree, with `repo` (decision 197). */
+export type WorkerPlacement = "current" | "new-child" | "new-top-level" | { existing: string };
 
 /**
  * The only path from the core to Orca (design §2, first-slot table). Not here on purpose:

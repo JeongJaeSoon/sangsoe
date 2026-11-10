@@ -11,7 +11,7 @@ import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import { type Choice, launch, pairing, resolve } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
-import type { NewTask, RefusalReason, Role, StartOutcome, StartPorts, StartRefusal, StartRequest } from "./types.ts";
+import { type NewTask, REPO_SELECTOR, type RefusalReason, type Role, type StartOutcome, type StartPorts, type StartRefusal, type StartRequest } from "./types.ts";
 
 type Json = Record<string, unknown>;
 const isObject = (v: unknown): v is Json => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -145,14 +145,20 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       payload: { kind: "start_refused", reason },
       subject: detail.slice(0, 500),
       entity: "task",
-      entity_id: taskId ?? requester.taskId ?? requester.worktreeId,
+      entity_id: taskId ?? requester.taskId ?? requester.worktreeId ?? requester.runId,
       actor: requester.role,
       ...(attempt ? { target: START_ATTEMPT } : {}),
     });
     let escalatedTo: string | null = null;
     if (requester.role === "orchestrator") {
       // Nobody above the orchestrator: the escalation ends at the owner (decision 94 (다)).
-      store.append({ type: "escalation", source, payload: { to: "owner", reason: `start_refused:${reason}` }, entity: "task", entity_id: taskId ?? requester.worktreeId });
+      store.append({
+        type: "escalation",
+        source,
+        payload: { to: "owner", reason: `start_refused:${reason}` },
+        entity: "task",
+        entity_id: taskId ?? requester.worktreeId ?? requester.runId,
+      });
       escalatedTo = "owner";
     } else if (parentHandle) {
       const sent = await orca.send({
@@ -187,8 +193,14 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     }
   } else if (requester.taskId) {
     lineageProblem = "오케스트레이터는 Dispatch 를 가진 세션이 아니다";
-  } else {
+  } else if (requester.worktreeId) {
     lineageProblem = await liveDispatchIn(orca, requester.worktreeId);
+  }
+  if (!lineageProblem && !requester.worktreeId && requester.role !== "orchestrator") {
+    lineageProblem = `${requester.role} 는 자기 worktree 를 밝힌다(worktree 없이 시작하는 것은 오케스트레이터뿐이다)`;
+  }
+  if (!lineageProblem && req.repo !== undefined && !REPO_SELECTOR.test(req.repo)) {
+    lineageProblem = `대상 저장소 "${req.repo}" 가 Orca 저장소 선택자(id:·name:·path:)가 아니다`;
   }
 
   // ① capability_missing
@@ -216,18 +228,31 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     if (!w.ok) return refuse("lineage_invalid", `요청자의 워커를 읽지 못했다 (${w.error.code})`);
     if (w.value.workspace !== requester.worktreeId) return refuse("lineage_invalid", "요청자의 Dispatch 가 밝힌 worktree 의 것이 아니다");
   }
-  const trees = await orca.worktreeList({});
+  const trees = await orca.worktreeList({ limit: 1000 });
   if (!trees.ok) return refuse("lineage_invalid", `worktree 목록을 읽지 못했다 (${trees.error.code})`);
-  const tree = trees.value.rows.find((w) => w.id === requester.worktreeId);
-  if (!tree) return refuse("lineage_invalid", "부모 worktree 를 읽지 못했다(로컬 worktree 목록에 없다)");
+  // A partial list could hide the caller's own worktree, so the check below fails closed on one.
+  if (trees.value.truncated || trees.value.omittedHostIds.includes("local")) {
+    return refuse("lineage_invalid", "worktree 목록이 다 오지 않았다: 부르는 세션의 worktree 를 가리지 못한다");
+  }
   // The declared worktree is the caller's own only if it is the innermost one the calling session
   // runs in: with worktrees nested under a checkout, the outer one also contains the cwd.
   const cwd = real((ports.cwd ?? (() => process.cwd()))());
   const innermost = trees.value.rows
     .filter((w) => within(cwd, real(w.path)))
     .sort((a, b) => real(b.path).length - real(a.path).length)[0];
-  if (innermost?.id !== tree.id) {
-    return refuse("lineage_invalid", `밝힌 worktree(${tree.path})가 부르는 세션의 작업 폴더(${cwd})가 있는 worktree 가 아니다`);
+  if (requester.worktreeId) {
+    const tree = trees.value.rows.find((w) => w.id === requester.worktreeId);
+    if (!tree) return refuse("lineage_invalid", "부모 worktree 를 읽지 못했다(로컬 worktree 목록에 없다)");
+    if (innermost?.id !== tree.id) {
+      return refuse("lineage_invalid", `밝힌 worktree(${tree.path})가 부르는 세션의 작업 폴더(${cwd})가 있는 worktree 가 아니다`);
+    }
+  } else {
+    // Orca resolves new-child from the caller's terminal and refuses it outside a managed worktree, so
+    // only an orchestrator that really runs outside every worktree may go without one (decision 197).
+    if (innermost) {
+      return refuse("lineage_invalid", `작업 폴더(${cwd})가 worktree ${innermost.path} 안에 있다: 그 worktree 를 밝힌다`);
+    }
+    if (!(req.repo ?? ("id" in req.task ? storedRepo(store, req.task.id) : undefined))) return refuse("lineage_invalid", "worktree 밖의 오케스트레이터는 대상 저장소(repo)를 밝힌다: 새 worktree 를 둘 곳이 없다");
   }
 
   // ③ depth_exceeded: only when the setting was read; otherwise the receipt decides (⑤).
@@ -250,6 +275,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
 
   // The Task: an existing one, or a new one with its deps and the child's role line first.
   let taskId: string;
+  let alias: string | undefined;
   if ("id" in req.task) {
     taskId = req.task.id;
   } else {
@@ -265,7 +291,17 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     const id = findKey(made.value, TASK_KEYS) ?? (isObject(made.value.task) ? findKey(made.value.task, ["id"]) : undefined);
     if (!id) return refuse("orca_error", "task-create 영수증에 Task id 가 없다");
     taskId = id;
+    // Bound like item_create's, so a decision on this Task has its `item:iNNN` subject (decision 197).
+    alias = store.allocate("i");
+    store.append({
+      type: "item_created",
+      source,
+      payload: { task: id, alias, who: requester.role === "orchestrator" ? "orchestrator" : `${requester.role}:${requester.runId}`, done_when: "spec 의 완료 조건", owner_action: 0 },
+      entity: "task",
+      entity_id: id,
+    });
   }
+  const repo = req.repo ?? storedRepo(store, taskId);
 
   // T5: count this Task's failed start attempts; stop at the third.
   const failures = store
@@ -274,8 +310,16 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   if (failures >= LOOP_LIMIT) return { kind: "stopped", taskId, why: "start_failed_3x" };
   const failedAttempt = async (reason: RefusalReason, detail: string) => {
     const out = await refuse(reason, detail, taskId, true);
-    if (failures + 1 >= LOOP_LIMIT) {
-      store.append({ type: "loop_detected", source, payload: { reason: "start_failed_3x" }, entity: "task", entity_id: taskId });
+    // On the third failure only (README T5): two starts racing past the count share this key.
+    if (failures + 1 === LOOP_LIMIT) {
+      store.append({
+        type: "loop_detected",
+        source,
+        payload: { reason: "start_failed_3x" },
+        entity: "task",
+        entity_id: taskId,
+        dedupe_key: `loop_detected:start_failed_3x:${taskId}`,
+      });
     }
     return out;
   };
@@ -319,13 +363,17 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     orcaFlag,
     ownerSetting: choice.advisor && !orcaFlag ? (ports.advisorSetting ?? (() => advisorSetting(process.env, homedir())))() : false,
   });
+  // new-child keeps parentWorktreeId; without a worktree the lineage is the Run alone (decision 197).
+  // A lead's terminal is the one the owner watches: kept open until the orchestrator releases it.
   const startArgs = {
     task: taskId,
     agent: req.agent,
-    worktree: "new-child" as const,
+    worktree: requester.worktreeId ? ("new-child" as const) : ("new-top-level" as const),
     run: requester.runId,
     model: plan.model,
     effort: plan.effort,
+    ...(repo ? { repo } : {}),
+    ...(req.childRole === "lead" ? { keepOpen: true } : {}),
     ...(plan.advisor ? { advisor: plan.advisor } : {}),
   };
   const started = await write(orca, orca.workerStart(startArgs), (o) => orca.workerStart(startArgs, o));
@@ -362,5 +410,14 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     }
   }
   const launched = { model: plan.model, effort: plan.effort, ...(plan.advisor ? { advisor: plan.advisor } : {}) };
-  return { kind: "started", taskId, dispatchId, ...(worktreeId ? { worktreeId } : {}), launch: launched, notes };
+  return { kind: "started", taskId, ...(alias ? { alias } : {}), dispatchId, ...(worktreeId ? { worktreeId } : {}), launch: launched, notes };
+}
+
+/** The target repo item_create recorded for this Task, the latest one. */
+export function storedRepo(store: Pick<StartPorts["store"], "events">, task: string): string | undefined {
+  const last = store
+    .events({ type: "item_extra_set" })
+    .filter((e) => e.payload.task === task && typeof e.payload.repo === "string")
+    .at(-1)?.payload.repo;
+  return typeof last === "string" ? last : undefined;
 }

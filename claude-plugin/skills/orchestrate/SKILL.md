@@ -34,7 +34,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 | 워커의 실행 출력(리드만) | 리뷰한 head 의 출력인가, 확인 못 한 것이 적혔나. 맞으면 등급이 묻는 `kind` 마다 증거를 기록하고, 머지 뒤에는 배포 단계를 기록한다. 그 PR 을 쓴 세션은 거부된다(결정 171) | `evidence_record` · `stage_record` |
 | "승인되면 머지" PR 이 승인됨(리드만) | 같은 `land` 요청으로 머지한다 | `land` |
 | 질문(`ask`) | 브리프와 승인 줄 안에서 답할 수 있나. 있으면 Orca `reply`, 없으면 한 단계 위로 | `decision_open`(오너 판단일 때) |
-| escalation | 네 단위 안에서 풀 수 있나. 아니면 선택지·추천·기다리는 것을 붙여 위로 | `decision_open` 또는 Orca `send --type escalation` |
+| escalation | 네 단위 안에서 풀 수 있나. 아니면 선택지·추천·기다리는 것을 붙여 위로 | `decision_open`, 또는 리드는 Orca `send --type escalation`(Dispatch 가 없는 오케스트레이터는 status·question 형, 결정 197) |
 | 거부 보고 | 거부된 행위를 다른 길로 하지 않는다. 규칙이 바뀌어야 하면 오너 몫으로 올린다 | `decision_open` |
 | `item_ready`·`capacity_free` | 시작할 항목이 생겼다 | `start_unit`(`start` skill) |
 | `close_suggested` | 증거가 그 오너 항목의 완료를 보이나. 보이면 오너에게 완료 버튼을 누를 항목이라고 알린다. 오너 항목은 오너가 닫는다. 오너가 먼저 누른 항목은 ⏳ 검증 대기라 이 제안이 오지 않고 probe 가 통과하면 저절로 ✅ 로 읽힌다(결정 181) | — |

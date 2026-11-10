@@ -27,13 +27,13 @@ stdout 의 줄이 그대로 세션 컨텍스트에 들어간다. sangsoe 세션�
 
 1. 역할 줄 `sangsoe-role: <role>` 과 Task · Dispatch · Run id 한 줄.
 2. Run: `run-current` 가 Run 을 주면 그 Run, 비었는데 리드·오케스트레이터면 이 Task(오케스트레이터는 이 역할)의 지난 `session_started` 가 쥐었던 Run 으로 `orca orchestration run-use <id>` 를 하라는 한 줄.
-3. 그 Run 우편함의 마지막 `handoff` 메시지 본문, 한 번만(`notified`, `notify:<run>:handoff:<msg>`).
+3. 마지막 인계 본문, 한 번만(`notified`, `notify:<run>:handoff:<msg>`): Dispatch 를 쥔 세션은 그 Dispatch 의 Run 에서 제목 `handoff <task>` 인 것, 아니면 쥔 Run 에서 제목 `handoff` 인 것(결정 197).
 4. 버전 어긋남 한 줄: 이 plugin 의 `plugin.json` 버전 ≠ 코어 버전일 때만.
 5. 늦은 답: 이 Task 가 대기자인 답한 결정 중 `notify:<task>:dNNN`(U8 `answerNotifiedKey`)이 없는 것마다 `dNNN: <답>` 한 줄, 같은 키로 `notified`. 그래서 `/clear` 뒤 새 세션에는 다시 실리지 않는다.
 
 ## MCP 기록 tool
 
-- `handoff_save{next, waiting, open_questions, reply_to}`: 네 칸이 모두 비지 않은 글(각 4,000자 이하)인지 검사하고 `run-current` 의 Run 우편함으로 `send --type handoff` 한다. sqlite 에는 쓰지 않는다(인계 본문은 Orca 메시지, 결정 80 N1).
+- `handoff_save{next, waiting, open_questions, reply_to}`: 네 칸이 모두 비지 않은 글(각 4,000자 이하)인지 검사하고 `send --type handoff` 한다. Dispatch 를 쥔 세션은 그 Dispatch 의 Run 으로 제목 `handoff <task>` 를 단다(Orca 가 다른 Run 우편함을 `dispatch_run_mismatch` 로 막는다). 아니면 `run-current` 의 Run 으로 보낸다(결정 197). sqlite 에는 쓰지 않는다(인계 본문은 Orca 메시지, 결정 80 N1).
 - `review_ask_record{pr, reviewer, reminder?}`: `review_ask_sent` 한 줄. `~/.config/sangsoe/config.json` 의 `reviewers` 에 없는 리뷰어면 `unmapped_reviewer` 도 쓴다.
 
 `restart_due`(뷰)는 `compacted`·`turn_ended` 에서 네 규칙을 계산한다: 자동 압축 3회 · 압축 뒤 첫 턴이 압축 전의 절반 이상 · 최근 두 압축 간격 30분 미만 · 토큰 상한.

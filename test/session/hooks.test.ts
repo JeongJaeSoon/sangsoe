@@ -30,7 +30,15 @@ function answered(w: SessionWorld, answer = "Path versioning") {
 
 test("SessionStart injects role, Run, the last handoff once, a version line and late answers, in that order", async () => {
   const w = createSessionWorld({ spec: "sangsoe-role: lead\nrun the api program", heldRun: "run_lead" });
-  w.mail.push({ id: "msg_1", type: "handoff", body: "old" }, { id: "msg_2", type: "status", body: "x" }, { id: "msg_3", type: "handoff", body: "## 다음에 할 일\nland U13" });
+  // A lead's handoff sits in its Dispatch's Run under its Task (decision 197); its own Run's mail is not it.
+  const mine = { subject: `handoff ${TASK}`, run: TASK_RUN };
+  w.mail.push(
+    { id: "msg_1", type: "handoff", body: "old", ...mine },
+    { id: "msg_2", type: "status", body: "x", run: TASK_RUN },
+    { id: "msg_3", type: "handoff", body: "## 다음에 할 일\nland U13", ...mine },
+    { id: "msg_4", type: "handoff", body: "another lead's", subject: "handoff task_000000000009", run: TASK_RUN },
+    { id: "msg_5", type: "handoff", body: "the Run's own", run: "run_lead" },
+  );
   answered(w);
   const lines = await hook(w, "session-start", { session_id: "s1", source: "startup" }, "0.0.1-other");
   assert.deepEqual(lines, [
@@ -49,7 +57,7 @@ test("SessionStart injects role, Run, the last handoff once, a version line and 
 
 test("late_answer_reaches_next_worker: after /clear the new session gets neither the answer nor the handoff again", async () => {
   const w = createSessionWorld({ spec: "sangsoe-role: lead\nx", heldRun: "run_lead" });
-  w.mail.push({ id: "msg_3", type: "handoff", body: "next" });
+  w.mail.push({ id: "msg_3", type: "handoff", body: "next", subject: `handoff ${TASK}`, run: TASK_RUN });
   answered(w);
   await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
   const again = await hook(w, "session-start", { session_id: "s2", source: "clear", model: "claude-x" }, VERSION);
@@ -391,6 +399,38 @@ test("handoff_save checks the four fields, sends one handoff to the caller's own
   w.heldRun = null;
   const none = await handoffSave(w, full);
   assert.equal(!none.ok && none.refusal.code, "no_run");
+});
+
+test("handoff_save from a session holding a Dispatch goes to that Dispatch's Run under its Task, not to run:<held>", async () => {
+  // Orca: a sender with an active Dispatch may write only to that Dispatch's Run (dispatch_run_mismatch,
+  // test/fixtures/orca-refusals.json), so a lead's own Run mailbox is out of its reach.
+  const w = createSessionWorld({ spec: "sangsoe-role: lead\nx", heldRun: "run_lead" });
+  const full = { next: "land U13", waiting: "없음", open_questions: "없음", reply_to: "run:run_orch" };
+  const r = await handoffSave(w, full, `${w.dir}/src`);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(r.value.run, TASK_RUN);
+  assert.deepEqual(
+    w.sends.map((s) => [s.to, s.type, s.subject, s.dispatchId]),
+    [[`run:${TASK_RUN}`, "handoff", `handoff ${TASK}`, DISPATCH]],
+  );
+  assert.ok(!w.sends.some((s) => s.to === "run:run_lead"));
+
+  // The next session of the same Task finds it there, once.
+  w.mail.push({ id: "msg_9", type: "handoff", body: w.sends[0]?.body ?? "", subject: `handoff ${TASK}`, run: TASK_RUN });
+  const lines = await hook(w, "session-start", { session_id: "s9", source: "startup" }, VERSION);
+  assert.ok(lines.includes("인계(handoff msg_9, 한 번만 싣는다):"), lines.join("\n"));
+});
+
+test("an orchestrator's SessionStart reads only the plain handoff of its Run, not a lead's or a gate hand-off", async () => {
+  const w = createSessionWorld({ heldRun: "run_orch", dispatched: false });
+  w.mail.push(
+    { id: "msg_1", type: "handoff", body: "mine", run: "run_orch" },
+    { id: "msg_2", type: "handoff", body: "a lead's", subject: `handoff ${TASK}`, run: "run_orch" },
+    { id: "msg_3", type: "handoff", body: "resolve it", subject: "d001: resolve gate gate_1", run: "run_orch" },
+  );
+  const lines = await hook(w, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+  assert.ok(lines.includes("인계(handoff msg_1, 한 번만 싣는다):"), lines.join("\n"));
+  assert.ok(!lines.some((l) => l.includes("msg_2") || l.includes("msg_3")));
 });
 
 test("review_ask_record writes review_ask_sent and raises an unmapped reviewer once", () => {
