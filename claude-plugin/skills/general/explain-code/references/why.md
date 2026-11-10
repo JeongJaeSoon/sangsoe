@@ -50,7 +50,7 @@ A calendar is not an evidence source. Use it only to narrow a date range (when a
 
 Start one investigator for source control and one for each connected source with a target-specific lead, such as a linked issue, document, incident, person, or date. Each investigator owns exactly one source. Search a source with a plausible lead even when it may return nothing, and report an empty result. List every skipped connected source and the reason in Sources consulted.
 
-Launch all investigators in a single message so they run concurrently. Each is an `Agent` call with `subagent_type: "general-purpose"` (it keeps MCP access). Tell each one in its prompt that it only reads: no file edits, commits, comments, messages, or issue changes, since the same MCPs can also write.
+Launch all investigators in a single message so they run concurrently. Each is an `Agent` call with `subagent_type: "general-purpose"` (it keeps MCP access) and `model` set to `subagents.judge` from resource `models` (`sonnet` without sangsoe's MCP server). Tell each one in its prompt that it only reads: no file edits, commits, comments, messages, or issue changes, since the same MCPs can also write.
 
 Each investigator gets:
 
@@ -72,7 +72,7 @@ Use this to know what to expect back and how to name a gap when a category retur
 
 ## Step 5. Synthesize
 
-Once every investigator has returned, synthesize once. Do it yourself, or hand it to one `general-purpose` subagent, told it must not write files or change external state, when the findings are too large to hold alongside the conversation.
+Once every investigator has returned, synthesize once. Do it yourself, or hand it to one `general-purpose` subagent on the same `model`, told it must not write files or change external state, when the findings are too large to hold alongside the conversation.
 
 The synthesis works from:
 

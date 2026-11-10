@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  ADVISOR_FROM_SETTING,
+  ADVISOR_NOT_APPLIED,
   CATALOG,
   catalogAgeDays,
   compareVersions,
@@ -15,7 +17,7 @@ const id = "model-table";
 const FIX = "re-read the pages in core/models/README.md and update core/models/table.ts (a new decision line)";
 const PIN_FIX = "the pins are the owner's settings; keep or clear them there, and confirm the model each start resolved to";
 
-type Settings = { env?: Record<string, unknown>; modelSettings?: Record<string, unknown> };
+type Settings = { env?: Record<string, unknown>; modelSettings?: Record<string, unknown>; advisorModel?: unknown };
 
 function readSettings(dir: string): Settings {
   try {
@@ -42,6 +44,19 @@ export function activePins(env: Record<string, string | undefined>, home: string
   return pins;
 }
 
+/**
+ * Whether the owner's user settings name an advisor (decision 187): only the key's presence is
+ * read, never its value, and the advisor's off switch counts as no advisor.
+ */
+export function advisorSetting(env: Record<string, string | undefined>, home: string): boolean {
+  if (env.CLAUDE_CODE_DISABLE_ADVISOR_TOOL) return false;
+  const settings = readSettings(env.CLAUDE_CONFIG_DIR ?? join(home, ".claude"));
+  return settings.advisorModel !== undefined && settings.advisorModel !== null && settings.advisorModel !== "";
+}
+
+const ADVISOR_FIX =
+  "setting advisorModel is the owner's act (sangsoe never writes it); a frontier advisor also needs the owner's one-time usage-credits consent through /model";
+
 const RANK: Record<CheckStatus, number> = { ok: 0, notice: 1, warn: 2, fail: 3 };
 
 // Decision 165: the table goes stale by date, by a newer Claude Code, and by pins it cannot see.
@@ -63,9 +78,13 @@ export const modelTable: Check = {
     if (pins.length > 0) {
       findings.push({ status: "notice", text: `alias 고정 ${pins.length}개: ${pins.join(" · ")} — 풀린 모델은 상태 줄로 확인` });
     }
-    if (findings.length === 0) return { id, status: "ok", summary: `모델 표 확인 ${age}일 전, 고정 없음` };
+    const advisor = advisorSetting(env, ctx.home ?? homedir());
+    if (!advisor) findings.push({ status: "notice", text: ADVISOR_NOT_APPLIED });
+    if (findings.length === 0) return { id, status: "ok", summary: `모델 표 확인 ${age}일 전, 고정 없음, ${ADVISOR_FROM_SETTING}` };
     const status = findings.reduce<CheckStatus>((s, f) => (RANK[f.status] > RANK[s] ? f.status : s), "ok");
-    const fix = findings.length === 1 && pins.length > 0 ? PIN_FIX : FIX;
+    // Each finding's own fix: pins and the advisor key are the owner's settings, not a table update.
+    const stale = findings.length > (pins.length > 0 ? 1 : 0) + (advisor ? 0 : 1);
+    const fix = [...(stale ? [FIX] : []), ...(pins.length > 0 ? [PIN_FIX] : []), ...(advisor ? [] : [ADVISOR_FIX])].join("; ");
     return { id, status, summary: findings.map((f) => f.text).join("; "), fix };
   },
 };

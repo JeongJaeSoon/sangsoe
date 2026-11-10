@@ -278,7 +278,8 @@ export interface OrcaAdapter {
 
   // Worker and Dispatch
   workerStart(
-    a: { task: string; agent: string; worktree: WorkerPlacement; run?: string; model?: string; effort?: string },
+    /** `advisor` is sent only when Orca's agent-context lists it on worker-start (decision 187). */
+    a: { task: string; agent: string; worktree: WorkerPlacement; run?: string; model?: string; effort?: string; advisor?: string },
     o?: WriteOptions,
   ): Promise<OrcaResult<Receipt>>;
   workerShow(a: { dispatch: string }): Promise<OrcaResult<WorkerShow>>;

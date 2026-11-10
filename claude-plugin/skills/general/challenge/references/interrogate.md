@@ -23,7 +23,7 @@ Before starting reviewers, state the intent in one paragraph from the user's mes
 
 ## Step 3. Start reviewers
 
-Use independent read-only reviewers available in the authorized environment, as subagents of this session. Give each the same raw scope and rubric, never another reviewer's conclusions. Choose the number by the change's risk. No particular model or model family is required. Record unavailable reviewers and incomplete coverage rather than claiming a pass.
+Use independent read-only reviewers available in the authorized environment, as subagents of this session. Give each the same raw scope and rubric, never another reviewer's conclusions. Choose the number by the change's risk. Name each one's `model`: `subagents.judge` from resource `models` (`sonnet` without sangsoe's MCP server), or the `review` row for a PR headed to merge; never leave it to inherit the session's model. Record unavailable reviewers and incomplete coverage rather than claiming a pass.
 
 Read `references/reviewer-prompt.md` and fill in the same template for every reviewer with the stated intent, the diff or file contents, the rubric from `references/rubric.md`, and the code-quality lens from `references/code-quality-review.md`. For a design, plan or decision, leave out the code-quality lens and add one line to the brief: the plan's premises are in scope, so reviewers may challenge the approach, not only its execution. The intent paragraph states the goal the plan serves.
 

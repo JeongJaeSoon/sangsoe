@@ -16,7 +16,7 @@ List the deployable units from what builds and ships them: compose files, Docker
 
 Read the public surfaces: HTTP routes or the OpenAPI file, CLI commands, UI routes and menus, bot commands, config flags a user sets. One row per thing a user can do, grouped by area (account, sessions, cost, operations). A row names the action, not the module that implements it.
 
-For a large product, split the surfaces across parallel `Explore` subagents, one area each, and merge their rows yourself. Each returns rows with evidence, not prose.
+For a large product, split the surfaces across parallel `Explore` subagents (`model`: `subagents.collect` from resource `models`, `haiku` without sangsoe's MCP server), one area each, and merge their rows yourself. Each returns rows with evidence, not prose.
 
 Add the features that plans and docs promise but the code lacks. Those rows are the reason a planning reader opens the map.
 

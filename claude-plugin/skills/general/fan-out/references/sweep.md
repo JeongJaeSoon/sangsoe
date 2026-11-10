@@ -7,7 +7,7 @@ Fan out N parallel workers. They may cover separate slices, race the same brief,
 1. State the done predicate and the report the sweep must return.
 2. Choose the shape: partition into slices, race N workers on identical briefs, or mix both. For a race or mixed shape, declare `first pass` or `rank all` before starting.
 3. Set N from the user or derive it from the shape. N is total workers, not the concurrency limit.
-4. Use the user's explicit model choice; else, when sangsoe's MCP server is present, the row for this kind of work in resource `models` (sweep for mechanical slices); else the host's configured worker defaults. For a comparison experiment, record each candidate's configuration before launch.
+4. Use the user's explicit model choice; else `subagents.collect` from resource `models` for mechanical slices and `subagents.judge` for slices that read and weigh (`haiku` and `sonnet` without sangsoe's MCP server). Never leave `model` unset: an unset subagent inherits the session's model and its advisor. For a comparison experiment, record each candidate's configuration before launch.
 5. Give each worker its own writable output when it writes. When workers verify or measure commits, each brief names the exact SHAs. A measurement brief also names the method (sample count, what one sample is, order). The worker records both in its result.
 
 ## Phase B: Fan out
