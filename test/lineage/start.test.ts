@@ -397,6 +397,25 @@ test("a failed start that reports a Dispatch writes worker_dead{start_failed}", 
   assert.equal(dead[0]?.entity_id, "ctx_dead");
 });
 
+test("decision 178: a Task Orca released at its predecessor's worker_done waits while that PR is open, starts once it merges", async () => {
+  const rows = () =>
+    ok({
+      tasks: [
+        { id: "task_pred", status: "completed", title: "p", deps: "[]" },
+        { id: NEW_TASK, status: "ready", title: "t", deps: JSON.stringify(["task_pred"]), spec: "sangsoe-role: worker\nbrief" },
+      ],
+    });
+  const h = harness({ taskList: rows });
+  h.store.append({ type: "pr_opened", source: "test", payload: { pr: "acme/api#41", task: "task_pred" } });
+  const held = await start(h, request({ task: { id: NEW_TASK } }));
+  assert.equal(held.kind === "waiting" && held.why, "not_ready");
+  assert.equal(h.called("worker-start").length, 0);
+  assert.equal(h.signals().length, 0, "a wait is not a refusal");
+
+  h.store.append({ type: "pr_merged", source: "test", payload: { pr: "acme/api#41", merge_sha: "a".repeat(40) } });
+  assert.equal((await start(h, request({ task: { id: NEW_TASK } }))).kind, "started");
+});
+
 // ---- task-create, first prompt, references ----
 
 test("a new Task goes through task-create --deps on the requester's Run: role line first, late answers after the brief", async () => {
