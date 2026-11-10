@@ -52,8 +52,9 @@
 | 대시보드 | Orca plugin 패널이 `event`·뷰·Orca 읽기를 그리는 화면. 열 때와 plugin worker 가 알릴 때 읽는다. 별도 서버·포트가 없고 스스로 수집·생성하지 않는다 | — | 콘솔, 웹 대시보드 |
 | 묶음 | 오케스트레이터 바로 아래의 한 단위. 리드 하나가 맡은 프로그램, 또는 리드 없는 단일 워커들을 모은 "그 외" | `group` · `others` | 팀, 그룹(화면에서) |
 | 프로그램 | 한 리드가 완료 조건을 정해 끌고 가는 일의 묶음. 묶음의 안쪽 말 | `programs/<slug>` | 프로젝트, 에픽 |
-| 프로필 | 모델 + effort 묶음. 브리프는 프로필만 적는다. `deep`=Opus·high, `standard`=Sonnet 또는 Opus·medium, `light`=Haiku 또는 Sonnet·low, `wait`=가장 싼 모델·low | `deep` · `standard` · `light` · `wait` | 모델 등급, 티어(화면에서) |
-| tier | 프로필의 이름(`deep`·`standard`·`light`·`wait`). 모델과 effort 는 프로필 정의가 적고, 설정이 모델 id 로 옮긴다 | `tier` | — |
+| 모델 선택 표 | 모델을 고르는 유일한 표. 카탈로그(tier → alias·현재 ID·가격·출처·확인 날짜)와 정책(일의 종류 → tier·effort·사다리·승격 조건)의 두 층이다. 표는 여기에 옮겨 적지 않는다(결정 164) | `core/models/table.ts` · resource `models` | 프로필, 모델 등급 |
+| tier | 카탈로그의 모델 자리 이름. alias 하나가 붙고 버전은 카탈로그 행에만 있다 | `frontier` · `primary` · `everyday` · `fast` | 프로필(옛 `deep`·`standard`·`light`·`wait`) |
+| 일의 종류 | 정책 행의 열쇠. 역할 셋과 워커가 맡는 일의 종류 | `kind` · `orchestrator` · `lead` · `worker` · `design` · `review` · `release-review` · `sweep` | — |
 
 ## 2. 상태 (항목은 늘 정확히 하나)
 
@@ -149,9 +150,7 @@
 | 대화 기록 가리킴 | 세션 id 와 메시지 uuid 로 대화 기록을 가리키는 값 | `cc_session` · `cc_message` | — |
 | 오너만 할 수 있는 이유 | 오너 항목이 오너에게 가는 이유 한 줄 | `why_owner` | — |
 | 버튼 | 패널에서 `plugin.request` 로 plugin worker 를 거쳐 코어의 같은 함수를 부르는 동작. `owner_action` 의 `origin` 이 `button` 이 된다 | `button` · `plugin.request` | — |
-| 모델 프로필 표 | 프로필 이름을 모델·effort 로 옮기는 설정 | `model_profiles` | — |
 | 열쇠 접두 | `dedupe_key` 의 종류 접두 | `notify:` · `edge:` · `decision:` · `decision:dNNN` · `item:iNNN` · `pr:acme/app#1` | — |
-| 프로필 줄 | 브리프에서 프로필과 이유를 적는 줄. 낮은 프로필에서 올릴 때 effort 도 적는다 | `PROFILE deep` · `PROFILE <tier> — <이유>` · `PROFILE deep (effort max)` | — |
 | 승인 줄 | 브리프의 승인 근거. 오너의 말을 인용한 `오너(dNNN, 날짜)` 줄 | `오너(dNNN, 날짜)` | — |
 | 이모지 체계 | 오너가 승인한 상태 7·플래그 4 | — | — |
 | 스키마 버전 | `event` 한 줄이 어느 형식인지 적는 칸. 읽는 쪽이 옛 줄을 받아들인다 | `schema_v` | — |
@@ -299,9 +298,9 @@
 | 용어 | 정의 | 영문 식별자 | 쓰지 않는 말 |
 |---|---|---|---|
 | goal | 한 단위의 완료 판정(`/goal`). 리드는 프로그램, 워커는 받은 작업 | `/goal` | 목표 |
-| escalation | 못 푼 문제·결정을 에이전트 트리 위로 한 단계씩 올리는 것. 이 뜻 하나뿐이다 | `escalation` | 에스컬레이트(프로필 변경이나 거부에) |
+| escalation | 못 푼 문제·결정을 에이전트 트리 위로 한 단계씩 올리는 것. 이 뜻 하나뿐이다 | `escalation` | 에스컬레이트(모델 승격이나 거부에) |
 | 거부 보고 | 거부된 행위를 일을 준 쪽에 바로 알리는 것. escalation 이 아니다 | `refusal_report` | 거부 escalation |
-| 프로필 승격/강등 | 도중에 프로필을 바꾸는 것. escalation 이 아니다 | `model_changed` | — |
+| 모델 승격 | 정책 행의 기본값을 벗어나는 것. effort 를 사다리대로 먼저 올리고, 끝에서도 모자라면 이유를 적고 다음 tier 로 간다. escalation 이 아니다 | `model_changed` | 프로필 승격/강등 |
 | 재시도 1회 | 거부된 행위를 조건을 갖춰 한 번만 다시 하고 보고하는 형식 | `재시도 1회: <더한 증거>` | — |
 | 위임 게이트 | 오케스트레이터가 조율 밖 도구 호출을 못 하게 막는 게이트 | `[gate:delegate]` | — |
 | 압박 게이트 | 머신 부하가 높을 때 무거운 시작을 거부하는 게이트 | `[gate:pressure]` | — |
@@ -443,7 +442,7 @@
 | 용어 | 정의 | 영문 식별자 | 쓰지 않는 말 |
 |---|---|---|---|
 | sqlite 파일 | `event` 와 번호 표·`owner_text`·캐시 예외 표가 든 파일 하나. Orca plugin 저장소가 아니라 plugin 밖 경로에 두고 양쪽 매니페스트가 같은 파일을 연다 | `~/.local/share/sangsoe/sangsoe.db` | — |
-| 설정 | 프로필 매핑·언어·규칙 수준. 사람이 고친다 | `~/.config/sangsoe/config.json` · `~/.config/sangsoe/` | — |
+| 설정 | 언어·규칙 수준. 사람이 고친다. 모델 선택은 설정이 아니라 `core/models/table.ts` 다 | `~/.config/sangsoe/config.json` · `~/.config/sangsoe/` | — |
 | 등급 설정 키 | 검증 등급이 읽는 설정 키. 경로 패턴 목록 셋과 내리기 권한자 목록이다. 값은 설정에만 있고 설계에는 없으며, 읽지 못하면 V3 다(`protected_paths` 는 자동 머지 조건 넷과 같은 키) | `docs_globs` · `test_globs` · `ui_globs` · `owners` · `protected_paths` | — |
 | 틀 폴더 | 오너가 덮어쓰는 흐름 틀 | `~/.config/sangsoe/flows/` | — |
 | 프로그램 폴더 | 리드의 보고·계획·브리프 | `~/.local/share/sangsoe/programs/<slug>/` · `~/.local/share/sangsoe/programs/<slug>/briefs/*.md` | — |

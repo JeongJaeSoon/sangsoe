@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 712" role="img" aria-labelledby="t5 d5">
 <title id="t5">정해진 코드로 도는 것과 토큰을 쓰는 것</title>
-<desc id="d5">왼쪽은 토큰이 들지 않는 hook, 게이트, 감지기, 스크립트 역할 둘(GRAPH, REAPER), 함수(ready 뷰, capacity, decision_open, decision_answer, notify), 뷰 계산. 오른쪽은 LLM 인 오케스트레이터, 리드, 워커, 서브에이전트와 기본 프로필. 가운데 event 의 needs 값이 judgment 일 때만 Orca 메시지로 에이전트를 깨운다. 아래에 프로필 표와 결정 루프 네 단계, 원칙 한 줄이 있다.</desc>
+<desc id="d5">왼쪽은 토큰이 들지 않는 hook, 게이트, 감지기, 스크립트 역할 둘(GRAPH, REAPER), 함수(ready 뷰, capacity, decision_open, decision_answer, notify), 뷰 계산. 오른쪽은 LLM 인 오케스트레이터, 리드, 워커, 서브에이전트와 기본 tier. 가운데 event 의 needs 값이 judgment 일 때만 Orca 메시지로 에이전트를 깨운다. 아래에 모델 선택 표의 자리와 결정 루프 네 단계, 원칙 한 줄이 있다.</desc>
 <style>
 :root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--warn:#b42318}
 @media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--warn:#fca5a5}}
@@ -48,10 +48,10 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 
 <!-- right -->
 <rect class="pr" x="610" y="10" width="380" height="400" rx="12"/><text class="t" x="624" y="32" style="fill:var(--llm)">LLM 판단 · 토큰 O · 깨울 때만</text>
-<text class="s" x="624" y="48">에이전트별 기본 프로필</text>
-<g class="llm"><rect x="624" y="58" width="352" height="82" rx="8"/><text class="t" x="636" y="78">오케스트레이터</text><text x="636" y="96">분류 · 배치 · dNNN 없는 답 잇기</text><text class="m" x="636" y="114">standard</text><text class="s" x="710" y="114">설계·모호한 결정은 deep 으로</text><text class="s" x="636" y="130">완료 조건 없음 · 깨울 때만</text></g>
-<g class="llm"><rect x="624" y="148" width="352" height="74" rx="8"/><text class="t" x="636" y="168">리드</text><text x="636" y="186">범위 · 증거 · 프로그램 완료 판정</text><text class="m" x="636" y="206">standard</text><text class="s" x="710" y="206">오래 쉬면 wait · 위험하면 deep</text></g>
-<g class="llm"><rect x="624" y="230" width="352" height="82" rx="8"/><text class="t" x="636" y="250">워커</text><text x="636" y="268">구현 · 조사 · 리뷰 초안</text><text class="s" x="636" y="286">브리프가 프로필을 정한다</text><text class="m" x="636" y="304">standard · deep · light</text></g>
+<text class="s" x="624" y="48">에이전트별 기본 tier</text>
+<g class="llm"><rect x="624" y="58" width="352" height="82" rx="8"/><text class="t" x="636" y="78">오케스트레이터</text><text x="636" y="96">분류 · 배치 · dNNN 없는 답 잇기</text><text class="m" x="636" y="114">primary</text><text class="s" x="710" y="114">막힌 설계 판단은 effort 먼저, 그다음 frontier</text><text class="s" x="636" y="130">완료 조건 없음 · 깨울 때만</text></g>
+<g class="llm"><rect x="624" y="148" width="352" height="74" rx="8"/><text class="t" x="636" y="168">리드</text><text x="636" y="186">범위 · 증거 · 프로그램 완료 판정</text><text class="m" x="636" y="206">primary</text><text class="s" x="710" y="206">두 번 실패하면 effort 먼저, 그다음 frontier</text></g>
+<g class="llm"><rect x="624" y="230" width="352" height="82" rx="8"/><text class="t" x="636" y="250">워커</text><text x="636" y="268">구현 · 조사 · 리뷰 초안</text><text class="s" x="636" y="286">일의 종류가 tier·effort 를 정한다</text><text class="m" x="636" y="304">primary · frontier · fast</text></g>
 <g class="llm"><rect x="624" y="320" width="352" height="74" rx="8"/><text class="t" x="636" y="340">서브에이전트</text><text x="636" y="358">읽기 전용 조사 (워커가 아니다)</text><text class="s" x="636" y="378">agent 정의의 model · effort</text></g>
 
 <!-- middle -->
@@ -69,11 +69,8 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 <text class="l c" x="500" y="391">sangsoe 명령 → event 한 줄</text>
 
 <!-- profile table -->
-<text class="t" x="10" y="438">프로필 → 모델 · effort</text><text class="m s" x="196" y="438" style="font-size:11px">model_profiles</text>
-<g class="llm"><rect x="10" y="446" width="236" height="52" rx="8"/><text class="m b" x="20" y="465">deep</text><text x="20" y="484">Opus · high — 설계·리뷰·위험</text></g>
-<g class="llm"><rect x="254" y="446" width="236" height="52" rx="8"/><text class="m b" x="264" y="465">standard</text><text x="264" y="484">Sonnet 또는 Opus · medium</text></g>
-<g class="llm"><rect x="498" y="446" width="236" height="52" rx="8"/><text class="m b" x="508" y="465">light</text><text x="508" y="484">Haiku 또는 Sonnet · low</text></g>
-<g class="llm"><rect x="742" y="446" width="248" height="52" rx="8"/><text class="m b" x="752" y="465">wait</text><text x="752" y="484">가장 싼 것 · low — 오래 쉬는 리드</text></g>
+<text class="t" x="10" y="438">일의 종류 → tier · effort</text><text class="m s" x="196" y="438" style="font-size:11px">core/models/table.ts</text>
+<g class="llm"><rect x="10" y="446" width="980" height="52" rx="8"/><text class="m b" x="20" y="465">frontier · primary · everyday · fast</text><text x="20" y="484">표는 한 곳(resource models). effort 를 먼저 올리고, 끝에서도 모자라면 이유를 적고 다음 tier 로</text></g>
 
 <!-- decision loop -->
 <text class="t" x="10" y="530">결정 루프: 네 단계 중 한 단계만 LLM</text>
