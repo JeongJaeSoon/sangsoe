@@ -249,8 +249,10 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   }
   // SessionStart takes the role from the spec's first line, and Orca cannot rewrite a spec: an
   // existing Task written for another role would start this child as that role.
+  // Read as SessionStart's readRoleLine reads it (core/session imports this module, so not shared).
   const first = typeof task.spec === "string" ? (task.spec.split("\n", 1)[0] ?? "").trim() : "";
-  if ("id" in req.task && first !== roleLine(req.childRole)) {
+  const role = first.startsWith(ROLE_LINE_PREFIX) ? first.slice(ROLE_LINE_PREFIX.length).trim() : "";
+  if ("id" in req.task && role !== req.childRole) {
     return refuse(
       "lineage_invalid",
       `Task ${taskId} 의 spec 첫 줄이 "${first.slice(0, 60)}" 라 ${req.childRole} 로 시작하지 않는다. ${req.childRole} 항목은 role 을 밝혀 다시 만든다(item_create role)`,

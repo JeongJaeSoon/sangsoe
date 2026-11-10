@@ -126,6 +126,13 @@ test("only an undispatched session's line that starts with the number answers a 
   await hook(worker, "user-prompt-submit", { session_id: "s1", prompt_id: "p1", prompt: "d001: Path versioning" });
   assert.equal(answers(worker), 0, "a prompt in a dispatched session is not the owner's answer");
 
+  // A lead whose Dispatch SessionStart could not find has no Task on its row; it is still not the owner.
+  const lead = createSessionWorld({ dispatched: false, heldRun: "run_lead" });
+  await hook(lead, "session-start", { session_id: "l1", source: "startup", agent_type: "sangsoe:lead" }, VERSION);
+  open(lead);
+  await hook(lead, "user-prompt-submit", { session_id: "l1", prompt_id: "p1", prompt: "d001: Path versioning" });
+  assert.equal(answers(lead), 0, "only the orchestrator's session answers");
+
   const orch = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
   await hook(orch, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
   open(orch);

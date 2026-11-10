@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { itemNew } from "../../cli/commands/item-new.ts";
 import { handle as itemCreate } from "../../claude-plugin/mcp/tools/item_create.ts";
 import { handle } from "../../claude-plugin/mcp/tools/start_unit.ts";
 import {
@@ -420,7 +421,7 @@ test("an existing Task starts only as the role its spec's first line names, for 
   const asWorker = harness({ existingRole: "lead" });
   assertRefused(asWorker, await start(asWorker, request({ task: { id: NEW_TASK } })), "lineage_invalid");
 
-  const lead = harness({ existingRole: "lead" });
+  const lead = harness({ existingRole: "  lead " });
   assert.equal((await start(lead, request({ requester: orchestrator, childRole: "lead", task: { id: NEW_TASK } }))).kind, "started");
   const worker = harness();
   assert.equal((await start(worker, request({ task: { id: NEW_TASK } }))).kind, "started");
@@ -445,6 +446,12 @@ test("item_create writes the role it is given as the spec's first line; worker b
   const bad = await itemCreate({ ...base, role: "orchestrator" }, ports);
   assert.equal(bad.ok ? "" : bad.refusal.code, "invalid_input");
   assert.equal(specs.length, 2, "no Task for a role off the list");
+
+  const cli = { run: RUN, spec: "brief", who: "lead:api", "done-when": "merged" };
+  assert.ok((await itemNew({ ...cli, role: "lead" }, ports)).ok);
+  const badCli = await itemNew({ ...cli, role: "orchestrator" }, ports);
+  assert.equal(badCli.ok ? "" : badCli.refusal.code, "invalid_input");
+  assert.deepEqual(specs.slice(2), ["sangsoe-role: lead\nbrief"], "the CLI entrance takes the same role");
 });
 
 test("ticket references attach to the new worktree; a failure does not stop the start", async () => {

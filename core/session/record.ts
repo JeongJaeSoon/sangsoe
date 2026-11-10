@@ -71,8 +71,8 @@ const DECISION_NO = /\bd\d{3,}\b/g;
 const ANSWER_SHAPE = /^\s*(d\d{3,})\b/;
 
 /**
- * The owner's chat line: owner_action with the masked text in owner_text. Decision 173: only a session
- * that holds no Dispatch answers, and only with a line that starts with the dNNN and names no other
+ * The owner's chat line: owner_action with the masked text in owner_text. Decision 173: only the
+ * orchestrator's session, holding no Dispatch, answers, and only with a line that starts with the dNNN and names no other
  * decision; it links through U8's decision_answer (linked_by=hook). A dispatched session's prompt can
  * be another session's message, so it never answers.
  */
@@ -97,7 +97,8 @@ async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
     },
     masked,
   );
-  if (!action.inserted || row.task) return;
+  // The orchestrator is the owner's session; a lead or worker whose Dispatch locate() missed is not.
+  if (!action.inserted || row.task || row.role !== "orchestrator") return;
   const named = [...new Set(text.match(DECISION_NO) ?? [])];
   const d = named.length === 1 ? ANSWER_SHAPE.exec(text)?.[1] : undefined;
   if (!d || !readDecision(deps.store, d)) return;
