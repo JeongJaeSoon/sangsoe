@@ -31,6 +31,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 | 워커의 worker_done(PR 없는 일) | 브리프의 완료 조건마다 실제 출력이 있나. 있으면 Task 를 닫고, 없으면 무엇이 빠졌는지 워커(살아 있으면)나 새 워커에게 | Orca `task-update --id <task_id> --status completed` |
 | 워커의 worker_done(`merge_ready`) | `land` 가 예약했나, "승인되면 머지"인가. 항목은 머지 확인 뒤 pr-monitor 가 닫으니 닫지 않는다 | — |
 | 리뷰한 head·리뷰어·증거(리드만) | 리뷰어가 작성자가 아니고 head 가 PR 의 현재 head 인가. 맞으면 판정을 기록한다(`pr`·`head_sha`·`act_on`·`reviewer`). 그 PR 을 쓴 세션은 거부된다 | `review_record` |
+| 워커의 실행 출력(리드만) | 리뷰한 head 의 출력인가, 확인 못 한 것이 적혔나. 맞으면 등급이 묻는 `kind` 마다 증거를 기록하고, 머지 뒤에는 배포 단계를 기록한다. 그 PR 을 쓴 세션은 거부된다(결정 171) | `evidence_record` · `stage_record` |
 | "승인되면 머지" PR 이 승인됨(리드만) | 같은 `land` 요청으로 머지한다 | `land` |
 | 질문(`ask`) | 브리프와 승인 줄 안에서 답할 수 있나. 있으면 Orca `reply`, 없으면 한 단계 위로 | `decision_open`(오너 판단일 때) |
 | escalation | 네 단위 안에서 풀 수 있나. 아니면 선택지·추천·기다리는 것을 붙여 위로 | `decision_open` 또는 Orca `send --type escalation` |
