@@ -26,6 +26,7 @@ function orcaCtx(o: { scenario?: string; replies?: Record<string, FakeReply>; pl
     exec: fake.exec,
     coreVersion: "0.1.0",
     home: NO_HOME,
+    env: {},
     ...(o.pluginBuild ? { pluginBuild: o.pluginBuild } : {}),
   };
   return { ctx, fake };
