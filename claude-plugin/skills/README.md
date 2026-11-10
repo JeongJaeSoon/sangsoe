@@ -1,7 +1,7 @@
 <!-- layout: slot=③ layer=판단 tokens=using -->
 # claude-plugin/skills — 판단 · 토큰 O
 
-판단 절차 skill 을 둔다. 지금은 일반 작업 스킬 14개가 `general/` 에 있다(결정 95). sangsoe 의 역할·상태에 기대는 판단 절차 skill(intake · write-brief · brief · deliver-ticket)은 뒤 유닛이 이전 설계에서 참조해 새로 쓴다(`docs/port-plan.md`).
+판단 절차 skill 을 둔다. 지금은 일반 작업 스킬 14개가 `general/` 에 있다(결정 95). sangsoe 의 역할·상태에 기대는 판단 절차 skill(intake · write-brief · brief · deliver-ticket)은 이 폴더에 있다.
 
 매니페스트(`.claude-plugin/plugin.json`)의 `skills` 가 이 폴더와 `general/` 을 둘 다 가리킨다. 두 폴더의 스킬은 `sangsoe:<name>` 으로 올라온다.
 

@@ -61,8 +61,8 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 <rect class="pl" x="560" y="10" width="430" height="320" rx="14"/>
 <text class="h" x="574" y="36" style="fill:var(--llm)">loop engineering · 역할마다</text>
 <text class="s" x="574" y="56">루프마다 멈추는 조건이 하나씩 있다</text>
-<g class="llm"><rect x="574" y="66" width="402" height="76" rx="8"/><text class="t" x="586" y="86">워커</text><text x="586" y="106">/goal → 일 → 끝나는 조건</text><text class="s" x="586" y="126">멈춤: 증거와 함께 worker_done</text></g>
-<g class="llm"><rect x="574" y="150" width="402" height="76" rx="8"/><text class="t" x="586" y="170">리드</text><text x="586" y="190">Orca 메시지 대기 → 처리 → 대기</text><text class="s" x="586" y="210">멈춤: 프로그램 완료 조건을 /goal 이 판정하거나, 오너가 중단을 지시</text></g>
+<g class="llm"><rect x="574" y="66" width="402" height="76" rx="8"/><text class="t" x="586" y="86">워커</text><text x="586" y="106">spec → 일 → 끝나는 조건</text><text class="s" x="586" y="126">멈춤: 증거와 함께 worker_done</text></g>
+<g class="llm"><rect x="574" y="150" width="402" height="76" rx="8"/><text class="t" x="586" y="170">리드</text><text x="586" y="190">Orca 메시지 대기 → 처리 → 대기</text><text class="s" x="586" y="210">멈춤: 프로그램 완료 조건을 리드가 판정하거나, 오너가 중단을 지시</text></g>
 <g class="llm"><rect x="574" y="234" width="402" height="76" rx="8"/><text class="t" x="586" y="254">오케스트레이터</text><text x="586" y="274">Orca 메시지로 깨어남 → 처리 → 잠듦</text><text class="s" x="586" y="294">멈춤: 없다 · 종료하지 않는다</text></g>
 
 <!-- graph -->
