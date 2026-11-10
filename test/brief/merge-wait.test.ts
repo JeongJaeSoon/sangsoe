@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { itemFacts, Store, type ViewInput, type ViewTask } from "../../core/index.ts";
+import { buildBrief, itemFacts, Store, type ViewInput, type ViewTask } from "../../core/index.ts";
 
 // Decision 175: a PR author ends with one worker_done, which completes its Task in Orca. Until
 // pr-monitor confirms the merge, the item reads 🚧 blocked on the reviewer, not ✅ done.
@@ -32,11 +32,21 @@ test("a completed Task whose PR is still open reads blocked on the reviewer", ()
   assert.equal(f?.closedAt, null);
 });
 
-test("the same item reads done once pr-monitor records the merge", () => {
+test("the same item reads done once pr-monitor records the merge, closed at the merge", () => {
   const input = world((store) => store.append({ type: "pr_merged", source: "test", payload: { pr: "acme/api#21", merge_sha: "a".repeat(40) } }));
   const f = facts(input, PR_ITEM);
   assert.equal(f?.state, "done");
   assert.equal(f?.waitsOn, null);
+  assert.equal(f?.closedAt, "2026-11-10T09:00:00.000Z", "no item_transition is written; the merge row dates the close");
+  assert.equal(buildBrief(input).summary.done, 1);
+});
+
+test("while it waits on the merge, only the PR's own alarms stand", () => {
+  const input = world((store) => {
+    store.append({ type: "worker_stuck", source: "test", payload: { reason: "no_output" }, entity: "task", entity_id: PR_ITEM });
+    store.append({ type: "ci_failed", source: "test", payload: { pr: "acme/api#21", head_sha: "b".repeat(40), run_id: "1" } });
+  });
+  assert.deepEqual(facts(input, PR_ITEM)?.alarms, ["ci_failed"]);
 });
 
 test("a completed Task with no PR reads done", () => {
