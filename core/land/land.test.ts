@@ -78,7 +78,7 @@ const verdict = (store: Store, head = HEAD, actOn = 0, reviewer = "codex") =>
     type: "review_verdict",
     source: "review record",
     actor: reviewer,
-    dedupe_key: dedupeKey(EVENTS.review_verdict, PR, head, reviewer),
+    dedupe_key: dedupeKey(EVENTS.review_verdict, PR, head, reviewer, String(actOn)),
     payload: { pr: PR, head_sha: head, act_on: actOn, reviewer, author: "alice" },
   });
 const stackEdge = (store: Store, pred: string, succ: string) =>

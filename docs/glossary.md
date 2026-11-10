@@ -65,7 +65,7 @@
 | 🔄 진행 중 | 살아 있는 워커나 리드가 Dispatch 로 쥐고 있다. 결정이 풀려 Orca 상태가 `ready` 가 됐어도 활성 Dispatch 가 있으면(워커가 아직 쥐고 있으면) 🟢 가 아니라 🔄 다 | `in_progress` | 작업 중, 실행 중 |
 | 🚧 막힘 | 시작했으나 누군가 없이는 못 간다. 기다리는 쪽을 괄호에 적는다. 리뷰 대기도 막힘이다 | `blocked` | 대기, 리뷰 중, 정지 |
 | ⏸️ 보류 | 일부러 지금 안 한다. 재검토 trigger 가 있다 | `parked` | 연기, 나중에 |
-| ✅ 완료 | Orca Task 가 `completed` 다. PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로, 오너 항목은 오너의 완료 버튼으로 `completed` 가 된다. `close_suggested` 는 닫기 제안이지 완료가 아니고, REAPER 의 끝남 판정은 카드를 치워도 되는지이지 항목 상태가 아니다(결정 161). 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
+| ✅ 완료 | Orca Task 가 `completed` 다. (결정 175·178: PR 작성자의 `worker_done` 이 머지 전에 Task 를 닫으므로, 브리프는 그 PR 이 열려 있으면 🚧 막힘(리뷰어), 머지 없이 닫혔으면 🚧 막힘(리드, 읽기 `pr_closed`), 상태를 아직 못 읽었으면 ❔ 모름(읽기 `unknown`)으로 읽는다. 보기 전용이고 Orca 상태는 그대로다. 아래 문장의 "머지 확인 뒤에야 `completed`" 는 이것으로 바뀌었다.) PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로, 오너 항목은 오너의 완료 버튼으로 `completed` 가 된다. `close_suggested` 는 닫기 제안이지 완료가 아니고, REAPER 의 끝남 판정은 카드를 치워도 되는지이지 항목 상태가 아니다(결정 161). 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
 | 🗑️ 취소 | 하지 않기로 했다. 이유가 필수다 | `canceled` | 폐기, 삭제 |
 
 ## 3. 플래그 (상태 위에 0개 이상)
@@ -167,12 +167,12 @@
 | 후속 | 간선의 끝. 항상 항목 | `succ` | 자식 |
 | 간선 종류 | 간선 하나의 의미. 네 종류(`blocks`·`after`·`stacked_on`·`deploys_after`)가 모두 후속을 막고, 막지 않는 참조 종류는 두지 않는다 | `kind` | — |
 | 간선 충족 | 간선 하나가 찼는지: 1 찼다 · 0 안 찼다 · 알 수 없음. 알 수 없음은 준비됨이 아니다 | `edge_ok` | — |
-| `blocks` | 선행이 ✅ 완료(선행이 결정이면 닫힘)여야 후속이 준비됨이 되는 간선 | `blocks` | depends_on |
-| `after` | 순서만 정하는 간선. 선행이 ✅ 완료나 🗑️ 취소면 후속이 준비됨이 된다 | `after` | — |
+| `blocks` | 선행이 ✅ 완료(선행이 결정이면 닫힘)여야 후속이 준비됨이 되는 간선. 선행 Task 에 pr-monitor 가 묶은 PR 이 있으면 그 PR 이 머지돼야 하고, 머지 없이 닫혔으면 끊긴 선행이다(결정 178, 흐름 단계인 선행은 예외) | `blocks` | depends_on |
+| `after` | 순서만 정하는 간선. 선행이 ✅ 완료나 🗑️ 취소면 후속이 준비됨이 된다. 선행에 묶인 PR 이 열려 있으면 머지나 닫힘을 기다린다(결정 178) | `after` | — |
 | `stacked_on` | 후속 PR 이 선행 PR 위에 쌓였다는 간선. 선행 PR 이 머지돼야 후속이 준비됨이 된다 | `stacked_on` | 부모 PR |
 | `deploys_after` | 선행에 `pr_merged` 가 있고 앞 단계에 `stage_recorded` 가 있으면 충족한다. 선행이 ✅ 완료일 필요는 없다(머지 확인이 `pr_merged` 와 ✅ 를 같은 라운드에 만든다) | `deploys_after` | — |
 | 끊긴 선행 | 🗑️ 취소된 선행에 `blocks`·`stacked_on`·`deploys_after` 로 걸린 후속의 표시. 자동으로 풀리지 않는다 | `dangling` | — |
-| ready | Orca Task 상태가 `pending`·`ready` 이고 Orca `deps` 의 선행이 모두 `completed` 이며 부가 간선·trigger 가 모두 차고 `hold` 가 아닌 항목을 내는 뷰. 리드·오케스트레이터가 시작할 일을 이 뷰(MCP)로 본다. Orca 의 `task-list --ready` 는 부가 간선과 trigger 를 몰라 더 많이 보인다. 계산 결과를 저장하지 않는다 | `ready` | 준비 목록, CLAIMER |
+| ready | Orca Task 상태가 `pending`·`ready` 이고 Orca `deps` 의 선행이 모두 `completed` 이고 그 선행에 묶인 PR 이 머지됐으며(결정 178) 부가 간선·trigger 가 모두 차고 `hold` 가 아닌 항목을 내는 뷰. 리드·오케스트레이터가 시작할 일을 이 뷰(MCP)로 본다. Orca 의 `task-list --ready` 는 부가 간선과 trigger 를 몰라 더 많이 보인다. 계산 결과를 저장하지 않는다 | `ready` | 준비 목록, CLAIMER |
 | `capacity` | 준비됨 항목과 여유(슬롯·압박)를 맞추는 함수(resource-monitor 모듈). 시작하는 쪽이 `worker-start` 전에 부르고 여유가 생기면 `capacity_free` 가 오케스트레이터를 깨운다 | `capacity` | 할당기 |
 | 순환 거부 | 간선을 더할 때 순환이 생기면 `event` 를 쓰지 않고 거부하는 것 | `edge_no_cycle` | — |
 | 흐름 틀 | 정해진 순서(예: 구현 → 리뷰 → 머지 → dev 배포 → 확인 → prod)를 선언형 데이터로 둔 것. 항목을 만들 때 하위 항목과 간선으로 펼친다 | `flow` | 템플릿(화면에서), 워크플로 |
@@ -307,7 +307,7 @@
 | 루프 게이트 | 포그라운드 sleep 반복 대기를 거부하는 게이트 | `[gate:sleep-loop]` | — |
 | 자기 머지 게이트 | 자기가 연 PR 이 열려 있는데 land 요청(`land_requested`: 머지 예약 또는 `merge_on_approval`) 없이 끝나지 못하게 하는 게이트. 머지를 예약했거나 "승인되면 머지"를 남겼으면 PR 이 열려 있어도 끝낼 수 있다 | `[gate:self-land]` | — |
 | 게이트 이름 | 차단 문구가 시작하는 형식 | `[gate:이름]` | — |
-| 게이트 4종 | 압박·루프·위임·자기 머지 게이트. 본문과 그림은 "게이트 4종"이라고만 쓰고 이름은 부록 §게이트와 원칙에만 둔다 | — | — |
+| 게이트 4종 | 압박·루프·위임·자기 머지 게이트. 본문과 그림은 "게이트 4종"이라고만 쓰고 이름은 부록 §게이트와 원칙에만 둔다. PreToolUse hook 은 이 넷에 가드 둘(세션 시작 가드 `startGuard`, 보고 주소 모양 검사 `reportAddress`)을 더한 여섯을 돌린다(`core/gates/index.ts` 의 `GATES`). 가드는 가정을 담은 게이트가 아니라 입력 모양을 막는 검사라 4종에 세지 않는다 | — | — |
 | Orca 자동화 | 에이전트 프롬프트를 주기로 실행하는 Orca 기능. 모델 없는 감지기에는 쓰지 않는다(plugin worker 타이머가 한다). 모델이 필요한 주기 작업이 생길 때, 그리고 첫 빌드 시험 T2 가 실패해 `--precheck` 가 타이머를 대신할 때만 쓴다 | `orca automations` | 상주 실행, 데몬, cron |
 | 배치 규칙 | 구성요소는 Orca plugin 이 할 수 있으면 Orca plugin 에 둔다. Claude Code plugin 에는 Claude Code 안에서만 되는 것(Claude Code hook·skill·MCP 서버·agents 정의)만 남긴다. 한 저장소에 매니페스트 둘과 공유 코어 하나를 둔다 | — | — |
 | 배치표 | 구성요소마다 네 칸(Orca CLI 내장 기능·Orca plugin·Claude Code plugin·공유 코어) 중 어디에 사는지, 이유 한 줄, 확인·미확인을 적은 표. design.html 2절 | — | — |
@@ -324,7 +324,7 @@
 | Claude Code plugin | Claude Code 가 읽는 plugin 매니페스트(`.claude-plugin/plugin.json`)로 싣는 쪽. 셋째 칸이고 Orca plugin 이 못 담는 것만 싣는다: hook·skill·MCP 서버(tools + resources)·agents 정의 | `.claude-plugin/plugin.json` | — |
 | 공유 코어 | 넷째 칸. 두 매니페스트가 같은 저장소 안에서 함께 부르는 코어 라이브러리(TS/Node)와 sqlite 파일 하나와 셸 호출자 전용 CLI. 에이전트는 MCP 만 쓴다 | — | 이중 코어 |
 | plugin worker | Orca plugin 의 `main` 코드. Orca 호스트의 별도 Node 프로세스로 사용자 계정 권한으로 돈다. monitor 의 타이머·이벤트 처리·패널 요청 처리를 맡는다. 역할 워커와 다른 것이다 | `main` · `trusted-worker` | — |
-| plugin 승인 | plugin worker 를 켜는 오너 승인. `sangsoe plugin approve` 코어 함수 하나로만 하고, 오너가 `permissions.allow` 에 이 명령 한 줄만 넣는다. 명령이 독립 리뷰 지적 0으로 main 에 머지된 버전인지, `orca plugin inspect` 의 지문이 리뷰된 빌드와 같은지, 대상이 sangsoe plugin 자신인지 검사하고 통과할 때만 `orca plugin enable --approve <지문>` 을 부르며 승인 event 를 남긴다. `orca plugin enable` 자체는 허용 목록에 두지 않는다. MCP tool 이 아닌 호출 경로 규칙의 예외다 | `plugin approve` · `orca plugin enable` · `orca plugin inspect` · `permissions.allow` | — |
+| plugin 승인 | plugin worker 를 켜는 오너 승인. `sangsoe plugin approve` 코어 함수 하나로만 하고, 오너가 `permissions.allow` 에 이 명령 한 줄만 넣는다. 명령이 독립 리뷰 지적 0으로 main 에 머지된 버전인지, 폴더의 내용 해시(`contentHash`)가 main 의 빌드 커밋 트리와 리뷰된 head 트리와 같은지(결정 105, `orca plugin inspect` 는 지문을 주지 않는다), 대상이 sangsoe plugin 자신인지 검사하고 통과할 때만 `orca plugin enable --approve <지문>` 을 부르며 승인 event 를 남긴다. `orca plugin enable` 자체는 허용 목록에 두지 않는다. MCP tool 이 아닌 호출 경로 규칙의 예외다 | `plugin approve` · `orca plugin enable` · `orca plugin inspect` · `permissions.allow` | — |
 | 첫 빌드 시험 | 구현의 첫 단계가 돌리는 시험 T1~T6. 결과가 설계의 갈래를 정하고, 실패하면 정해 둔 대체가 적용된다: T1 worker 안 `node:sqlite` → 코어 프로세스를 CLI 로 부름 · T2 worker 타이머 → `orca automations --precheck` · T3 패널 그림 → 상태 표시줄과 `sangsoe brief` 출력 · T4 승인 뒤 자율 범위와 재승인 빈도 · T5 Dispatch 재시작 거부와 세 번 실패 차단(PR 작성자의 끝은 결정 175 가 `worker_done` 하나로 정했다). T6(결정 90) 경로 마켓플레이스 설치와 `brew upgrade` 뒤 갱신, hook PATH 의 `sangsoe`, 개발 폴더로 올린 Orca plugin 이 앱 재시작 뒤에도 남는지. 어느 것도 오너 결정을 기다리지 않는다 | `T1`~`T6` | 오너 결정 대기 |
 | Orca·Node 호스트 낱말 | 호스트가 정한 이름이라 sangsoe 가 바꾸지 않는 것: worker 가 돌리는 파일 형식 `.ts`, Orca plugin 매니페스트의 빈 칸 `mcpServers`, Node 의 내장 sqlite `node:sqlite`, command hook 만 갖는 실패 시 막기 `onFailure: "block"`, plugin 로컬 시험 `orca plugin test`, worktree 삭제 `orca worktree rm`, 입력을 받을 때까지 기다리는 `tui-idle`(대체 시작이 없어져 쓰지 않는다, 결정 94), Orca 가 돌려주는 거부·승인 코드 `approval_required`·`approval_stale`·`consumer_fenced`·`task_not_startable`·`task_id` | `approval_required` · `approval_stale` · `consumer_fenced` · `task_not_startable` · `task_id` · `.ts` · `mcpServers` · `node:sqlite` · `onFailure: "block"` · `orca plugin test` · `orca worktree rm` · `tui-idle` | — |
 | 패널 | Orca plugin 이 오른쪽 사이드바에 그리는 화면. 현황 세 단계·오너 할 일·결정 버튼을 낸다. 폭은 사이드바가 정한다. Orca 패널처럼 머리 행(새로 고침·터미널에서 전체 현황·더 보기)과 1단계의 탭(전체 · 할 일 · 진행 중)을 두고 색은 Orca 테마 변수를 따른다(결정 169) | `panels` | 웹 화면, 페이지(패널을 가리킬 때) |
@@ -379,7 +379,7 @@
 | 증거 기록 입구 | 검증 실행의 결과를 PR head 의 `evidence` 로 남기는 MCP tool. land 의 `evidence_missing` 이 이 입구를 가리킨다. 작성자와 그 PR 을 쥔 세션은 거부한다(결정 171) | `evidence_record` | — |
 | 단계 기록 입구 | 머지된 PR 이 `merge`·`dev`·`prod` 에 닿았음을 `stage_recorded` 로 남기는 MCP tool. `deploys_after` 가 기다리는 것이 이 줄이다(결정 171) | `stage_record` | — |
 | 리마인드 대상 | 리마인드할 때가 된 의뢰를 `review_ask_sent` 에서 계산하는 뷰 | `ask_due` | — |
-| 릴리스 묶음 틀 | 여러 항목이 dev 배포·확인·prod 승격 한 번을 함께 쓰는 흐름 틀. 구성원 여럿의 `pr_merged` 를 `blocks` 로 기다리고 `stage_recorded` 의 `members` 칸이 전체의 증거다. 단독 긴급 수정은 `ship-change` 다 | `ship-batch` | — |
+| 릴리스 묶음 틀 | 여러 항목이 dev 배포·확인·prod 승격 한 번을 함께 쓰는 흐름 틀. 흐름 변수 `members`(항목 id 목록)의 구성원을 Orca deps(`blocks`)로 기다리고, 증거는 구성원 PR 마다 하나씩 쓰는 `stage_recorded`(`pr`·`stage`·`sha`, `members` 칸은 없다)다. 단독 긴급 수정은 `ship-change` 다 | `ship-batch` | — |
 | main 수정 land | 그 저장소의 최신 main 이 `main_red` 인 동안 land 판정 함수가 받는 유일한 요청 종류 | `main_fix` | — |
 | 감시 범위 | pr-monitor 가 읽는 PR 의 범위를 정하는 설정 키. 기본은 자기 프로그램·항목에 연결된 PR 만이고 "연결됨"은 Orca `reference` 조회가 원본이다 | `watch`(`repos` · `authors` · `linked_only`) | — |
 

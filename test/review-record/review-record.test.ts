@@ -100,9 +100,16 @@ test("the PR's author as reviewer: the same refusal through the tool and `sangso
   assert.deepEqual(verdicts(), []);
 });
 
-test("a second call at the same head: both entrances answer that the first verdict stands", async () => {
+test("S2: a later verdict with another count at the same head is stored; the same count again stands", async () => {
   reset();
   assert.equal((await record({ reviewer: "codex" })).ok, true);
+  const worse = await record({ reviewer: "codex", act_on: 2 });
+  assert.match(worse.ok ? String(worse.value) : "", /^recorded/);
+  assert.deepEqual(
+    verdicts().map((v) => v.act_on),
+    [0, 2],
+    "the worse row is kept, and land reads the one with findings",
+  );
   const r = await expectSameViaBothEntrances({
     tool: "review_record",
     input: { repo: REPO, pr: 12, head_sha: HEAD, act_on: 2, reviewer: "codex" },
@@ -110,5 +117,5 @@ test("a second call at the same head: both entrances answer that the first verdi
     dirs,
   });
   assert.match(r.ok ? String(r.value) : "", /^already recorded/);
-  assert.equal(verdicts().length, 1);
+  assert.equal(verdicts().length, 2);
 });

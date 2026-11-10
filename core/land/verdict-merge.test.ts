@@ -125,7 +125,7 @@ const verdict = (store: Store, o: { head?: string; reviewer?: string; author?: s
     type: "review_verdict",
     source: "review record",
     actor: reviewer,
-    dedupe_key: dedupeKey(EVENTS.review_verdict, PR, head, reviewer),
+    dedupe_key: dedupeKey(EVENTS.review_verdict, PR, head, reviewer, String(o.actOn ?? 0)),
     payload: { pr: PR, head_sha: head, act_on: o.actOn ?? 0, reviewer, author: o.author ?? "alice" },
   });
 };

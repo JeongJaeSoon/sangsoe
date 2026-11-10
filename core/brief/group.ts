@@ -8,7 +8,7 @@ export function groupBriefFrom(input: ViewInput, facts: readonly ItemFacts[]): G
   const leads = [...new Set(facts.filter(open).map((f) => f.lead))];
   return leads.map((lead) => {
     const mine = facts.filter((f) => f.lead === lead);
-    const blocked = mine.filter((f) => f.state === "blocked");
+    const blocked = mine.filter((f) => f.state === "blocked" || f.state === "pr_closed");
     const oldest = blocked.map((f) => f.since ?? input.now).sort()[0] ?? null;
     return {
       lead,

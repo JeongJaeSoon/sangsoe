@@ -11,7 +11,7 @@ export default {
       decision: { type: "string", description: "dNNN" },
       answer: { type: "string", description: "The owner's answer, already masked" },
       owner_action: { type: "integer", description: "seq of the owner_action the answer came from" },
-      linked_by: { type: "string", enum: ["hook", "button", "orchestrator", "observed"] },
+      linked_by: { type: "string", description: "orchestrator (default) or observed; hook and button are set by their own entrances, never here" },
     },
     required: ["decision", "answer", "owner_action"],
     additionalProperties: false,
