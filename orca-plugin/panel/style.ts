@@ -64,7 +64,7 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; overflow-wrap
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 #root { padding: 0 0 var(--s4); container: panel / inline-size; }
 .top { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: var(--s2); height: 36px; padding: 0 var(--s1) 0 var(--s3); border-bottom: 1px solid var(--rule); background: var(--paper); }
-.brand { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: var(--text-base); white-space: nowrap; }
+.brand { display: inline-flex; align-items: center; gap: var(--s2); font-weight: 600; font-size: var(--text-base); white-space: nowrap; }
 .brand .ic { width: 16px; height: 16px; color: var(--muted); }
 .brand small { color: var(--muted); font-weight: 400; font-size: var(--text-xs); }
 .fresh { color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
@@ -89,7 +89,7 @@ button.link { border: 0; background: none; padding: 0; color: var(--link); font:
 h1 { font-size: var(--text-base); line-height: 20px; margin-bottom: var(--s2); }
 h1 .dim { color: var(--ink-2); font-weight: 400; }
 h3 { font-size: var(--text-sm); color: var(--muted); font-weight: 500; padding: var(--s1) 0; }
-.sumline { margin: 0 0 var(--s3); padding: 6px var(--s2); background: var(--accent-soft); border-radius: var(--r2); font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.sumline { margin: 0 0 var(--s3); padding: var(--s1) var(--s2); background: var(--accent-soft); border-radius: var(--r2); font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
 section { margin: 0 0 var(--s3); }
 .sec-h { display: flex; align-items: baseline; gap: var(--s2); padding: var(--s1) 0; border-bottom: 1px solid var(--rule); }
 .sec-h h2 { font-size: var(--text-sm); line-height: 20px; }
@@ -150,7 +150,8 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 @container panel (min-width: 900px) {
   .gwrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
-@container panel (max-width: 639px) {
+/* Orca's sidebar is about 665px wide; without the old side padding it still folds rows (decision 169). */
+@container panel (max-width: 719px) {
   .tbl, .tbl tbody { display: block; }
   .tbl thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .tbl tr { display: flex; flex-wrap: wrap; align-items: baseline; padding: var(--s2) var(--s1); border-bottom: 1px solid var(--rule); }

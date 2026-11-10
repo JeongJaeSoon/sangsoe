@@ -270,7 +270,8 @@ export const TABS = ["all", "todo", "prog"] as const;
 export type Tab = (typeof TABS)[number];
 
 function tabs(m: Overview, active: Tab): string {
-  const prog = m.inProgress.count + (m.onHold?.count ?? 0);
+  // The same number as the 진행 중 section heading; 보류 rides along in the view but is not counted.
+  const prog = m.inProgress.count;
   const one = (t: Tab, label: string, n: number | null) =>
     `<button type="button" role="tab" aria-selected="${t === active}" data-tab-to="${t}">${label}${n === null ? "" : ` <span class="count">${n}</span>`}</button>`;
   return `<nav class="seg" role="tablist" aria-label="현황 보기">${one("all", "전체", null)}${one("todo", "할 일", m.todo.total)}${one("prog", "진행 중", prog)}</nav>`;

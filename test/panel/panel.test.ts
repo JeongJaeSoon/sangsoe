@@ -165,7 +165,7 @@ test("decision 169: header row, stage 1 tabs with model counts, empty sections o
   assert.match(html, /<header class="top">.*data-refresh.*data-open=.*<details class="menu">/s);
   assert.match(html, /<main data-view="all">/, "every section shows by default");
   assert.ok(html.includes(`data-tab-to="todo">할 일 <span class="count">${m.todo.total}</span>`));
-  assert.ok(html.includes(`data-tab-to="prog">진행 중 <span class="count">${m.inProgress.count + (m.onHold?.count ?? 0)}</span>`));
+  assert.ok(html.includes(`data-tab-to="prog">진행 중 <span class="count">${m.inProgress.count}</span>`), "the tab says the section heading's number");
   assert.match(renderStage(one, [], "prog"), /<main data-view="prog">/);
   assert.equal(html.match(/data-tab="todo"/g)?.length, 2, "결정 필요 and 지금 오너가 할 일");
 

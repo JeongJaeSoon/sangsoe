@@ -36,18 +36,26 @@ function mount(): void {
   const draw = async () => {
     const r = (await orca.plugin.request("panel.brief", current(stack)).catch(failed)) as Reply<PanelView>;
     if (!r.ok) {
-      root.innerHTML = `${note}<p class="msg bad">${esc(`${r.refusal.code}: ${r.refusal.reason}`)}</p>`;
+      root.innerHTML = `${note}<p class="msg bad">${esc(`${r.refusal.code}: ${r.refusal.reason}`)} <button type="button" class="link" data-refresh>새로 고침</button></p>`;
       return;
     }
     // The message sits under the header row, above the tabs.
     root.innerHTML = renderStage(r.value, trail(stack), tab, where()).replace("</header>", () => `</header>${note}`);
   };
+  const closeMenu = () => root.querySelector("details.menu")?.removeAttribute("open");
   const open = async (o: Open) => {
-    (root.querySelector("details.menu") as HTMLDetailsElement | null)?.removeAttribute("open");
+    closeMenu();
     const r = (await orca.plugin.request("panel.open", o).catch(failed)) as Reply<{ status: string }>;
+    const stale = note !== "";
     say(r.ok ? "" : `${r.refusal.reason} — ${r.refusal.fix}`, !r.ok);
-    if (!r.ok) await draw();
+    if (!r.ok || stale) await draw();
   };
+  document.addEventListener("click", (ev) => {
+    if (!(ev.target as Element).closest("details.menu")) closeMenu();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") closeMenu();
+  });
   // One act at a time: a second click while the first is in flight would answer the decision twice.
   const act = async (a: Act) => {
     if (busy) return;
