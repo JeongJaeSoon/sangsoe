@@ -573,6 +573,25 @@ test("decision 197: a waiter joined without a gate gets none on a later open aft
   assert.ok([...w.gates.values()].every((g) => g.status !== "pending"), "every gate is resolved");
 });
 
+test("decision 197: a later open of only a gate-less waiter reuses the gate another waiter holds, no carrier", async () => {
+  const w = createWorld([
+    { id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" },
+    { id: T2, run: RUN, status: "pending" },
+  ]);
+  const first = await open(w, [{ task: T1, run: RUN }, { task: T2, run: RUN }]);
+  const again = await open(w, [{ task: T1, run: RUN }]);
+  assert.deepEqual(again.gates, first.gates);
+  assert.equal(w.calls("orchestration gate-create").length, 1, "the owner is asked once");
+  assert.equal([...w.tasks.values()].filter((t) => t.title === "d001").length, 0, "no carrier Task");
+});
+
+test("decision 197: the carrier lookup reads task-list --full, where Orca gives the title", async () => {
+  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }]);
+  await open(w);
+  const lists = w.calls("orchestration task-list");
+  assert.ok(lists.length > 0 && lists.every((a) => a.includes("--full")), JSON.stringify(lists));
+});
+
 test("decisionAnswer refuses an unknown decision", async () => {
   const w = createWorld([]);
   const r = await decisionAnswer(w, { decision: "d404", answer: "x", ownerAction: 1, linkedBy: "hook", callerRun: RUN });

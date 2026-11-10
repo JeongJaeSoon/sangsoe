@@ -145,8 +145,9 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
     gates,
     sends,
     calls: (name) => {
-      const words = fake.calls.filter((c) => c[0] === "orca").map((c) => c.slice(1, 3));
-      return name ? words.filter((w) => w.join(" ") === name) : words;
+      const orca = fake.calls.filter((c) => c[0] === "orca");
+      // Named: each call's full argv, so a test can read its flags.
+      return name ? orca.filter((c) => c.slice(1, 3).join(" ") === name).map((c) => c.slice(1)) : orca.map((c) => c.slice(1, 3));
     },
     useRun: (run) => {
       current = run;

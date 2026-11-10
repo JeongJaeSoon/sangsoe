@@ -92,7 +92,10 @@ export async function decisionOpen(deps: CoreDeps, input: DecisionOpenInput): Pr
       payload: { decision: d, waiter: w.task, run: w.run },
     });
   }
-  if (waiters.length === 0) {
+  const holders = state.waiters.filter((x) => x.gate !== null && x.run !== null);
+  if (waiters.length === 0 && holders.length > 0) {
+    waiters = holders.map((x) => ({ task: x.task, run: x.run as string }));
+  } else if (waiters.length === 0) {
     const run = input.carrierRun ?? input.callerRun;
     const carrier = await carrierTask(deps, state, run);
     if (!carrier.ok) return carrier;
@@ -141,7 +144,7 @@ async function carrierTask(deps: CoreDeps, state: DecisionState, run: string): P
   const d = state.row.decision;
   const marked = state.waiters.find((w) => w.carrier);
   if (marked) return done(marked.task);
-  const listed = await deps.orca.taskList({ run });
+  const listed = await deps.orca.taskList({ run, full: true });
   if (!listed.ok) return refuse("orca_error", `task-list ${run}: ${listed.error.code}`, "retry once Orca answers");
   let task = listed.value.find((t) => t.title === d)?.id;
   if (!task) {
