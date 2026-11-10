@@ -88,22 +88,28 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
     tier: () => readLandConfig(o.home).tier,
     coreVersion: VERSION,
   };
-  // After a lost database, the first round of this runner waits for one reread of the host rows, so
-  // the rounds after it see those rows as known and act only on what is new.
+  return {
+    run: afterHostReread(deps, () => !o.dryRun && hostRereadPending(store.events({ type: "signal" }))),
+    stall: () => stallCheck(deps),
+    close: () => store.close(),
+  };
+}
+
+/**
+ * After a lost database, the first round of a runner waits for one reread of the host rows, so
+ * the rounds after it see those rows as known and act only on what is new (decision 184).
+ */
+export function afterHostReread(deps: MonitorDeps, pending: () => boolean): MonitorRunner["run"] {
   let reread: Promise<unknown> | null = null;
   const firstReread = (signal?: AbortSignal) => {
-    if (o.dryRun || !hostRereadPending(store.events({ type: "signal" }))) return Promise.resolve();
+    if (!pending()) return Promise.resolve();
     reread ??= rereadHostRows(deps, signal).finally(() => {
       reread = null;
     });
     return reread;
   };
-  return {
-    run: async (name, signal) => {
-      await firstReread(signal);
-      return runMonitor(name, deps, signal);
-    },
-    stall: () => stallCheck(deps),
-    close: () => store.close(),
+  return async (name, signal) => {
+    await firstReread(signal);
+    return runMonitor(name, deps, signal);
   };
 }

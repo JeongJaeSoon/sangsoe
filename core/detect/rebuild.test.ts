@@ -11,7 +11,7 @@ import { Store } from "../store/store.ts";
 import { nullChatProvider } from "./chat/provider.ts";
 import { DEFAULT_MONITOR_CONFIG, type MonitorDeps } from "./monitor.ts";
 import { rereadHostRows } from "./rebuild.ts";
-import { runMonitor } from "./run.ts";
+import { afterHostReread, runMonitor } from "./run.ts";
 
 const tmp = mkdtempSync(join(tmpdir(), "sangsoe-rebuild-"));
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -173,6 +173,59 @@ test("a wake sent before the loss is not sent again by the reread", async () => 
   assert.equal(out.acts.length, 1, "the wake act runs");
   assert.notEqual(out.acts[0]?.detail, "sent", "and notify holds it back");
   assert.deepEqual(sends(h.writes), ["send run:run_lead"], "the copied notified row keeps it once");
+  r.close();
+});
+
+/** Deps whose Orca writes note whether the host reread was still pending when they ran. */
+function watched(h: ReturnType<typeof hosts>, r: Store) {
+  const d = h.deps(r);
+  const acts: string[] = [];
+  const note = (what: string) => acts.push(hostRereadPending(r.events({ type: "signal" })) ? `${what} while pending` : what);
+  const wrap =
+    <A, R>(what: string, f: (a: A) => R) =>
+    (a: A) => {
+      note(what);
+      return f(a);
+    };
+  const base = d.orca;
+  const orca: OrcaAdapter = {
+    ...base,
+    taskUpdate: wrap("task-update", base.taskUpdate),
+    referenceAdd: wrap("reference add", base.referenceAdd),
+    send: wrap("send", base.send),
+  };
+  const run = afterHostReread({ ...d, orca, core: { store: r, orca } }, () => hostRereadPending(r.events({ type: "signal" })));
+  return { run, acts };
+}
+
+test("a second caller on a reread the first caller aborted runs the reread again before its round, never a round while it is pending", async () => {
+  const h = hosts();
+  const r = await lose("abort-shared.db", () => {});
+  const w = watched(h, r);
+  const first = new AbortController();
+  const a = w.run("pr", first.signal);
+  first.abort();
+  const b = w.run("pr", new AbortController().signal);
+  await Promise.all([a, b]);
+  assert.deepEqual(w.acts.filter((x) => x.endsWith(" while pending")), [], "no act before the reread completed");
+  assert.equal(hostRereadPending(r.events({ type: "signal" })), false, "the second caller completed the reread");
+  r.close();
+});
+
+test("a caller whose own reread was aborted runs no round; the next caller rereads first", async () => {
+  const h = hosts();
+  const r = await lose("abort-own.db", () => {});
+  const w = watched(h, r);
+  const first = new AbortController();
+  const a = w.run("pr", first.signal);
+  first.abort();
+  const out = await a;
+  assert.equal(w.acts.length, 0, "no act at all");
+  assert.deepEqual(out.written, []);
+  assert.equal(hostRereadPending(r.events({ type: "signal" })), true, "the reread is still owed");
+  await w.run("pr", new AbortController().signal);
+  assert.deepEqual(w.acts.filter((x) => x.endsWith(" while pending")), []);
+  assert.equal(hostRereadPending(r.events({ type: "signal" })), false);
   r.close();
 });
 
