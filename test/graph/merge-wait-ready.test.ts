@@ -45,10 +45,10 @@ test("A blocks B: once A's PR merges, B is ready", () => {
   })), [B]);
 });
 
-test("before pr-monitor binds the PR, the one A's report names holds B as unknown", () => {
+test("a PR only A's report names reads unknown on A's item but does not hold B: no row is sure to come", () => {
+  // Without watch.repos, or for a PR pr-monitor never lists, nothing writes the row that would clear it.
   const input = world(() => {}, { report: `U21 landed\nPR: ${URL}` });
-  assert.deepEqual(readyTasks(input), []);
-  assert.match(why(input, B).rows[0]?.predState ?? "", /^모름/);
+  assert.deepEqual(readyTasks(input), [B]);
   assert.equal(item(input, A)?.state, "unknown");
 });
 

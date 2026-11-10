@@ -416,6 +416,13 @@ test("decision 178: a Task Orca released at its predecessor's worker_done waits 
   assert.equal((await start(h, request({ task: { id: NEW_TASK } }))).kind, "started");
 });
 
+test("decision 178: start_unit holds only on a merge wait in its own Run; another Run's predecessor and a hold are queue-monitor's", async () => {
+  const h = harness();
+  h.store.append({ type: "edge_added", source: "test", payload: { pred: "item:task_other_run", succ: `item:${NEW_TASK}`, kind: "blocks" } });
+  h.store.append({ type: "item_extra_set", source: "test", payload: { task: NEW_TASK, hold: true } });
+  assert.equal((await start(h, request({ task: { id: NEW_TASK } }))).kind, "started");
+});
+
 // ---- task-create, first prompt, references ----
 
 test("a new Task goes through task-create --deps on the requester's Run: role line first, late answers after the brief", async () => {
