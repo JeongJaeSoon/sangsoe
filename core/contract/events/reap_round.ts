@@ -11,4 +11,6 @@ export default defineEvent("reap_round", {
   reaped: opt(int),
   unknown: opt(int),
   docker_skipped: opt(bool),
+  // Set on the one round that catches up after a pause (Orca closed): timer slots that never ran.
+  missed: opt(int),
 });

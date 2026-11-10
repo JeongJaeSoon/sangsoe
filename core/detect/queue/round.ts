@@ -215,7 +215,7 @@ export type StallReport = { planned: Planned[]; written: { type: string; seq: nu
  * told once under a key bound to it; a re-check after a crash finishes the notice.
  */
 export async function stallCheck(d: MonitorDeps): Promise<StallReport> {
-  const planned = judgeStall(d.events({ type: "reap_round" }), d.now(), d.config.reaperIntervalMinutes * 60_000);
+  const planned = judgeStall(d.events({ type: "reap_round" }), d.now(), d.config.reaperIntervalMinutes * 60_000, d.openedAt);
   const written: StallReport["written"] = [];
   const calls: string[] = [];
   let top: Promise<string | undefined> | undefined;
