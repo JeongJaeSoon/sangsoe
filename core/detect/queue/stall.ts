@@ -8,14 +8,17 @@ const ROOTS_FAILED_RUN = 3;
  * Decision 83: the REAPER timer is judged stalled from its own reap_round rows, never from the
  * timer — the last `trigger=timer` row older than 3× its period, or `roots_ok=false` three rounds
  * running. Each key is bound to the row that started the stall, so one stall writes once and a
- * later stall writes again. No reap_round row at all is unknown: nothing is judged.
+ * later stall writes again. No reap_round row at all is unknown: nothing is judged. While Orca is
+ * closed no timer runs by design (decision 182), so the age counts from `openedAt`, the time this
+ * worker's runner opened, when that is later than the last timer row.
  */
-export function judgeStall(events: readonly StoredEvent[], now: number, periodMs: number): Planned[] {
+export function judgeStall(events: readonly StoredEvent[], now: number, periodMs: number, openedAt = Number.NEGATIVE_INFINITY): Planned[] {
   const rounds = events.filter((e) => e.type === "reap_round");
   const out: Planned[] = [];
   const lastTimer = rounds.findLast((e) => e.payload.trigger === "timer");
-  if (lastTimer && now - Date.parse(lastTimer.ts) > 3 * periodMs) {
-    const minutes = Math.round((now - Date.parse(lastTimer.ts)) / 60_000);
+  const since = lastTimer ? Math.max(Date.parse(lastTimer.ts), openedAt) : 0;
+  if (lastTimer && now - since > 3 * periodMs) {
+    const minutes = Math.round((now - since) / 60_000);
     out.push(stalled(`no timer round for ${minutes} min (period ${Math.round(periodMs / 60_000)} min)`, "age", lastTimer.seq));
   }
   const tail = rounds.slice(-ROOTS_FAILED_RUN);

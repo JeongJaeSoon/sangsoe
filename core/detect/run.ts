@@ -20,6 +20,8 @@ import { orcaRound } from "./orca/round.ts";
 import { readWatchConfig } from "./pr/config.ts";
 import { prRound } from "./pr/round.ts";
 import { queueRound, type StallReport, stallCheck } from "./queue/round.ts";
+import { hostRereadPending } from "../store/backup.ts";
+import { rereadHostRows } from "./rebuild.ts";
 import { resourceRound } from "./resource/round.ts";
 
 /** The one table both entrances run: the worker's timer rounds and `sangsoe monitor run <name>`. */
@@ -76,6 +78,7 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
     events: (f) => store.events(f),
     ...(o.dryRun ? {} : { append: (e) => store.append(e), core: { store, orca } }),
     now: () => Date.now(),
+    openedAt: Date.now(),
     config: DEFAULT_MONITOR_CONFIG,
     chat: nullChatProvider,
     sample: () => sampleLoad(),
@@ -85,5 +88,36 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
     tier: () => readLandConfig(o.home).tier,
     coreVersion: VERSION,
   };
-  return { run: (name, signal) => runMonitor(name, deps, signal), stall: () => stallCheck(deps), close: () => store.close() };
+  return {
+    run: afterHostReread(deps, () => !o.dryRun && hostRereadPending(store.events({ type: "signal" }))),
+    stall: () => stallCheck(deps),
+    close: () => store.close(),
+  };
+}
+
+/**
+ * After a lost database, the first round of a runner waits for one reread of the host rows, so
+ * the rounds after it see those rows as known and act only on what is new (decision 184). A reread
+ * another caller aborted is started again under this caller's signal; a caller aborted before the
+ * reread completes runs no round.
+ */
+export function afterHostReread(deps: MonitorDeps, pending: () => boolean): MonitorRunner["run"] {
+  let reread: Promise<unknown> | null = null;
+  const firstReread = async (signal?: AbortSignal): Promise<boolean> => {
+    while (pending()) {
+      if (signal?.aborted) return false;
+      const mine = reread === null;
+      reread ??= rereadHostRows(deps, signal).finally(() => {
+        reread = null;
+      });
+      await reread;
+      // Our own reread ran to its end and still left it owed (no `append`): stop rather than spin.
+      if (mine && pending()) return false;
+    }
+    return true;
+  };
+  return async (name, signal) => {
+    if (await firstReread(signal)) return runMonitor(name, deps, signal);
+    return { monitor: name, planned: [], written: [], unseen: ["host rows not read again yet"], calls: [], aborted: true, acts: [] };
+  };
 }

@@ -9,15 +9,15 @@ import { isOwnerItem, OWNER_DEFAULTS, type OwnerConfig, type OwnerItemFacts } fr
 export interface OwnerDone {
   readonly task: string;
   readonly alias: string;
-  /** ✅ 🔍 "오너 완료 표시 · 검증 대기": the item has a verify and no probe has seen it true yet. */
-  readonly evidenceShort: boolean;
+  /** ⏳ 검증 대기: the item has a verify and no probe has seen it true yet (decision 181). */
+  readonly pendingVerify: boolean;
 }
 
 /**
- * The panel "완료" button (decision 91②, row 2): an explicit answer naming exactly one owner item,
- * so it closes the item at once. Orca's task-update goes first; item_transition records it after.
- * With no verify the button is the evidence; with a verify and no probe true yet the item is ✅ 🔍
- * and a later probe inside verify.grace_hours lifts the 🔍.
+ * The panel "완료" button (decision 91②, row 2): an explicit answer naming exactly one owner item.
+ * Orca's task-update goes first; item_transition records it after. With no verify the button is the
+ * evidence and the item is ✅. With a verify the item reads ⏳ 검증 대기 until a probe sees the
+ * effect (decision 181: a to-do closes on verification); the readers, not this, hold it there.
  */
 export async function ownerDone(
   ports: { readonly orca: Pick<OrcaAdapter, "taskUpdate">; readonly store: Pick<Store, "append" | "appendOwnerAction"> },
@@ -62,5 +62,5 @@ export async function ownerDone(
       entity_id: f.task,
     });
   }
-  return done({ task: f.task, alias: f.alias, evidenceShort: Boolean(m?.verify) && !m?.verified });
+  return done({ task: f.task, alias: f.alias, pendingVerify: Boolean(m?.verify) && !m?.verified });
 }

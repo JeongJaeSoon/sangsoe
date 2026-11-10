@@ -51,7 +51,7 @@ export function countsAsEvidence(e: StoredEvent): boolean {
 export const DONE_EVIDENCE = "owner_done";
 
 /** Folds every item's verify, hint and mark from the events; pure, `now` decides row 11. */
-export function ownerMarks(input: ViewInput, cfg: Pick<OwnerConfig, "waitMinutes">): Map<string, OwnerItemMarks> {
+export function ownerMarks(input: Pick<ViewInput, "events" | "now">, cfg: Pick<OwnerConfig, "waitMinutes">): Map<string, OwnerItemMarks> {
   type M = { -readonly [K in keyof OwnerItemMarks]: OwnerItemMarks[K] };
   const out = new Map<string, M>();
   const at = (task: string): M => {

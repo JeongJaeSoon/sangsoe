@@ -98,19 +98,19 @@ export interface ProbeTarget {
 }
 
 /**
- * What a round reads: each owner item with a verify and no probe true yet, open or closed inside
- * verify.grace_hours. run_ok and pr_found only while the item carries a mark (decision 91②, 92 (가)).
+ * What a round reads: each owner item with a verify and no probe true yet, open or pending
+ * verification (decision 181: it stays pending until a probe passes, so it is read until then).
+ * run_ok and pr_found only while the item carries a mark or the owner pressed 완료 (decision 91②, 92 (가)).
  */
-export function probeTargets(input: ViewInput, facts: readonly OwnerItemFacts[], cfg: Pick<OwnerConfig, "waitMinutes" | "graceHours"> = OWNER_DEFAULTS): ProbeTarget[] {
+export function probeTargets(input: ViewInput, facts: readonly OwnerItemFacts[], cfg: Pick<OwnerConfig, "waitMinutes"> = OWNER_DEFAULTS): ProbeTarget[] {
   const marks = ownerMarks(input, cfg);
-  const graceStart = Date.parse(input.now) - cfg.graceHours * 3_600_000;
   const out: ProbeTarget[] = [];
   for (const f of facts) {
     const m: OwnerItemMarks | undefined = marks.get(f.task);
     const spec = m ? verifyWithRun(m) : null;
-    if (!m || !spec || m.verified || !isOwnerItem(f) || f.state === "cancelled") continue;
-    if (f.state === "done" && (!f.closedAt || Date.parse(f.closedAt) < graceStart)) continue;
-    if (MARKED_ONLY.has(spec.kind) && m.mark !== "verifying" && m.mark !== "unverified") continue;
+    if (!m || !spec || m.verified || !isOwnerItem(f) || !isOpenState(f.state)) continue;
+    const pending = f.state === "pending_verify";
+    if (MARKED_ONLY.has(spec.kind) && !pending && m.mark !== "verifying" && m.mark !== "unverified") continue;
     // The hook writes the mark at the next turn, minutes after the line ran; the item's creation is guard (가)'s bound.
     out.push({ task: f.task, spec, open: f.state === "ready", ...(m.createdAt ? { since: m.createdAt } : {}) });
   }
@@ -126,7 +126,7 @@ export interface RoundResult {
 
 /**
  * One probe round (the queue-monitor calls it, U17). A true probe writes evidence{probe:<kind>} on
- * the item and, while the item is open, close_suggested{verified}: the holder closes, not this
+ * the item and, while the item is still 🟢, close_suggested{verified}: the holder closes, not this
  * (decision 76 rule 6). A false or unreadable probe writes nothing. A mark that outlived
  * verify.wait_minutes is escalated once to the owning lead as escalation_stale{verify_unconfirmed}.
  */
@@ -135,7 +135,7 @@ export async function probeRound(
   store: Pick<Store, "append">,
   input: ViewInput,
   facts: readonly OwnerItemFacts[],
-  cfg: Pick<OwnerConfig, "waitMinutes" | "graceHours"> = OWNER_DEFAULTS,
+  cfg: Pick<OwnerConfig, "waitMinutes"> = OWNER_DEFAULTS,
   source = "monitor:queue",
 ): Promise<RoundResult> {
   const runOf = new Map(input.orca.tasks.map((t) => [t.id, t.runId]));

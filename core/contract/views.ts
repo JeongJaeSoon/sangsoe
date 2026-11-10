@@ -63,11 +63,12 @@ export interface ViewInput {
 export type WaitsOn = "owner" | "reviewer" | "infra" | "lead" | "worker";
 
 /**
- * How the item view reads an item (decision 178): an Orca-backed ItemState, or one of two readings
- * of a completed Task no transition writes: `pr_closed` (its PR closed without merging, the lead's
- * call) and `unknown` (its PR's state not read yet).
+ * How the item view reads an item (decisions 178, 181): an Orca-backed ItemState, or one of three
+ * readings of a completed Task no transition writes: `pr_closed` (its PR closed without merging, the
+ * lead's call), `unknown` (its PR's state not read yet) and `pending_verify` (an owner to-do whose
+ * verify no probe has seen true yet).
  */
-export type ItemReading = ItemState | "pr_closed" | "unknown";
+export type ItemReading = ItemState | "pr_closed" | "unknown" | "pending_verify";
 
 export interface ItemStatusRow {
   readonly task: string;
