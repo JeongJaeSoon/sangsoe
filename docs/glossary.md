@@ -226,7 +226,7 @@
 | 입력 확인됨 · 검증 중 | 오너의 `!` 명령·프롬프트가 열린 오너 항목의 후보로 읽혔고 probe 를 기다린다는 뷰의 표지. 상태가 아니고 입력만으로는 어떤 상태도 바뀌지 않는다. probe 가 실패하거나 시간이 지나면 "검증 안 됨" 이 된다. 규칙은 결정 181 이다: 결정은 그 결정을 가리키는 오너의 답(hook 이 잇는 `dNNN` 답·패널 버튼·오케스트레이터가 `decision_answer` 로 잇는 오너의 말)으로 닫히고, 할 일은 검증(probe 의 관측)으로 닫힌다. 오너가 패널에서 완료를 눌러도 `verify` 가 있으면 ⏳ 검증 대기다 | `owner_act:seen` | 실행됨(상태로), 동작확인 중(상태로) |
 | 원인이 사라진 결정 | 게이트가 건 Task 가 모두 닫혔거나 가리키는 PR 이 닫혀 더 물을 이유가 없는 결정. 답 없이 닫고 뒤늦은 답은 기록만 한다 | `moot` | — |
 | | 턴 종료 | `turn_ended` | — |
-| | 일 없이 멈춘 워커(계약만: 쓰는 쪽이 아직 없다. 결정 186) | `worker_idle` | — |
+| | 일 없이 멈춘 워커: Task 를 쥔 세션의 턴이 끝났는데 Orca 가 그 Dispatch 를 아직 `dispatched` 로 답한다(Stop hook, 턴마다 한 번. 결정 196) | `worker_idle` | — |
 | | 같은 Task 의 시작 실패 세 번(`core/start/start.ts`) | `loop_detected` | — |
 | | 세션 시작({session, role, model}. model 은 hook 이 줄 때만, 계약의 tier·effort 칸은 아직 채우지 않는다) | `session_started` | — |
 | | 게이트 거부({gate, command 파일 경로}) | `gate_denied` | — |
@@ -242,7 +242,7 @@
 | | 압박 높음 | `pressure_high` | — |
 | | 죽은 워커 | `worker_dead` | — |
 | | 멈춘 워커. 일하는 중인데 `worktree ps --json` 의 마지막 출력·활동 시각(`lastOutputAt`·`lastActivityAt`, 에이전트 행의 `stateStartedAt`)이 설정한 분보다 오래된 워커에 쓴다(결정 87, 필드 뜻은 시험 P10 전까지 미확인). monitor 가 판정할 수 없는 입력(시각 필드가 비었거나 미래)에는 쓰지 않는다(그때는 행동 0) | `worker_stuck` | — |
-| 🚨 사유 | 새 event 종류를 더하지 않고 다섯 `event` 의 `reason` 칸에 사유를 적는다: 역할 줄 없는 sangsoe 세션은 `worker_stuck`(`no_role_line`), 시작 실패는 `worker_dead`(`start_failed`). 오류로 멈춘 워커의 `worker_dead`(`stop_failure`)는 Orca escalation 을 orca-monitor 가 읽어 쓸 자리이고 아직 쓰는 곳이 없다(결정 193) | `reason` · `no_role_line` · `start_failed` · `stop_failure` | — |
+| 🚨 사유 | 새 event 종류를 더하지 않고 다섯 `event` 의 `reason` 칸에 사유를 적는다: 역할 줄 없는 sangsoe 세션은 `worker_stuck`(`no_role_line`), 시작 실패는 `worker_dead`(`start_failed`). 오류로 멈춘 워커의 `worker_dead`(`stop_failure`)는 orca-monitor 가 Orca 의 `errored` 멈춤 escalation 에서 쓴다. 사용 한도로 멈춘 것은 죽음이 아니라 `rate_limited`(`usage_limit`)다(결정 196) | `reason` · `no_role_line` · `start_failed` · `stop_failure` | — |
 | | 멈춘 Run | `run_stalled` | — |
 | | 답 없는 결정 질문 | `waiting_decision` | — |
 | | 항목에 연결된 PR 이 열림 | `pr_opened` | — |
@@ -261,9 +261,9 @@
 | 사유 값 | 새 event 종류 없이 기존 `event` 의 `reason` 칸에 적는 값: `worker_dead` 의 `host_restart`(한꺼번에 많이 죽음) · `land_failed` 의 `main_red`(그 저장소의 최신 main 이 빨강) · `land_failed` 의 `evidence_missing`(등급이 요구하는 증거가 그 head 에 없음) · `gate_denied` 의 `report_address`(보고 주소가 `term_` 핸들) · `land_requested` 의 `merge_on_approval`(예약하지 않고 승인 뒤 머지를 남김) · `reap_blocked` 의 `uncommitted`(커밋 안 된 변경, 추적 안 된 파일 포함) · `unpushed`(원격에 없는 커밋) · `unpushed_other_patch`(메시지만 같고 패치가 다른 커밋, 사람에게 넘김) · `in_use`(쓰는 중인 Docker 자원) · `archive_hook_failed`(저장소의 archive hook 이 실패해 Orca 가 지우지 않음, `--allow-failed-archive-hook` 은 오너만) · `remote_host`(비로컬 행이라 지우지 않음, 카드마다 한 번, 결정 88) · `item_transition` 취소의 `superseded`(다른 항목으로 대체됨) · `escalation_stale` 의 `waiting_unreleased`(제때 풀리지 않은 `waiting_human`)·`verify_unconfirmed`(`입력 확인됨 · 검증 중` 가 길어짐) · `close_suggested` 의 `verified`(오너 항목의 probe 통과) · `decision_closed` 의 `moot`(원인이 사라짐, 결정 91) · `item_transition` 의 `owner_not_yet`(오너가 "아직") | `waiting_unreleased` · `verify_unconfirmed` · `verified` · `moot` · `owner_not_yet` · `host_restart` · `main_red` · `evidence_missing` · `report_address` · `merge_on_approval` · `uncommitted` · `unpushed` · `unpushed_other_patch` · `in_use` · `archive_hook_failed` · `remote_host` · `superseded` | — |
 | | 새 리뷰 코멘트(계약만. 결정 186) | `review_commented` | — |
 | | 새 리뷰 답글(계약만. 결정 186) | `review_replied` | — |
-| | GitHub 한도 부족 | `rate_limited` | — |
+| | 한도 부족: GitHub API(`kind: github`) 또는 워커 세션의 사용 한도 멈춤(`kind: usage_limit`, 결정 196) | `rate_limited` | — |
 | | Orca 메시지를 보낸 기록(`msg_id`·받는 쪽·type). 기록이지 깨움이 아니고 메시지 본문의 사본도 아니다 | `notified` | — |
-| | 대체 경로 전용 기록: 시험 P10 이 `worktree ps` 시각 필드를 못 믿는다고 보일 때만 orca-monitor 가 워커의 상태·단계·생존·세션 활동 중 하나가 바뀐 때 쓰고, 마지막 변화로부터의 경과로 `worker_stuck` 을 판정한다. 평소에는 쓰지 않는다(결정 87, 옛 방식은 결정 61). 지금은 쓰는 쪽이 없는 계약만이다(결정 186) | `observed_change` | — |
+| | 대체 경로 전용 기록: P10 이 `worktree ps` 시각을 못 믿는다고 보인 자리, 곧 살아 있는 터미널이 둘 이상인 workspace 의 Dispatch 에만 orca-monitor 가 Orca 필드 `state`·`stage`·`liveness` 중 지난 라운드와 달라진 필드 이름을 쓴다(값은 쓰지 않는다. 결정 87·196, 옛 방식은 결정 61) | `observed_change` | — |
 | | sangsoe 를 거치지 않고 만들어진 Orca 게이트, 곧 sangsoe 결정 키가 없는 게이트(orca-monitor 가 Run 마다 훑어 쓴다). 그 게이트가 막는 항목은 🚨 로 보인다 | `decision_untracked` | — |
 | | 오너가 직접 한 일(머지·수동 sync 같은 사실)이 열린 어느 결정의 답에도 이어지지 않음(pr-monitor 가 쓰고 오케스트레이터에게 Orca 메시지로 알린다. 감시 목록에 든 `!` 명령이 어느 열린 오너 항목에도 안 맞을 때는 `!` 입력을 읽는 hook `H/owner_input.py` 가 쓴다. 현황 진행 중 절에서 `그 외` 리드 행 아래 PR 행으로 오르고, 오케스트레이터가 잇거나 `unlinked.show_hours`(기본 24)가 지나면 빠진다, 결정 91) | `owner_act_unlinked` | — |
 | | REAPER 결과 | `reap_done` · `reap_blocked` | — |
@@ -281,10 +281,10 @@
 | | 열린 같은 결정 키에 대기자가 합류함 | `decision_joined` | — |
 | | 결정에 답이 달림. 답을 잇는 쪽을 `linked_by`(hook·button·orchestrator·observed)에 적는다(게이트를 푸는 대상) | `decision_answered` | — |
 | | 한 단계 위로 올림 | `escalation` | 에스컬레이션 보고(오너에게 간 것을 가리킬 때) |
-| | 거부 보고(계약만. 결정 186) | `refusal_report` | — |
+| | 거부 보고: 세션의 escalation 이 가리키는 `orch-refusal/` 아래 파일의 `Act:`·`Category:` 머리 줄을 orca-monitor 가 읽어 쓴다(결정 196) | `refusal_report` | — |
 | | 증거·배포 확인. `evidence` 줄은 칸 `kind`(증거 종류: 테스트 출력 · 실행 출력 · 화면 · dev 확인 등) · `head_sha`(증거가 가리키는 머지할 head) · `exit_code`(명령의 종료 코드) · `not_verified`(확인하지 못한 것을 적는 칸)을 싣는다. 큰 파일은 증거 폴더에 두고 event 에는 경로와 sha256 만 둔다. head 가 바뀌면 이전 증거는 그 head 에 대해 무효다 | `evidence` · `kind` · `head_sha` · `exit_code` · `not_verified` · `stage_recorded` | — |
 | | 검증 등급이 정해지거나 바뀜(pr-monitor 가 쓰는 하나뿐인 쪽) | `verify_tier_set` | — |
-| | 워커 완료 보고. PR 이 걸린 일은 그 본문이 머지 대기 보고다(결정 175). 실제 보고는 Orca 메시지이고 이 이름의 event 줄은 계약만이다(결정 186) | `worker_done` | — |
+| | 워커 완료 보고. PR 이 걸린 일은 그 본문이 머지 대기 보고다(결정 175). 실제 보고는 Orca 메시지이고, 이 이름의 event 줄은 orca-monitor 가 그 메시지를 본 표지(id 만, `outcome`·본문 없음)다(결정 196) | `worker_done` | — |
 | | 모델 도중 변경({from, to, reason}) | `model_changed` | — |
 | | 신호 한 종류 묶음({kind}) | `signal` | — |
 | | `signal` 의 kind | `loss` · `wait` · `orchestrator_correction` · `main_flake` · `start_refused` | — |

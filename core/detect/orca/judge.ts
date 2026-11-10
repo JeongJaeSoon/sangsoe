@@ -3,6 +3,7 @@ import type { GateRow, InboxMessage, LocalRows, WorkerRow, WorkerShow, WorktreeP
 import { isOpenGate } from "../../decision/waiters.ts";
 import { settled } from "../../recover/recover.ts";
 import { type MonitorConfig, minutes, type Planned, type Reading } from "../monitor.ts";
+import { judgeMail } from "./mail.ts";
 
 const SOURCE = "orca-monitor";
 
@@ -19,9 +20,24 @@ export type OrcaReads = {
   inbox: InboxMessage[] | null;
   /** sqlite rows of ORCA_EVENT_TYPES. */
   events: readonly StoredEvent[];
+  /** Header text of each refusal file the inbox points to (mail.ts); absent: none read. */
+  refusals?: ReadonlyMap<string, string | null>;
 };
 
-export const ORCA_EVENT_TYPES = ["notified", "decision_opened", "decision_joined", "decision_answered", "decision_closed", "worker_dead"];
+export const ORCA_EVENT_TYPES = [
+  "notified",
+  "decision_opened",
+  "decision_joined",
+  "decision_answered",
+  "decision_closed",
+  "worker_dead",
+  "worker_done",
+  "rate_limited",
+  "refusal_report",
+  "waiting_human",
+  "waiting_released",
+  "observed_change",
+];
 
 export const isUnfinished = (w: WorkerRow) => !settled(w);
 
@@ -75,7 +91,8 @@ function judgeWorkers(r: OrcaReads, now: number, c: MonitorConfig, planned: Plan
   for (const rows of [r.workers, ...Object.values(r.runs)]) {
     for (const w of rows?.rows.filter(isUnfinished) ?? []) if (!all.has(w.dispatchId)) all.set(w.dispatchId, w);
   }
-  const recordedDead = new Set(r.events.filter((e) => e.type === "worker_dead").map((e) => e.entity_id));
+  // A stop_failure is one stop of a session that may go on; it does not stand for the terminal's death.
+  const recordedDead = new Set(r.events.filter((e) => e.type === "worker_dead" && e.payload.reason !== "stop_failure").map((e) => e.entity_id));
   const isDead = (w: WorkerRow) => w.liveness !== undefined && DEAD.has(w.liveness);
   // "Many at once" counts only deaths first seen in this round.
   const fresh = [...all.values()].filter((w) => isDead(w) && !recordedDead.has(w.dispatchId));
@@ -204,11 +221,65 @@ function judgeWakes(r: OrcaReads, now: number, c: MonitorConfig, planned: Planne
   }
 }
 
-export function judgeOrca(r: OrcaReads, now: number, c: MonitorConfig): Reading {
+/** The Orca fields observed_change compares between rounds; values stay in memory, never in sqlite. */
+export type Observed = { state: string; stage: string; liveness: string };
+const OBSERVED_FIELDS = ["state", "stage", "liveness"] as const;
+
+/** Every Dispatch this round's worker lists show, finished ones included. */
+function knownWorkers(r: OrcaReads): Map<string, WorkerRow> {
+  const all = new Map<string, WorkerRow>();
+  for (const rows of [r.workers, ...Object.values(r.runs)]) for (const w of rows?.rows ?? []) if (!all.has(w.dispatchId)) all.set(w.dispatchId, w);
+  return all;
+}
+
+/** This round's observed fields of each unfinished Dispatch; round.ts keeps them for the next round. */
+export function observe(r: OrcaReads): Map<string, Observed> {
+  const out = new Map<string, Observed>();
+  for (const w of knownWorkers(r).values()) {
+    if (!isUnfinished(w)) continue;
+    out.set(w.dispatchId, { state: w.state, stage: r.shows[w.dispatchId]?.stage ?? "", liveness: w.liveness ?? "" });
+  }
+  return out;
+}
+
+// P10: with two or more live terminals on one workspace, ps times do not tell which one moved, so a
+// change in Orca's own Dispatch fields is the activity record (decision 196). Field names only.
+function judgeChanges(r: OrcaReads, previous: ReadonlyMap<string, Observed>, now: number, planned: Planned[]) {
+  if (!r.ps) return;
+  const ps = new Map(r.ps.rows.map((row) => [row.worktreeId, row]));
+  const known = knownWorkers(r);
+  for (const [dispatch, cur] of observe(r)) {
+    const before = previous.get(dispatch);
+    const w = known.get(dispatch);
+    const row = w?.workspace ? ps.get(w.workspace) : undefined;
+    if (!before || !w || !row || row.liveTerminalCount < 2) continue;
+    for (const field of OBSERVED_FIELDS) {
+      if (before[field] === cur[field]) continue;
+      planned.push({
+        type: "observed_change",
+        source: SOURCE,
+        payload: { task: w.taskId, field },
+        entity: "dispatch",
+        entity_id: dispatch,
+        target: w.taskId,
+        dedupe_key: key("observed_change", dispatch, field, String(now)),
+      });
+    }
+  }
+}
+
+export function judgeOrca(r: OrcaReads, now: number, c: MonitorConfig, previous: ReadonlyMap<string, Observed> = new Map()): Reading {
   const planned: Planned[] = [];
   const unseen: string[] = [];
   judgeWorkers(r, now, c, planned, unseen);
   judgeGates(r, now, c, planned, unseen);
   judgeWakes(r, now, c, planned, unseen);
+  if (r.inbox) {
+    const known = knownWorkers(r);
+    const unfinished = new Set([...known.values()].filter(isUnfinished).map((w) => w.dispatchId));
+    const ps = r.ps ? new Map(r.ps.rows.map((row) => [row.worktreeId, row])) : null;
+    judgeMail({ inbox: r.inbox, known, unfinished, ps, events: r.events, refusals: r.refusals ?? new Map() }, planned, unseen);
+  }
+  judgeChanges(r, previous, now, planned);
   return { planned, unseen };
 }

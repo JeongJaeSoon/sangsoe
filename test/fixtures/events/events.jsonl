@@ -71,6 +71,6 @@
 {"type":"waiting_released","source":"PostToolUse","dedupe_key":"waiting_released:68","payload":{"ref":"68","outcome":"answered","by":"owner","evidence":"PostToolUse Bash"}}
 {"type":"wake_unconfirmed","source":"orca-monitor","payload":{"msg_id":"msg_2"}}
 {"type":"worker_dead","source":"orca-monitor","payload":{"reason":"stop_failure"}}
-{"type":"worker_done","source":"worker:u1","payload":{"dispatch":"ctx_1","task":"task_a1","outcome":"succeeded"}}
+{"type":"worker_done","source":"orca-monitor","payload":{"dispatch":"ctx_1","task":"task_a1","msg_id":"msg_1"}}
 {"type":"worker_idle","source":"Stop","payload":{"session":"sess-1"}}
 {"type":"worker_stuck","source":"orca-monitor","payload":{"reason":"no_role_line"}}

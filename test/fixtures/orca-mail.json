@@ -1,0 +1,71 @@
+{
+  "_note": "inbox --full rows in the shape recorded from Orca on 2026-11-11 (ids, paths and text rewritten to generic values). The usage-limit stop text follows the recorded last output; the other errored stop is synthetic: no login-expired stop was observed.",
+  "messages": [
+    {
+      "id": "msg_stop_00000000000000000000000a",
+      "type": "escalation",
+      "from_handle": "term_00000000-0000-4000-8000-00000000000a",
+      "to_handle": "run:run_000000000001",
+      "subject": "Worker stopped on an error without reporting",
+      "read": 1,
+      "priority": "high",
+      "payload": "{\"taskId\":\"task_a\",\"dispatchId\":\"ctx_a\",\"handle\":\"term_00000000-0000-4000-8000-00000000000a\",\"stopReason\":\"errored\"}",
+      "body": "Worker term_00000000-0000-4000-8000-00000000000a ended its turn on an error without sending worker_done for task \"feature-a\" (task_a).\nThe Dispatch is still open. Answer it with your Orca CLI's `orchestration send --to dispatch:ctx_a --subject \"<topic>\" --body \"<guidance>\"`, retry it, or stop the worker.\nLast output:\n  ⎿  You've hit your 5-hour limit · resets 2:40am (UTC)\n⏺ Usage limit reached · continuing automatically at 2:40am · esc to cancel"
+    },
+    {
+      "id": "msg_stop_00000000000000000000000b",
+      "type": "escalation",
+      "from_handle": "term_00000000-0000-4000-8000-00000000000b",
+      "to_handle": "run:run_000000000001",
+      "subject": "Worker stopped on an error without reporting",
+      "read": 0,
+      "priority": "high",
+      "payload": "{\"taskId\":\"task_b\",\"dispatchId\":\"ctx_b\",\"handle\":\"term_00000000-0000-4000-8000-00000000000b\",\"stopReason\":\"errored\"}",
+      "body": "Worker term_00000000-0000-4000-8000-00000000000b ended its turn on an error without sending worker_done for task \"feature-b\" (task_b).\nThe Dispatch is still open.\nLast output:\n  ⎿  API Error: 500 Internal server error"
+    },
+    {
+      "id": "msg_stop_00000000000000000000000c",
+      "type": "escalation",
+      "from_handle": "term_00000000-0000-4000-8000-00000000000c",
+      "to_handle": "run:run_000000000001",
+      "subject": "Worker is waiting on a prompt",
+      "read": 0,
+      "priority": "high",
+      "payload": "{\"taskId\":\"task_c\",\"dispatchId\":\"ctx_c\",\"handle\":\"term_00000000-0000-4000-8000-00000000000c\",\"stopReason\":\"needs-input\"}",
+      "body": "Worker term_00000000-0000-4000-8000-00000000000c is stopped at a prompt that needs a person (approval or a question) while running task \"feature-c\" (task_c).\nThe Dispatch is still open."
+    },
+    {
+      "id": "msg_stop_00000000000000000000000d",
+      "type": "escalation",
+      "from_handle": "term_00000000-0000-4000-8000-00000000000d",
+      "to_handle": "run:run_000000000001",
+      "subject": "Worker stopped without reporting",
+      "read": 1,
+      "priority": "high",
+      "payload": "{\"taskId\":\"task_d\",\"dispatchId\":\"ctx_d\",\"handle\":\"term_00000000-0000-4000-8000-00000000000d\",\"stopReason\":\"finished\"}",
+      "body": "Worker term_00000000-0000-4000-8000-00000000000d ended its turn without sending worker_done for task \"feature-d\" (task_d).\nThe Dispatch is still open.\nLast output:\nI sent two questions to the lead and am waiting for the answer."
+    },
+    {
+      "id": "msg_00000000000e",
+      "type": "worker_done",
+      "from_handle": "term_00000000-0000-4000-8000-00000000000e",
+      "to_handle": "run:run_000000000001",
+      "subject": "feature-e landed: acme/api#40 merged",
+      "read": 1,
+      "priority": "normal",
+      "payload": "{\"taskId\":\"task_e\",\"dispatchId\":\"ctx_e\",\"outcome\":\"succeeded\"}",
+      "body": "WHAT CHANGED: one file."
+    },
+    {
+      "id": "msg_00000000000f",
+      "type": "escalation",
+      "from_handle": "term_00000000-0000-4000-8000-00000000000f",
+      "to_handle": "run:run_000000000001",
+      "subject": "Refusal report: one read-only grep blocked by a hook",
+      "read": 0,
+      "priority": "normal",
+      "payload": "{\"taskId\":\"task_f\",\"dispatchId\":\"ctx_f\"}",
+      "body": "Act: find callers. Category: hook. The command is in REFUSAL_ROOT/feature-f/20261111-1.txt. Not retried."
+    }
+  ]
+}

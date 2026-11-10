@@ -1,6 +1,13 @@
+import { dedupeKey, EVENTS } from "../../contract/index.ts";
 import type { GateRow, LocalRows, OrcaResult, WorkerRow, WorkerShow } from "../../contract/orca.ts";
 import type { MonitorDeps, Reading } from "../monitor.ts";
-import { isUnfinished, judgeOrca, ORCA_EVENT_TYPES } from "./judge.ts";
+import { isUnfinished, judgeOrca, type Observed, ORCA_EVENT_TYPES, observe } from "./judge.ts";
+import { readRefusalHead, refusalPath } from "./mail.ts";
+
+// The orca-monitor runs inside the long-lived plugin worker: the last round's Dispatch fields stay
+// here, in memory, for observed_change. A restart starts with none and writes no change that round.
+let previous: ReadonlyMap<string, Observed> = new Map();
+const readRefusal = readRefusalHead();
 
 const value = <T>(r: OrcaResult<T>): T | null => (r.ok ? r.value : null);
 
@@ -65,5 +72,18 @@ export async function orcaRound(d: MonitorDeps, signal: AbortSignal): Promise<Re
     gates[run] = value(await d.orca.gateList({ run }));
   }
   const events = ORCA_EVENT_TYPES.flatMap((type) => d.events({ type }));
-  return judgeOrca({ ps: value(ps), workers: workerRows, shows, runs, gates, inbox: value(inbox), events }, d.now(), d.config);
+  const mail = value(inbox);
+  const recorded = new Set(events.map((e) => e.dedupe_key));
+  const refusals = new Map<string, string | null>();
+  for (const m of mail ?? []) {
+    const path = refusalPath(m);
+    const dispatch = m.payload?.dispatchId;
+    if (!path || !dispatch || refusals.has(path) || signal.aborted) continue;
+    if (recorded.has(dedupeKey(EVENTS.refusal_report, dispatch, m.id))) continue;
+    refusals.set(path, await readRefusal(path));
+  }
+  const reads = { ps: value(ps), workers: workerRows, shows, runs, gates, inbox: mail, events, refusals };
+  const reading = judgeOrca(reads, d.now(), d.config, previous);
+  if (!signal.aborted) previous = observe(reads);
+  return reading;
 }

@@ -1,7 +1,6 @@
-import { dedupeKey, dedupeSegment, EVENTS } from "../contract/index.ts";
+import { dedupeKey, EVENTS } from "../contract/index.ts";
 import { decisionAnswer } from "../decision/answer.ts";
 import { readDecision } from "../decision/waiters.ts";
-import { notify } from "../notify/notify.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
 import type { Store } from "../store/store.ts";
@@ -40,6 +39,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
       turnEnded(deps.store, row, input);
       released(deps.store, { kind: "turn_ended", session: input.session_id }, "Stop");
+      await workerIdle(deps, row, input);
       break;
     case "notification":
       await waitingHuman(deps, row, input);
@@ -65,8 +65,16 @@ const released = (store: Store, signal: ReleaseSignal, source: string) => {
   return recordReleases(store, { events }, signal, source);
 };
 
-// Orca's own prompts to a dispatched session (the brief, wrapped) are not the owner's words.
-const ORCA_PROMPT = /^(Please carry out this task from my Orca coordinator|You are working inside Orca, a multi-agent IDE\.)/;
+// Prompts no person typed (decision 173's shape rule, widened by decision 196): Orca's brief, Orca's
+// new-mail nudge and its mail-delivery turn, another session's message and a background task's
+// notice, which Claude Code also hands to UserPromptSubmit.
+const NOT_OWNER = [
+  /^Please carry out this task from my Orca coordinator/,
+  /^You are working inside Orca, a multi-agent IDE\./,
+  /^You have (\d+|new) orchestration messages?\b/,
+  /^Another Claude session sent a message:/,
+  /^<task-notification>/,
+];
 const DECISION_NO = /\bd\d{3,}\b/g;
 const ANSWER_SHAPE = /^\s*(d\d{3,})\b/;
 
@@ -78,7 +86,8 @@ const ANSWER_SHAPE = /^\s*(d\d{3,})\b/;
  */
 async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
   const text = input.prompt ?? "";
-  if (text.trim() === "" || ORCA_PROMPT.test(text.trimStart())) return;
+  const start = text.trimStart();
+  if (start === "" || NOT_OWNER.some((re) => re.test(start))) return;
   const masked = mask(text);
   const key = dedupeKey(EVENTS.owner_action, input.session_id, input.prompt_id ?? hashOf(`${masked}\n${tail(input.transcript_path).length}`));
   const action = deps.store.appendOwnerAction(
@@ -119,6 +128,24 @@ function turnEnded(store: Store, row: SessionRow, input: SessionHookInput): void
   });
 }
 
+/**
+ * Decision 196: a dispatched session whose turn ended while its Dispatch is still open in Orca (no
+ * worker_done sent) is idle. Orca's dispatch state is the fact; a failed read writes nothing.
+ */
+async function workerIdle(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
+  if (!row.task) return;
+  const d = await deps.orca.dispatchShow({ task: row.task });
+  if (!d.ok || d.value.completed_at !== null || d.value.status !== "dispatched") return;
+  deps.store.append({
+    type: "worker_idle",
+    source: "Stop",
+    entity: "task",
+    entity_id: row.task,
+    dedupe_key: dedupeKey(EVENTS.worker_idle, input.session_id, input.prompt_id ?? String(deps.store.events({ type: "worker_idle" }).length)),
+    payload: { session: input.session_id },
+  });
+}
+
 function compacted(store: Store, row: SessionRow, input: SessionHookInput): void {
   const trigger = input.trigger === "auto" || input.trigger === "manual" ? input.trigger : undefined;
   if (!trigger) return;
@@ -136,11 +163,14 @@ const PERMISSION = /permission to use ([A-Za-z_][\w:.-]*)/i;
 const WAITS = new Set(["permission_prompt", "idle_prompt", "elicitation_dialog"]);
 
 /**
- * Notification → waiting_human, then one message to the owning lead (decision 91①: the lead first, the
- * owner only through queue-monitor's escalation). The tool is read from the text or left out; a repeat
+ * Notification → waiting_human for a session holding no Dispatch (the owner reaches it through
+ * queue-monitor's escalation, decision 91①). The tool is read from the text or left out; a repeat
  * notification for a wait still open writes nothing.
  */
 async function waitingHuman(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
+  // A session holding a Dispatch is seen through Orca's needs-input mail alone (decision 196), which
+  // Orca already delivers to the lead: one source per wait, and it holds with the plugin off.
+  if (row.task) return;
   const message = input.message ?? "";
   const kind = input.notification_type;
   if (kind ? !WAITS.has(kind) : !/permission|waiting for your input/i.test(message)) return;
@@ -148,21 +178,10 @@ async function waitingHuman(deps: CoreDeps, row: SessionRow, input: SessionHookI
   const open = openWaits(deps.store.events()).filter((e) => e.payload.session === input.session_id);
   if (open.some((e) => e.payload.tool === tool)) return;
   const n = deps.store.events({ type: "waiting_human" }).filter((e) => e.payload.session === input.session_id).length + 1;
-  const w = deps.store.append({
+  deps.store.append({
     type: "waiting_human",
     source: "Notification",
-    ...(row.task ? { entity: "task", entity_id: row.task } : {}),
     dedupe_key: dedupeKey(EVENTS.waiting_human, input.session_id, String(n)),
     payload: { session: input.session_id, ...(tool ? { tool } : {}), ...(message ? { excerpt: summarize(mask(message)) } : {}) },
-  });
-  if (!w.inserted || !row.task || !row.taskRun) return;
-  await notify(deps, {
-    key: { target: row.task, dedupe_key: `notify:${dedupeSegment(row.task)}:waiting_human:${w.seq}` },
-    to: "lead",
-    chain: { leadRun: row.taskRun },
-    subject: `${row.task}: 사람 입력 대기${tool ? ` (${tool})` : ""}`,
-    body: `세션 ${input.session_id} 이 ${tool ? `${tool} 권한` : "입력"}을 기다린다. ${message ? summarize(mask(message)) : ""}`.trim(),
-    msgType: "escalation",
-    source: "Notification",
   });
 }

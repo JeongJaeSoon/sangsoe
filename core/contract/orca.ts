@@ -157,6 +157,18 @@ export type GateRow = {
   resolution?: string | null;
 };
 
+/** The ids and stop reason Orca attaches to a message; only these are read. */
+export type InboxPayload = {
+  taskId?: string;
+  dispatchId?: string;
+  /** Orca's own stop escalations: `finished`, `errored`, `needs-input`. */
+  stopReason?: string;
+};
+
+/**
+ * One message as the adapter hands it on. `inbox --full` names the fields `from_handle`,
+ * `to_handle` and `read` and sends `payload` as JSON text; the adapter maps them to these.
+ */
 export type InboxMessage = {
   id: string;
   type: string;
@@ -165,6 +177,7 @@ export type InboxMessage = {
   subject: string;
   handled: boolean;
   body?: string;
+  payload?: InboxPayload;
 };
 
 export type WorkerRow = {
