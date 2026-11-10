@@ -3,7 +3,7 @@
 // sqlite (no <view>_cache table, decision 76 rule 7). Views never call a clock, Orca or the network.
 
 import type { Needs } from "./define.ts";
-import type { ItemState } from "./transitions.ts";
+import { ITEM_STATES, STATE_LABEL } from "./transitions.ts";
 
 export interface StoredEvent<P = Record<string, unknown>> {
   readonly seq: number;
@@ -68,7 +68,16 @@ export type WaitsOn = "owner" | "reviewer" | "infra" | "lead" | "worker";
  * lead's call), `unknown` (its PR's state not read yet) and `pending_verify` (an owner to-do whose
  * verify no probe has seen true yet).
  */
-export type ItemReading = ItemState | "pr_closed" | "unknown" | "pending_verify";
+export const ITEM_READINGS = [...ITEM_STATES, "pr_closed", "unknown", "pending_verify"] as const;
+export type ItemReading = (typeof ITEM_READINGS)[number];
+
+/** What the owner reads for each reading; the marker matches the brief's (core/brief/build.ts). */
+export const READING_LABEL: Readonly<Record<ItemReading, string>> = {
+  ...STATE_LABEL,
+  pr_closed: "🚧 PR 이 머지 없이 닫힘",
+  unknown: "❔ PR 상태를 아직 읽지 못함",
+  pending_verify: "⏳ 검증 대기",
+};
 
 export interface ItemStatusRow {
   readonly task: string;

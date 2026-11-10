@@ -82,6 +82,7 @@ export * from "./define.ts";
 export * from "./notify-key.ts";
 export * from "./transitions.ts";
 export type * from "./views.ts";
+export { ITEM_READINGS, READING_LABEL } from "./views.ts";
 
 // A new event type is one file under events/ plus one import line and one entry here (split §1.3).
 export const EVENTS = {
