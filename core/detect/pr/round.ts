@@ -292,6 +292,7 @@ async function readyToMerge(r: Reads, repo: string, p: ListedPull, link: Link | 
   if (!task || !lead) return void r.unseen.push(`owning lead of ${ref}`);
   r.acts.push({
     what: `notify run:${lead} ${ref} ready to merge`,
+    wake: true,
     run: async (d) => {
       const n = await sendNotice(d, {
         key: { target: task, dedupe_key: key("notify", task, "ready_to_merge", p.head.sha) },
