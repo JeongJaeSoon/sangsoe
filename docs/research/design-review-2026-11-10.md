@@ -8,11 +8,12 @@ A read-only review of the whole design set: against itself, against the code on 
 
 ## 1. What was reviewed, and how
 
-**Model proof.** The review ran on Claude Fable 5.2 (`claude-fable-5-2`).
+**Model proof.** The repo keeps model names and versions in one file (`core/models/table.ts`, decisions 164 and 165), and `test/model-table.test.ts` fails on a second copy anywhere else. So this report names the model by reference, and the literal strings are quoted in the pull request that added this file.
 
-- `claude --version` printed `2.1.322 (Claude Code)`.
-- The session transcript records `"model":"claude-fable-5-2"` on every assistant record (256 of 256 when this report was written). The transcripts of the eight subagents used below record the same id on every record and no other.
-- The session's status line read `Fable 5.2 high`.
+- Model: the `currentId` of the `frontier` row in `core/models/table.ts`, as that file stands on main after decisions 164 and 165.
+- `claude --version` printed `2.1.322 (Claude Code)`, the version that table records as checked.
+- The session transcript carries that id in the `model` field of every assistant record (256 of 256 when the first draft was written) and no other id. The transcripts of the eight subagents used below carry the same id on every record and no other.
+- The session's status line showed that model's name followed by the effort setting `high`.
 
 **Commit reviewed.** `72fb3fed8ef78af1437348a0235607d0b32ee531` (main when the review began). Every `path:line` below is a line of that commit; `git show 72fb3fe:<path>` prints the file as cited. One change landed on main while the review ran (the model-selection table, decisions 164 and 165). It is not reviewed here. It shifts line numbers in `docs/design.html`, `docs/design-appendix.html`, `docs/glossary.md`, `docs/decisions.md`, `docs/architecture.md` and `claude-plugin/agents/worker.md`, and it adds a fourth MCP resource and one doctor check, so the counts in S19 and S20 are those of the reviewed commit.
 
