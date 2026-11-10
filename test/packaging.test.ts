@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { basename, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -13,25 +13,22 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 // The folders whose code runs from dist/: the CLI, the core it imports and the MCP server.
 const RUNS_FROM_DIST = ["core", "cli", join("claude-plugin", "mcp")];
 
-/** Files the built code can open by a path next to its module: anything the compiler does not emit. */
-function sourceAssets(): string[] {
-  const out: string[] = [];
-  const walk = (dir: string) => {
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      const p = join(dir, e.name);
-      if (e.isDirectory()) walk(p);
-      else if (!e.name.endsWith(".ts") && e.name !== "README.md") out.push(relative(ROOT, p));
-    }
-  };
-  for (const r of RUNS_FROM_DIST) walk(join(ROOT, r));
-  return out.sort();
-}
-
 const run = (cmd: string, args: string[], env: NodeJS.ProcessEnv = process.env) => {
   const r = spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8", env });
   assert.equal(r.status, 0, `${cmd} ${args.join(" ")}\n${r.stdout}\n${r.stderr}`);
   return r.stdout;
 };
+
+/**
+ * Files the built code can open by a path next to its module: anything tracked the compiler does not
+ * emit. Listed from git, not by scripts/copy-assets.ts's walk, so the two can disagree.
+ */
+function sourceAssets(): string[] {
+  return run("git", ["ls-files", "--", ...RUNS_FROM_DIST])
+    .split("\n")
+    .filter((p) => p !== "" && !p.endsWith(".ts") && basename(p) !== "README.md")
+    .sort();
+}
 
 test("the flow templates are runtime assets the walk finds", () => {
   const assets = sourceAssets();

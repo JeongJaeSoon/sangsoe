@@ -13,7 +13,8 @@ function copyAssets(dir: string): void {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
     if (e.isDirectory()) copyAssets(p);
-    else if (!e.name.endsWith(".ts") && e.name !== "README.md") cpSync(p, join(root, "dist", relative(root, p)));
+    // A dotfile (.DS_Store) is never an asset, and npm pack would leave it out anyway.
+    else if (!e.name.startsWith(".") && !e.name.endsWith(".ts") && e.name !== "README.md") cpSync(p, join(root, "dist", relative(root, p)));
   }
 }
 
