@@ -106,12 +106,17 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     const lead = str(x.lead) ?? OTHERS;
     const own = decisions.filter((d) => d.waiters.some((w) => w.task === t.id));
     const openDecisions = own.filter((d) => d.state === "open").map((d) => d.decision);
-    const state = stateOf(t, x.hold === true && str(x.review_trigger) !== null, waiterReading(t, input.orca.gates), ready.has(t.id));
+    const closed = stateOf(t, x.hold === true && str(x.review_trigger) !== null, waiterReading(t, input.orca.gates), ready.has(t.id));
+    // Decision 175: the author's worker_done completes the Task in Orca; the item waits on review until the merge.
+    const awaitingMerge = closed === "done" && prOpen.has(t.id);
+    const state: ItemState = awaitingMerge ? "blocked" : closed;
     const last = moved.get(t.id) ?? 0;
     // An alarm stands until the item moves again.
     const standing = [...(alarms.get(t.id) ?? new Map<string, number>())].filter(([, seq]) => seq > last).map(([type]) => type);
     const undelivered = own.filter((d) => d.undelivered).map((d) => d.decision);
-    const waitsOn = (openDecisions.length > 0 || undelivered.length > 0 ? "owner" : (str(x.waits_on) as WaitsOn | null)) ?? null;
+    const waitsOn = awaitingMerge
+      ? "reviewer"
+      : ((openDecisions.length > 0 || undelivered.length > 0 ? "owner" : (str(x.waits_on) as WaitsOn | null)) ?? null);
     out.push({
       task: t.id,
       alias: String(c.payload.alias),
