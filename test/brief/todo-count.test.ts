@@ -45,6 +45,7 @@ test("the MCP server lists the brief resource", async () => {
     res.result.resources.map((r) => [r.name, r.uri]),
     [
       ["brief", "sangsoe://brief"],
+      ["models", "sangsoe://models"],
       ["ready", "sangsoe://ready"],
     ],
   );

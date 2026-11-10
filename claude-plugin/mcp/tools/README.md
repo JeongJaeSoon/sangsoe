@@ -37,7 +37,7 @@ export default {
 | tool | 하는 일 | 입력 | 단위 |
 |---|---|---|---|
 | `item_create` | 항목 만들기(Orca `task-create --deps` + `item_created`). 오너 항목의 확인 사실(`verify`·`cmdHint`)과 시작 시점(`trigger`·`hold`·`review_trigger`·`exec_by`, 결정 162)은 같은 호출에서 `item_extra_set` 으로. CLI `sangsoe item new` 와 같은 Outcome | `{runId, spec, who, doneWhen, title?, deps?, verify?, cmdHint?, trigger?, hold?, review_trigger?, exec_by?}` | U10 |
-| `start_unit` | 세션을 여는 유일한 길인 코어 시작 함수(결정 94)를 부른다 | `{role, worktreeId, runId, childRole, taskId?, task 또는 spec, title?, deps?, lateAnswers?, references?, agent?}` | U10 |
+| `start_unit` | 세션을 여는 유일한 길인 코어 시작 함수(결정 94)를 부른다. `kind`·`effort`·`tier`·`reason` 을 모델 선택 표로 풀어 `--model`·`--effort` 로 넘긴다(결정 164) | `{role, worktreeId, runId, childRole, taskId?, task 또는 spec, title?, deps?, lateAnswers?, references?, agent?, kind?, effort?, tier?, reason?}` | U10 |
 | `edge_add` | 간선 더하기(순환·없는 항목·후속이 항목 아닌 간선 거부, 같은 간선 합침). CLI `sangsoe graph add` 와 같은 Outcome | `{kind, pred, succ, runs}` | U7 |
 | `edge_remove` | 부가 간선 빼기(이유 필수, Orca deps 간선은 거부). CLI `sangsoe graph remove` | `{kind, pred, succ, reason, runs}` | U7 |
 | `flow_expand` | 흐름 틀 펼치기(`dry_run` 은 쓰지 않음, 같은 `request_id` 는 이어서). CLI `sangsoe graph expand` | `{template, vars?, run?, who?, request_id?, dry_run?}` | U7 |

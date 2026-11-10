@@ -61,7 +61,7 @@ export const ORCA_COMMANDS = {
 
   workerStart: {
     path: ["orchestration", "worker-start"],
-    flags: ["json", "task", "agent", "worktree", "run", "retry-request"],
+    flags: ["json", "task", "agent", "worktree", "run", "model", "effort", "retry-request"],
     write: true,
   },
   workerShow: { path: ["orchestration", "worker-show"], flags: ["json", "dispatch"] },

@@ -171,6 +171,7 @@ export {
   type CheckStatus,
   DOCTOR_CHECKS,
   doctorReport,
+  modelTable,
   type PluginBuild,
   REQUIRED_CAPABILITIES,
   runChecks,
@@ -180,3 +181,25 @@ export {
 
 export * from "./owner/index.ts";
 export * from "./reaper/index.ts";
+
+export {
+  type Alias as ModelAlias,
+  CATALOG as MODEL_CATALOG,
+  CHANGELOG as MODEL_CHANGELOG,
+  type Choice as ModelChoice,
+  catalogAgeDays,
+  EFFORTS,
+  type Effort,
+  isEffort,
+  isKind as isModelKind,
+  KINDS as MODEL_KINDS,
+  type Kind as ModelKind,
+  POLICY as MODEL_POLICY,
+  type Raise as ModelRaise,
+  resolve as resolveModel,
+  SOURCES as MODEL_SOURCES,
+  STALE_DAYS as MODEL_STALE_DAYS,
+  TIERS as MODEL_TIERS,
+  type Tier as ModelTier,
+  VERIFIED_WITH_CLAUDE_CODE,
+} from "./models/index.ts";
