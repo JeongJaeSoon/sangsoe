@@ -8,7 +8,7 @@ import type { InboxMessage, LocalRows, WorkerRow, WorktreePsRow } from "../../co
 import { inboxRow } from "../../orca/adapter.ts";
 import { DEFAULT_MONITOR_CONFIG as C } from "../monitor.ts";
 import { judgeOrca, type Observed, type OrcaReads, observe } from "./judge.ts";
-import { readRefusalHead, refusalHeader, refusalPath } from "./mail.ts";
+import { readRefusalHead, refusalHeader, refusalPath, refusalRoots } from "./mail.ts";
 
 const NOW = Date.parse("2026-11-11T12:00:00Z");
 const FIXTURE = new URL("../../../test/fixtures/orca-mail.json", import.meta.url);
@@ -123,6 +123,8 @@ test("worker_done mail is a marker row with ids only: no outcome, no body", () =
 test("refusal_report reads the Act:/Category: header of the file the escalation names, inside the refusal root only", async () => {
   const base = realpathSync(mkdtempSync(join(tmpdir(), "sangsoe-mail-")));
   const root = join(base, "orch-refusal");
+  // The reader is built before the root exists, as the plugin worker's is at start.
+  const read = readRefusalHead(() => refusalRoots([base]));
   mkdirSync(join(root, "feature-f"), { recursive: true });
   const file = join(root, "feature-f", "20261111-1.txt");
   writeFileSync(file, "Act: find callers of the adapter rows\nCategory: hook (deny pattern)\nCommand:\n  grep -rn x core\n");
@@ -130,7 +132,6 @@ test("refusal_report reads the Act:/Category: header of the file the escalation 
   const m = inbox.find((x) => x.id === "msg_00000000000f");
   assert.equal(m && refusalPath(m), file, "the sentence's period is not part of the path");
 
-  const read = readRefusalHead([root]);
   const refusals = new Map([[file, await read(file)]]);
   const out = planned(reads({ inbox, refusals })).filter((e) => e.type === "refusal_report");
   assert.deepEqual(
@@ -145,6 +146,7 @@ test("refusal_report reads the Act:/Category: header of the file the escalation 
   symlinkSync(outside, link);
   assert.equal(await read(link), null, "nor a link that leaves it");
   assert.equal(await read(join(root, "missing.txt")), null);
+  assert.equal(await read(join(root, "feature-f")), null, "a directory is not read");
 });
 
 test("a refusal file without the header is reported unseen, not guessed", () => {
@@ -172,4 +174,6 @@ test("observed_change: only on a workspace with two live terminals, field names 
     out.map((e) => [e.type, e.entity_id, e.payload]),
     [["observed_change", "ctx_a", { task: "task_a", field: "stage" }]],
   );
+  const unread = { ...base("review"), shows: { ctx_a: null, ctx_b: null } };
+  assert.deepEqual(planned(unread, prev), [], "a worker-show that failed is not a change");
 });

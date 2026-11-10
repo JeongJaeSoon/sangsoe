@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { constants, realpathSync, statSync } from "node:fs";
 import { open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
@@ -55,18 +55,24 @@ const real = (p: string) => {
   }
 };
 
-export const REFUSAL_ROOTS = () => [...new Set([tmpdir(), "/tmp"].map((r) => real(join(r, "orch-refusal"))).filter((r) => r !== undefined))];
+/** `<base>/orch-refusal` for each base that has one now, by real path. */
+export const refusalRoots = (bases: readonly string[] = [tmpdir(), "/tmp"]) =>
+  [...new Set(bases.map((r) => real(join(r, "orch-refusal"))).filter((r) => r !== undefined))];
 
 const HEAD_BYTES = 4096;
 
-/** Reads the first 4 KiB of a refusal file whose real path lies under one of `roots`. */
+/**
+ * Reads the first 4 KiB of a regular refusal file whose real path lies under one of the roots. The
+ * roots resolve on every read: `orch-refusal/` may appear after the plugin worker started.
+ */
 export const readRefusalHead =
-  (roots: readonly string[] = REFUSAL_ROOTS()): ReadRefusal =>
+  (roots: () => readonly string[] = refusalRoots): ReadRefusal =>
   async (path) => {
     const p = real(path);
-    if (!p || !roots.some((r) => p.startsWith(r + sep))) return null;
+    if (!p || !roots().some((r) => p.startsWith(r + sep))) return null;
     try {
-      const f = await open(p, "r");
+      if (!statSync(p).isFile()) return null;
+      const f = await open(p, constants.O_RDONLY | constants.O_NONBLOCK);
       try {
         const buf = Buffer.alloc(HEAD_BYTES);
         const { bytesRead } = await f.read(buf, 0, HEAD_BYTES, 0);

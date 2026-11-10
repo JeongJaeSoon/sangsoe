@@ -222,7 +222,8 @@ function judgeWakes(r: OrcaReads, now: number, c: MonitorConfig, planned: Planne
 }
 
 /** The Orca fields observed_change compares between rounds; values stay in memory, never in sqlite. */
-export type Observed = { state: string; stage: string; liveness: string };
+/** A field this round could not read is undefined and is not compared. */
+export type Observed = { state: string; stage: string | undefined; liveness: string | undefined };
 const OBSERVED_FIELDS = ["state", "stage", "liveness"] as const;
 
 /** Every Dispatch this round's worker lists show, finished ones included. */
@@ -237,7 +238,8 @@ export function observe(r: OrcaReads): Map<string, Observed> {
   const out = new Map<string, Observed>();
   for (const w of knownWorkers(r).values()) {
     if (!isUnfinished(w)) continue;
-    out.set(w.dispatchId, { state: w.state, stage: r.shows[w.dispatchId]?.stage ?? "", liveness: w.liveness ?? "" });
+    const show = r.shows[w.dispatchId];
+    out.set(w.dispatchId, { state: w.state, stage: show ? (show.stage ?? "") : undefined, liveness: w.liveness });
   }
   return out;
 }
@@ -254,7 +256,7 @@ function judgeChanges(r: OrcaReads, previous: ReadonlyMap<string, Observed>, now
     const row = w?.workspace ? ps.get(w.workspace) : undefined;
     if (!before || !w || !row || row.liveTerminalCount < 2) continue;
     for (const field of OBSERVED_FIELDS) {
-      if (before[field] === cur[field]) continue;
+      if (before[field] === undefined || cur[field] === undefined || before[field] === cur[field]) continue;
       planned.push({
         type: "observed_change",
         source: SOURCE,

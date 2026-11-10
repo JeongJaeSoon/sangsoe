@@ -109,7 +109,7 @@
 
 | 용어 | 정의 | 영문 식별자 | 쓰지 않는 말 |
 |---|---|---|---|
-| event | sangsoe 가 원본인 사실(오너 말·분류·결정·부가 간선·PR 사실·자원·신호·`notified`·`observed_change`(P10 실패 때만 쓰는 대체 경로)·증거)을 한 줄씩 적는 append-only 표. sangsoe 쪽 원본은 이것 하나 | `event` | 로그(원본을 가리킬 때), 투영 표 |
+| event | sangsoe 가 원본인 사실(오너 말·분류·결정·부가 간선·PR 사실·자원·신호·`notified`·`observed_change`(터미널이 둘 이상인 Dispatch 만 쓰는 대체 경로)·증거)을 한 줄씩 적는 append-only 표. sangsoe 쪽 원본은 이것 하나 | `event` | 로그(원본을 가리킬 때), 투영 표 |
 | 뷰 | `event` 에서 읽을 때 계산하는 현재 상태. 계산 결과를 저장하는 `<뷰>_cache` 표는 없다 | `VIEW` | 투영, 테이블(상태를 가리킬 때), `<뷰>_cache` 표 |
 | 항목 | 한 일 하나. Orca Task 하나와 sangsoe 부가 정보로 이루어진다. 제목·상태·`spec`·만들 때의 의존은 Orca Task 가, 번호 별칭·시작하는 쪽·소유 리드·우선순위·trigger·부가 간선은 부가 정보가 가진다 | `item` | 보드, 큐, 단계표 행, 티켓 |
 | 부가 정보 | Orca Task id 를 키로 sangsoe 가 붙이는, Orca 에 칸이 없는 것: `iNNN` 별칭·`exec_by`(owner·lead·worker)·소유 리드·우선순위·`est`·trigger·`hold`·`waits_on`·흐름 틀 id·단계·`done_when`. 표가 아니라 `event` 에서 읽는 뷰이고 Orca 값의 사본을 담지 않는다 | `item_extra` | 항목 사본, 항목 캐시 |
