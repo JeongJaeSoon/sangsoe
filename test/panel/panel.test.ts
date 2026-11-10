@@ -222,7 +222,8 @@ const T1 = "task_000000000001";
  * returns each gate's options as the JSON text real Orca does. `unreadable` and `blank-first` replace that text.
  */
 async function world(how: "options" | "no-options" | "unreadable" | "blank-first" = "options") {
-  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001", title: "webhook retry" }]);
+  // Not started yet: Orca gates only such a Task (decision 197).
+  const w = createWorld([{ id: T1, run: RUN, status: "pending", title: "webhook retry" }]);
   const opened = await decisionOpen(w, {
     subject: "item:i012",
     question: "Retry policy?",

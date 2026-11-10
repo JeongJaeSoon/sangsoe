@@ -55,8 +55,8 @@ test("decisionKey ignores wording, case, spacing, edge punctuation and option or
 
 test("decisionOpen issues dNNN, gates each waiter Task once, and records only ids", async () => {
   const w = createWorld([
-    { id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" },
-    { id: T2, run: RUN, status: "dispatched", dispatchId: "ctx_000000000002" },
+    { id: T1, run: RUN, status: "pending" },
+    { id: T2, run: RUN, status: "pending" },
   ]);
   const v = await open(w);
   assert.equal(v.status, "opened");
@@ -82,7 +82,7 @@ test("decisionOpen issues dNNN, gates each waiter Task once, and records only id
 });
 
 test("decisionOpen reuses a gate a crashed call already created", async () => {
-  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }]);
+  const w = createWorld([{ id: T1, run: RUN, status: "pending" }]);
   const gated = await w.orca.gateCreate({ task: T1, question: "d001: Which API versioning scheme?" });
   assert.ok(gated.ok);
   w.store.allocate("d");
@@ -255,9 +255,10 @@ test("owner_direct_merge (function side): an observed merge closes the decision 
 });
 
 test("a gate bound to another Run is handed to that Run by message, not resolved from here", async () => {
+  // T1's worker runs, so its question sits on a carrier in RUN; T2 has not started, so it has its own gate.
   const w = createWorld([
     { id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" },
-    { id: T2, run: OTHER_RUN, status: "dispatched", dispatchId: "ctx_000000000002" },
+    { id: T2, run: OTHER_RUN, status: "pending" },
   ]);
   const across = await decisionOpen(w, ask([{ task: T1, run: RUN }, { task: T2, run: OTHER_RUN }]));
   assert.ok(!across.ok, "gate-create binds to the caller's Run, so a waiter elsewhere is refused before any write");
@@ -278,19 +279,20 @@ test("a gate bound to another Run is handed to that Run by message, not resolved
   assert.equal(w.gates.get("gate_000000000002")?.status, "pending");
   assert.deepEqual(w.sends.map((s) => s.to).sort(), ["dispatch:ctx_000000000001", `run:${OTHER_RUN}`]);
 
-  // The other Run's session calls the same function; its gate resolves and its worker is told once.
+  // The other Run's session calls the same function; its gate resolves. T2 has no worker yet, so the
+  // answer rides in its first prompt instead of a message (91④(i)).
   const there = await decisionAnswer(w, { decision: d, answer: "path", ownerAction: said, linkedBy: "hook", callerRun: OTHER_RUN });
   assert.ok(there.ok);
   assert.deepEqual(there.value.resolved, ["gate_000000000002"]);
   assert.deepEqual(there.value.handedOff, [], "T1's gate is already resolved, so nothing goes back");
-  assert.equal(w.sends.filter((s) => s.to === "dispatch:ctx_000000000002").length, 1);
+  assert.equal(w.sends.length, 2);
   assert.equal(w.calls("orchestration gate-resolve").length, 2);
 });
 
 test("late_answer_reaches_next_worker (ii): a waiter Task already closed gets one message to its Run", async () => {
   const w = createWorld([
-    { id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" },
-    { id: T3, run: RUN, status: "dispatched", dispatchId: "ctx_000000000003" },
+    { id: T1, run: RUN, status: "pending" },
+    { id: T3, run: RUN, status: "pending" },
   ]);
   const { decision: d } = await open(w, [{ task: T1, run: RUN }, { task: T3, run: RUN }]);
   const t1 = w.tasks.get(T1);
@@ -373,8 +375,9 @@ test("moot by closed Tasks: needs every non-carrier waiter closed, and calls no 
   t2.result = "cancelled";
   const r = await decisionMoot(w, input);
   assert.ok(r.ok);
-  assert.deepEqual(r.value.resolved, []);
-  assert.equal(w.calls("orchestration gate-resolve").length, 0);
+  // Both workers ran at the open, so only the carrier holds a gate; it is freed, theirs never existed.
+  assert.deepEqual(r.value.resolved, ["gate_000000000001"]);
+  assert.equal(w.calls("orchestration gate-resolve").length, 1);
   assert.deepEqual(r.value.notified, [T1, T2]);
   assert.deepEqual(w.sends.map((s) => s.to), [`run:${RUN}`, `run:${RUN}`]);
 });
@@ -431,7 +434,7 @@ test("decisionAnswer needs the owner_action it cites, and one owner_action answe
 });
 
 test("two concurrent opens of one waiter keep one gate and resolve the duplicate", async () => {
-  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }]);
+  const w = createWorld([{ id: T1, run: RUN, status: "pending" }]);
   const [a, b] = await Promise.all([decisionOpen(w, ask([{ task: T1, run: RUN }])), decisionOpen(w, ask([{ task: T1, run: RUN }]))]);
   assert.ok(a.ok && b.ok);
   assert.ok(a.value.status !== "closed" && b.value.status !== "closed");
@@ -473,8 +476,8 @@ test("an answer recorded before a racing moot's close row is still delivered", a
 test("a moot hands a foreign gate to its Run, which resolves it with `decision moot`, and tells a closed waiter there", async () => {
   const w = createWorld([
     { id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" },
-    { id: T2, run: OTHER_RUN, status: "dispatched", dispatchId: "ctx_000000000002" },
-    { id: T3, run: OTHER_RUN, status: "dispatched", dispatchId: "ctx_000000000003" },
+    { id: T2, run: OTHER_RUN, status: "pending" },
+    { id: T3, run: OTHER_RUN, status: "pending" },
   ]);
   const { decision: d } = await open(w);
   await open(w, [{ task: T2, run: OTHER_RUN }, { task: T3, run: OTHER_RUN }], OTHER_RUN);
@@ -490,7 +493,7 @@ test("a moot hands a foreign gate to its Run, which resolves it with `decision m
   const handoff = w.sends.find((s) => s.type === "handoff");
   assert.equal(handoff?.to, `run:${OTHER_RUN}`);
   assert.match(handoff?.body ?? "", /Run there: sangsoe decision moot --decision d001$/);
-  const closed = w.sends.filter((s) => s.type === "decision_gate" && s.to === `run:${OTHER_RUN}`);
+  const closed = w.sends.filter((s) => s.type === "status" && s.to === `run:${OTHER_RUN}`);
   assert.equal(closed.length, 1, "T3's Run hears once that its closed waiter's question is moot");
 
   // The other Run's session runs what the handoff names: its gate resolves under the first evidence.
@@ -501,7 +504,7 @@ test("a moot hands a foreign gate to its Run, which resolves it with `decision m
   const t2gate = [...w.gates.values()].find((g) => g.taskId === T2);
   assert.equal(t2gate?.status, "resolved");
   assert.equal(t2gate?.resolution, "MOOT d001: pr_closed:acme/api#3");
-  assert.equal(w.sends.filter((s) => s.to === "dispatch:ctx_000000000002").length, 1);
+  assert.equal(w.sends.filter((s) => s.to === "dispatch:ctx_000000000001" && s.type === "status").length, 1, "T1's running worker hears by message");
   assert.equal(w.sends.filter((s) => s.type === "handoff").length, 1);
 });
 
@@ -518,15 +521,42 @@ test("one waiter's failed send does not hold back the next waiter's gate, and a 
   assert.ok(!r.ok);
   assert.equal(r.refusal.code, "release_incomplete");
   assert.match(r.refusal.reason, new RegExp(`^${T1}: send_failed`));
-  assert.equal(w.gates.get("gate_000000000002")?.status, "resolved", "T2 is freed although T1's send failed");
-  assert.equal(w.sends.filter((s) => s.to === "dispatch:ctx_000000000002").length, 1);
+  assert.equal(w.gates.get("gate_000000000001")?.status, "resolved", "the carrier's gate is freed although T1's send failed");
+  assert.equal(w.sends.filter((s) => s.to === "dispatch:ctx_000000000002").length, 1, "T2 is told although T1's send failed");
 
   w.failSendTo(null);
   const again = await decisionAnswer(w, input);
   assert.ok(again.ok, JSON.stringify(again));
   assert.deepEqual(again.value.notified, [T1]);
-  assert.equal(w.calls("orchestration gate-resolve").length, 2);
+  assert.equal(w.calls("orchestration gate-resolve").length, 1);
   assert.equal(w.sends.length, 2);
+});
+
+test("decision 197: a waiter whose worker runs gets no gate (Orca: task_not_startable); the question rides a carrier, the answer a status message", async () => {
+  const w = createWorld([
+    { id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" },
+    { id: T2, run: RUN, status: "ready", dispatchId: "ctx_000000000002" },
+  ]);
+  const v = await open(w, [{ task: T1, run: RUN }, { task: T2, run: RUN }]);
+  assert.equal(v.status, "opened");
+  const gated = [...w.gates.values()].map((g) => g.taskId);
+  assert.equal(w.calls("orchestration gate-create").length, 1);
+  const carrier = [...w.tasks.values()].find((t) => t.title === "d001");
+  assert.ok(carrier);
+  assert.equal(carrier.run, RUN, "the carrier sits in the caller's Run");
+  assert.deepEqual(gated, [carrier.id], "no gate is asked of a Task Orca shows a worker on, even as ready");
+  assert.deepEqual(
+    w.store.events({ type: "decision_joined" }).map((e) => [e.payload.waiter, e.payload.gate ?? null]),
+    [[T1, null], [T2, null], [carrier.id, "gate_000000000001"]],
+  );
+
+  const said = ownerSays(w.store, "d001 path");
+  const r = await decisionAnswer(w, { decision: v.decision, answer: "path", ownerAction: said, linkedBy: "hook", callerRun: RUN });
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(r.value.resolved, ["gate_000000000001"]);
+  assert.deepEqual(r.value.notified, [T1, T2]);
+  // decision_gate and escalation are Orca's worker-to-coordinator types: from anyone else they are rejected.
+  assert.deepEqual(w.sends.map((s) => [s.to, s.type]), [["dispatch:ctx_000000000001", "status"], ["dispatch:ctx_000000000002", "status"]]);
 });
 
 test("decisionAnswer refuses an unknown decision", async () => {

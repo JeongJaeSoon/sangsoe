@@ -342,12 +342,13 @@ test("worker_start_dispatched (2): enough depth → a Dispatch and no event", as
   assert.deepEqual(out, {
     kind: "started",
     taskId: NEW_TASK,
+    alias: "i001",
     dispatchId: "ctx_new",
     worktreeId: CHILD_TREE,
     launch: { model: MODEL_CATALOG.find((c) => c.tier === worker.tier)?.alias, effort: worker.effort },
     notes: [ADVISOR_FROM_SETTING],
   });
-  assert.equal(h.store.events().length, 0);
+  assert.deepEqual(h.store.events().map((e) => e.type), ["item_created"], "only the new Task's alias row");
   const ws = h.called("worker-start")[0] ?? [];
   assert.equal(flag(ws, "worktree"), "new-child");
   assert.equal(flag(ws, "task"), NEW_TASK);
@@ -367,7 +368,7 @@ test("a Task that is not ready waits, and nothing is written", async () => {
   const h = harness({ newTaskStatus: "pending" });
   const out = await start(h);
   assert.equal(out.kind === "waiting" && out.why, "not_ready");
-  assert.equal(h.store.events().length, 0);
+  assert.deepEqual(h.store.events().map((e) => e.type), ["item_created"], "only the new Task's alias row");
   assert.equal(h.called("worker-start").length, 0);
 });
 
@@ -740,4 +741,118 @@ test("unit_lineage_complete: a missing Dispatch, a different parent or Run, a cr
     "orchestration-worker-show": ok({ dispatchId: "ctx_000000000001", taskId: "task_000000000001", runId: RUN, state: "ready", workspace: PARENT_TREE }),
   });
   assert.match(orphan.units[0]?.problems.join() ?? "", /parentWorktreeId 가 없다/);
+});
+
+// ---- decision 197: placement, target repo, keep-open, alias, T5 once ----
+
+const { worktreeId: _tree, ...plainFolder } = orchestrator;
+const TARGET = "name:acme-web";
+
+test("decision 197: an orchestrator in no worktree (cwd / or a plain folder) starts with new-top-level --repo, lineage on its Run", async () => {
+  for (const cwd of ["/", "/srv/owner-notes"]) {
+    const h = harness();
+    const out = await startUnit(ports(h, () => 1, cwd), request({ requester: plainFolder, childRole: "lead", repo: TARGET }));
+    assert.equal(out.kind, "started", JSON.stringify(out));
+    const ws = h.called("worker-start")[0] ?? [];
+    assert.equal(flag(ws, "worktree"), "new-top-level");
+    assert.equal(flag(ws, "repo"), TARGET);
+    assert.equal(flag(ws, "run"), RUN);
+    assert.equal(h.called("worker-list").length, 0, "no worktree to scan for a Dispatch");
+  }
+});
+
+test("decision 197: without a worktree, only an orchestrator outside every worktree and with a repo may start", async () => {
+  // No repo: Orca would have nowhere to put the worktree.
+  const noRepo = harness();
+  assertRefused(noRepo, await startUnit(ports(noRepo, () => 1, "/"), request({ requester: plainFolder, childRole: "lead" })), "lineage_invalid");
+  // A session inside a worktree must name it: a lead could otherwise pass as the orchestrator.
+  const inside = harness();
+  const out = await startUnit(ports(inside, () => 1, CALLER_CWD), request({ requester: plainFolder, childRole: "lead", repo: TARGET }));
+  assertRefused(inside, out, "lineage_invalid");
+  assert.match(out.kind === "refused" ? out.detail : "", /그 worktree 를 밝힌다/);
+  // A lead or a worker always names its worktree.
+  const { worktreeId: _w, ...leadNoTree } = lead;
+  for (const role of ["lead", "worker"] as const) {
+    const h = harness();
+    assertRefused(h, await startUnit(ports(h, () => 1, "/"), request({ requester: { ...leadNoTree, role }, repo: TARGET })), "lineage_invalid");
+  }
+  // A selector Orca would not read.
+  const bad = harness();
+  assertRefused(bad, await start(bad, request({ repo: "acme-web" })), "lineage_invalid");
+});
+
+test("decision 197: a target repo rides on new-child, so the parent worktree is kept; an item's recorded repo is used by id", async () => {
+  const h = harness();
+  assert.equal((await start(h, request({ repo: TARGET }))).kind, "started");
+  const ws = h.called("worker-start")[0] ?? [];
+  assert.equal(flag(ws, "worktree"), "new-child");
+  assert.equal(flag(ws, "repo"), TARGET);
+
+  const byId = harness();
+  byId.store.append({ type: "item_extra_set", source: "core:item", payload: { task: NEW_TASK, repo: "path:/home/dev/src/web" }, entity: "task", entity_id: NEW_TASK });
+  assert.equal((await start(byId, request({ task: { id: NEW_TASK } }))).kind, "started");
+  assert.equal(flag(byId.called("worker-start")[0] ?? [], "repo"), "path:/home/dev/src/web");
+  const mine = harness();
+  await start(mine, request());
+  assert.ok(!(mine.called("worker-start")[0] ?? []).includes("--repo"), "no repo given or recorded: the requester's own");
+});
+
+test("decision 197: a lead starts with --keep-open; a worker does not", async () => {
+  const asLead = harness();
+  await start(asLead, request({ requester: orchestrator, childRole: "lead" }));
+  assert.ok((asLead.called("worker-start")[0] ?? []).includes("--keep-open"));
+  const asWorker = harness();
+  await start(asWorker, request());
+  assert.ok(!(asWorker.called("worker-start")[0] ?? []).includes("--keep-open"));
+});
+
+test("decision 197: a Task start_unit creates gets an iNNN alias, so a decision can name it item:iNNN", async () => {
+  const h = harness();
+  const out = await start(h);
+  assert.equal(out.kind === "started" && out.alias, "i001");
+  const made = h.store.events({ type: "item_created" });
+  assert.deepEqual(made.map((e) => [e.payload.task, e.payload.alias]), [[NEW_TASK, "i001"]]);
+  assert.equal(made[0]?.payload.who, `lead:${RUN}`);
+  const byId = harness();
+  await start(byId, request({ task: { id: NEW_TASK } }));
+  assert.equal(byId.store.events({ type: "item_created" }).length, 0, "an existing Task keeps the alias it has");
+});
+
+test("T5: two starts racing past the count on the third failure still write loop_detected once", async () => {
+  const h = harness({ workerStart: () => fail("spawn_failed") });
+  const req = request({ task: { id: NEW_TASK } });
+  for (let i = 0; i < 2; i++) await start(h, req);
+  const raced = await Promise.all([start(h, req), start(h, req)]);
+  assert.deepEqual(raced.map((r) => r.kind), ["refused", "refused"]);
+  assert.equal(h.store.events({ type: "loop_detected" }).length, 1);
+});
+
+test("decision 197: item_create and sangsoe item new record the target repo; a bad selector is refused before Orca", async () => {
+  const h = harness();
+  const made = await itemCreate({ runId: RUN, spec: "web change", who: "lead:web", doneWhen: "merged", repo: TARGET }, { orca: h.orca, store: h.store as never });
+  assert.ok(made.ok, JSON.stringify(made));
+  assert.deepEqual(h.store.events({ type: "item_extra_set" }).at(-1)?.payload, { task: NEW_TASK, repo: TARGET });
+  const badMcp = await itemCreate({ runId: RUN, spec: "x", who: "w", doneWhen: "d", repo: "acme-web" }, { orca: h.orca, store: h.store as never });
+  assert.equal(!badMcp.ok && badMcp.refusal.code, "invalid_input");
+
+  const c = harness();
+  const cli = await itemNew({ run: RUN, spec: "web change", who: "lead:web", "done-when": "merged", repo: TARGET }, { orca: c.orca, store: c.store as never });
+  assert.ok(cli.ok, JSON.stringify(cli));
+  assert.deepEqual(c.store.events({ type: "item_extra_set" }).at(-1)?.payload, { task: NEW_TASK, repo: TARGET });
+  const badCli = await itemNew({ run: RUN, spec: "x", who: "w", "done-when": "d", repo: "acme-web" }, { orca: c.orca, store: c.store as never });
+  assert.equal(!badCli.ok && badCli.refusal.code, "invalid_input");
+  assert.equal(c.called("task-create").length, 1, "the bad selector never reached Orca");
+});
+
+test("decision 197: MCP start_unit takes repo and lets only an orchestrator leave worktreeId out", async () => {
+  const h = harness();
+  const noTree = await handle({ role: "lead", taskId: "task_lead", runId: RUN, childRole: "worker", spec: "x" }, ports(h));
+  assert.equal(!noTree.ok && noTree.refusal.code, "invalid_input");
+  const badRepo = await handle({ role: "orchestrator", runId: RUN, childRole: "lead", spec: "x", repo: "acme-web" }, ports(h));
+  assert.equal(!badRepo.ok && badRepo.refusal.code, "invalid_input");
+  assert.equal(h.called("worker-start").length, 0);
+  const o = harness();
+  const out = await handle({ role: "orchestrator", runId: RUN, childRole: "lead", spec: "x", repo: TARGET }, ports(o, () => 1, "/"));
+  assert.ok(out.ok, JSON.stringify(out));
+  assert.equal(flag(o.called("worker-start")[0] ?? [], "worktree"), "new-top-level");
 });

@@ -47,6 +47,7 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
   const gates = new Map<string, WorldGate>();
   const sends: WorldSend[] = [];
   let n = 0;
+  let created = 0;
   let current = o.currentRun ?? null;
   let deadAddress: string | null = null;
   let lose: boolean | null = null;
@@ -65,13 +66,19 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
       });
     },
     "orchestration-task-create": (args: readonly string[]) => {
-      const id = `task_9${String(++n).padStart(11, "0")}`;
+      // Its own counter, so a carrier Task does not shift the gate and message ids tests name.
+      const id = `task_9${String(++created).padStart(11, "0")}`;
       taskMap.set(id, { id, run: flag(args, "run") ?? "run_unbound", status: "pending", title: flag(args, "task-title") ?? id });
       return ok({ task: { id } });
     },
     "orchestration-gate-create": (args: readonly string[]) => {
       const task = flag(args, "task") ?? "";
       if (!taskMap.has(task)) return err("task_not_found");
+      // Orca refuses a gate on a Task whose supervised worker runs (test/fixtures/orca-refusals).
+      const t = taskMap.get(task);
+      if (t?.status === "dispatched" || t?.dispatchId) return err("task_not_startable");
+      // "Create a decision gate blocking a task" (gate-create --help).
+      if (t && (t.status === "pending" || t.status === "ready")) t.status = "blocked";
       const id = `gate_${String(++n).padStart(12, "0")}`;
       const options = flag(args, "options");
       gates.set(id, { id, taskId: task, status: "pending", question: flag(args, "question") ?? "", ...(options ? { options } : {}) });

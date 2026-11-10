@@ -53,13 +53,14 @@ async function releaseOne(
   input: ReleaseInput,
   out: Out,
 ): Promise<Result<null>> {
-  if (!w.run || !w.gate) return done(null);
+  // A waiter joined while its worker ran has no gate (Orca refuses one then, decision 197): only the message below.
+  if (!w.run || (!w.gate && w.carrier)) return done(null);
   const task = await reads.task(w.run, w.task);
   if (!task.ok) return task;
-  const gate = await reads.gate(w.run, w.gate);
+  const gate = w.gate ? await reads.gate(w.run, w.gate) : done(undefined);
   if (!gate.ok) return gate;
   const closed = task.value !== undefined && isClosedTask(task.value);
-  const open = !closed && gate.value !== undefined && isOpenGate(gate.value);
+  const open = !closed && w.gate && gate.value !== undefined && isOpenGate(gate.value) ? w.gate : null;
 
   if (open && w.run !== input.callerRun) {
     const key = input.keyFor(w.task);
@@ -67,8 +68,8 @@ async function releaseOne(
       key: { target: key.target, dedupe_key: `${key.dedupe_key}:resolve` },
       to: "lead",
       chain: { leadRun: w.run },
-      subject: `${d}: resolve gate ${w.gate}`,
-      body: `${input.resolution}\nThe gate ${w.gate} on ${w.task} is bound to your Run. Run there: ${input.resume}`,
+      subject: `${d}: resolve gate ${open}`,
+      body: `${input.resolution}\nThe gate ${open} on ${w.task} is bound to your Run. Run there: ${input.resume}`,
       msgType: "handoff",
       source: input.resumeWith,
     });
@@ -76,9 +77,9 @@ async function releaseOne(
     return r.ok ? done(null) : r;
   }
   if (open) {
-    const r = await deps.orca.gateResolve({ id: w.gate, resolution: input.resolution });
-    if (!r.ok) return refuse("orca_error", `gate-resolve ${w.gate}: ${r.error.code}`, "call again");
-    out.resolved.push(w.gate);
+    const r = await deps.orca.gateResolve({ id: open, resolution: input.resolution });
+    if (!r.ok) return refuse("orca_error", `gate-resolve ${open}: ${r.error.code}`, "call again");
+    out.resolved.push(open);
   }
 
   if (w.carrier || !task.value) return done(null);
@@ -90,7 +91,8 @@ async function releaseOne(
     chain: closed || !dispatch ? { leadRun: w.run } : { dispatch, leadRun: w.run },
     subject: input.subject,
     body: input.resolution,
-    msgType: "decision_gate",
+    // Not decision_gate: Orca takes that type (and escalation) only from the Dispatch's own process (decision 197).
+    msgType: "status",
     source: input.resumeWith,
   });
   if (r.ok && r.value.status === "sent") out.notified.push(w.task);

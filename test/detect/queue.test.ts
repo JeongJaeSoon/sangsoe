@@ -96,8 +96,11 @@ function answerWithoutDelivery(w: World, d: string): number {
   return said;
 }
 
+// A gated waiter has not started: Orca refuses a gate on a Task whose worker runs (decision 197).
+const GATED = { id: T1, run: RUN, status: "pending" };
+
 test("answer_gate_unresolved (queue side): the round re-calls decision_answer, the gate's Run resolves it once", async () => {
-  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: D1 }]);
+  const w = createWorld([GATED]);
   const d = await openDecision(w);
   const said = answerWithoutDelivery(w, d);
 
@@ -110,19 +113,19 @@ test("answer_gate_unresolved (queue side): the round re-calls decision_answer, t
   await queue(deps(w.store, w.orca));
   assert.equal(w.sends.length, 1, "the handoff goes once");
 
-  // The session holding the Run makes the same call: one resolve, the worker told once.
+  // The session holding the Run makes the same call: one resolve. No worker yet, so no message (91④(i)).
   const there = await decisionAnswer(w, { decision: d, answer: "header", ownerAction: said, linkedBy: "hook", callerRun: RUN });
   assert.ok(there.ok);
   assert.deepEqual(there.value.resolved, ["gate_000000000001"]);
   const after = await queue(deps(w.store, w.orca));
   assert.ok(!after.calls.some((c) => c.includes("decision_answer")), "delivered: nothing left to re-call");
   assert.equal(w.calls("orchestration gate-resolve").length, 1);
-  assert.deepEqual(w.sends.map((s) => s.to), [`run:${RUN}`, `dispatch:${D1}`]);
+  assert.deepEqual(w.sends.map((s) => s.to), [`run:${RUN}`]);
 });
 
 test("answer_gate_unresolved: a handoff still unresolved past the wait is escalation_stale once, one tier up", async () => {
   // The lead's Run is coordinated by a terminal that ORCH_RUN's Dispatch runs: that Run is the tier above.
-  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: D1 }], { above: { [RUN]: ORCH_RUN } });
+  const w = createWorld([GATED], { above: { [RUN]: ORCH_RUN } });
   const d = await openDecision(w);
   answerWithoutDelivery(w, d);
   await queue(deps(w.store, w.orca));
@@ -140,7 +143,7 @@ test("answer_gate_unresolved: a handoff still unresolved past the wait is escala
 });
 
 test("answer_gate_unresolved: no Dispatch runs the lead's coordinator, so no Run above: the event only", async () => {
-  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: D1 }], { above: {} });
+  const w = createWorld([GATED], { above: {} });
   const d = await openDecision(w);
   answerWithoutDelivery(w, d);
   await queue(deps(w.store, w.orca));
@@ -167,7 +170,7 @@ test("decision_moot_closed: a waiter whose Task row was not read is unknown, so 
 });
 
 test("decision_moot_closed (detection side): every waiter Task closed moots the decision through U8's function", async () => {
-  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: D1 }]);
+  const w = createWorld([GATED]);
   const d = await openDecision(w);
   assert.equal((await queue(deps(w.store, w.orca))).calls.filter((c) => c.includes("decision_moot")).length, 0, "a live waiter: not moot");
 
@@ -188,7 +191,7 @@ test("decision_moot_closed (detection side): every waiter Task closed moots the 
 });
 
 test("decision_moot_closed (detection side): a waiter's PR closed unmerged moots it; the live gate goes to its Run", async () => {
-  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: D1 }]);
+  const w = createWorld([GATED]);
   const d = await openDecision(w);
   w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#3", task: T1 } });
   w.store.append({ type: "pr_closed", source: "pr-monitor", payload: { pr: "acme/api#3" } });
@@ -426,7 +429,9 @@ test("verify_unconfirmed goes to the item's owning lead (decision 91② row 11),
   await queue(ownerDeps(w, withSend));
   w.at(later(T0, 45));
   await queue(ownerDeps(w, withSend));
-  assert.deepEqual(sent.filter((s) => !s.endsWith(" status")), [`run:${OWNER_RUN} escalation`], "the ready notice aside");
+  // status, never escalation: queue-monitor holds no Dispatch and Orca refuses its escalation (sender_not_assignee).
+  assert.deepEqual(sent.filter((s) => !s.includes("escalation")).length, sent.length);
+  assert.equal(sent.filter((s) => s === `run:${OWNER_RUN} status`).length, 2, "the ready notice and verify_unconfirmed, once each");
 });
 
 test("probeRound honours gh_budget: below 10% no gh probe is read, above it they are", async () => {
