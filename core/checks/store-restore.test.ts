@@ -28,7 +28,7 @@ test("doctor rebuilds a lost database and names, one by one, what could not be r
     assert.match(r.summary, /되살리지 못한 것/);
     assert.match(r.summary, /- owner_text: the masked text of 1 owner_action row/);
     assert.ok(r.summary.includes(`- ${HOST_WINDOW_LOST}`));
-    assert.match(r.fix ?? "", /Orca 를 열면/, "host rows wait for the monitors");
+    assert.match(r.fix ?? "", /Orca 가 열려 있으면 monitor 의 다음 회차가, 닫혀 있으면 Orca 를 열 때/, "host rows wait for the monitors, whether Orca is open or not");
     const back = Store.open({ home: h });
     assert.deepEqual(
       back.events().map((e) => e.type),

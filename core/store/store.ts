@@ -66,6 +66,11 @@ export class StartRefused extends Error {
   }
 }
 
+/** A write on a connection whose file is no longer the one at its path (decision 191). */
+export class StoreReplaced extends Error {
+  override name = "StoreReplaced";
+}
+
 export interface OpenOptions {
   /** Database file, or ":memory:". Default ~/.local/share/sangsoe/sangsoe.db (decision 14). */
   readonly path?: string;
@@ -171,13 +176,36 @@ export class Store {
   readonly #clock: Clock;
   /** The own-facts file; null for ":memory:". */
   readonly #backup: string | null;
+  /** The path and the file identity this connection opened; null for ":memory:". */
+  readonly #file: { path: string; dev: number; ino: number } | null;
   /** Set when this open found the database lost or unreadable and rebuilt it; null otherwise. */
   rebuilt: Rebuilt | null = null;
 
-  private constructor(db: DatabaseSync, clock: Clock, backup: string | null) {
+  private constructor(db: DatabaseSync, clock: Clock, backup: string | null, path: string) {
     this.#db = db;
     this.#clock = clock;
     this.#backup = backup;
+    if (path === ":memory:") this.#file = null;
+    else {
+      const { dev, ino } = statSync(path);
+      this.#file = { path, dev, ino };
+    }
+  }
+
+  /**
+   * True once the file at this store's path is not the one it opened: moved aside, removed, or
+   * rebuilt by another opener. Its rows would then reach no reader, so it refuses to write
+   * (StoreReplaced) and a long-lived holder opens again (decision 191).
+   */
+  replaced(): boolean {
+    if (!this.#file) return false;
+    try {
+      const now = statSync(this.#file.path);
+      return now.dev !== this.#file.dev || now.ino !== this.#file.ino;
+    } catch (e) {
+      if ((e as { code?: string }).code === "ENOENT") return true;
+      throw e;
+    }
   }
 
   /** Runs the start checks, then opens (creating if needed) the database. Refuses with StartRefused. */
@@ -212,7 +240,7 @@ export class Store {
     }
     db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     const backup = path === ":memory:" ? null : backupPath(path);
-    const store = new Store(db, clock, backup);
+    const store = new Store(db, clock, backup, path);
     store.#migrate();
     if (backup && fresh && existsSync(backup)) store.rebuilt = store.#restore(backup, setAside);
     else if (backup) {
@@ -307,6 +335,7 @@ export class Store {
   }
 
   #tx<T>(fn: () => T): T {
+    if (this.replaced()) throw new StoreReplaced(`${this.#file?.path} is no longer the file this connection opened: open the store again`);
     this.#db.exec("BEGIN IMMEDIATE");
     try {
       const out = fn();

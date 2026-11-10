@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { dedupeKey, EVENTS, fixedClock } from "../contract/index.ts";
-import { backupPath, HOST_TYPES, OWN_TYPES } from "./backup.ts";
-import { HOST_WINDOW_LOST, LOST_SEPARATOR, Store } from "./store.ts";
+import { backupPath, HOST_TYPES, OWN_TYPES, readBackup } from "./backup.ts";
+import { holdStore } from "./held.ts";
+import { HOST_WINDOW_LOST, LOST_SEPARATOR, Store, StoreReplaced } from "./store.ts";
 
 const T0 = "2026-11-11T00:00:00.000Z";
 const tmp = mkdtempSync(join(tmpdir(), "sangsoe-backup-"));
@@ -209,6 +210,62 @@ test("own rows an older build wrote after the facts file existed are copied on t
   assert.equal(r.rebuilt?.restored, 2, "the older build's row comes back after a loss");
   assert.equal(r.allocate("d"), "d008");
   r.close();
+});
+
+test("a connection whose file another opener rebuilt refuses to write, so the facts file keeps one row per seq", () => {
+  const path = newPath();
+  const held = open(path);
+  held.append(decisionOpened("d001", "k1"));
+  held.append(decisionOpened("d002", "k2"));
+  renameSync(path, `${path}.gone`);
+  const second = open(path);
+  assert.ok(second.rebuilt, "the next opener rebuilds");
+  assert.equal(held.replaced(), true);
+  assert.throws(() => held.append(decisionOpened("d003", "k3")), StoreReplaced);
+  assert.deepEqual(readBackup(backupPath(path)).skipped, [], "no seq holds two different rows");
+  held.close();
+  second.close();
+  lose(path);
+  const third = open(path);
+  assert.ok(third.events({ type: "signal" }).some((e) => e.payload.kind === "store_rebuilt"), "the first rebuild's signal survives a second loss");
+  third.close();
+});
+
+test("a held store reopens before its next use once the file at its path changed, and joins the rebuilt file", async () => {
+  const path = newPath();
+  const held = holdStore(() => open(path), (s) => s);
+  await held.use(async (s) => s.append(decisionOpened("d001", "k1")));
+  let inFlight: Store | undefined;
+  let release = () => {};
+  const slow = held.use(async (s) => {
+    inFlight = s;
+    await new Promise<void>((r) => {
+      release = r;
+    });
+    return s.events().length;
+  });
+  renameSync(path, `${path}.gone`);
+  const second = open(path);
+  assert.ok(second.rebuilt);
+  await held.use(async (s) => {
+    assert.equal(s.rebuilt, null, "it joins the rebuilt file, it does not rebuild again");
+    assert.notEqual(s, inFlight, "each use after the change has the new connection");
+    s.append(decisionOpened("d002", "k2"));
+  });
+  release();
+  assert.ok((await slow) > 0, "a use already in flight keeps its connection open to its end");
+  assert.ok(second.events().some((e) => e.dedupe_key === dedupeKey(EVENTS.decision_opened, "k2")), "the write reached the file other openers read");
+  assert.deepEqual(readBackup(backupPath(path)).skipped, []);
+  second.close();
+  held.close();
+
+  const alone = newPath();
+  const solo = holdStore(() => open(alone), (s) => s);
+  await solo.use(async (s) => s.append(decisionOpened("d001", "k1")));
+  renameSync(alone, `${alone}.gone`);
+  const rebuilt = await solo.use(async (s) => s.rebuilt);
+  assert.equal(rebuilt?.restored, 1, "with no other opener, the held store's own reopen rebuilds");
+  solo.close();
 });
 
 test("an older build's row between two of this build's rows is copied before the later one", () => {
