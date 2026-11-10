@@ -332,8 +332,10 @@ async function mainCi(r: Reads): Promise<void> {
     const ref = str(m.payload.pr) ?? "";
     const repo = ref.split("#")[0] ?? "";
     const sha = str(m.payload.merge_sha) ?? "";
-    if (!r.watch.repos.includes(repo) || Date.parse(at(m)) < since || green.has(`${repo}@${sha}`)) continue;
-    const listed = await get<{ workflow_runs?: Record<string, unknown>[] }>(r, `repos/${repo}/actions/runs?head_sha=${sha}&event=push&per_page=100`);
+    // The stored ref is lowercase; GitHub is asked under the spelling watch.repos gives.
+    const given = r.watch.repos.find((w) => w.toLowerCase() === repo);
+    if (!given || Date.parse(at(m)) < since || green.has(`${repo}@${sha}`)) continue;
+    const listed = await get<{ workflow_runs?: Record<string, unknown>[] }>(r, `repos/${given}/actions/runs?head_sha=${sha}&event=push&per_page=100`);
     if (!listed || !Array.isArray(listed.workflow_runs)) continue;
     const runs: MainRun[] = [];
     for (const w of listed.workflow_runs) {
@@ -341,7 +343,7 @@ async function mainCi(r: Reads): Promise<void> {
       const conclusion = str(w.conclusion) ?? null;
       let jobs: number | null = null;
       if (["failure", "timed_out", "startup_failure"].includes(conclusion ?? "")) {
-        const j = await get<{ total_count?: number }>(r, `repos/${repo}/actions/runs/${id}/jobs?per_page=1`);
+        const j = await get<{ total_count?: number }>(r, `repos/${given}/actions/runs/${id}/jobs?per_page=1`);
         jobs = typeof j?.total_count === "number" ? j.total_count : null;
       }
       runs.push({ id, run_attempt: Number(w.run_attempt ?? 1), status: str(w.status) ?? "", conclusion, updatedAt: Date.parse(str(w.updated_at) ?? "") || now, jobs });

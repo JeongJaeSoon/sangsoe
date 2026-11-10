@@ -247,9 +247,9 @@ test("watch.repos keeps its case for every GitHub call; rows and keys stay lower
     },
   };
 
-  const r = await w.round({ gh });
-  assert.deepEqual(r.written.map((x) => x.type), ["pr_merged", "main_green"]);
+  assert.deepEqual((await w.round({ gh })).written.map((x) => x.type), ["pr_merged"]);
   assert.equal(w.rows("pr_merged")[0]?.payload.pr, "acme/api#7");
+  assert.deepEqual((await w.round({ gh })).written.map((x) => x.type), ["main_green"], "main CI reads the merge the round before wrote");
   assert.deepEqual(w.rows("main_green")[0]?.payload, { repo: "acme/api", sha: SHA, run_id: "41" }, "land compares main state lowercase");
   assert.ok(paths.length > 0 && paths.every((p) => p.startsWith(`repos/${given}`)), paths.join("\n"));
 });
