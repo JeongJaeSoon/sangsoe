@@ -15,7 +15,7 @@ export interface World {
   readonly tasks: Map<string, WorldTask>;
   readonly gates: Map<string, WorldGate>;
   readonly sends: WorldSend[];
-  /** Every orca call as its subcommand words, e.g. "orchestration gate-resolve". */
+  /** Every orca call as its subcommand words; with a name ("orchestration gate-resolve"), those calls' full argv. */
   calls(name?: string): string[][];
   /** The Run run-current reports from now on, as when another Run's session makes the call. */
   useRun(run: string): void;

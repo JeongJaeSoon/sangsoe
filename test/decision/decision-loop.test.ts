@@ -592,6 +592,22 @@ test("decision 197: the carrier lookup reads task-list --full, where Orca gives 
   assert.ok(lists.length > 0 && lists.every((a) => a.includes("--full")), JSON.stringify(lists));
 });
 
+test("decision 197: a gate-less running waiter whose message failed reads as undelivered, so it is told again", async () => {
+  type ViewTaskStatus = Parameters<typeof decision>[0]["orca"]["tasks"][number]["status"];
+  const view = (w: World, d: string) => {
+    const gates = [...w.gates.values()].map((g) => ({ id: g.id, taskId: g.taskId, open: g.status === "pending" }));
+    const tasks = [...w.tasks.values()].map((t) => ({ id: t.id, status: t.status as ViewTaskStatus, runId: t.run, deps: [] }));
+    return decision({ orca: { tasks, gates }, events: w.store.events(), now: "2026-11-10T00:00:00Z" }).find((r) => r.decision === d);
+  };
+  for (const failSend of [true, false]) {
+    const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }], { failSend });
+    const v = await open(w);
+    const said = ownerSays(w.store, "d001 path");
+    await decisionAnswer(w, { decision: v.decision, answer: "path", ownerAction: said, linkedBy: "hook", callerRun: RUN });
+    assert.equal(view(w, v.decision)?.undelivered, failSend, `failSend ${failSend}`);
+  }
+});
+
 test("decisionAnswer refuses an unknown decision", async () => {
   const w = createWorld([]);
   const r = await decisionAnswer(w, { decision: "d404", answer: "x", ownerAction: 1, linkedBy: "hook", callerRun: RUN });
