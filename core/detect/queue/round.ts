@@ -90,7 +90,8 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   calls.push(`probeRound: read ${probes.read}, passed ${probes.passed.length}, skipped ${probes.skipped.length}`);
   if (!d.gh) unseen.push("gh client");
 
-  // waiting_human rows come from this machine's hooks, so each session they name is local (decision 88).
+  // waiting_human rows come from this machine's hooks or its orca-monitor, which drops other hosts' rows,
+  // so each wait is local (decisions 88, 196).
   const waits = unreleasedWaits(input, () => true, OWNER_DEFAULTS);
   for (const w of waits) recordUnreleased(collect, w, undefined, QUEUE_SOURCE);
   if (waits.length > 0) unseen.push("screen excerpt: the Orca adapter has no terminal read");

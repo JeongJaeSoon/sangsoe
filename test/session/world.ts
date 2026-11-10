@@ -32,6 +32,8 @@ export interface SessionWorld extends CoreDeps {
   failTaskList: boolean;
   /** run-current answers an error while set. */
   failRunCurrent: boolean;
+  /** dispatch-show's status for TASK: `dispatched` while open, `completed` after worker_done. */
+  dispatchStatus: string;
   calls(): string[][];
 }
 
@@ -57,6 +59,7 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
     dispatched: o.dispatched ?? true,
     failTaskList: false,
     failRunCurrent: false,
+    dispatchStatus: "dispatched",
   };
   const replies: Record<string, FakeReply> = {
     "worktree-list": () =>
@@ -76,6 +79,19 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
       return ok({ tasks: [...own, ...(runTasks.get(run) ?? [])] });
     },
     "orchestration-gate-list": () => ok({ gates: [] }),
+    "orchestration-dispatch-show": () =>
+      ok({
+        dispatch: {
+          id: DISPATCH,
+          run_id: TASK_RUN,
+          task_id: TASK,
+          status: w.dispatchStatus,
+          depth: 1,
+          failure_count: 0,
+          dispatched_at: "2026-11-09 14:56:05",
+          completed_at: w.dispatchStatus === "dispatched" ? null : "2026-11-09 15:56:05",
+        },
+      }),
     "orchestration-run-current": () =>
       w.failRunCurrent ? { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "runtime_unavailable", message: "down" } }), stderr: "" } : ok({ runId: w.heldRun }),
     "orchestration-inbox": (args: readonly string[]) => {
