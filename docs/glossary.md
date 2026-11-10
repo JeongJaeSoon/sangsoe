@@ -307,7 +307,7 @@
 | 루프 게이트 | 포그라운드 sleep 반복 대기를 거부하는 게이트 | `[gate:sleep-loop]` | — |
 | 자기 머지 게이트 | 자기가 연 PR 이 열려 있는데 land 요청(`land_requested`: 머지 예약 또는 `merge_on_approval`) 없이 끝나지 못하게 하는 게이트. 머지를 예약했거나 "승인되면 머지"를 남겼으면 PR 이 열려 있어도 끝낼 수 있다 | `[gate:self-land]` | — |
 | 게이트 이름 | 차단 문구가 시작하는 형식 | `[gate:이름]` | — |
-| 게이트 4종 | 압박·루프·위임·자기 머지 게이트. 본문과 그림은 "게이트 4종"이라고만 쓰고 이름은 부록 §게이트와 원칙에만 둔다 | — | — |
+| 게이트 4종 | 압박·루프·위임·자기 머지 게이트. 본문과 그림은 "게이트 4종"이라고만 쓰고 이름은 부록 §게이트와 원칙에만 둔다. PreToolUse hook 은 이 넷에 가드 둘(세션 시작 가드 `startGuard`, 보고 주소 모양 검사 `reportAddress`)을 더한 여섯을 돌린다(`core/gates/index.ts` 의 `GATES`). 가드는 가정을 담은 게이트가 아니라 입력 모양을 막는 검사라 4종에 세지 않는다 | — | — |
 | Orca 자동화 | 에이전트 프롬프트를 주기로 실행하는 Orca 기능. 모델 없는 감지기에는 쓰지 않는다(plugin worker 타이머가 한다). 모델이 필요한 주기 작업이 생길 때, 그리고 첫 빌드 시험 T2 가 실패해 `--precheck` 가 타이머를 대신할 때만 쓴다 | `orca automations` | 상주 실행, 데몬, cron |
 | 배치 규칙 | 구성요소는 Orca plugin 이 할 수 있으면 Orca plugin 에 둔다. Claude Code plugin 에는 Claude Code 안에서만 되는 것(Claude Code hook·skill·MCP 서버·agents 정의)만 남긴다. 한 저장소에 매니페스트 둘과 공유 코어 하나를 둔다 | — | — |
 | 배치표 | 구성요소마다 네 칸(Orca CLI 내장 기능·Orca plugin·Claude Code plugin·공유 코어) 중 어디에 사는지, 이유 한 줄, 확인·미확인을 적은 표. design.html 2절 | — | — |
@@ -379,7 +379,7 @@
 | 증거 기록 입구 | 검증 실행의 결과를 PR head 의 `evidence` 로 남기는 MCP tool. land 의 `evidence_missing` 이 이 입구를 가리킨다. 작성자와 그 PR 을 쥔 세션은 거부한다(결정 171) | `evidence_record` | — |
 | 단계 기록 입구 | 머지된 PR 이 `merge`·`dev`·`prod` 에 닿았음을 `stage_recorded` 로 남기는 MCP tool. `deploys_after` 가 기다리는 것이 이 줄이다(결정 171) | `stage_record` | — |
 | 리마인드 대상 | 리마인드할 때가 된 의뢰를 `review_ask_sent` 에서 계산하는 뷰 | `ask_due` | — |
-| 릴리스 묶음 틀 | 여러 항목이 dev 배포·확인·prod 승격 한 번을 함께 쓰는 흐름 틀. 구성원 여럿의 `pr_merged` 를 `blocks` 로 기다리고 `stage_recorded` 의 `members` 칸이 전체의 증거다. 단독 긴급 수정은 `ship-change` 다 | `ship-batch` | — |
+| 릴리스 묶음 틀 | 여러 항목이 dev 배포·확인·prod 승격 한 번을 함께 쓰는 흐름 틀. 흐름 변수 `members`(항목 id 목록)의 구성원을 Orca deps(`blocks`)로 기다리고, 증거는 구성원 PR 마다 하나씩 쓰는 `stage_recorded`(`pr`·`stage`·`sha`, `members` 칸은 없다)다. 단독 긴급 수정은 `ship-change` 다 | `ship-batch` | — |
 | main 수정 land | 그 저장소의 최신 main 이 `main_red` 인 동안 land 판정 함수가 받는 유일한 요청 종류 | `main_fix` | — |
 | 감시 범위 | pr-monitor 가 읽는 PR 의 범위를 정하는 설정 키. 기본은 자기 프로그램·항목에 연결된 PR 만이고 "연결됨"은 Orca `reference` 조회가 원본이다 | `watch`(`repos` · `authors` · `linked_only`) | — |
 

@@ -471,6 +471,11 @@ test("item_create writes the role it is given as the spec's first line; worker b
   const badCli = await itemNew({ ...cli, role: "orchestrator" }, ports);
   assert.equal(badCli.ok ? "" : badCli.refusal.code, "invalid_input");
   assert.deepEqual(specs.slice(2), ["sangsoe-role: lead\nbrief"], "the CLI entrance takes the same role");
+
+  const empty = await itemCreate({ ...base, role: "" }, ports);
+  const emptyCli = await itemNew({ ...cli, role: "" }, ports);
+  assert.deepEqual([empty.ok ? "" : empty.refusal.code, emptyCli.ok ? "" : emptyCli.refusal.code], ["invalid_input", "invalid_input"], "an empty role is refused by both");
+  assert.equal(specs.length, 3, "no Task for an empty role");
 });
 
 test("ticket references attach to the new worktree; a failure does not stop the start", async () => {
