@@ -559,6 +559,20 @@ test("decision 197: a waiter whose worker runs gets no gate (Orca: task_not_star
   assert.deepEqual(w.sends.map((s) => [s.to, s.type]), [["dispatch:ctx_000000000001", "status"], ["dispatch:ctx_000000000002", "status"]]);
 });
 
+test("decision 197: a waiter joined without a gate gets none on a later open after its worker ends, so no gate is left unresolved", async () => {
+  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }]);
+  const v = await open(w, [{ task: T1, run: RUN }]);
+  w.tasks.set(T1, { id: T1, run: RUN, status: "pending" });
+  const again = await open(w, [{ task: T1, run: RUN }]);
+  assert.equal(again.status, "joined");
+  assert.deepEqual([...w.gates.values()].map((g) => g.taskId).filter((t) => t === T1), [], "no gate on T1");
+
+  const said = ownerSays(w.store, "d001 path");
+  const r = await decisionAnswer(w, { decision: v.decision, answer: "path", ownerAction: said, linkedBy: "hook", callerRun: RUN });
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.ok([...w.gates.values()].every((g) => g.status !== "pending"), "every gate is resolved");
+});
+
 test("decisionAnswer refuses an unknown decision", async () => {
   const w = createWorld([]);
   const r = await decisionAnswer(w, { decision: "d404", answer: "x", ownerAction: 1, linkedBy: "hook", callerRun: RUN });

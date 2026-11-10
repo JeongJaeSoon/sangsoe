@@ -228,8 +228,12 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     if (!w.ok) return refuse("lineage_invalid", `요청자의 워커를 읽지 못했다 (${w.error.code})`);
     if (w.value.workspace !== requester.worktreeId) return refuse("lineage_invalid", "요청자의 Dispatch 가 밝힌 worktree 의 것이 아니다");
   }
-  const trees = await orca.worktreeList({});
+  const trees = await orca.worktreeList({ limit: 1000 });
   if (!trees.ok) return refuse("lineage_invalid", `worktree 목록을 읽지 못했다 (${trees.error.code})`);
+  // A partial list could hide the caller's own worktree, so the check below fails closed on one.
+  if (trees.value.truncated || trees.value.omittedHostIds.includes("local")) {
+    return refuse("lineage_invalid", "worktree 목록이 다 오지 않았다: 부르는 세션의 worktree 를 가리지 못한다");
+  }
   // The declared worktree is the caller's own only if it is the innermost one the calling session
   // runs in: with worktrees nested under a checkout, the outer one also contains the cwd.
   const cwd = real((ports.cwd ?? (() => process.cwd()))());

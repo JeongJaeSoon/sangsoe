@@ -73,8 +73,10 @@ export async function decisionOpen(deps: CoreDeps, input: DecisionOpenInput): Pr
   const running: { task: string; run: string }[] = [];
   let waiters: { task: string; run: string }[] = [];
   for (const w of input.waiters) {
-    if (state.waiters.some((x) => x.task === w.task && x.gate !== null)) {
-      waiters.push(w);
+    const prior = state.waiters.find((x) => x.task === w.task);
+    if (prior) {
+      // A waiter joined without a gate stays so: a later gate would not be recorded and never resolve.
+      (prior.gate !== null ? waiters : running).push(w);
       continue;
     }
     const t = await reads.task(w.run, w.task);

@@ -17,6 +17,7 @@ import {
   dedupeKey,
   EVENTS,
   type ExecResult,
+  type ExpectedUnit,
   MODEL_CATALOG,
   MODEL_POLICY,
   type Requester,
@@ -724,7 +725,7 @@ test("unit_lineage_complete: a started unit has its Dispatch, Run and parentWork
 });
 
 test("unit_lineage_complete: a missing Dispatch, a different parent or Run, a crossed worker, or no parent fails", async () => {
-  const lineage = async (replies: Record<string, FakeReply>, u = unit) =>
+  const lineage = async (replies: Record<string, FakeReply>, u: ExpectedUnit = unit) =>
     checkLineage(createOrcaAdapter(createFakeOrca({ replies: asReplies(replies) }).exec), [u]);
   assert.equal((await lineage({}, { ...unit, taskId: "task_unknown" })).ok, false);
   const wrongParent = await lineage(recorded, { ...unit, parentWorktreeId: "repo-0001::/elsewhere" });
@@ -741,6 +742,14 @@ test("unit_lineage_complete: a missing Dispatch, a different parent or Run, a cr
     "orchestration-worker-show": ok({ dispatchId: "ctx_000000000001", taskId: "task_000000000001", runId: RUN, state: "ready", workspace: PARENT_TREE }),
   });
   assert.match(orphan.units[0]?.problems.join() ?? "", /parentWorktreeId 가 없다/);
+  // decision 197: a new-top-level unit has no parent to expect; its Dispatch and Run still bind it.
+  const { parentWorktreeId: _p, ...topLevel } = unit;
+  const top = await lineage({
+    ...recorded,
+    "orchestration-worker-show": ok({ dispatchId: "ctx_000000000001", taskId: "task_000000000001", runId: RUN, state: "ready", workspace: PARENT_TREE }),
+  }, topLevel);
+  assert.deepEqual(top.units[0]?.problems, []);
+  assert.match((await lineage(recorded, { ...topLevel, runId: "run_other" })).units[0]?.problems.join() ?? "", /Run 이 다르다/);
 });
 
 // ---- decision 197: placement, target repo, keep-open, alias, T5 once ----
@@ -774,8 +783,17 @@ test("decision 197: without a worktree, only an orchestrator outside every workt
   const { worktreeId: _w, ...leadNoTree } = lead;
   for (const role of ["lead", "worker"] as const) {
     const h = harness();
-    assertRefused(h, await startUnit(ports(h, () => 1, "/"), request({ requester: { ...leadNoTree, role }, repo: TARGET })), "lineage_invalid");
+    const r = await startUnit(ports(h, () => 1, "/"), request({ requester: { ...leadNoTree, role }, repo: TARGET }));
+    assertRefused(h, r, "lineage_invalid");
+    assert.match(r.kind === "refused" ? r.detail : "", /worktree 없이 시작하는 것은 오케스트레이터뿐/);
   }
+  // A partial worktree list could hide the caller's own worktree: refused, not read as "in none".
+  const recorded = JSON.parse(readFileSync(new URL("../fake-orca/scenarios/local/worktree-list.json", import.meta.url), "utf8"));
+  recorded.result.truncated = true;
+  const partial = harness({ replies: { "worktree-list": () => ({ code: 0, stdout: JSON.stringify(recorded), stderr: "" }) } });
+  const cut = await startUnit(ports(partial, () => 1, "/"), request({ requester: plainFolder, childRole: "lead", repo: TARGET }));
+  assertRefused(partial, cut, "lineage_invalid");
+  assert.match(cut.kind === "refused" ? cut.detail : "", /다 오지 않았다/);
   // A selector Orca would not read.
   const bad = harness();
   assertRefused(bad, await start(bad, request({ repo: "acme-web" })), "lineage_invalid");

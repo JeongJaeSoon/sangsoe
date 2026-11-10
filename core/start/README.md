@@ -21,4 +21,4 @@ sangsoe 가 여는 모든 세션은 `startUnit` 하나를 지난다(결정 94 (�
 
 T5(결정 84 ④): 시작 함수는 Task 상태를 먼저 읽어 `dispatched` 인 Task 를 다시 시작하지 않고, 같은 Task 의 시작 시도 실패(`worker-start` 오류와 `no_dispatch`)를 event 로 세어 세 번째에 `loop_detected` 를 쓰고 그 뒤로는 Orca 를 부르지 않는다. 시작 전 읽기 실패는 세지 않는다.
 
-`checkLineage` 는 회귀 시나리오 `unit_lineage_complete` 의 판정이다: 시작한 단위마다 Dispatch·워커·새 worktree 를 읽어 한 사슬인지(Dispatch 가 그 Task 의 것이고 기대한 Run 에 있음, 워커가 그 Dispatch 의 것, worktree 의 `parentWorktreeId` 가 기대한 부모) 보고, 하나라도 없거나 어긋나면 실패.
+`checkLineage` 는 회귀 시나리오 `unit_lineage_complete` 의 판정이다: 시작한 단위마다 Dispatch·워커·새 worktree 를 읽어 한 사슬인지(Dispatch 가 그 Task 의 것이고 기대한 Run 에 있음, 워커가 그 Dispatch 의 것, worktree 의 `parentWorktreeId` 가 기대한 부모. `new-top-level` 단위는 부모를 기대하지 않고 Run 만 본다, 결정 197) 보고, 하나라도 없거나 어긋나면 실패.
