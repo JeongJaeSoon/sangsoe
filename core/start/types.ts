@@ -46,6 +46,7 @@ export const REFUSAL_REASONS = [
   "depth_exceeded",
   "orca_error",
   "no_dispatch",
+  "model_invalid",
 ] as const;
 export type RefusalReason = (typeof REFUSAL_REASONS)[number];
 
@@ -59,7 +60,7 @@ export type StartRefusal = {
 };
 
 export type StartOutcome =
-  | { kind: "started"; taskId: string; dispatchId: string; worktreeId?: string; notes: string[] }
+  | { kind: "started"; taskId: string; dispatchId: string; worktreeId?: string; launch: { model: string; effort: string; advisor?: string }; notes: string[] }
   /** Not a refusal (decision 94): the Task stays as it is and the caller tries again later. */
   | { kind: "waiting"; taskId: string; why: "not_ready" | "already_dispatched" | "no_capacity"; detail: string }
   /** T5: three failed starts on one Task; worker-start is not called again. */
@@ -78,4 +79,6 @@ export type StartPorts = {
    * as a child of that session (MCP server or CLI), so this is not the caller's word. Default process.cwd().
    */
   cwd?: () => string;
+  /** Whether the owner's settings name an advisor (key presence only). Default reads the user settings. */
+  advisorSetting?: () => boolean;
 };

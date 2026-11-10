@@ -284,7 +284,7 @@
 | | 모델 도중 변경({from, to, reason}) | `model_changed` | — |
 | | 신호 한 종류 묶음({kind}) | `signal` | — |
 | | `signal` 의 kind | `loss` · `wait` · `orchestrator_correction` · `main_flake` · `start_refused` | — |
-| | 시작 함수가 Dispatch 있는 세션을 열지 못해 시작을 거부함(결정 94). `reason` 은 `capability_missing` · `lineage_invalid` · `depth_exceeded` · `orca_error` · `no_dispatch` 중 하나다. 일이 들어간 세션은 없고, 시작을 요청한 세션이 그 일을 맡긴 쪽에 escalation 으로 올린다 | `start_refused` · `capability_missing` · `lineage_invalid` · `depth_exceeded` · `orca_error` · `no_dispatch` | `start_fallback`(결정 59 의 옛 이름. 결정 94 가 `start_refused` 로 바꿨다) |
+| | 시작 함수가 Dispatch 있는 세션을 열지 못해 시작을 거부함(결정 94). `reason` 은 `capability_missing` · `lineage_invalid` · `depth_exceeded` · `model_invalid`(advisor 짝이 맞지 않음, 결정 187) · `orca_error` · `no_dispatch` 중 하나다. 일이 들어간 세션은 없고, 시작을 요청한 세션이 그 일을 맡긴 쪽에 escalation 으로 올린다 | `start_refused` · `capability_missing` · `lineage_invalid` · `depth_exceeded` · `model_invalid` · `orca_error` · `no_dispatch` | `start_fallback`(결정 59 의 옛 이름. 결정 94 가 `start_refused` 로 바꿨다) |
 | | 오너 말과 분류 | `owner_action` · `owner_class` | — |
 | | 원문 지우기 | `owner_text_redacted` | — |
 | 저장소 단위 기록 | 머지·main 상태를 저장소마다 하나로 쌓는 event 묶음 | `land_*` · `main_*` | — |

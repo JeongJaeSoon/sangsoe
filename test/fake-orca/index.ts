@@ -69,7 +69,8 @@ export function createFakeOrca(o: { scenario?: string; replies?: Record<string, 
     if (key === "orchestration-send" && args.includes("--type") && !SEND_TYPES.has(type ?? "")) {
       return reply({ ok: false, error: { code: "invalid_argument", message: `--type ${type} is not a message type` } }, args);
     }
-    const unlisted = args.filter((a) => a.startsWith("--") && !spec.flags.includes(a.slice(2)));
+    const known: readonly string[] = [...spec.flags, ...("optional" in spec ? spec.optional : [])];
+    const unlisted = args.filter((a) => a.startsWith("--") && !known.includes(a.slice(2)));
     if (unlisted.length > 0) throw new Error(`fake orca: ${unlisted.join(" ")} is not in ORCA_COMMANDS for ${key}`);
     const doc = o.replies?.[key] ?? recorded(scenario, key);
     if (doc !== undefined) return reply(doc, args);

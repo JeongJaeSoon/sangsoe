@@ -20,7 +20,7 @@ const isObject = (v: unknown): v is Json => typeof v === "object" && v !== null 
 
 export function buildArgs(name: CommandName, call: Call = {}, o?: WriteOptions): string[] {
   const spec = ORCA_COMMANDS[name];
-  const allowed: readonly string[] = spec.flags;
+  const allowed: readonly string[] = [...spec.flags, ...("optional" in spec ? spec.optional : [])];
   const pos = call.pos ?? [];
   // Orca would parse a leading dash as an option; whether it honours `--` is unverified.
   const dashed = pos.find((p) => p.startsWith("-"));
@@ -241,7 +241,7 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     workerStart: (a, o) =>
       run(
         "workerStart",
-        { flags: { task: a.task, agent: a.agent, worktree: placement(a.worktree), run: a.run, model: a.model, effort: a.effort } },
+        { flags: { task: a.task, agent: a.agent, worktree: placement(a.worktree), run: a.run, model: a.model, effort: a.effort, advisor: a.advisor } },
         o,
       ),
     workerShow: (a) => shaped("workerShow", isObject, { flags: { dispatch: a.dispatch } }),

@@ -5,6 +5,11 @@ export type CommandSpec = {
   path: readonly string[];
   /** Every flag the wrapper may pass, without `--`; `json` is always passed. */
   flags: readonly string[];
+  /**
+   * Flags a caller passes only after `orca agent-context --json` lists them; the `orca-commands`
+   * check does not require them (decision 187: `--advisor`, which no Orca has yet).
+   */
+  optional?: readonly string[];
   /** A write whose lost response is recovered through `request-show` (decision 60). */
   write?: true;
 };
@@ -62,6 +67,7 @@ export const ORCA_COMMANDS = {
   workerStart: {
     path: ["orchestration", "worker-start"],
     flags: ["json", "task", "agent", "worktree", "run", "model", "effort", "retry-request"],
+    optional: ["advisor"],
     write: true,
   },
   workerShow: { path: ["orchestration", "worker-show"], flags: ["json", "dispatch"] },

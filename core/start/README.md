@@ -7,9 +7,11 @@ sangsoe 가 여는 모든 세션은 `startUnit` 하나를 지난다(결정 94 (�
 |---|---|---|
 | `started` | Dispatch 가 있는 워커가 떴다 | 없음(Orca 가 원본) |
 | `waiting` | Task 가 `ready` 가 아니거나 `capacity` 가 모자람 | 없음(거부가 아니다) |
-| `refused` | 다섯 사유 중 하나(아래 순서로 판정) | `signal`{`start_refused`, reason} 한 줄 + 부모에게 escalation 한 통 |
+| `refused` | 여섯 사유 중 하나(아래 순서로 판정) | `signal`{`start_refused`, reason} 한 줄 + 부모에게 escalation 한 통 |
 
-거부 사유: `capability_missing` → `lineage_invalid` → `depth_exceeded` → `orca_error` → `no_dispatch`. 오케스트레이터가 거부되면 위가 없으므로 Orca 메시지 대신 `escalation`{to `owner`} 한 줄을 쓴다(오너 할 일의 재료).
+거부 사유: `capability_missing` → `lineage_invalid` → `depth_exceeded` → `model_invalid` → `orca_error` → `no_dispatch`. `model_invalid` 은 advisor tier 가 본 tier 보다 낮거나 fast tier 인 선택이다(결정 187): Claude Code 는 그런 advisor 를 말없이 떼므로 거부하는 곳은 여기 하나다.
+
+모델(결정 187): `worker-start` 는 `--model`·`--effort` 를 받고, `--advisor` 는 Orca 가 `ADVISOR_CAPABILITY` 를 알릴 때만 넘긴다(지금 Orca 에는 없다). 없으면 advisor 는 오너 설정 `advisorModel`(키가 있는지만 읽는다)에서 오고, 그것도 없으면 `withoutAdvisor` 가 있는 행(구현 워커)은 그 tier 로 시작하고 `model_changed` 를 남긴다. 어느 쪽이었는지는 `started.notes` 와 `started.launch` 가 말한다. 오케스트레이터가 거부되면 위가 없으므로 Orca 메시지 대신 `escalation`{to `owner`} 한 줄을 쓴다(오너 할 일의 재료).
 
 역할 규칙: 오케스트레이터(깊이 0) > 리드(오케스트레이터의 자식) > 워커. 워커는 시작하지 않고, 리드는 리드를 시작하지 않으며, 부모 worktree 나 요청자의 Dispatch 를 읽지 못하면 시작하지 않는다. 역할은 부르는 쪽(MCP tool·CLI)이 밝히고, 코어가 Orca 로 대조한다: 부르는 세션이 그 Run 을 쥐었는지(`run-current`), 리드·워커의 Dispatch 가 밝힌 worktree 의 것이고 시작하려는 Run 밖에 있는지, 리드의 깊이가 1 인지, 오케스트레이터의 worktree 에 끝나지 않은 Dispatch 가 없는지(`worker-list` 전 페이지), 밝힌 worktree 의 경로가 부르는 세션의 작업 폴더를 품는지(모든 역할; 코어는 그 세션의 자식 프로세스다). 앞의 둘을 함께 보아야 시작 함수가 연 리드가 오케스트레이터라고 밝혀도 거부된다. Dispatch 없이 손으로 연 리드는 Orca 로는 오케스트레이터와 같아 가르지 못한다(docs/test-outcomes.md). MCP `start_unit` 은 정해진 값이 아닌 `role`·`childRole` 과 기존 Task 에 붙은 `lateAnswers` 를 Orca 를 부르기 전에 `invalid_input` 으로 거부한다.
 

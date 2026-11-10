@@ -1,4 +1,6 @@
 import { realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { advisorSetting } from "../checks/model-table.ts";
 import { REQUIRED_CAPABILITIES } from "../checks/orca-capabilities.ts";
 import type { OrcaAdapter, OrcaResult, Receipt, TaskRow, WriteOptions } from "../contract/orca.ts";
 import type { ViewInput, ViewTask } from "../contract/views.ts";
@@ -6,7 +8,7 @@ import { foldFacts } from "../graph/facts.ts";
 import { itemRef } from "../graph/nodes.ts";
 import { whyFrom } from "../graph/ready.ts";
 import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
-import { type Choice, resolve } from "../models/index.ts";
+import { type Choice, launch, pairing, resolve } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
 import type { NewTask, RefusalReason, Role, StartOutcome, StartPorts, StartRefusal, StartRequest } from "./types.ts";
@@ -36,6 +38,17 @@ function defaultChoice(childRole: "lead" | "worker"): Choice {
   const r = resolve(childRole);
   if (!r.ok) throw new Error(r.reason);
   return r.value;
+}
+
+/**
+ * Whether this Orca's worker-start takes `--advisor` (decision 187), read from its own command
+ * schema. No Orca does yet; an unreadable schema counts as no.
+ */
+async function orcaTakesAdvisor(orca: OrcaAdapter): Promise<boolean> {
+  const ctx = await orca.agentContext();
+  if (!ctx.ok) return false;
+  const ws = ctx.value.commands.find((c) => c.path.join(" ") === "orchestration worker-start");
+  return ws?.flags.includes("advisor") ?? false;
 }
 
 const LOOP_LIMIT = 3;
@@ -226,6 +239,11 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     }
   }
 
+  // A choice built outside resolve still gets the pairing check: Claude Code drops a lower advisor silently.
+  const choice = req.model ?? defaultChoice(req.childRole);
+  const badPair = choice.advisorTier ? pairing(choice.tier, choice.advisorTier) : null;
+  if (badPair) return refuse("model_invalid", `${choice.kind}: ${badPair}`);
+
   // The Task: an existing one, or a new one with its deps and the child's role line first.
   let taskId: string;
   if ("id" in req.task) {
@@ -292,14 +310,19 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   if (free <= 0) return { kind: "waiting", taskId, why: "no_capacity", detail: `빈 자리 ${free}` };
 
   // ④ orca_error
-  const choice = req.model ?? defaultChoice(req.childRole);
+  const orcaFlag = choice.advisor ? await orcaTakesAdvisor(orca) : false;
+  const plan = launch(choice, {
+    orcaFlag,
+    ownerSetting: choice.advisor && !orcaFlag ? (ports.advisorSetting ?? (() => advisorSetting(process.env, homedir())))() : false,
+  });
   const startArgs = {
     task: taskId,
     agent: req.agent,
     worktree: "new-child" as const,
     run: requester.runId,
-    model: choice.model,
-    effort: choice.effort,
+    model: plan.model,
+    effort: plan.effort,
+    ...(plan.advisor ? { advisor: plan.advisor } : {}),
   };
   const started = await write(orca, orca.workerStart(startArgs), (o) => orca.workerStart(startArgs, o));
   if (!started.ok) {
@@ -320,17 +343,13 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     return failedAttempt("no_dispatch", `worker-start 는 끝났지만 Dispatch 가 없다${left ? ` (남은 것: ${left})` : ""}`);
   }
 
-  if (choice.escalated) {
-    store.append({
-      type: "model_changed",
-      source,
-      payload: { from: choice.escalated.from, to: `${choice.model}/${choice.effort}`, reason: choice.escalated.reason },
-      entity: "task",
-      entity_id: taskId,
-    });
+  for (const moved of [choice.escalated, plan.fallback]) {
+    if (!moved) continue;
+    const to = moved === plan.fallback ? `${plan.model}/${plan.effort}` : `${choice.model}/${choice.effort}`;
+    store.append({ type: "model_changed", source, payload: { from: moved.from, to, reason: moved.reason }, entity: "task", entity_id: taskId });
   }
 
-  const notes: string[] = [];
+  const notes: string[] = plan.note ? [plan.note] : [];
   if (req.references?.length) {
     if (!worktreeId) notes.push("reference add 건너뜀: 새 worktree id 를 영수증에서 찾지 못했다");
     else {
@@ -338,5 +357,6 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       if (!ref.ok) notes.push(`reference add 실패 (${ref.error.code}), 시작은 계속`);
     }
   }
-  return { kind: "started", taskId, dispatchId, ...(worktreeId ? { worktreeId } : {}), notes };
+  const launched = { model: plan.model, effort: plan.effort, ...(plan.advisor ? { advisor: plan.advisor } : {}) };
+  return { kind: "started", taskId, dispatchId, ...(worktreeId ? { worktreeId } : {}), launch: launched, notes };
 }
