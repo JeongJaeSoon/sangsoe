@@ -82,8 +82,18 @@ export interface PanelPorts {
  */
 export const PANEL_RUN = "";
 
-// The panel shows `label` after the press: a to-do with a verify is not done yet (decision 181).
-export type PanelActed = DecisionAnswered | { readonly status: "done" | "pending_verify"; readonly label: string; readonly item: string };
+type ItemActed = { readonly status: "done" | "pending_verify"; readonly item: string };
+
+/** What the panel prints after an act, per reply status (glossary terms: 닫힘, 원인이 사라진 결정, 검증 대기). */
+export const ACTED_LABEL: Readonly<Record<(DecisionAnswered | ItemActed)["status"], string>> = {
+  answered: "답이 달려 닫힘",
+  late: "뒤늦은 답: 기록만 함(원인이 사라진 결정)",
+  done: READING_LABEL.done,
+  pending_verify: READING_LABEL.pending_verify,
+};
+
+// The panel shows `label`, never `status`: a to-do with a verify is not done yet (decision 181).
+export type PanelActed = (DecisionAnswered | ItemActed) & { readonly label: string };
 
 export interface PanelCore {
   brief(target: PanelTarget): Promise<Result<PanelView>>;
@@ -111,10 +121,11 @@ export function panelCore(ports: PanelPorts): PanelCore {
         { type: "owner_action", source: "plugin:panel", payload: { origin: "button", summary: summarize(said), hash: hashOf(said) } },
         said,
       );
-      return decisionAnswer(
+      const r = await decisionAnswer(
         { store, orca: ports.orca },
         { decision: d, answer: answerText, ownerAction: action.seq, linkedBy: "button", callerRun: PANEL_RUN },
       );
+      return r.ok ? done({ ...r.value, label: ACTED_LABEL[r.value.status] }) : r;
     });
   }
 
@@ -123,7 +134,7 @@ export function panelCore(ports: PanelPorts): PanelCore {
       const r = await ownerDone({ store, orca: ports.orca }, input, itemFacts(input), { task: item });
       if (!r.ok) return r;
       const status = r.value.pendingVerify ? "pending_verify" : "done";
-      return done({ status, label: READING_LABEL[status], item: r.value.alias });
+      return done({ status, label: ACTED_LABEL[status], item: r.value.alias });
     });
   }
 

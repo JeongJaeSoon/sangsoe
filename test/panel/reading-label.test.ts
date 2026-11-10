@@ -19,5 +19,5 @@ test("every ItemReading has a label that is not its raw key (a new reading witho
 test("the panel's note after a 완료 press shows the label, not the status key", () => {
   const note = panel.actedNote?.({ kind: "done", item: "i012" }, { status: "pending_verify", label: "⏳ 검증 대기" });
   assert.equal(note, "i012: ⏳ 검증 대기");
-  assert.equal(panel.actedNote?.({ kind: "answer", decision: "d001", choice: "recommended" }, { status: "answered" }), "d001: answered", "a decision's note is unchanged");
+  assert.equal(panel.actedNote?.({ kind: "answer", decision: "d001", choice: "recommended" }, { status: "answered", label: "답이 달려 닫힘" }), "d001: 답이 달려 닫힘");
 });
