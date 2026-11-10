@@ -1,6 +1,10 @@
 import { realpathSync } from "node:fs";
 import { REQUIRED_CAPABILITIES } from "../checks/orca-capabilities.ts";
 import type { OrcaAdapter, OrcaResult, Receipt, TaskRow, WriteOptions } from "../contract/orca.ts";
+import type { ViewInput, ViewTask } from "../contract/views.ts";
+import { foldFacts } from "../graph/facts.ts";
+import { whyFrom } from "../graph/ready.ts";
+import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import { type Choice, resolve } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
@@ -84,6 +88,19 @@ async function liveDispatchIn(orca: OrcaAdapter, worktreeId: string): Promise<st
     if (!cursor) return null;
   }
   return "오케스트레이터 worktree 의 Dispatch 확인이 페이지 상한에서 끝나지 않았다";
+}
+
+/** Why GRAPH holds a Task Orca calls ready, or null when it does not. */
+function graphHold(rows: readonly FullTaskRow[], run: string, events: ViewInput["events"], taskId: string): string | null {
+  let tasks: ViewTask[];
+  try {
+    tasks = snapshotTasks(rows, run);
+  } catch (err) {
+    return `task-list 의 deps 를 읽지 못했다 (${(err as Error).message})`;
+  }
+  const report = whyFrom({ orca: { tasks, gates: [] }, events, now: new Date().toISOString() }, foldFacts(events), taskId);
+  if (report.readiness !== "waiting" && report.readiness !== "unknown") return null;
+  return report.rows.map((r) => `${r.pred} (${r.kind}): ${r.predState}`).join("; ") || "GRAPH 가 준비되지 않았다고 본다";
 }
 
 function firstPrompt(role: Role, t: NewTask): string {
@@ -247,6 +264,9 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   if (task?.status !== "ready") {
     return { kind: "waiting", taskId, why: "not_ready", detail: task ? `Task 상태 ${task.status}` : "Run 의 Task 목록에 없다" };
   }
+  // Orca releases deps at the predecessor's worker_done, before its PR merges: GRAPH has the last word (decision 178).
+  const held = graphHold(tasks.value as FullTaskRow[], requester.runId, store.events(), taskId);
+  if (held) return { kind: "waiting", taskId, why: "not_ready", detail: held };
   // SessionStart takes the role from the spec's first line, and Orca cannot rewrite a spec: an
   // existing Task written for another role would start this child as that role.
   // Read as SessionStart's readRoleLine reads it (core/session imports this module, so not shared).

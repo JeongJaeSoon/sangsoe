@@ -1,4 +1,4 @@
-import type { ItemState } from "../contract/index.ts";
+import type { ItemReading } from "../contract/index.ts";
 
 /** Settings of decision 91, with its defaults. */
 export interface OwnerConfig {
@@ -29,7 +29,7 @@ export const OWNER_DEFAULTS: OwnerConfig = {
 export interface OwnerItemFacts {
   readonly task: string;
   readonly alias: string;
-  readonly state: ItemState;
+  readonly state: ItemReading;
   readonly who: string;
   readonly execBy: string | null;
   readonly whyOwner: string | null;
@@ -38,4 +38,4 @@ export interface OwnerItemFacts {
 }
 
 export const isOwnerItem = (f: Pick<OwnerItemFacts, "who" | "execBy">): boolean => f.execBy === "owner" || f.who === "owner";
-export const isOpenState = (s: ItemState): boolean => s !== "done" && s !== "cancelled";
+export const isOpenState = (s: ItemReading): boolean => s !== "done" && s !== "cancelled";

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { StoredEvent, ViewTaskStatus } from "../contract/index.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
 import { isOpenGate } from "../decision/waiters.ts";
+import { type FullTaskRow, resultFields } from "../graph/snapshot.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
@@ -37,7 +38,7 @@ export async function readSnapshot(orca: OrcaAdapter, runs: readonly string[]): 
         status,
         deps: [],
         title: t.title,
-        ...(t.result ? { result: t.result } : {}),
+        ...resultFields(t as FullTaskRow),
         ...(t.dispatchId ? { activeDispatchId: t.dispatchId } : {}),
         ...(t.assignee ? { assignee: t.assignee } : {}),
       });
