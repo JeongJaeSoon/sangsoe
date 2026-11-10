@@ -1,0 +1,18 @@
+{
+  "_note": "Shapes recorded from `gh api -i` on a public PR (issues/N/events, pulls/N/reviews, pulls/N/comments?sort=created&direction=desc), trimmed to the fields sangsoe reads, with generic names and ids.",
+  "pull": { "number": 7, "user": { "login": "alice" } },
+  "events": [
+    { "id": 1001, "event": "ready_for_review", "actor": { "login": "alice" }, "requested_reviewer": null, "requested_team": null },
+    { "id": 1002, "event": "review_requested", "actor": { "login": "alice" }, "requested_reviewer": null, "requested_team": { "slug": "Code-Reviewers", "id": 9 } },
+    { "id": 1003, "event": "review_requested", "actor": { "login": "alice" }, "requested_reviewer": { "login": "Bob", "id": 2, "type": "User" }, "requested_team": null }
+  ],
+  "reviews": [
+    { "id": 2001, "user": { "login": "Bob", "type": "User" }, "state": "CHANGES_REQUESTED", "submitted_at": "2026-11-10T09:00:00Z" },
+    { "id": 2002, "user": { "login": "review-bot[bot]", "type": "Bot" }, "state": "COMMENTED", "submitted_at": "2026-11-10T10:00:00Z" },
+    { "id": 2003, "user": { "login": "alice", "type": "User" }, "state": "COMMENTED", "submitted_at": "2026-11-10T11:00:00Z" }
+  ],
+  "comments": [
+    { "id": 3002, "user": { "login": "alice", "type": "User" }, "in_reply_to_id": 3001, "pull_request_review_id": 2003, "created_at": "2026-11-10T11:00:00Z" },
+    { "id": 3001, "user": { "login": "Review-Bot", "type": "Bot" }, "in_reply_to_id": null, "pull_request_review_id": 2002, "created_at": "2026-11-10T10:00:00Z" }
+  ]
+}

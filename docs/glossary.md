@@ -246,8 +246,8 @@
 | | 멈춘 Run | `run_stalled` | — |
 | | 답 없는 결정 질문 | `waiting_decision` | — |
 | | 항목에 연결된 PR 이 열림 | `pr_opened` | — |
-| | 리뷰 요청됨(계약만. 결정 186) | `pr_review_requested` | — |
-| | 수정 요청됨(계약만. 결정 186) | `pr_changes_requested` | — |
+| | 리뷰 요청됨(pr-monitor, 요청 id 마다. 결정 195) | `pr_review_requested` | — |
+| | 수정 요청됨(pr-monitor, 리뷰 id 마다. 결정 195) | `pr_changes_requested` | — |
 | | 머지 가능 | `pr_ready_to_merge` | — |
 | | 머지됨 | `pr_merged` | — |
 | | 머지 없이 닫힘 | `pr_closed` | — |
@@ -258,9 +258,9 @@
 | | `notify` 가 판단 메시지를 보낸 뒤 설정한 분 안에 Orca 우편함에서 읽히지 않음(handled 상태는 `inbox` 가 원본). 받는 순서의 다음 사람에게 `escalation_stale` 길로 올린다 | `wake_unconfirmed` | — |
 | | 리뷰 의뢰·리마인드 한 건({pr, reviewer, head, action(request·remind), source(hand·auto·scheduled), scheduled_id, post_at}). `review_ask_record` tool 로만 쓴다 | `review_ask_sent` | — |
 | | 리뷰어 매핑이 설정에 없어 리마인드할 수 없음. 🚨 로 보인다 | `unmapped_reviewer` | — |
-| 사유 값 | 새 event 종류 없이 기존 `event` 의 `reason` 칸에 적는 값: `worker_dead` 의 `host_restart`(한꺼번에 많이 죽음) · `land_failed` 의 `main_red`(그 저장소의 최신 main 이 빨강) · `land_failed` 의 `evidence_missing`(등급이 요구하는 증거가 그 head 에 없음) · `gate_denied` 의 `report_address`(보고 주소가 `term_` 핸들) · `land_requested` 의 `merge_on_approval`(예약하지 않고 승인 뒤 머지를 남김) · `reap_blocked` 의 `uncommitted`(커밋 안 된 변경, 추적 안 된 파일 포함) · `unpushed`(원격에 없는 커밋) · `unpushed_other_patch`(메시지만 같고 패치가 다른 커밋, 사람에게 넘김) · `task_open`(그 카드의 Task 가 닫히지 않음) · `session_alive`(그 카드의 세션이 살아 있음) · `evidence_in_worktree`(증거 파일이 아직 worktree 안) · `listener`(Orca `ports` 가 그 worktree 에 묶은 listener) · `compose_running`(그 worktree 의 설정 파일로 도는 compose stack. 이 다섯은 결정 194) · `in_use`(쓰는 중인 Docker 자원) · `archive_hook_failed`(저장소의 archive hook 이 실패해 Orca 가 지우지 않음, `--allow-failed-archive-hook` 은 오너만) · `remote_host`(비로컬 행이라 지우지 않음, 카드마다 한 번, 결정 88) · `item_transition` 취소의 `superseded`(다른 항목으로 대체됨) · `escalation_stale` 의 `waiting_unreleased`(제때 풀리지 않은 `waiting_human`)·`verify_unconfirmed`(`입력 확인됨 · 검증 중` 가 길어짐) · `close_suggested` 의 `verified`(오너 항목의 probe 통과) · `decision_closed` 의 `moot`(원인이 사라짐, 결정 91) · `item_transition` 의 `owner_not_yet`(오너가 "아직") | `waiting_unreleased` · `verify_unconfirmed` · `verified` · `moot` · `owner_not_yet` · `host_restart` · `main_red` · `evidence_missing` · `report_address` · `merge_on_approval` · `uncommitted` · `unpushed` · `unpushed_other_patch` · `in_use` · `archive_hook_failed` · `remote_host` · `superseded` | — |
-| | 새 리뷰 코멘트(계약만. 결정 186) | `review_commented` | — |
-| | 새 리뷰 답글(계약만. 결정 186) | `review_replied` | — |
+| 사유 값 | 새 event 종류 없이 기존 `event` 의 `reason` 칸에 적는 값: `worker_dead` 의 `host_restart`(한꺼번에 많이 죽음) · `land_failed` 의 `main_red`(그 저장소의 최신 main 이 빨강) · `land_failed` 의 `evidence_missing`(등급이 요구하는 증거가 그 head 에 없음) · `gate_denied` 의 `report_address`(보고 주소가 `term_` 핸들) · `land_requested` 의 `merge_on_approval`(예약하지 않고 승인 뒤 머지를 남김) · `reap_blocked` 의 `uncommitted`(커밋 안 된 변경, 추적 안 된 파일 포함) · `unpushed`(원격에 없는 커밋) · `unpushed_other_patch`(메시지만 같고 패치가 다른 커밋, 사람에게 넘김) · `task_open`(그 카드의 Task 가 닫히지 않음) · `session_alive`(그 카드의 세션이 살아 있음) · `evidence_in_worktree`(증거 파일이 아직 worktree 안) · `listener`(Orca `ports` 가 그 worktree 에 묶은 listener) · `compose_running`(그 worktree 의 설정 파일로 도는 compose stack. 이 다섯은 결정 194) · `in_use`(쓰는 중인 Docker 자원) · `archive_hook_failed`(저장소의 archive hook 이 실패해 Orca 가 지우지 않음, `--allow-failed-archive-hook` 은 오너만) · `remote_host`(비로컬 행이라 지우지 않음, 카드마다 한 번, 결정 88) · `item_transition` 취소의 `superseded`(다른 항목으로 대체됨) · `escalation_stale` 의 `waiting_unreleased`(제때 풀리지 않은 `waiting_human`)·`verify_unconfirmed`(`입력 확인됨 · 검증 중` 가 길어짐) · `close_suggested` 의 `verified`(오너 항목의 probe 통과) · `decision_closed` 의 `moot`(원인이 사라짐, 결정 91) · `item_transition` 의 `owner_not_yet`(오너가 "아직") | `waiting_unreleased` · `verify_unconfirmed` · `verified` · `moot` · `owner_not_yet` · `host_restart` · `main_red` · `evidence_missing` · `report_address` · `merge_on_approval` · `uncommitted` · `unpushed` · `unpushed_other_patch` · `task_open` · `session_alive` · `evidence_in_worktree` · `listener` · `compose_running` · `in_use` · `archive_hook_failed` · `remote_host` · `superseded` | — |
+| | 새 리뷰 코멘트(작성자가 아닌 사람, 코멘트 id 마다. 결정 195) | `review_commented` | — |
+| | 새 리뷰 답글(스레드에 단 작성자의 답, 코멘트 id 마다. 결정 195) | `review_replied` | — |
 | | GitHub 한도 부족 | `rate_limited` | — |
 | | Orca 메시지를 보낸 기록(`msg_id`·받는 쪽·type). 기록이지 깨움이 아니고 메시지 본문의 사본도 아니다 | `notified` | — |
 | | 대체 경로 전용 기록: 시험 P10 이 `worktree ps` 시각 필드를 못 믿는다고 보일 때만 orca-monitor 가 워커의 상태·단계·생존·세션 활동 중 하나가 바뀐 때 쓰고, 마지막 변화로부터의 경과로 `worker_stuck` 을 판정한다. 평소에는 쓰지 않는다(결정 87, 옛 방식은 결정 61). 지금은 쓰는 쪽이 없는 계약만이다(결정 186) | `observed_change` | — |
@@ -276,7 +276,7 @@
 | | 항목의 부가 정보를 붙임·바꿈, 상태를 바꾼 함수가 Orca 호출 뒤에 남기는 이력(원본은 Orca Task 이고 이 줄은 기록이다) | `item_created` · `item_extra_set` · `item_transition` | item_state |
 | | 우선순위 지정 | `priority_set` | — |
 | | 간선 더함·뺌 | `edge_added` · `edge_removed` | — |
-| | 흐름 틀 펼침·단계 건너뜀(건너뜀은 계약만. 결정 186) | `flow_expanded` · `flow_step_skipped` | — |
+| | 흐름 틀 펼침·단계 건너뜀(건너뜀은 `flow_step_skip`·`sangsoe graph skip`, 이유 필수. 결정 195) | `flow_expanded` · `flow_step_skipped` | — |
 | | 결정 열림·닫힘 | `decision_opened` · `decision_closed` | — |
 | | 열린 같은 결정 키에 대기자가 합류함 | `decision_joined` | — |
 | | 결정에 답이 달림. 답을 잇는 쪽을 `linked_by`(hook·button·orchestrator·observed)에 적는다(게이트를 푸는 대상) | `decision_answered` | — |
@@ -403,6 +403,7 @@
 | graph ready | `ready` 뷰를 읽는다 | `sangsoe graph ready` | — |
 | graph why | 한 항목이 왜 준비됨·막힘인지 설명한다 | `sangsoe graph why` · `sangsoe graph why <iNNN>` | item why |
 | graph expand | 흐름 틀을 항목과 간선으로 펼친다. `--dry-run` 은 미리보기 | `sangsoe graph expand` · `sangsoe graph expand <틀>` · `sangsoe graph expand --dry-run` | item new --flow, flow preview |
+| graph skip | 펼친 흐름의 단계 하나를 이유와 함께 건너뛴다(이유가 비면 거부, 결정 195) | `sangsoe graph skip` | — |
 | graph critical | 크리티컬 패스를 낸다 | `sangsoe graph critical` | graph --critical |
 | graph impact | 영향 범위를 낸다 | `sangsoe graph impact` · `sangsoe graph impact <iNNN>` | — |
 | graph sync | 감지 사실로 간선 충족을 갱신한다 | `sangsoe graph sync` | — |
