@@ -82,6 +82,12 @@ jobs:
           test -f smoke/package/orca-plugin/vendor/core/index.ts
           cmp smoke/package/orca-plugin/vendor/package.json package.json
           test ! -e orca-plugin/vendor
+          # U46: the bundled flow templates must ride in dist/; an empty HOME keeps ~/.config/sangsoe/flows out.
+          plan="$(HOME="$(mktemp -d)" SANGSOE_ROOT="$PWD/smoke/package" node smoke/package/dist/cli/main.js graph expand --template ship-change --var repo=acme/api --dry-run)"
+          test "$(node -e 'const p = JSON.parse(process.argv[1]); console.log(`${p.flow} ${p.steps.length}`)' "$plan")" = "ship-change 6"
+          plan="$(HOME="$(mktemp -d)" SANGSOE_ROOT="$PWD/smoke/package" node smoke/package/dist/cli/main.js graph expand --template ship-batch --var repo=acme/api --var members=i001 --dry-run)"
+          test "$(node -e 'const p = JSON.parse(process.argv[1]); console.log(`${p.flow} ${p.steps.length}`)' "$plan")" = "ship-batch 3"
+          echo "smoke: ship-change 6 steps, ship-batch 3 steps"
 
       - name: Publish the GitHub release
         env:
