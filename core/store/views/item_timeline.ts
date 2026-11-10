@@ -24,7 +24,7 @@ export const item_timeline: ItemTimelineView = (input, task) => {
     if (NOISE.has(e.type)) return false;
     const p = e.payload;
     if (s(p.task) === task || s(p.waiter) === task) return true;
-    if (e.entity === "task" && e.entity_id === task) return true;
+    if ((e.entity === "task" && e.entity_id === task) || e.subject === `item:${task}`) return true;
     if (e.type === "owner_action" && ownerActions.has(`owner_action:${e.seq}`)) return true;
     if (e.subject !== null && ownerActions.has(e.subject)) return true;
     const pr = s(p.pr);

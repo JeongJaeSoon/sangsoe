@@ -1,6 +1,6 @@
 export { type CriticalPath, criticalPath, type ImpactRow, impact } from "./critical.ts";
-export { type ExpandInput, type GraphPorts, graphAdd, graphExpand, graphRemove, readInput, runList, withGraphPorts } from "./entry.ts";
-export { addEdge, addEdgeTo, cycleThrough, type EdgeInput, type EdgeWritten, GRAPH_SOURCE, removeEdge, removeEdgeFrom, resolveRef } from "./edit.ts";
+export { type ExpandInput, type GraphPorts, graphAdd, graphExpand, graphRemove, graphSkip, readInput, runList, withGraphPorts } from "./entry.ts";
+export { addEdge, addEdgeTo, cycleThrough, type EdgeInput, type EdgeWritten, GRAPH_SOURCE, removeEdge, removeEdgeFrom, resolveRef, type SkipInput, type SkipWritten, skipFlowStep } from "./edit.ts";
 export { EDGE_KINDS, type EdgeKind, type ExtraEdge, type Facts, foldFacts, type ItemExtra, type Stage } from "./facts.ts";
 export { doneBlockers, type DoneBy, type Expanded, expandFlow, type FlowPlan, type FlowTemplate, flowGap, loadFlow, parseFlow, planFlow } from "./flow.ts";
 export { type GraphNode, itemRef, parseNode } from "./nodes.ts";

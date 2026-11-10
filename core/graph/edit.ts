@@ -156,6 +156,39 @@ export function removeEdgeFrom(deps: Pick<CoreDeps, "store">, snapshot: OrcaSnap
   return done({ status: "removed", pred, succ, kind, where: "extra" });
 }
 
+export interface SkipInput {
+  /** The flow's root item: `iNNN`, `item:<task>` or the bare task id. */
+  readonly root: string;
+  readonly step: string;
+  readonly reason: string;
+}
+
+export interface SkipWritten {
+  readonly status: "skipped" | "already";
+  readonly root: string;
+  readonly step: string;
+}
+
+/** `flow_step_skip`: a template step the flow will not have, with the reason `flow_gap` then accepts. */
+export function skipFlowStep(deps: Pick<CoreDeps, "store">, input: SkipInput): Result<SkipWritten> {
+  if (input.reason.trim() === "") return refuse("invalid_input", "skipping a step needs a reason", "pass a reason");
+  const facts = foldFacts(deps.store.events());
+  const node = parseNode(resolveRef(input.root, facts));
+  if (node?.kind !== "item") return refuse("invalid_input", `root ${JSON.stringify(input.root)} is not an item`, "name the flow's root item: iNNN or item:<task>");
+  const flow = facts.flows.find((f) => f.parent === node.task);
+  if (!flow) return refuse("no_flow", `no flow was expanded under ${node.task}`, "name the root item flow_expand returned");
+  if (!flow.steps.includes(input.step)) return refuse("unknown_step", `${flow.flow} has no step ${JSON.stringify(input.step)}`, `use one of ${flow.steps.join(", ")}`);
+  const subject = itemRef(node.task);
+  const row = deps.store.append({
+    type: "flow_step_skipped",
+    source: GRAPH_SOURCE,
+    subject,
+    dedupe_key: dedupeKey(EVENTS.flow_step_skipped, node.task, input.step),
+    payload: { step: input.step, reason: input.reason },
+  });
+  return done({ status: row.inserted ? "skipped" : "already", root: subject, step: input.step });
+}
+
 /** Reads the named Runs first, so a cycle through Orca deps is seen and an unknown item refused. */
 export async function addEdge(deps: CoreDeps, input: EdgeInput & { runs: readonly string[] }): Promise<Result<EdgeWritten>> {
   const r = await readSnapshot(deps.orca, input.runs);

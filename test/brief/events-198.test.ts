@@ -21,7 +21,8 @@ const NINE = [
   line("2026-11-10T11:01:00.000Z", "review_commented", { pr: "acme/api#40", reviewer: "bob" }),
   line("2026-11-10T11:02:00.000Z", "review_replied", { pr: "acme/api#40", by: "w-api-1" }),
   line("2026-11-10T11:03:00.000Z", "pr_changes_requested", { pr: "acme/api#40", reviewer: "bob" }),
-  line("2026-11-10T11:04:00.000Z", "flow_step_skipped", { step: "dev", reason: "no deploy" }, { entity: "task", entity_id: "task_26" }),
+  // As core/graph/edit.ts writes it (U54): the root item as `subject`.
+  line("2026-11-10T11:04:00.000Z", "flow_step_skipped", { step: "dev", reason: "no deploy" }, { subject: "item:task_26" }),
   line("2026-11-10T11:05:00.000Z", "worker_idle", { session: "sess-26" }, { entity: "task", entity_id: "task_26" }),
   line("2026-11-10T11:06:00.000Z", "observed_change", { task: "task_26", field: "status" }),
   line("2026-11-10T11:07:00.000Z", "refusal_report", { act: "land", category: "no verdict", command_file: "/tmp/r/1.txt" }, { entity: "task", entity_id: "task_26" }),

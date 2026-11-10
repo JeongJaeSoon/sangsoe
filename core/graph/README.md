@@ -21,7 +21,7 @@
 | `facts.ts` | event 를 접어 현재 부가 간선 · 항목 부가 정보 · PR · 결정 · 단계 기록을 낸다 |
 | `ready.ts` | `edgeOk` · `ready` · `why` (순수 함수, 저장하지 않음) |
 | `read.ts` | `graphRead`: 다른 유닛이 task id 로 읽는 포트(`ready` · `edges` · `criticalPath` · `why`) |
-| `edit.ts` | `addEdge` · `removeEdge`: 순환 · 없는 항목 · 후속이 항목이 아닌 간선 거부, 같은 간선 합치기 |
+| `edit.ts` | `addEdge` · `removeEdge`: 순환 · 없는 항목 · 후속이 항목이 아닌 간선 거부, 같은 간선 합치기. `skipFlowStep`(`graph skip`): 이유 있는 단계 건너뜀 `flow_step_skipped`, 이유가 비면 거부(결정 195) |
 | `critical.ts` | `criticalPath` · `impact` |
 | `toml.ts` | 흐름 틀이 쓰는 TOML 부분집합 파서(런타임 의존 없음) |
 | `flow.ts` | 흐름 틀 읽기 · 검사 · `planFlow`(`--dry-run`) · `expandFlow` · `flowGap` · `doneBlockers` |
