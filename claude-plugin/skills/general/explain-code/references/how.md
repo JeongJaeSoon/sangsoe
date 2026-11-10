@@ -2,7 +2,7 @@
 
 Explore the codebase to answer "how does X work?" questions. Produce architectural explanations at the level of a senior engineer onboarding onto a subsystem: enough to build a working mental model, not so much that it reads like annotated source code.
 
-Explorers are the built-in read-only `Explore` subagent. The explainer is one `general-purpose` subagent, told in its prompt that it only reads and writes the explanation and must not edit files.
+Explorers are the built-in read-only `Explore` subagent. The explainer is one `general-purpose` subagent, told in its prompt that it only reads and writes the explanation and must not edit files. Each call names `model`: explorers `subagents.collect`, the explainer `subagents.judge`, from resource `models` (`haiku` and `sonnet` without sangsoe's MCP server).
 
 ## 1. Assess complexity
 

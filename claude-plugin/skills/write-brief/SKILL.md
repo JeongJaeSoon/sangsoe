@@ -28,6 +28,9 @@ description: "Use when a sangsoe lead or the orchestrator writes the spec a new 
 - 워커는 세션을 시작하지 않는다. 브리프에 "도우미 워커를 띄워라"를 쓰지 않는다. 손이 더 필요하면 읽기 전용 서브에이전트나 리드에게 묻는 것이다.
 - 보고 주소는 Run·Dispatch 다. 터미널 핸들(`term_…`)을 주소로 쓰지 않는다. 핸들은 재시작마다 바뀐다.
 - 앞 워커가 끝난 뒤 도착한 답은 브리프에 섞지 않고 `start_unit` 의 `lateAnswers` 로 넘긴다.
+- 모델 이름·effort 를 브리프에 적지 않는다. 단위의 어려움은 `item_create`·`start_unit` 의 `class`(`default`·`hard`·`design`·`mechanical`)로 표시한다(결정 187). 브리프 본문에는 왜 그 class 인지 한 줄만 적는다.
+- 워커가 advisor 를 언제 부르는지 한 줄 적는다: 접근을 정하기 전, 막혔을 때, 끝났다고 말하기 전. 매 턴이 아니다.
+- 서브에이전트를 쓰라고 할 때는 그 `model` 을 resource `models` 의 `subagents` 로 정하라고 적는다(결정 188).
 
 ## 거부 문단
 

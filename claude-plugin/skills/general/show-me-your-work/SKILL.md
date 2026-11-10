@@ -72,7 +72,7 @@ Correct the log, not the story. The audit never edits or removes a row, even an 
 
 ## Independent review of the trail
 
-Before handing back, have an independent reviewer read the trail without changing files. Self-review is not a substitute. The reviewer subagent reads the trail and the run's transcript, then flags what the user should pay attention to. It is not a redo of the work but a scan for what's weak or risky:
+Before handing back, have an independent reviewer read the trail without changing files. Self-review is not a substitute. The reviewer subagent (`model`: `subagents.judge` from resource `models`, `sonnet` without sangsoe's MCP server) reads the trail and the run's transcript, then flags what the user should pay attention to. It is not a redo of the work but a scan for what's weak or risky:
 
 - Decisions logged with weak or absent evidence.
 - Verification steps skipped or claimed without proof in the transcript.

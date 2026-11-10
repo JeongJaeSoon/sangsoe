@@ -42,10 +42,13 @@ description: "Use when a sangsoe lead or the orchestrator starts a session on an
 | `task` 또는 `spec` | 있는 Task id, 또는 새 Task 의 브리프(`title`·`deps` 함께) |
 | `lateAnswers` | 앞 워커가 끝난 뒤 도착한 답. 새 Task 의 첫 프롬프트에 한 번 붙는다. `spec` 과만 쓴다(`task` 와 함께면 `invalid_input`) |
 | `references` | 티켓·이슈 URL. 새 worktree 에 붙는다 |
-| `kind` | 일의 종류. 리드는 `lead`, 워커는 `worker`(구현, 기본) · `design` · `review` · `release-review` · `sweep`. 모델과 effort 는 코어가 resource `models` 의 그 행으로 정한다 |
+| `class` | 워커 단위의 class: `default`(구현, 기본) · `hard`(리드가 어렵다고 판단한 단위) · `design` · `mechanical`(버전 올림·링크 고침·수집, 구현에는 쓰지 않는다). 비우면 `item_create` 가 남긴 class, 그것도 없으면 `default`. 모델·advisor·effort 는 코어가 resource `models` 로 정한다(결정 187) |
+| `kind` | class 가 아닌 일: 리드는 `lead`, 워커는 `review` · `release-review`. `class` 와 함께 주면 같은 행이어야 한다 |
 | `effort` · `tier` · `reason` | 기본값으로 모자랄 때만. 그 행의 effort 사다리를 먼저 올리고, 사다리 끝에서도 모자라면 다음 tier 로 간다. 둘 다 `reason` 이 있어야 하고, 시작이 `model_changed` 로 남긴다 |
 
-역할 줄(`sangsoe-role: …`)은 코어가 spec 첫 줄에 붙인다. 네가 쓰지 않는다. 있는 Task 로 시작하면 그 줄이 `childRole` 과 같아야 한다: 리드 항목은 `item_create` 의 `role: "lead"` 로 만든다(빼면 worker). 다르면 Orca 가 spec 을 고치지 못하므로 `start_unit` 이 `lineage_invalid` 로 거부하고, 항목을 맞는 `role` 로 다시 만든다. Orca 가 `ready` 로 보여도 같은 Run 의 선행 항목에 묶인 PR 이 아직 머지되지 않았으면 `waiting`(`not_ready`)이 온다(결정 178): 머지를 기다린다. `ready` resource 도 그 항목을 준비됨으로 보이지 않는다. 모델 이름·버전·effort 를 브리프에 적지 않는다. 고르는 것은 `kind` 와 승격 칸뿐이다.
+역할 줄(`sangsoe-role: …`)은 코어가 spec 첫 줄에 붙인다. 네가 쓰지 않는다. 있는 Task 로 시작하면 그 줄이 `childRole` 과 같아야 한다: 리드 항목은 `item_create` 의 `role: "lead"` 로 만든다(빼면 worker). 다르면 Orca 가 spec 을 고치지 못하므로 `start_unit` 이 `lineage_invalid` 로 거부하고, 항목을 맞는 `role` 로 다시 만든다. Orca 가 `ready` 로 보여도 같은 Run 의 선행 항목에 묶인 PR 이 아직 머지되지 않았으면 `waiting`(`not_ready`)이 온다(결정 178): 머지를 기다린다. `ready` resource 도 그 항목을 준비됨으로 보이지 않는다. 모델 이름·버전·effort 를 브리프에 적지 않는다. 고르는 것은 `class`·`kind` 와 승격 칸뿐이다.
+
+advisor 는 행이 정한 tier 로 붙는다. 지금 Orca 의 `worker-start` 에는 advisor 옵션이 없어서, `started` 의 `notes` 가 어떻게 붙었는지 말한다: 오너 설정 `advisorModel` 이 있으면 그 advisor 가 붙고(짝 검사는 Claude Code 가 한다), 없으면 advisor 없이 시작하며 advisor 가 꼭 있어야 하는 행(구현 워커)은 `withoutAdvisor` tier 로 시작하고 `model_changed` 를 남긴다. 짝이 맞지 않는 선택(advisor 가 본 모델보다 낮은 tier)은 `model_invalid` 로 거부된다. `advisorModel` 을 정하는 것은 오너의 일이다. sangsoe 는 그 설정을 쓰지 않는다.
 
 alias 는 바깥 설정(`ANTHROPIC_DEFAULT_*_MODEL`)에 고정될 수 있다. 시작한 워커의 첫 보고나 상태 줄에서 실제로 풀린 모델이 그 tier 의 현재 ID 와 다르면 워커를 다시 띄우지 말고 그 사실을 위로 올린다. `doctor` 의 `model-table` 행이 지금 걸린 고정을 보인다.
 
@@ -63,7 +66,7 @@ alias 는 바깥 설정(`ANTHROPIC_DEFAULT_*_MODEL`)에 고정될 수 있다. �
 | `ok: false`, `refusal.code` 가 거부 사유 | 시작하지 않았고, `start_refused` 신호로 이미 위에 보고됐다 | 같은 일을 다른 길로 시작하지 않는다. 원인이 Orca 설정이면 오너 몫이다 |
 | `ok: false`, `refusal.code` 가 `invalid_input` | 입력이 틀렸다 | `refusal.fix` 대로 고쳐 한 번 다시 부른다 |
 
-거부 사유 다섯은 `capability_missing` · `lineage_invalid` · `depth_exceeded` · `orca_error` · `no_dispatch` 다. 어느 것도 "다시 해 보면 되는" 사유가 아니다. 부모는 같은 일을 자기 Run 에 새 Task 로 만들지도 않는다(같은 일의 원본이 둘이 된다).
+거부 사유 여섯은 `capability_missing` · `lineage_invalid` · `depth_exceeded` · `orca_error` · `no_dispatch` · `model_invalid`(advisor 짝이 맞지 않는 모델 선택) 다. 어느 것도 "다시 해 보면 되는" 사유가 아니다. 부모는 같은 일을 자기 Run 에 새 Task 로 만들지도 않는다(같은 일의 원본이 둘이 된다).
 
 ## 깊이가 모자랄 때
 

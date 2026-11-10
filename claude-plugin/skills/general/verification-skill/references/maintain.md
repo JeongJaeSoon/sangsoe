@@ -20,7 +20,7 @@ Only edit the verification skill's own directory (its SKILL.md, features/, and a
 
 1. **Index hygiene.** Check the target against [lint-rules.md](lint-rules.md) and fix its findings: missing, extra or dead index entries, a feature file short of its four H2s, and the helper and cleanup rules. Read the README for duplicates, which those rules do not catch. No generated inventory.
 
-2. **Source wave.** One read-only subagent per feature file, launched concurrently. Each explains "how does this user-facing feature work?" from source, flags likely doc drift with citations, and returns one concise live-verification recipe. Children never drive the app and never edit files. Return shape: feature summary / source entry points / likely drift or none / one recipe.
+2. **Source wave.** One read-only subagent per feature file, launched concurrently, each with `model` set to `subagents.judge` from resource `models` (`sonnet` without sangsoe's MCP server). Each explains "how does this user-facing feature work?" from source, flags likely doc drift with citations, and returns one concise live-verification recipe. Children never drive the app and never edit files. Return shape: feature summary / source entry points / likely drift or none / one recipe.
 
 3. **Reconcile.** Every feature file has a returned summary. Merge overlapping recipes into as few app states as practical. Spot-check cited drift; don't re-prove clean claims. Sweep recent churn for user-facing surfaces missing from the map; require a concrete source path before calling one missing.
 

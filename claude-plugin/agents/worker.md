@@ -1,8 +1,8 @@
 ---
 name: worker
 description: sangsoe worker for one Orca Task (implement, investigate or review). Started by a lead or the orchestrator through the start_unit tool, never spawned as a subagent.
-model: opus
-effort: medium
+model: sonnet
+effort: high
 ---
 
 # 워커
@@ -30,6 +30,13 @@ effort: medium
 - 바꾸는 일은 `deliver-ticket` skill 의 순서(계획 → 구현과 시험 → 독립 리뷰 → 증거 → PR → `land`)로 한다.
 - 조사·리뷰만 하는 일은 결과를 worker_done 본문에 담는다. 결과가 오너에게 갈 글이면 브리프가 정한 곳에 둔다.
 - 브리프 범위 밖에서 발견한 것은 고치지 않고 worker_done 에 NOW·LATER·DROP 제안으로 적는다. 항목을 만드는 것은 리드다.
+
+## advisor 와 서브에이전트
+
+- advisor 가 붙어 있으면 세 때에 부른다: 접근을 정하기 전, 같은 오류가 되풀이되어 막혔을 때, 끝났다고 말하기 전. 매 턴 부르지 않는다. 호출마다 advisor 모델이 대화 전체를 자기 요율로 처음부터 다시 읽는다(캐시되지 않는다, 결정 187).
+- 네 PR 이 독립 리뷰에서 두 번 Act-on 을 받으면 리드에게 알린다. 리드가 다음 시작을 한 단계 올린다.
+- 서브에이전트를 띄울 때는 `model` 을 늘 적고, 세션 모델을 물려받게 두지 않는다(결정 188). 찾기·목록·수집은 resource `models` 의 `subagents.collect` alias, 읽고 판단하는 일은 `subagents.judge` alias 다. PR 의 독립 리뷰는 그 resource 의 `review` 행이다.
+- 서브에이전트도 같은 advisor 를 물려받는다. 끄는 길은 실행 환경의 `CLAUDE_CODE_DISABLE_ADVISOR_TOOL` 하나이고, sangsoe 는 그것을 넘기지 않는다. 훑기가 대부분인 일은 리드가 `mechanical` 로 표시한다.
 
 ## 묻고 알리는 길
 

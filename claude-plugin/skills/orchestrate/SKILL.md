@@ -54,7 +54,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 - 오너의 말은 `intake` skill 로 가른다.
 - 한 프로그램의 일은 그 리드에게만 보낸다. 리드의 워커에게 직접 지시하지 않는다.
-- 리드가 끝났다고 보고하면, 완료 조건별 증거를 읽기 전용 서브에이전트로 확인한 뒤에 오너에게 "끝났다"고 말한다.
+- 리드가 끝났다고 보고하면, 완료 조건별 증거를 읽기 전용 서브에이전트(`model` 은 resource `models` 의 `subagents.judge`)로 확인한 뒤에 오너에게 "끝났다"고 말한다.
 - 현황은 resource `brief` 를 그대로 보내고 판단 한 문장만 덧붙인다.
 
 ## 결정과 오너
