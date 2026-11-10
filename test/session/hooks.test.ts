@@ -101,15 +101,39 @@ test("the owner's chat line is stored masked; one dNNN links through decision_an
   assert.ok(!(w.store.ownerText(a[0]?.seq ?? 0) ?? "").includes(secret));
   assert.equal(w.store.events({ type: "decision_answered" }).length, 0, "iNNN alone is not an explicit link");
 
-  w.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });
-  await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: "p2", prompt: "d001: Path versioning" });
-  await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: "p2", prompt: "d001: Path versioning" });
-  const ans = w.store.events({ type: "decision_answered" });
-  assert.deepEqual(ans.map((e) => [e.payload.decision, e.payload.linked_by]), [["d001", "hook"]]);
-  assert.equal(w.store.events({ type: "owner_action" }).length, 2, "a repeated hook call writes nothing twice");
-
   await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: "p3", prompt: "Please carry out this task from my Orca coordinator ..." });
-  assert.equal(w.store.events({ type: "owner_action" }).length, 2, "Orca's own prompt is not the owner's");
+  assert.equal(w.store.events({ type: "owner_action" }).length, 1, "Orca's own prompt is not the owner's");
+
+  const o = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  await hook(o, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+  o.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });
+  await hook(o, "user-prompt-submit", { session_id: "o1", prompt_id: "p2", prompt: "d001: Path versioning" });
+  await hook(o, "user-prompt-submit", { session_id: "o1", prompt_id: "p2", prompt: "d001: Path versioning" });
+  const ans = o.store.events({ type: "decision_answered" });
+  assert.deepEqual(ans.map((e) => [e.payload.decision, e.payload.linked_by]), [["d001", "hook"]]);
+  assert.equal(o.store.events({ type: "owner_action" }).length, 1, "a repeated hook call writes nothing twice");
+});
+
+test("only an undispatched session's line that starts with the number answers a decision (M2)", async () => {
+  const open = (w: SessionWorld) => {
+    w.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });
+  };
+  const answers = (w: SessionWorld) => w.store.events({ type: "decision_answered" }).length;
+
+  const worker = createSessionWorld({ spec: "sangsoe-role: worker\nx", heldRun: TASK_RUN });
+  await hook(worker, "session-start", { session_id: "s1", source: "startup" }, VERSION);
+  open(worker);
+  await hook(worker, "user-prompt-submit", { session_id: "s1", prompt_id: "p1", prompt: "d001: Path versioning" });
+  assert.equal(answers(worker), 0, "a prompt in a dispatched session is not the owner's answer");
+
+  const orch = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  await hook(orch, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+  open(orch);
+  await hook(orch, "user-prompt-submit", { session_id: "o1", prompt_id: "p1", prompt: "status: the lead is still waiting on d001" });
+  await hook(orch, "user-prompt-submit", { session_id: "o1", prompt_id: "p2", prompt: "d001 d002 both yes" });
+  assert.equal(answers(orch), 0, "a line that only mentions the number, or names two, answers nothing");
+  await hook(orch, "user-prompt-submit", { session_id: "o1", prompt_id: "p3", prompt: "  d001 Path versioning" });
+  assert.equal(answers(orch), 1);
 });
 
 test("waiting_human_released (hook side): the owner's words mark, the session moving releases, an end is moot", async () => {

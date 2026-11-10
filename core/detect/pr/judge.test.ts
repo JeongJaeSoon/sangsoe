@@ -34,7 +34,7 @@ test("item state, requested tier label and the watch setting", () => {
   assert.equal(requestedTier(["bug", "verify-tier:1"]), "V1");
   assert.equal(requestedTier(["verify-tier:9"]), null);
   assert.deepEqual(parseWatch({ watch: { repos: ["Acme/API"] }, owners: ["Owner1"] }), {
-    repos: ["acme/api"],
+    repos: ["Acme/API"],
     authors: [],
     linkedOnly: true,
     owners: ["owner1"],
