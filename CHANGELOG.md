@@ -12,7 +12,7 @@ The first stable release. It carries everything since `v0.1.0-rc.4`.
 - **Facts backup.** The first time 0.1.0 opens the database it writes `~/.local/share/sangsoe/sangsoe.db.facts.jsonl`, a copy of the rows only sangsoe owns, including the ones rc.4 wrote (decisions 183, 192). Nothing to do; `store-restore` names the file.
 - **Doctor rows that change.**
   - New rows: `claude profile` (the Claude configuration directory doctor checked), `orca claude profile` (the one Orca starts sessions with), `tier-config`, `watch-repos`, `model-table` and `store-restore`.
-  - `tier-config` and `watch-repos` print a `notice` until `~/.config/sangsoe/config.json` has those settings. `model-table` prints a `notice` when Claude Code settings pin model aliases. A `notice` row does not change the exit code.
+  - `tier-config` and `watch-repos` print a `notice` until `~/.config/sangsoe/config.json` has those settings. `model-table` prints a `notice` when Claude Code settings have no advisor model or pin model aliases, or Claude Code is newer than the model table, and a `warn` once the table is older than its date floor. `store-restore` prints a `notice` after a lost database was rebuilt. A `notice` row does not change the exit code.
   - The `claude` row no longer appends `CLAUDE_CONFIG_DIR`; the `claude profile` row says which directory was checked.
   - `claude-plugin-version` is `ok` after `sangsoe install`, which now enables the Claude Code plugin (decision 166).
 
@@ -47,4 +47,4 @@ The first stable release. It carries everything since `v0.1.0-rc.4`.
 
 ### Documentation
 
-- LaunchAgents, launchd jobs and private schedulers are forbidden without exception (176); unregistered hooks and unbuilt REAPER roots are written as such (177); event tables and counts match the code (158, 160, 180, 186).
+- LaunchAgents, launchd jobs and private schedulers are forbidden without exception (176); unregistered hooks and unbuilt REAPER roots are written as such (177); event tables and counts match the code (160, 180, 186); decision 158 notes the one record check it guards.

@@ -35,7 +35,9 @@ test("the release smoke expands both bundled flows from the packed tree with an 
   const yml = readFileSync(join(ROOT, ".github/workflows/release.yml"), "utf8");
   const smoke = yml.split(/\n {6}- name: /).find((s) => s.startsWith("Smoke-test the packed tree"));
   assert.ok(smoke, "release.yml has no smoke step");
-  for (const flow of ["ship-change", "ship-batch"]) {
+  // Step counts as in test/packaging.test.ts: an expand that answers with the wrong plan fails too.
+  for (const [flow, steps] of [["ship-change", 6], ["ship-batch", 3]] as const) {
+    assert.ok(smoke.includes(`= "${flow} ${steps}"`), `smoke does not check ${flow}'s flow name and ${steps} steps`);
     const line = smoke.split("\n").find((l) => l.includes(`--template ${flow}`));
     assert.ok(line, `smoke does not expand ${flow}`);
     assert.match(line, /HOME="\$\(mktemp -d\)"/, `${flow}: HOME is not an empty directory`);
