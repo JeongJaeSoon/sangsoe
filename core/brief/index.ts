@@ -10,6 +10,7 @@ export { type ItemFacts, itemFacts, item_status } from "./item_status.ts";
 export { briefRuns, type LoadOptions, loadBriefInput, readSnapshot } from "./load.ts";
 export { owner_todo } from "./owner_todo.ts";
 export {
+  ACTED_LABEL,
   openPanelCore,
   PANEL_RUN,
   type PanelAct,

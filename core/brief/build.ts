@@ -1,5 +1,5 @@
 import type { ItemReading, ItemState, OwnerTodoRow, WaitsOn } from "../contract/index.ts";
-import { STATE_LABEL } from "../contract/index.ts";
+import { ITEM_READINGS, READING_LABEL, STATE_LABEL } from "../contract/index.ts";
 import { linkedActs } from "../owner/link.ts";
 import { item_timeline } from "../store/views/item_timeline.ts";
 import { graphRead } from "../graph/read.ts";
@@ -25,18 +25,8 @@ export interface BuildOptions extends BriefOptions {
   readonly graph?: GraphRead;
 }
 
-const EMOJI: Readonly<Record<ItemReading, string>> = {
-  planned: "📅",
-  ready: "🟢",
-  in_progress: "🔄",
-  blocked: "🚧",
-  pr_closed: "🚧",
-  on_hold: "⏸️",
-  done: "✅",
-  cancelled: "🗑️",
-  unknown: "❔",
-  pending_verify: "⏳",
-};
+// The marker is the label's first word, so the brief and the panel's note cannot drift apart.
+const EMOJI = Object.fromEntries(ITEM_READINGS.map((r) => [r, READING_LABEL[r].split(" ")[0]])) as Readonly<Record<ItemReading, string>>;
 const ORDER: readonly ItemReading[] = ["pr_closed", "blocked", "unknown", "in_progress", "pending_verify", "ready", "planned", "on_hold"];
 const WAITS: Readonly<Record<WaitsOn, string>> = { owner: "오너", reviewer: "리뷰어", infra: "인프라", lead: "리드", worker: "워커" };
 const ALARM_NEXT: Readonly<Record<string, string>> = {

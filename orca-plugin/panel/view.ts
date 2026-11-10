@@ -59,11 +59,11 @@ export const trail = (stack: readonly Target[]): string[] =>
 /** What a button asks the worker for; the worker hands it to the core unchanged. */
 export type Act = { kind: "answer"; decision: string; choice: "recommended" } | { kind: "answer"; decision: string; text: string } | { kind: "done"; item: string };
 
-/** The worker's answer to an act; a 완료 press also carries the item reading's label. */
-export type Acted = { status: string; label?: string };
+/** The worker's answer to an act: every reply status comes with the core's label for it. */
+export type Acted = { status: string; label: string };
 
-/** The note after an act: a 완료 press shows the label (decision 181's ⏳ 검증 대기), not the status key. */
-export const actedNote = (a: Act, v: Acted): string => `${"decision" in a ? a.decision : a.item}: ${v.label ?? v.status}`;
+/** The note after an act shows the label (decision 181's ⏳ 검증 대기), never the status key. */
+export const actedNote = (a: Act, v: Acted): string => `${"decision" in a ? a.decision : a.item}: ${v.label}`;
 
 const ESC: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => ESC[c] ?? c);
