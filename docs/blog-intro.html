@@ -61,7 +61,7 @@ svg .halo{fill:var(--card)}
 <h1>sangsoe 소개: 여러 에이전트 세션을 한 사람이 이끄는 법</h1>
 
 <blockquote>
-<p>이 글은 저장소(<code>JeongJaeSoon/sangsoe</code>)에 있는 <strong>설계와 그 첫 빌드</strong>를 소개한다. 지금 있는 것은 사전 배포판(<code>v0.1.0-rc.N</code>, Homebrew 로 설치)이고 안정판은 아직 없다. 첫 빌드 시험 T0~T6(매니페스트, worker 안 sqlite, worker 타이머, 패널 그림, 승인 뒤 자율 범위, 시작 거부, 설치·갱신·재설치)은 실제 Orca 에서 돌렸고(일부 칸은 미실행) 결과는 <a href="test-outcomes.md">test-outcomes.md</a> 에 있다. 아직 돌리지 않은 것(여러 세션이 함께 도는 스모크, 시험 P5·P7 등)이 있으니, 아래 "동작한다"는 그 표에 결과가 있는 것만 확인된 것으로 읽어 주길 바란다. 확인하지 못한 부분은 6절에 따로 모았다. 설계 전체는 <a href="design.html">design.html</a>, 세부는 <a href="design-appendix.html">design-appendix.html</a>에 있다.</p>
+<p>이 글은 저장소(<code>JeongJaeSoon/sangsoe</code>)에 있는 <strong>설계와 그 첫 빌드</strong>를 소개한다. 지금 있는 것은 첫 안정판(<code>v0.1.0</code>, Homebrew 로 설치)이다. 첫 빌드 시험 T0~T6(매니페스트, worker 안 sqlite, worker 타이머, 패널 그림, 승인 뒤 자율 범위, 시작 거부, 설치·갱신·재설치)은 실제 Orca 에서 돌렸고(일부 칸은 미실행) 결과는 <a href="test-outcomes.md">test-outcomes.md</a> 에 있다. 아직 돌리지 않은 것(여러 세션이 함께 도는 스모크, 시험 P5·P7 등)이 있으니, 아래 "동작한다"는 그 표에 결과가 있는 것만 확인된 것으로 읽어 주길 바란다. 확인하지 못한 부분은 6절에 따로 모았다. 설계 전체는 <a href="design.html">design.html</a>, 세부는 <a href="design-appendix.html">design-appendix.html</a>에 있다.</p>
 </blockquote>
 
 <p>상쇠(sangsoe)는 풍물패 맨 앞에서 꽹과리 소리로 패 전체의 박자를 이끄는 사람이다. 이 프로젝트가 하는 일이 그렇다. Claude Code와 Orca에서 여러 세션에 일을 나눠 맡겼을 때, 누가 어디까지 했고 누가 막혀 있는지 놓치지 않게 하고, 필요한 쪽에만 신호를 보낸다.</p>
@@ -325,7 +325,7 @@ svg .halo{fill:var(--card)}
 
 <h3>설치</h3>
 
-<p>지금은 사전 배포판(<code>v0.1.0-rc.N</code>)만 있다. 아래 절차는 저장소 <code>README.md</code> 의 Install · Update · Uninstall 과 같다.</p>
+<p>지금 안정판은 <code>v0.1.0</code> 이다. 아래 절차는 저장소 <code>README.md</code> 의 Install · Update · Uninstall 과 같다.</p>
 
 <p>설치 길은 하나다. Homebrew가 코어와 매니페스트 둘(<code>.claude-plugin/plugin.json</code>과 <code>orca-plugin.json</code>)이 든 트리 하나를 깔고, <code>sangsoe install</code>이 그 트리를 각 호스트의 공식 명령으로 Claude Code plugin과 Orca plugin에 등록한다(결정 90·108). 필요한 것은 macOS 의 Homebrew, Claude Code, Orca, 인증된 <code>gh</code> 다. 사람이 순서대로 실행한다.</p>
 
