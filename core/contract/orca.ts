@@ -29,7 +29,7 @@ export type OrcaResult<T> =
 
 /**
  * Options every write wrapper takes. Set only by `recoverWrite`, never on a first call.
- * `worktree set|rm` and `reference add` have no `--retry-request` in Orca:
+ * `worktree rm` and `reference add` have no `--retry-request` in Orca:
  * after their `response_lost`, re-read the state they change instead of sending again.
  */
 export type WriteOptions = { retryRequest?: string };
@@ -214,6 +214,18 @@ export type RequestShow = {
   interpretation?: string;
 };
 
+/** One listener `orca ports --worktree` tied to the worktree; `owner` is absent when Orca tied it to none. */
+export type PortRow = {
+  id: string;
+  port: number;
+  pid?: number;
+  processName?: string;
+  bindHost?: string;
+  protocol?: string;
+  kind?: string;
+  owner?: { worktreeId?: string; path?: string; confidence?: string };
+};
+
 /** The receipt shape of a write is Orca's; the core reads ids from it and keeps the rest opaque. */
 export type Receipt = Record<string, unknown>;
 
@@ -244,9 +256,7 @@ export interface OrcaAdapter {
     o?: WriteOptions,
   ): Promise<OrcaResult<Receipt>>;
 
-  // Run
-  runCreate(a: { objective: string }, o?: WriteOptions): Promise<OrcaResult<Receipt>>;
-  runUse(a: { id: string }, o?: WriteOptions): Promise<OrcaResult<Receipt>>;
+  // Run (`run-create`·`run-use` are the sessions' own verbs, decision 193)
   runCurrent(): Promise<OrcaResult<RunCurrent>>;
   runShow(a: { id: string }): Promise<OrcaResult<RunShow>>;
 
@@ -258,7 +268,7 @@ export interface OrcaAdapter {
   gateResolve(a: { id: string; resolution: string }, o?: WriteOptions): Promise<OrcaResult<Receipt>>;
   gateList(a: { run: string; task?: string; status?: string }): Promise<OrcaResult<GateRow[]>>;
 
-  // Message (reads go through `inbox`, which never marks mail handled)
+  // Message (reads go through `inbox`, which never marks mail handled; `ask`·`reply` are the sessions' own verbs)
   send(
     a: {
       to: string;
@@ -272,37 +282,43 @@ export interface OrcaAdapter {
     },
     o?: WriteOptions,
   ): Promise<OrcaResult<Receipt>>;
-  ask(a: { question: string; to?: string; options?: string[] }, o?: WriteOptions): Promise<OrcaResult<Receipt>>;
-  reply(a: { id: string; body: string }, o?: WriteOptions): Promise<OrcaResult<Receipt>>;
   inbox(a: { terminal?: string; limit: number }): Promise<OrcaResult<InboxMessage[]>>;
 
-  // Worker and Dispatch
+  // Worker and Dispatch (`worker-release` is the orchestrator's own verb for a kept-open lead, decision 193)
   workerStart(
-    /** `advisor` is sent only when Orca's agent-context lists it on worker-start (decision 187). */
-    a: { task: string; agent: string; worktree: WorkerPlacement; run?: string; model?: string; effort?: string; advisor?: string },
+    /**
+     * `advisor` is sent only when Orca's agent-context lists it on worker-start (decision 187).
+     * `keepOpen` keeps the terminal after `worker_done`; `repo` is an Orca repo selector for a new worktree.
+     */
+    a: {
+      task: string;
+      agent: string;
+      worktree: WorkerPlacement;
+      run?: string;
+      model?: string;
+      effort?: string;
+      advisor?: string;
+      keepOpen?: boolean;
+      repo?: string;
+    },
     o?: WriteOptions,
   ): Promise<OrcaResult<Receipt>>;
   workerShow(a: { dispatch: string }): Promise<OrcaResult<WorkerShow>>;
   workerList(a: { run?: string; limit?: number; cursor?: string }): Promise<OrcaResult<LocalRows<WorkerRow>>>;
-  workerRelease(a: { dispatch: string }, o?: WriteOptions): Promise<OrcaResult<Receipt>>;
   dispatchShow(a: { task: string }): Promise<OrcaResult<DispatchRow>>;
   requestShow(a: { request: string }): Promise<OrcaResult<RequestShow>>;
 
   // Worktree (cards)
   worktreeList(a: { repo?: string; limit?: number }): Promise<OrcaResult<LocalRows<WorktreeRow>>>;
   worktreePs(a: { limit?: number; agentWait?: boolean }): Promise<OrcaResult<LocalRows<WorktreePsRow>>>;
-  worktreeSet(
-    a: { worktree: string; displayName?: string; comment?: string; workspaceStatus?: string },
-  ): Promise<OrcaResult<Receipt>>;
   /** Always `--run-hooks --delete-branch`, never `--force` (decision 86). */
   worktreeRm(a: { worktree: string }): Promise<OrcaResult<Receipt>>;
+  /** Listeners tied to one worktree; `non_local_host` when Orca scanned another host (decision 88). */
+  ports(a: { worktree: string }): Promise<OrcaResult<PortRow[]>>;
 
-  // Reference, search, terminal
+  // Reference
   referenceAdd(a: { worktree: string; urls: string[] }): Promise<OrcaResult<Receipt>>;
-  referenceList(a: { worktree: string }): Promise<OrcaResult<Receipt>>;
   referenceFind(a: { query: string; limit?: number }): Promise<OrcaResult<Receipt>>;
-  search(a: { query: string; limit?: number }): Promise<OrcaResult<Receipt>>;
-  terminalWaitIdle(a: { terminal: string; timeoutMs: number }): Promise<OrcaResult<Receipt>>;
 
   // Plugin
   pluginList(): Promise<OrcaResult<OrcaPluginRow[]>>;

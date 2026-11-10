@@ -6,6 +6,7 @@ import type {
   LocalRows,
   OrcaAdapter,
   OrcaResult,
+  PortRow,
   WorkerPlacement,
   WriteOptions,
 } from "../contract/orca.ts";
@@ -195,8 +196,6 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     taskList: (a) => field("taskList", "tasks", rowsWith({ id: "string", status: "string" }), { flags: { run: a.run, status: a.status, ready: a.ready, full: a.full } }),
     taskUpdate: (a, o) => run("taskUpdate", { flags: { id: a.id, status: a.status, result: a.result, run: a.run } }, o),
 
-    runCreate: (a, o) => run("runCreate", { flags: { objective: a.objective } }, o),
-    runUse: (a, o) => run("runUse", { flags: { id: a.id } }, o),
     runCurrent: () => shaped("runCurrent", isObject),
     runShow: async (a) => {
       const r = await shaped<Json>("runShow", has("run", has("id", (x) => typeof x === "string")), { flags: { id: a.id, full: true } });
@@ -234,20 +233,29 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
         },
         o,
       ),
-    ask: (a, o) => run("ask", { flags: { question: a.question, to: a.to, options: a.options?.join(",") } }, o),
-    reply: (a, o) => run("reply", { flags: { id: a.id, body: a.body } }, o),
     inbox: (a) => field("inbox", "messages", rowsWith({ id: "string", type: "string" }), { flags: { terminal: a.terminal, limit: a.limit, full: true } }),
 
     workerStart: (a, o) =>
       run(
         "workerStart",
-        { flags: { task: a.task, agent: a.agent, worktree: placement(a.worktree), run: a.run, model: a.model, effort: a.effort, advisor: a.advisor } },
+        {
+          flags: {
+            task: a.task,
+            agent: a.agent,
+            worktree: placement(a.worktree),
+            run: a.run,
+            model: a.model,
+            effort: a.effort,
+            advisor: a.advisor,
+            "keep-open": a.keepOpen,
+            repo: a.repo,
+          },
+        },
         o,
       ),
     workerShow: (a) => shaped("workerShow", isObject, { flags: { dispatch: a.dispatch } }),
     workerList: (a) =>
       local("workerList", "workers", "host", "dispatchId", { flags: { run: a.run, limit: a.limit, cursor: a.cursor } }),
-    workerRelease: (a, o) => run("workerRelease", { flags: { dispatch: a.dispatch } }, o),
     dispatchShow: (a) => field("dispatchShow", "dispatch", isObject, { flags: { task: a.task } }),
     requestShow: (a) => shaped("requestShow", isObject, { flags: { request: a.request } }),
 
@@ -255,23 +263,19 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
       local("worktreeList", "worktrees", "hostId", "id", { flags: { repo: a.repo, limit: a.limit } }, (row) => row.instanceId),
     worktreePs: (a) =>
       local("worktreePs", "worktrees", "hostId", "worktreeId", { flags: { limit: a.limit, "agent-wait": a.agentWait } }),
-    worktreeSet: (a) =>
-      run("worktreeSet", {
-        flags: {
-          worktree: a.worktree,
-          "display-name": a.displayName,
-          comment: a.comment,
-          "workspace-status": a.workspaceStatus,
-        },
-      }),
     worktreeRm: (a) => run("worktreeRm", { flags: { worktree: a.worktree, "run-hooks": true, "delete-branch": true } }),
+    ports: async (a) => {
+      const r = await shaped<Json>("ports", has("ports", rowsWith({ id: "string" })), { flags: { worktree: a.worktree } });
+      if (!r.ok) return r;
+      const host = r.value.executionHostId;
+      if (host !== undefined && host !== "local") {
+        return { ok: false, error: { code: "non_local_host", message: `orca ports scanned host ${String(host)}`, data: r.value } };
+      }
+      return { ok: true, value: r.value.ports as PortRow[] };
+    },
 
     referenceAdd: (a) => run("referenceAdd", { pos: a.urls, flags: { worktree: a.worktree } }),
-    referenceList: (a) => run("referenceList", { flags: { worktree: a.worktree } }),
     referenceFind: (a) => run("referenceFind", { pos: [a.query], flags: { limit: a.limit } }),
-    search: (a) => run("search", { pos: [a.query], flags: { scope: "conversation", limit: a.limit } }),
-    terminalWaitIdle: (a) =>
-      run("terminalWaitIdle", { flags: { terminal: a.terminal, for: "tui-idle", "timeout-ms": a.timeoutMs } }),
 
     pluginList: () => field("pluginList", "plugins", rowsWith({ pluginKey: "string", version: "string", status: "string" })),
     pluginInspect: (a) => run("pluginInspect", { pos: [a.dir] }),

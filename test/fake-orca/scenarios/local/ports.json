@@ -1,0 +1,29 @@
+{
+  "id": "00000000-0000-4000-8000-000000000040",
+  "ok": true,
+  "result": {
+    "platform": "darwin",
+    "scannedAt": 1794347535721,
+    "ports": [
+      {
+        "id": "127.0.0.1:5173:4242",
+        "bindHost": "127.0.0.1",
+        "connectHost": "127.0.0.1",
+        "port": 5173,
+        "pid": 4242,
+        "processName": "node",
+        "protocol": "http",
+        "kind": "workspace",
+        "owner": {
+          "worktreeId": "repo-0001::/home/dev/workspaces/api/feature-a",
+          "repoId": "repo-0001",
+          "displayName": "feature-a",
+          "path": "/home/dev/workspaces/api/feature-a",
+          "confidence": "cwd"
+        }
+      }
+    ],
+    "executionHostId": "local"
+  },
+  "_meta": { "runtimeId": "00000000-0000-4000-8000-000000000041" }
+}

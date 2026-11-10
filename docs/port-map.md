@@ -6,7 +6,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 - **옛 시험 파일**(`test_*.py`·`*.test.tsx`)은 그 대상의 행에 함께 적는다. 옛 코드는 옮기지 않았고 시험은 다시 쓸 명세로만 읽었다(port-plan 1절).
 - `test/migrate/port-map.test.ts` 가 `test/fixtures/migrate/agent-skills-entries.txt` 의 모든 항목이 이 표에 있는지, 경로가 있는지, DROP·GAP 에 이유가 있는지 센다.
 
-집계: 행 87 · 경로 51 · PR 0 · 단위 6 · DROP 25 · GAP 9 (한 행이 경로와 PR 을 함께 가지면 둘 다 센다).
+집계: 행 88 · 경로 51 · PR 0 · 단위 6 · DROP 27 · GAP 8 (한 행이 경로와 PR 을 함께 가지면 둘 다 센다).
 
 ## skills
 
@@ -54,10 +54,11 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 | `hooks/delegate_gate.py`, `hooks/test_delegate_gate.py` | `core/gates/delegate.ts`, `core/gates/gates.test.ts` | `[gate:delegate]` |
 | `hooks/pressure_gate.py`, `hooks/test_pressure_gate.py` | `core/gates/pressure.ts`, `core/capacity/` | 판정 함수 하나(결정 83, 115). 버림: 대기열(결정 119 "아직 없는 것") |
 | `hooks/self_land_gate.py`, `hooks/land_route_gate.py`, `hooks/test_self_land_gate.py`, `hooks/test_land_route_gate.py` | `core/gates/self-land.ts` | 두 게이트를 자기 머지 게이트 하나로 합쳤다(부록 `#gates`) |
-| `hooks/guard.py`, `hooks/test_guard.py`, `hooks/test_coordination.py`, `hooks/test_danger.py`, `hooks/test_discipline.py`, `hooks/test_refusal_retry.py` | `core/gates/start.ts`, `core/gates/sleep-loop.ts`, `core/gates/report-address.ts`, `core/gates/shell.ts`, GAP | 남김: 시작 가드·sleep-loop·모양 검사·셸 파서. GAP: 위험 명령(`lib/danger`)·워커 규율(`lib/discipline`)·역할 세션의 사람 직접 질문 금지(`lib/coordination`)는 결정 119 가 미뤘고 아직 없다 |
-| `hooks/lib` | `core/gates/shell.ts`, `core/session/shell.ts`, GAP | `lib/shell` → 두 파서(막는 hook·`!` 입력 읽기). GAP: `lib/danger`·`lib/discipline`·`lib/coordination`(위 행), `lib/skillload`(아래 행). `lib/config` 는 설정 파일 읽기라 각 모듈이 `~/.config/sangsoe/` 를 직접 읽는다. `lib/artifact_links` → DROP(아래 artifact 행) |
-| `hooks/stack_gate.py`, `hooks/test_stack_gate.py` | GAP | 다른 열린 PR 에 기대는 PR 을 스택으로 돌리는 게이트. 결정 119 가 미뤘다 |
-| `hooks/claim_check.py`, `hooks/test_claim_check.py`, `hooks/turn_check.py`, `hooks/test_turn_check.py`, `hooks/owner_check.py`, `hooks/test_owner_check.py` | GAP | 경고만 하는 턴 끝 점검 셋. 막는 hook 단위(U12)에도 기록 hook 단위(U13)에도 들지 않았다 |
+| `hooks/guard.py`, `hooks/test_guard.py`, `hooks/test_coordination.py`, `hooks/test_danger.py`, `hooks/test_discipline.py`, `hooks/test_refusal_retry.py` | `core/gates/start.ts`, `core/gates/sleep-loop.ts`, `core/gates/report-address.ts`, `core/gates/shell.ts`, GAP | 남김: 시작 가드·sleep-loop·모양 검사·셸 파서. 버림: 위험 명령·바닥 거부(`lib/danger`)와 다른 터미널의 Orca 메일 읽기 거부(`guard.py`)는 sangsoe 의 일이 아니다(결정 193: 오너의 가드 도구·auto mode·브랜치 보호). GAP: 워커 규율(`lib/discipline`)·역할 세션의 사람 직접 질문 금지(`lib/coordination`)는 결정 119 가 미뤘고 아직 없다 |
+| `hooks/lib` | `core/gates/shell.ts`, `core/session/shell.ts`, GAP | `lib/shell` → 두 파서(막는 hook·`!` 입력 읽기). GAP: `lib/discipline`·`lib/coordination`(위 행), `lib/skillload`(아래 행). 버림: `lib/danger`(위 행, 결정 193). `lib/config` 는 설정 파일 읽기라 각 모듈이 `~/.config/sangsoe/` 를 직접 읽는다. `lib/artifact_links` → DROP(아래 artifact 행) |
+| `hooks/stack_gate.py`, `hooks/test_stack_gate.py` | DROP | 다른 열린 PR 에 기대는 PR 을 스택으로 돌리는 게이트. 결정 193: 오너가 잘랐다(sangsoe 의 일이 아니다) |
+| `hooks/claim_check.py`, `hooks/test_claim_check.py` | DROP | 실행 없는 "고쳤다·통과" 주장을 Stop 에서 한 번 막는 hook. 결정 193: 오너가 잘랐다 |
+| `hooks/turn_check.py`, `hooks/test_turn_check.py`, `hooks/owner_check.py`, `hooks/test_owner_check.py` | GAP | 경고만 하는 턴 끝 점검 둘. 막는 hook 단위(U12)에도 기록 hook 단위(U13)에도 들지 않았다 |
 | `hooks/decision_relay.py`, `hooks/test_decision_relay.py` | GAP | 오너 말을 중계했는데 결정 기록이 없을 때의 경고. 닫기 자체는 `core/decision/` 의 `decision_answer` 가 한다 |
 | `hooks/decision.py`, `hooks/test_decision.py` | `core/decision/`, `cli/commands/decision.ts`, `core/session/record.ts` | 답은 UserPromptSubmit 이 `owner_action` 으로 쌓고 `dNNN` 하나면 `decision_answer` 가 닫는다. 회귀 시나리오는 `test/decision/decision-loop.test.ts`·`test/session/hooks.test.ts` |
 | `hooks/reorient.py`, `hooks/test_reorient.py`, `hooks/roles.py`, `hooks/test_roles.py` | `core/session/session-start.ts`, `claude-plugin/hooks/record.sh` | SessionStart 가 역할·Run·인계·늦은 답을 다시 싣고 `session_started` 를 쓴다. 버림: `roles/*.json` 파일 |

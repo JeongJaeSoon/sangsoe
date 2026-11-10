@@ -36,6 +36,6 @@ test("writes without a recording answer ok and are recorded as calls", async () 
 });
 
 test("reads without a recording fail instead of inventing data", async () => {
-  const r = await createOrcaAdapter(createFakeOrca().exec).search({ query: "export" });
+  const r = await createOrcaAdapter(createFakeOrca().exec).referenceFind({ query: "export" });
   assert.equal(!r.ok && r.error.code, "fake_not_recorded");
 });

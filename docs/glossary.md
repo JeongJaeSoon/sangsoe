@@ -227,7 +227,7 @@
 | 원인이 사라진 결정 | 게이트가 건 Task 가 모두 닫혔거나 가리키는 PR 이 닫혀 더 물을 이유가 없는 결정. 답 없이 닫고 뒤늦은 답은 기록만 한다 | `moot` | — |
 | | 턴 종료 | `turn_ended` | — |
 | | 일 없이 멈춘 워커(계약만: 쓰는 쪽이 아직 없다. 결정 186) | `worker_idle` | — |
-| | Stop 차단 상한에 닿음 | `loop_detected` | — |
+| | 같은 Task 의 시작 실패 세 번(`core/start/start.ts`) | `loop_detected` | — |
 | | 세션 시작({session, role, model}. model 은 hook 이 줄 때만, 계약의 tier·effort 칸은 아직 채우지 않는다) | `session_started` | — |
 | | 게이트 거부({gate, command 파일 경로}) | `gate_denied` | — |
 | | chat-monitor: 새 멘션 | `mention_new` | — |
@@ -242,7 +242,7 @@
 | | 압박 높음 | `pressure_high` | — |
 | | 죽은 워커 | `worker_dead` | — |
 | | 멈춘 워커. 일하는 중인데 `worktree ps --json` 의 마지막 출력·활동 시각(`lastOutputAt`·`lastActivityAt`, 에이전트 행의 `stateStartedAt`)이 설정한 분보다 오래된 워커에 쓴다(결정 87, 필드 뜻은 시험 P10 전까지 미확인). monitor 가 판정할 수 없는 입력(시각 필드가 비었거나 미래)에는 쓰지 않는다(그때는 행동 0) | `worker_stuck` | — |
-| 🚨 사유 | 새 event 종류를 더하지 않고 다섯 `event` 의 `reason` 칸에 사유를 적는다: 역할 줄 없는 sangsoe 세션은 `worker_stuck`(`no_role_line`), 시작 실패는 `worker_dead`(`start_failed`). `StopFailure` 의 `worker_dead`(`stop_failure`)는 계약만 있고 hook 을 등록하지 않아 쓰이지 않는다(결정 177) | `reason` · `no_role_line` · `start_failed` · `stop_failure` | — |
+| 🚨 사유 | 새 event 종류를 더하지 않고 다섯 `event` 의 `reason` 칸에 사유를 적는다: 역할 줄 없는 sangsoe 세션은 `worker_stuck`(`no_role_line`), 시작 실패는 `worker_dead`(`start_failed`). 오류로 멈춘 워커의 `worker_dead`(`stop_failure`)는 Orca escalation 을 orca-monitor 가 읽어 쓸 자리이고 아직 쓰는 곳이 없다(결정 193) | `reason` · `no_role_line` · `start_failed` · `stop_failure` | — |
 | | 멈춘 Run | `run_stalled` | — |
 | | 답 없는 결정 질문 | `waiting_decision` | — |
 | | 항목에 연결된 PR 이 열림 | `pr_opened` | — |
@@ -463,7 +463,7 @@
 | Docker 명령 | REAPER 가 쓰는 Docker 의 이름. `docker` 명령과 현재 context 만 쓰고 런타임을 가리지 않는다. 데몬이 없으면 건너뛴다. 지울 때는 id 하나씩, 정지한 컨테이너 → 볼륨 → 네트워크 → 이미지 순서이고 쓰는 중이면 지우지 않는다. 일괄 정리 명령(`prune`)과 `down -v`, 라벨·이름 패턴으로 지울 대상을 거르는 일, base 이미지 삭제는 쓰지 않는다. `working_dir` 라벨은 편입의 근거로 읽는 데만 쓴다 | `docker` · `compose up` · `<project>_default` · `working_dir` · `prune` · `down -v` | — |
 | 값 | 값 이름 | `created` · `released` · `deep` · `standard` · `light` | — |
 | SQLite 낱말 | 스키마·트랜잭션에 쓰는 SQLite 의 이름 | `UNIQUE` · `RETURNING` · `RAISE(ABORT)` · `BEGIN IMMEDIATE` · `busy_timeout` · `IS NOT 1` · `sha256` | — |
-| Claude Code hook 이름 | 감지기가 붙는 이벤트. 도식이 쓰는 이름 전부. 등록된 것은 `claude-plugin/hooks/hooks.json` 의 여덟이고, `SubagentStop` · `PermissionDenied` · `StopFailure` · `PreCompact` 는 등록하지 않았다(결정 177) | `Notification` · `Stop` · `SubagentStop` · `PreToolUse` · `PostToolUse` · `SessionStart` · `UserPromptSubmit` · `PermissionDenied` · `StopFailure` · `SessionEnd` · `PreCompact` · `PostCompact` · `Monitor` | — |
+| Claude Code hook 이름 | 감지기가 붙는 이벤트. 도식이 쓰는 이름 전부. 등록된 것은 `claude-plugin/hooks/hooks.json` 의 여덟이다. 거부 수집과 오류 종료는 hook 이 아니라 Orca escalation 이 원천이다(결정 193) | `Notification` · `Stop` · `PreToolUse` · `PostToolUse` · `SessionStart` · `UserPromptSubmit` · `SessionEnd` · `PostCompact` · `Monitor` | — |
 | sangsoe 스킬 | sangsoe 가 플러그인에 싣는 판단 절차 스킬. 오너 지시 분류(`intake`), 워커 브리프 쓰기(`write-brief`), 현황 보고(`brief`), 배포 절차(`deliver-ticket`) | `intake` · `write-brief` · `brief` · `deliver-ticket` | — |
 | 일반 스킬 | sangsoe 밖의 일반 스킬 | `principles` · `tdd` · `write-plainly` · `prune-comments` | — |
 | Orca 읽기 명령 | 상태를 읽는 Orca 명령과 옵션 | `worker-list` · `check --wait` | — |
