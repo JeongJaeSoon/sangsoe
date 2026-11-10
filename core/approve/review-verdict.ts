@@ -46,12 +46,13 @@ export async function recordReviewVerdict(
       type: "review_verdict",
       source: "review record",
       actor: reviewer,
-      dedupe_key: dedupeKey(EVENTS.review_verdict, ref, input.head, reviewer),
+      // The count is in the key: a worse verdict at the same head is stored, never dropped (S2).
+      dedupe_key: dedupeKey(EVENTS.review_verdict, ref, input.head, reviewer, String(input.actOn)),
       payload: { pr: ref, head_sha: input.head, act_on: input.actOn, reviewer, author },
     });
     const note = out.inserted
       ? `recorded: ${ref} ${input.head} reviewed by ${reviewer}, ${input.actOn} Act-on`
-      : `already recorded: ${reviewer}'s verdict on ${ref} ${input.head} stands (seq ${out.seq})`;
+      : `already recorded: ${reviewer}'s ${input.actOn} Act-on verdict on ${ref} ${input.head} stands (seq ${out.seq})`;
     return { ok: true, inserted: out.inserted, seq: out.seq, author, note };
   } catch (e) {
     if (e instanceof ContractError) return fail(e.message, author);
