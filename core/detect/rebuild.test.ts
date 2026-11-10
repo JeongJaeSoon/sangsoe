@@ -169,7 +169,9 @@ test("a wake sent before the loss is not sent again by the reread", async () => 
     await runMonitor("pr", h.deps(s));
   });
   assert.deepEqual(sends(h.writes), ["send run:run_lead"]);
-  await rereadHostRows(h.deps(r));
+  const out = await rereadHostRows(h.deps(r));
+  assert.equal(out.acts.length, 1, "the wake act runs");
+  assert.notEqual(out.acts[0]?.detail, "sent", "and notify holds it back");
   assert.deepEqual(sends(h.writes), ["send run:run_lead"], "the copied notified row keeps it once");
   r.close();
 });
