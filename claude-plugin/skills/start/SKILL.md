@@ -42,8 +42,12 @@ description: "Use when a sangsoe lead or the orchestrator starts a session on an
 | `task` 또는 `spec` | 있는 Task id, 또는 새 Task 의 브리프(`title`·`deps` 함께) |
 | `lateAnswers` | 앞 워커가 끝난 뒤 도착한 답. 새 Task 의 첫 프롬프트에 한 번 붙는다. `spec` 과만 쓴다(`task` 와 함께면 `invalid_input`) |
 | `references` | 티켓·이슈 URL. 새 worktree 에 붙는다 |
+| `kind` | 일의 종류. 리드는 `lead`, 워커는 `worker`(구현, 기본) · `design` · `review` · `release-review` · `sweep`. 모델과 effort 는 코어가 resource `models` 의 그 행으로 정한다 |
+| `effort` · `tier` · `reason` | 기본값으로 모자랄 때만. 그 행의 effort 사다리를 먼저 올리고, 사다리 끝에서도 모자라면 다음 tier 로 간다. 둘 다 `reason` 이 있어야 하고, 시작이 `model_changed` 로 남긴다 |
 
-역할 줄(`sangsoe-role: …`)은 코어가 spec 첫 줄에 붙인다. 네가 쓰지 않는다.
+역할 줄(`sangsoe-role: …`)은 코어가 spec 첫 줄에 붙인다. 네가 쓰지 않는다. 모델 이름·버전·effort 를 브리프에 적지 않는다. 고르는 것은 `kind` 와 승격 칸뿐이다.
+
+alias 는 바깥 설정(`ANTHROPIC_DEFAULT_*_MODEL`)에 고정될 수 있다. 시작한 워커의 첫 보고나 상태 줄에서 실제로 풀린 모델이 그 tier 의 현재 ID 와 다르면 워커를 다시 띄우지 말고 그 사실을 위로 올린다. `doctor` 의 `model-table` 행이 지금 걸린 고정을 보인다.
 
 ## 결과 읽기
 

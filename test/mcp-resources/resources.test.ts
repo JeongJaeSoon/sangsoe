@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { readyText } from "../../claude-plugin/mcp/resources/ready.ts";
 import { timelineText } from "../../claude-plugin/mcp/resources/item_timeline.ts";
 import { createServer } from "../../claude-plugin/mcp/server.ts";
-import { type BriefSnapshot, item_timeline, ready, replayJsonl } from "../../core/index.ts";
+import { type BriefSnapshot, item_timeline, MODEL_CATALOG, MODEL_POLICY, ready, replayJsonl } from "../../core/index.ts";
 
 // Decision 162: the judgment layer's `ready` and `item_timeline` are resources over the core views,
 // with nothing stored; a view that takes an item is a resource template.
@@ -50,12 +50,22 @@ test("the server lists templates apart from fixed resources and reads a template
   }
 });
 
-test("the real server lists brief and ready, and item_timeline as a template", async () => {
+test("the real server lists brief, models and ready, and item_timeline as a template", async () => {
   const server = await createServer();
   const list = (await server.handle({ jsonrpc: "2.0", id: 1, method: "resources/list" })) as { result: { resources: { uri: string }[] } };
-  assert.deepEqual(list.result.resources.map((r) => r.uri), ["sangsoe://brief", "sangsoe://ready"]);
+  assert.deepEqual(list.result.resources.map((r) => r.uri), ["sangsoe://brief", "sangsoe://models", "sangsoe://ready"]);
   const templates = (await server.handle({ jsonrpc: "2.0", id: 2, method: "resources/templates/list" })) as {
     result: { resourceTemplates: { name: string; uriTemplate: string }[] };
   };
   assert.deepEqual(templates.result.resourceTemplates.map((t) => [t.name, t.uriTemplate]), [["item_timeline", "sangsoe://item/{task}/timeline"]]);
+});
+
+test("decision 164: resource models serves the core table itself, not a copy", async () => {
+  const server = await createServer();
+  const read = (await server.handle({ jsonrpc: "2.0", id: 1, method: "resources/read", params: { uri: "sangsoe://models" } })) as {
+    result: { contents: { text: string }[] };
+  };
+  const body = JSON.parse(read.result.contents[0]?.text ?? "{}");
+  assert.deepEqual(body.policy, JSON.parse(JSON.stringify(MODEL_POLICY)));
+  assert.deepEqual(body.catalog, JSON.parse(JSON.stringify(MODEL_CATALOG)));
 });

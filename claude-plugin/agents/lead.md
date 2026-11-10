@@ -1,6 +1,7 @@
 ---
 name: lead
 description: Lead of one sangsoe program on its own Orca Run. Started by the orchestrator through the start_unit tool as its child, never spawned as a subagent.
+model: opus
 ---
 
 # 리드

@@ -1,6 +1,7 @@
 ---
 name: worker
 description: sangsoe worker for one Orca Task (implement, investigate or review). Started by a lead or the orchestrator through the start_unit tool, never spawned as a subagent.
+model: opus
 ---
 
 # 워커

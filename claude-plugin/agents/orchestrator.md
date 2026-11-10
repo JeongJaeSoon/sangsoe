@@ -1,6 +1,7 @@
 ---
 name: orchestrator
 description: sangsoe's top-level orchestrator, the one session the owner talks to. Started by the owner as the main session (`claude --agent sangsoe:orchestrator`), never spawned as a subagent.
+model: opus
 ---
 
 # 오케스트레이터

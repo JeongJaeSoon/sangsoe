@@ -8,6 +8,8 @@ import {
   checkLineage,
   createOrcaAdapter,
   type ExecResult,
+  MODEL_CATALOG,
+  MODEL_POLICY,
   type Requester,
   type StartRequest,
   Store,
@@ -432,6 +434,45 @@ test("MCP start_unit refuses input it would otherwise drop or misread, before ca
     { ...base, role: "lead", childRole: "worker", task: "task_000000000002", lateAnswers: ["d002: no"] },
     { ...base, childRole: "lead", spec: "brief" },
     { ...base, role: "lead", childRole: "boss", spec: "brief" },
+  ];
+  for (const input of cases) {
+    const h = harness();
+    const r = await handle(input, ports(h));
+    assert.equal(r.ok === false && r.refusal.code, "invalid_input", JSON.stringify(input));
+    assert.equal(h.fake.calls.length, 0);
+  }
+});
+
+test("decision 164: worker-start gets the role row's alias and effort; an escalation is recorded as model_changed", async () => {
+  const h = harness();
+  await start(h, request({ requester: orchestrator, childRole: "lead" }));
+  const ws = h.called("worker-start")[0] ?? [];
+  const row = MODEL_POLICY.lead;
+  assert.equal(flag(ws, "model"), MODEL_CATALOG.find((c) => c.tier === row.tier)?.alias);
+  assert.equal(flag(ws, "effort"), row.effort);
+  assert.deepEqual(h.store.events({ type: "model_changed" }), []);
+
+  const h2 = harness();
+  const base = { role: "lead", worktreeId: PARENT_TREE, taskId: "task_lead", runId: RUN, childRole: "worker", spec: "brief" };
+  const top = MODEL_POLICY.design.raiseEffort.at(-1);
+  const r = await handle({ ...base, kind: "design", effort: top, tier: MODEL_POLICY.design.thenTier, reason: "max still misses the race" }, ports(h2));
+  assert.equal(r.ok, true);
+  const ws2 = h2.called("worker-start")[0] ?? [];
+  assert.equal(flag(ws2, "model"), MODEL_CATALOG.find((c) => c.tier === MODEL_POLICY.design.thenTier)?.alias);
+  assert.equal(flag(ws2, "effort"), top);
+  const changed = h2.store.events({ type: "model_changed" });
+  assert.equal(changed.length, 1);
+  assert.equal(changed[0]?.payload.reason, "max still misses the race");
+});
+
+test("MCP start_unit refuses a model choice off the table before calling Orca", async () => {
+  const base = { role: "lead", worktreeId: PARENT_TREE, taskId: "task_lead", runId: RUN, childRole: "worker", spec: "brief" };
+  const cases = [
+    { ...base, kind: "orchestrator" },
+    { ...base, kind: "lead" },
+    { ...base, kind: "design", tier: MODEL_POLICY.design.thenTier, reason: "skip the ladder" },
+    { ...base, kind: "design", effort: MODEL_POLICY.design.raiseEffort.at(-1) },
+    { ...base, kind: "worker", effort: "low", reason: "cheaper" },
   ];
   for (const input of cases) {
     const h = harness();
