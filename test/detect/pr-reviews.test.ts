@@ -31,7 +31,7 @@ const pull = { number: 7, merged_at: null, user: { login: "alice" }, head: { sha
 
 /** `gh api -i` over a route table: 304 when If-None-Match names the route's current ETag. */
 function fakeGh() {
-  const routes = new Map<string, { etag: string; body: unknown }>([
+  const routes = new Map<string, { etag: string; body: unknown; limited?: boolean }>([
     [`repos/${REPO}/pulls?state=open&per_page=100`, { etag: '"open1"', body: [pull] }],
     [EVENTS, { etag: '"ev1"', body: recorded.events }],
     [REVIEWS, { etag: '"rv1"', body: recorded.reviews }],
@@ -45,6 +45,9 @@ function fakeGh() {
     const route = routes.get(path);
     const head = "x-ratelimit-limit: 5000\nx-ratelimit-remaining: 4900\nx-ratelimit-reset: 9999999999\n";
     if (!route) return { code: 1, stdout: `HTTP/2.0 404 Not Found\n${head}\n{"message":"Not Found"}`, stderr: "" };
+    if (route.limited) {
+      return { code: 1, stdout: 'HTTP/2.0 403 Forbidden\nx-ratelimit-limit: 5000\nx-ratelimit-remaining: 0\nx-ratelimit-reset: 9999999999\n\n{"message":"API rate limit exceeded"}', stderr: "" };
+    }
     if (sent === route.etag) {
       log.push(`304 ${path}`);
       return { code: 1, stdout: `HTTP/2.0 304 Not Modified\nEtag: ${route.etag}\n${head}\n`, stderr: "" };
@@ -121,6 +124,26 @@ test("a lost database's reread reads the review lists without the ETag the lost 
   rebuilt.store.append({ type: "signal", source: "store", payload: { kind: "store_rebuilt", reason: "test" } });
   await rebuilt.round();
   assert.equal(rebuilt.reviewRows().length, 5);
+});
+
+test("a rate limit on a later list keeps the facts of the list already read, so its saved ETag hides nothing", async () => {
+  const gh = fakeGh();
+  gh.routes.set(REVIEWS, { etag: '"rv1"', body: [], limited: true });
+  const w = world(gh);
+  const r = await w.round();
+  assert.ok(r.written.some((x) => x.type === "rate_limited"));
+  assert.deepEqual(
+    w.reviewRows().map((e) => e.type),
+    ["pr_review_requested", "pr_review_requested"],
+  );
+});
+
+test("the author's comment outside a thread is neither a reply nor a review comment", async () => {
+  const gh = fakeGh();
+  gh.routes.set(COMMENTS, { etag: '"cm3"', body: [{ id: 3004, user: { login: "Alice" }, in_reply_to_id: null }, ...recorded.comments] });
+  const w = world(gh);
+  await w.round();
+  assert.ok(!w.reviewRows().some((e) => e.dedupe_key?.endsWith(":3004")));
 });
 
 test("an oldest-first list that fills its page is reported unread past it", async () => {

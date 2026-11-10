@@ -245,16 +245,19 @@ async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, 
 async function reviews(r: Reads, repo: string, p: ListedPull): Promise<void> {
   const ref = prRef(repo, p.number);
   const at = `repos/${repo}`;
-  const reads: ReviewReads = {
-    requests: await changed<IssueEvent[]>(r, `${at}/issues/${p.number}/events?per_page=${PAGE}`),
-    reviews: await changed<Review[]>(r, `${at}/pulls/${p.number}/reviews?per_page=${PAGE}`),
-    // Newest first, so a long thread's page always holds the new comments.
-    comments: await changed<ReviewComment[]>(r, `${at}/pulls/${p.number}/comments?sort=created&direction=desc&per_page=${PAGE}`),
-  };
-  const { facts, full } = reviewFacts(ref, p.user?.login.toLowerCase() ?? "", reads);
   const known = new Set(REVIEW_TYPES.flatMap((t) => rowsOf(r, t, ref).map((e) => e.dedupe_key)));
-  for (const f of facts) if (!known.has(f.dedupe_key ?? null)) plan(r, f);
-  for (const k of full) r.unseen.push(`${ref}: ${k} past the first ${PAGE}`);
+  const none: ReviewReads = { requests: null, reviews: null, comments: null };
+  // Each list is planned as soon as it is read: its ETag is saved now, and a rate limit on the next
+  // list ends the round with only what is already planned.
+  const judge = (reads: ReviewReads) => {
+    const { facts, full } = reviewFacts(ref, p.user?.login.toLowerCase() ?? "", reads);
+    for (const f of facts) if (!known.has(f.dedupe_key ?? null)) plan(r, f);
+    for (const k of full) r.unseen.push(`${ref}: ${k} past the first ${PAGE}`);
+  };
+  judge({ ...none, requests: await changed<IssueEvent[]>(r, `${at}/issues/${p.number}/events?per_page=${PAGE}`) });
+  judge({ ...none, reviews: await changed<Review[]>(r, `${at}/pulls/${p.number}/reviews?per_page=${PAGE}`) });
+  // Newest first, so a long thread's page always holds the new comments.
+  judge({ ...none, comments: await changed<ReviewComment[]>(r, `${at}/pulls/${p.number}/comments?sort=created&direction=desc&per_page=${PAGE}`) });
 }
 
 /** A PR whose branch is a local workspace Orca did not link yet: attach it there (decision 64, one-way). */
