@@ -86,7 +86,31 @@ function hosts() {
     tier: () => null,
     core: { store, orca },
   });
-  return { deps, writes };
+  /** PR 8 approved by someone else and green at its head: ready once land asked for merge_on_approval. */
+  const ready = () => {
+    routes[`repos/${REPO}/pulls/8`] = ok({ ...pull(8), state: "open", mergeable_state: "clean" });
+    routes[`repos/${REPO}/pulls/8/reviews?per_page=100&page=1`] = ok([{ user: { login: "bob" }, state: "APPROVED", commit_id: HEAD, author_association: "MEMBER" }]);
+    routes[`repos/${REPO}/commits/${HEAD}/check-runs?per_page=100`] = ok({ total_count: 1, check_runs: [{ status: "completed", conclusion: "success" }] });
+  };
+  return { deps, writes, ready };
+}
+
+const landOnApproval = (s: Store): void => {
+  s.append({ type: "land_requested", source: "land", payload: { pr: `${REPO}#8`, head_sha: HEAD, reason: "merge_on_approval" } });
+};
+
+const sends = (writes: string[]) => writes.filter((w) => w.startsWith("send "));
+
+/** Writes `before` into a store, loses the database file, and opens it again rebuilt from the backup. */
+async function lose(name: string, before: (s: Store) => Promise<void> | void): Promise<Store> {
+  const path = join(tmp, name);
+  const s = Store.open({ path, clock: fixedClock("2026-11-11T12:00:00.000Z", 1000), fsProbe: () => "apfs" });
+  await before(s);
+  s.close();
+  rmSync(path);
+  const r = Store.open({ path, clock: fixedClock("2026-11-11T13:00:00.000Z", 1000), fsProbe: () => "apfs" });
+  assert.ok(r.rebuilt);
+  return r;
 }
 
 const hostRows = (s: Store) =>
@@ -118,5 +142,46 @@ test("a lost database gets its host rows back from Orca and GitHub, and the rere
   assert.equal(h.writes.length, writesBefore, "no task-update, reference add or message during the reread");
   assert.ok(out.unseen.some((u) => u.startsWith("orca: ")), "what a reader could not see is named");
   assert.equal(hostRereadPending(r.events({ type: "signal" })), false, "the reread is recorded once done");
+  r.close();
+});
+
+test("a PR that became ready to merge while the database was lost wakes its lead once after the reread, and the next round sends none", async () => {
+  const h = hosts();
+  const r = await lose("ready.db", landOnApproval);
+  h.ready();
+  const out = await rereadHostRows(h.deps(r));
+  assert.equal(hostRows(r).filter((x) => x.startsWith("pr_ready_to_merge ")).length, 1, "the ready row is written");
+  assert.deepEqual(sends(h.writes), ["send run:run_lead"], "one wake to the owning lead");
+  assert.equal(r.events({ type: "notified" }).length, 1, "notify records it");
+  assert.deepEqual(out.acts.map((a) => [a.ok, a.detail]), [[true, "sent"]]);
+  assert.ok(!h.writes.some((w) => w.startsWith("task-update") || w === "reference add"), "only the wake runs, no Task close or reference add");
+
+  await runMonitor("pr", h.deps(r));
+  assert.deepEqual(sends(h.writes), ["send run:run_lead"], "the next normal round sends none");
+  r.close();
+});
+
+test("a wake sent before the loss is not sent again by the reread", async () => {
+  const h = hosts();
+  h.ready();
+  const r = await lose("sent.db", async (s) => {
+    landOnApproval(s);
+    await runMonitor("pr", h.deps(s));
+  });
+  assert.deepEqual(sends(h.writes), ["send run:run_lead"]);
+  const out = await rereadHostRows(h.deps(r));
+  assert.equal(out.acts.length, 1, "the wake act runs");
+  assert.notEqual(out.acts[0]?.detail, "sent", "and notify holds it back");
+  assert.deepEqual(sends(h.writes), ["send run:run_lead"], "the copied notified row keeps it once");
+  r.close();
+});
+
+test("a reread that sees nothing ready sends none", async () => {
+  const h = hosts();
+  const r = await lose("none.db", landOnApproval);
+  const out = await rereadHostRows(h.deps(r));
+  assert.deepEqual(sends(h.writes), []);
+  assert.deepEqual(out.acts, []);
+  assert.ok(!hostRows(r).some((x) => x.startsWith("pr_ready_to_merge ")));
   r.close();
 });
