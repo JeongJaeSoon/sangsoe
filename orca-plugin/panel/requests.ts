@@ -46,12 +46,24 @@ export function openCommand(raw: unknown): string | null {
 
 type Exec = (cmd: string, args: readonly string[]) => Promise<{ ok: boolean; code: string | number | null; out: string; err: string }>;
 
-/** `panel.open`: Orca's own terminal (`orca terminal create`) runs the token-free CLI read. */
-export function openHandler(exec: Exec) {
+// Orca's worktree ids are `<repo-id>::<absolute path>`; anything else never reaches the command line.
+const WORKTREE = /^[A-Za-z0-9-]+::\/\S.*$/;
+
+/**
+ * `panel.open`: Orca's own terminal (`orca terminal create`) runs the token-free CLI read, in the
+ * worktree the core names by id. `active` would resolve from this worker's cwd, `/` (decision 198).
+ */
+export function openHandler(exec: Exec, worktreeOf: (target: { group?: string; item?: string }) => Promise<Reply>) {
   return async (input: unknown): Promise<Reply> => {
     const command = openCommand(input);
     if (!command) return refuse("bad_input", "not a panel view", "press a header button on the panel");
-    const r = await exec("orca", ["terminal", "create", "--worktree", "active", "--title", command, "--command", command, "--focus", "--json"]);
+    const fix = `run ${command} in a terminal`;
+    const o = (input ?? {}) as Record<string, unknown>;
+    const w = o.view === "brief" ? await worktreeOf(target(input)) : refuse("no_worktree", "this view has no worktree of its own", fix);
+    if (!w.ok) return refuse(w.refusal.code, w.refusal.reason, fix);
+    const id = (w.value as { worktree?: unknown }).worktree;
+    if (typeof id !== "string" || !WORKTREE.test(id)) return refuse("no_worktree", "the core named no worktree", fix);
+    const r = await exec("orca", ["terminal", "create", "--worktree", `id:${id}`, "--title", command, "--command", command, "--focus", "--json"]);
     return r.ok ? { ok: true, value: { status: "opened" } } : refuse("open_failed", (r.err || r.out || String(r.code)).slice(0, 200), `run ${command} in a terminal`);
   };
 }
@@ -83,6 +95,16 @@ export function panelHandlers(load: () => Promise<PanelCore | string>) {
       try {
         const c = await core();
         return isCore(c) ? await c.act(a) : c;
+      } catch (e) {
+        return thrown(e);
+      }
+    },
+    /** The worktree `panel.open` opens a terminal in; an older core without it names none. */
+    worktree: async (t: { group?: string; item?: string }): Promise<Reply> => {
+      try {
+        const c = await core();
+        if (!isCore(c)) return c;
+        return c.worktree ? await c.worktree(t) : refuse("no_worktree", "this core names no worktree", "");
       } catch (e) {
         return thrown(e);
       }

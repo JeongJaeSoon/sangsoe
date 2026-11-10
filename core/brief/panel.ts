@@ -12,6 +12,7 @@ import { type BuildOptions, buildBrief, buildGroup, buildItem } from "./build.ts
 import { itemFacts } from "./item_status.ts";
 import { loadBriefInput } from "./load.ts";
 import { ownerTodoFrom } from "./owner_todo.ts";
+import { localShort, localStamp, localZone } from "./time.ts";
 import type { BriefInput, BriefModel, Overview } from "./types.ts";
 
 // The Orca plugin panel's entrance to the core (decision 136). The worker forwards panel requests here
@@ -26,6 +27,10 @@ export interface PanelTarget {
 export interface PanelView {
   readonly model: BriefModel;
   readonly todo: readonly OwnerTodoRow[];
+  /** The header's refresh time in the local zone: `short` on the row, `full` in its title (decision 198). */
+  readonly fresh: { readonly short: string; readonly full: string };
+  /** Status bar item B from this same reading, so the worker redraws both at once (decision 198). */
+  readonly status: StatusBarItem;
 }
 
 export type PanelAct =
@@ -64,7 +69,9 @@ export function panelView(input: BriefInput, target: PanelTarget, opts: BuildOpt
   else if (target.group) model = buildGroup(input, target.group, opts);
   else model = buildBrief(input, opts);
   if (!model) return refuse("not_found", `no ${target.item ? `item ${target.item}` : `open group ${target.group}`}`, "go back to 현황");
-  return done({ model, todo });
+  const overview = model.stage === 1 ? model : buildBrief(input, opts);
+  const fresh = { short: localShort(input.now), full: `갱신 ${localStamp(input.now)} (${localZone(input.now)})` };
+  return done({ model, todo, fresh, status: statusBarItem(overview) });
 }
 
 export interface PanelPorts {
@@ -99,6 +106,24 @@ export interface PanelCore {
   brief(target: PanelTarget): Promise<Result<PanelView>>;
   statusBar(): Promise<Result<StatusBarItem>>;
   act(a: PanelAct): Promise<Result<PanelActed>>;
+  /** The Orca worktree id a terminal for `target` opens in: the item's Dispatch worktree, or no_worktree. */
+  worktree(target: PanelTarget): Promise<Result<{ readonly worktree: string }>>;
+}
+
+const NO_WORKTREE = "run the command in a terminal";
+
+/**
+ * Orca resolves `--worktree active` from the caller's cwd, and the plugin worker's is `/` (decision 198).
+ * So the id comes from Orca's own worker-list row for the item's Task; a stage with no such row has none.
+ */
+async function itemWorktree(orca: OrcaAdapter, input: BriefInput, alias: string): Promise<Result<{ readonly worktree: string }>> {
+  const f = itemFacts(input).find((x) => x.alias === alias);
+  const task = f ? input.orca.tasks.find((t) => t.id === f.task) : undefined;
+  if (!task) return refuse("not_found", `no item ${alias}`, NO_WORKTREE);
+  const rows = await orca.workerList({ run: task.runId });
+  if (!rows.ok) return refuse("orca_error", `worker-list ${task.runId}: ${rows.error.code}`, NO_WORKTREE);
+  const ws = rows.value.rows.filter((w) => w.taskId === task.id && w.workspace).at(-1)?.workspace;
+  return ws ? done({ worktree: ws }) : refuse("no_worktree", `${alias} has no worker worktree`, NO_WORKTREE);
 }
 
 export function panelCore(ports: PanelPorts): PanelCore {
@@ -152,6 +177,11 @@ export function panelCore(ports: PanelPorts): PanelCore {
       if (!input.ok) return input;
       if (a.kind === "done") return closeItem(input.value, a.item);
       return answer(input.value, a.decision, "text" in a ? a.text : null);
+    },
+    async worktree(target) {
+      if (!target.item) return refuse("no_worktree", "this stage has no worktree of its own", NO_WORKTREE);
+      const input = await load(ports.now());
+      return input.ok ? itemWorktree(ports.orca, input.value, target.item) : input;
     },
   };
 }

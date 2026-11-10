@@ -7,6 +7,7 @@ import type { GraphRead } from "./graph.ts";
 import { groupBriefFrom } from "./group.ts";
 import { type ItemFacts, itemFacts, OTHERS, rank } from "./item_status.ts";
 import { ownerTodoFrom } from "./owner_todo.ts";
+import { localShort } from "./time.ts";
 import type {
   BriefInput,
   BriefOptions,
@@ -36,6 +37,9 @@ const ALARM_NEXT: Readonly<Record<string, string>> = {
   land_failed: "land 확인",
   loop_detected: "반복 확인",
   decision_untracked: "결정 연결",
+  pr_changes_requested: "리뷰 변경 요청 반영",
+  review_commented: "리뷰 코멘트에 답",
+  refusal_report: "거부 보고 확인",
 };
 
 const COLS = {
@@ -77,6 +81,7 @@ function next(f: ItemFacts): string {
   else if (f.state === "blocked") base = f.lastReason ?? "—";
   else if (f.state === "ready") base = "시작";
   else if (f.state === "planned") base = "선행 대기";
+  else if (f.idle) base = "워커가 다음 지시를 기다림";
   const alarm = f.alarms[0];
   if (!alarm) return base;
   return `🚨 ${base === "—" ? (ALARM_NEXT[alarm] ?? alarm) : base}`;
@@ -315,6 +320,24 @@ const STAGE: Readonly<Record<string, string>> = {
   evidence: "증거",
   waiting_human: "대기",
   waiting_released: "대기",
+  worker_idle: "대기",
+  worker_done: "보고",
+  refusal_report: "거부",
+  flow_step_skipped: "흐름",
+  observed_change: "신호",
+};
+
+// Decision 186's nine events in the owner's words (decision 198); their writers are the monitors'.
+const NINE: Readonly<Record<string, (s: (k: string) => string) => string>> = {
+  pr_review_requested: (s) => `${s("pr")} 리뷰 요청 ${s("reviewer")}`,
+  pr_changes_requested: (s) => `${s("pr")} 변경 요청 ${s("reviewer")}`,
+  review_commented: (s) => `${s("pr")} 리뷰 코멘트 ${s("reviewer")}`,
+  review_replied: (s) => `${s("pr")} 리뷰에 답함 ${s("by")}`,
+  flow_step_skipped: (s) => `${s("step")} 건너뜀: ${s("reason")}`,
+  worker_idle: () => "워커가 다음 지시를 기다림",
+  observed_change: (s) => `Orca 에서 ${s("field")} 바뀜`,
+  refusal_report: (s) => `${s("act")} 거부됨(${s("category")})`,
+  worker_done: (s) => `worker_done ${s("outcome") === "succeeded" ? "성공" : s("outcome") === "failed" ? "실패" : s("outcome")}`,
 };
 const SKIP = new Set(["item_extra_set", "priority_set", "item_ready"]);
 
@@ -330,6 +353,8 @@ function chainText(type: string, p: Record<string, unknown>): string {
   }
   if (type === "evidence") return `${s("kind")}${typeof p.exit_code === "number" ? ` exit ${p.exit_code}` : ""}`;
   if (type.startsWith("decision_")) return `${s("decision")} ${type.slice(9)}${p.answer ? ` "${s("answer")}"` : ""}`;
+  const nine = NINE[type];
+  if (nine) return nine(s).replace(/\s+/g, " ").trim();
   return [type, s("pr")].filter(Boolean).join(" ");
 }
 
@@ -342,7 +367,7 @@ export function buildItem(input: BriefInput, alias: string, opts: BuildOptions =
     .map((e) => ({
       id: `seq:${e.seq}`,
       cells: [
-        t(`${e.ts.slice(5, 10)} ${e.ts.slice(11, 16)}`),
+        t(localShort(e.ts)),
         t(STAGE[e.type] ?? (e.type.startsWith("decision_") ? "결정" : typeof e.payload.pr === "string" ? "PR" : "신호")),
         t(chainText(e.type, e.payload)),
       ],

@@ -351,6 +351,27 @@ test("activate subscribes, registers and redraws status bar B from the core each
   }
 });
 
+test("decision 198: a panel reading redraws status bar B from the same reading", async () => {
+  const w = fakeWorker();
+  const { clock } = fakeClock();
+  const status = { text: "✨ SANGSOE  🚧 0 · 결정 1 · 🔄 0", tone: "danger" as const, tooltip: "sangsoe: 내가 할 일 1" };
+  const core: PanelCore = {
+    brief: async () => ({ ok: true, value: { model: {}, todo: [], status } }),
+    statusBar: async () => ({ ok: true, value: { text: "✨ SANGSOE  🚧 0 · 결정 0 · 🔄 0", tone: "neutral", tooltip: "" } }),
+    act: async () => ({ ok: true, value: {} }),
+  };
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: async () => core });
+  try {
+    await settle();
+    const before = w.hostCalls.length;
+    await w.handlers.get("panel.brief")?.({});
+    const after = w.hostCalls.slice(before).map(([m, p]) => [m, (p as { text: string }).text]);
+    assert.deepEqual(after, [["statusBar.update", status.text]], "the band's 결정 1 is the status bar's 결정 1");
+  } finally {
+    deactivate();
+  }
+});
+
 test("panel requests reach the core unchanged; a malformed act and a missing core are refused", async () => {
   const w = fakeWorker();
   const { clock } = fakeClock();
