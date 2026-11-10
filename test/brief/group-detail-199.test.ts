@@ -61,7 +61,7 @@ test("broken is the dangling predecessor only; an open PR predecessor is a refer
 
 test("critical path rows carry 상태 and 단계 이름 (the flow step, the owner gate)", () => {
   assert.deepEqual(col(m.critical, 0), ["1", "2", "3", "4"]);
-  assert.deepEqual(col(m.critical, 2), ["🔄 진행 중", "📅 예정", "📅 예정", "📅 예정"]);
+  assert.deepEqual(col(m.critical, 2), ["🔄 진행 중 🚨", "📅 예정", "📅 예정", "📅 예정"]);
   assert.deepEqual(col(m.critical, 3), ["지금 늦추는 것", "deploy_dev", "verify_dev", "deploy_prod, 오너 게이트"]);
   assert.deepEqual(m.criticalPath, m.critical.rows.map((r) => r.id));
 });

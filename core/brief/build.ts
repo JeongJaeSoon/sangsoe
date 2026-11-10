@@ -330,13 +330,13 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
   const nodes: GraphNodeRow[] = [...new Set(raw.flatMap((e) => [e.pred, e.succ]))]
     .map((task) => alias.get(task))
     .filter((f): f is ItemFacts => f !== undefined)
-    .map((f) => ({ id: f.alias, title: f.title, state: EMOJI[f.state], flags: flagsOf(f), outside: f.lead === key ? null : leadName(f.lead) }));
+    .map((f) => ({ id: f.alias, title: f.title, state: EMOJI[f.state], stateLabel: READING_LABEL[f.state], flags: flagsOf(f), outside: f.lead === key ? null : leadName(f.lead) }));
 
   const criticalRows: Row[] = critical.map((task, i) => {
     const f = alias.get(task);
     const x = g.items.get(task);
     const name = [x?.step ?? "", i === 0 ? "지금 늦추는 것" : "", x?.execBy === "owner" ? "오너 게이트" : ""].filter(Boolean).join(", ");
-    return { id: label(task), cells: [t(String(i + 1)), t(f ? titled(f) : label(task)), t(stateText(f)), t(name || "—")] };
+    return { id: label(task), cells: [t(String(i + 1)), t(f ? titled(f) : label(task)), t(`${stateText(f)}${f && flagsOf(f) ? ` ${flagsOf(f)}` : ""}`), t(name || "—")] };
   });
 
   const stacked = raw.filter((e) => e.kind === "stacked_on" && alias.has(e.pred) && alias.has(e.succ));

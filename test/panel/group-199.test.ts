@@ -69,6 +69,8 @@ test("왜 준비되지 않았나: 항목 is the item with its title, 막는 선�
   assert.doesNotMatch(why, /class="title"/);
   assert.match(why, /<td data-l="항목"><span class="id">i043<\/span>후속 테스트 PR<\/td><td data-l="막는 선행"><span class="id">i027<\/span>캐시 도입<\/td><td data-l="간선 종류" class="kind">blocks<\/td>/);
   assert.match(why, /<tr data-id="i043" class="broken">/);
+  const states = [...why.matchAll(/data-l="선행 상태">([^<]*)</g)].map((x) => x[1] ?? "");
+  assert.ok(states.length > 0 && states.every((s) => /\p{L}/u.test(s)), `bare marker in 선행 상태: ${states.join(" | ")}`);
 });
 
 test("legend: four kinds and the two marks, every cell labelled so a folded row keeps kind and meaning apart", () => {

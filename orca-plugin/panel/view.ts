@@ -22,7 +22,7 @@ export type Overview = {
   done?: Table;
 };
 export type GraphEdgeRow = { pred: string; succ: string; kind: string; met: boolean | null };
-export type GraphNodeRow = { id: string; title: string; state: string; flags: string; outside: string | null };
+export type GraphNodeRow = { id: string; title: string; state: string; stateLabel?: string; flags: string; outside: string | null };
 export type GroupFigures = {
   done: number;
   doneDays: number;
@@ -488,11 +488,23 @@ export function dagSvg(m: Pick<GroupDetail, "edges" | "criticalPath"> & Pick<Gro
 }
 
 // Graph tables label every cell (hallmark's .gt), so a folded row never runs a name into its meaning.
-function gtTable(t: Table, o: { kinds?: readonly number[]; step?: boolean; titles?: ReadonlyMap<string, string>; idCols?: readonly number[] } = {}): string {
+type GtOpts = {
+  kinds?: readonly number[];
+  step?: boolean;
+  titles?: ReadonlyMap<string, string>;
+  idCols?: readonly number[];
+  /** [state column, the column naming whose state it is]: a bare marker there gets its word. */
+  stateOf?: readonly [number, number];
+  labels?: ReadonlyMap<string, string>;
+};
+
+function gtTable(t: Table, o: GtOpts = {}): string {
   const head = t.columns.map((c) => `<th>${esc(c.name)}</th>`).join("");
   const rows = t.rows.map((r) => {
-    const tds = r.cells.map((c, i) => {
+    const tds = r.cells.map((cell, i) => {
       const name = esc(t.columns[i]?.name ?? "");
+      const word = o.stateOf?.[0] === i ? o.labels?.get(r.cells[o.stateOf[1]]?.text ?? "") : undefined;
+      const c = word?.startsWith(cell.text) ? { ...cell, text: word } : cell;
       if (o.step && i === 0) return `<td data-l="${name}"><span class="step">${esc(c.text)}</span></td>`;
       if (o.kinds?.includes(i)) return `<td data-l="${name}" class="kind">${esc(c.text)}</td>`;
       const titled = o.idCols?.includes(i) && o.titles?.has(c.text) ? { ...c, text: `${c.text} ${o.titles.get(c.text)}` } : c;
@@ -533,6 +545,7 @@ function group(m: GroupDetail): string {
   const items = (t: Table) => t.rows.map((r) => rowHtml(t, r, { nav: { item: r.id } }));
   const nodes = m.nodes ?? [];
   const titles = new Map(nodes.map((n) => [n.id, n.title]));
+  const labels = new Map(nodes.flatMap((n) => (n.stateLabel ? [[n.id, n.stateLabel] as const] : [])));
   const refs = m.edges.filter((e) => !titles.has(e.pred));
   const refLine =
     refs.length === 0
@@ -555,7 +568,7 @@ function group(m: GroupDetail): string {
     m.recent ? gtSection("recent", m.recent, gtTable(m.recent)) : "",
     `<section aria-labelledby="h-graph"><div class="sec-h"><h2 id="h-graph">의존 그래프</h2><span class="hint">위에서 아래로. 굵은 선과 번호가 크리티컬 패스</span></div>`,
     `<div class="gwrap"><div class="gl">${graph}</div><div class="side">${side}</div></div></section>`,
-    gtSection("why", m.why, gtTable(m.why, { kinds: [2], idCols: [0, 1], titles }), "<code>sangsoe graph why</code>"),
+    gtSection("why", m.why, gtTable(m.why, { kinds: [2], idCols: [0, 1], titles, stateOf: [3, 1], labels }), "<code>sangsoe graph why</code>"),
     m.edgeList ? gtSection("edges", m.edgeList, gtTable(m.edgeList, { kinds: [0] })) : "",
     m.done ? doneFold(m.done) : "",
     `<p class="foot">터미널: <code>sangsoe brief ${esc(m.lead)}</code></p>`,

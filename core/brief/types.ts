@@ -95,6 +95,8 @@ export interface GraphNodeRow {
   readonly title: string;
   /** The state marker (🔄, 🚧, ...). */
   readonly state: string;
+  /** The marker with its word (🔄 진행 중): what a table cell shows for this item's state. */
+  readonly stateLabel: string;
   /** 🙋 🚨 as the brief prints them, "" when none. */
   readonly flags: string;
   /** The other group's name when the item is not this group's, else null. */
