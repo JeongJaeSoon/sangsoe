@@ -13,7 +13,7 @@ export async function listening(card: Pick<WorktreeRow, "id">, orca: Pick<OrcaAd
 
 export type Stacks = { kind: "no_daemon" } | { kind: "unread"; why: string } | { kind: "read"; running: string[][] };
 
-/** Compose projects with a running service, each as its absolute config file paths. */
+/** Compose projects with a live service (running, restarting or paused), each as its absolute config file paths. */
 export async function readStacks(exec: Exec, daemon: () => Promise<boolean>): Promise<Stacks> {
   if (!(await daemon())) return { kind: "no_daemon" };
   const r = await exec("docker", ["compose", "ls", "--all", "--format", "json"]);
@@ -27,7 +27,7 @@ export async function readStacks(exec: Exec, daemon: () => Promise<boolean>): Pr
   if (!Array.isArray(rows)) return { kind: "unread", why: "docker compose ls: not a list" };
   const running = (rows as { Status?: unknown; ConfigFiles?: unknown }[])
     // `running(2)`, or mixed: `running(1), exited(1)`.
-    .filter((s) => /running/.test(String(s.Status ?? "")))
+    .filter((s) => /running|restarting|paused/.test(String(s.Status ?? "")))
     .map((s) =>
       String(s.ConfigFiles ?? "")
         .split(",")

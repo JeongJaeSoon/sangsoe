@@ -106,6 +106,44 @@ test("session_alive at the root: a settled Dispatch whose session is live keeps 
   assert.deepEqual(rms(w), []);
 });
 
+test("session_alive: a liveness Orca cannot tell (or none) at the removal is unknown and removes nothing", async () => {
+  for (const liveness of ["unverifiable", undefined] as const) {
+    const w = world();
+    const name = `unsure-${liveness ?? "none"}`;
+    withDispatch(w, name);
+    await w.round();
+    w.clock.now += 30 * 60_000;
+    atSecondCall(w, "workerShow", () => {
+      const row = w.orca.workers[0];
+      if (!row) return;
+      if (liveness) row.liveness = liveness;
+      else delete row.liveness;
+    });
+    const r = await w.round();
+    assert.deepEqual(rms(w), [], name);
+    assert.deepEqual(w.types("reap_blocked"), []);
+    assert.deepEqual(r.unknown, [`worktree:inst-${name}: worker-show ctx_${name}: liveness ${liveness ?? "missing"}`]);
+  }
+});
+
+test("open-Task root: a worker-show that fails is unknown, at the root and at the removal", async () => {
+  const w = world();
+  withDispatch(w, "show-down");
+  w.orca.failing.add("workerShow");
+  const last = await rounds(w, 3, 30);
+  assert.deepEqual(last.unknown, ["worktree:inst-show-down"]);
+  assert.deepEqual(rms(w), []);
+
+  const s = world();
+  withDispatch(s, "show-late");
+  await s.round();
+  s.clock.now += 30 * 60_000;
+  atSecondCall(s, "workerShow", () => s.orca.failing.add("workerShow"));
+  const r = await s.round();
+  assert.deepEqual(rms(s), []);
+  assert.deepEqual(r.unknown, ["worktree:inst-show-late: worker-show ctx_show-late: runtime_unreachable"]);
+});
+
 test("evidence_in_worktree: the PR's evidence file still in the card blocks, by relative or absolute path", async () => {
   for (const form of ["relative", "absolute"] as const) {
     const w = world();
@@ -132,6 +170,23 @@ test("evidence_in_worktree: a newer row outside the card, a missing file, a sibl
   await rounds(w, 3, 30);
   assert.deepEqual(w.types("reap_blocked"), []);
   assert.deepEqual(rms(w), [`worktreeRm id:${c.id}`]);
+});
+
+test("evidence_in_worktree: a newer row for the same PR, head and kind without a path keeps the block", async () => {
+  const w = world();
+  const c = finishedCard(w, "ev-pathless");
+  ignoredFile(c, "out/test.log");
+  evidence(w, "acme/api#1", "out/test.log");
+  w.store.append({
+    type: "evidence",
+    source: "evidence record",
+    subject: "acme/api#1",
+    actor: "reviewer",
+    payload: { kind: "test", head_sha: HEAD, exit_code: 0, not_verified: ["prod"] },
+  });
+  await rounds(w, 3, 30);
+  assert.deepEqual(rms(w), []);
+  assert.deepEqual(w.types("reap_blocked"), [{ kind: "worktree", ref: "inst-ev-pathless", reason: "evidence_in_worktree" }]);
 });
 
 test("listener: a port Orca ties to the card blocks; nothing is killed", async () => {
@@ -166,6 +221,18 @@ test("compose_running: a running stack whose config file is in the card blocks; 
   assert.deepEqual(rms(w), []);
   assert.deepEqual(w.types("reap_blocked"), [{ kind: "worktree", ref: "inst-stacked", reason: "compose_running" }]);
   assert.ok(!w.docker.calls.some((x) => / (down|stop|rm) /.test(` ${x} `)), w.docker.calls.join("\n"));
+});
+
+test("compose_running: a restarting or paused stack blocks too", async () => {
+  for (const status of ["restarting(1)", "paused(1)"]) {
+    const w = world();
+    const name = `held-${status.slice(0, 4)}`;
+    const c = finishedCard(w, name);
+    w.docker.stacks = [{ Name: "held", Status: status, ConfigFiles: join(c.path, "compose.yaml") }];
+    await rounds(w, 3, 30);
+    assert.deepEqual(rms(w), [], status);
+    assert.deepEqual(w.types("reap_blocked"), [{ kind: "worktree", ref: `inst-${name}`, reason: "compose_running" }], status);
+  }
 });
 
 test("compose_running: an exited stack or a sibling path does not block, and a daemon that is down skips the check", async () => {

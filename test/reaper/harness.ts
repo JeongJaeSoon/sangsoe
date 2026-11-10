@@ -80,7 +80,7 @@ export function card(name: string, repo: Repo, o: Partial<WorktreeRow> = {}): Wo
 }
 
 export function worker(workspace: string, o: Partial<WorkerRow> = {}): WorkerRow {
-  return { dispatchId: `ctx_${workspace.length}`, taskId: "task_1", state: "succeeded", workspace, host: "local", ...o };
+  return { dispatchId: `ctx_${workspace.length}`, taskId: "task_1", state: "succeeded", liveness: "exited", workspace, host: "local", ...o };
 }
 
 const rows = <T>(r: T[], nonLocalIds: string[] = []): LocalRows<T> => ({

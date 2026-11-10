@@ -351,7 +351,8 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   const daemon = () => (up ??= dockerUp(d.exec));
   let stacks: Promise<Stacks> | undefined;
   const evidence = d.events({ type: "evidence" });
-  // Decision 194: each check reads fresh, and a hit skips the removal; nothing is stopped or killed.
+  // Decision 194: a hit skips the removal; nothing is stopped or killed. The Orca reads and `ports` are
+  // asked again per card, for the Dispatches the round's worker-list named; the compose list once per sweep.
   const checks: ((card: WorktreeRow & { instanceId: string }, f: Extract<Finished, { state: "finished" }>) => Promise<Check> | Check)[] = [
     (card) => openWork(card, workerRows, d.orca),
     (card, f) => evidenceInWorktree(card, f, evidence),

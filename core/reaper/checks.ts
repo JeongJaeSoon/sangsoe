@@ -18,6 +18,7 @@ export type BlockReason =
 export type Check = { ok: true } | { ok: false; blocked: BlockReason } | { ok: false; unknown: string };
 
 const OK: Check = { ok: true };
+const ENDED = new Set(["gone", "exited"]);
 
 /** Whether `path` is `root` or under it; `/a/u5` is not under `/a/u53`. */
 export function inside(root: string, path: string): boolean {
@@ -44,6 +45,10 @@ export async function openWork(
     const show = await orca.workerShow({ dispatch: w.dispatchId });
     if (!show.ok) return { ok: false, unknown: `worker-show ${w.dispatchId}: ${show.error.code}` };
     if (show.value.liveness === "live") return { ok: false, blocked: "session_alive" };
+    // `unverifiable` or no answer is Orca not knowing; only a session it calls ended lets the card go.
+    if (!ENDED.has(show.value.liveness ?? "")) {
+      return { ok: false, unknown: `worker-show ${w.dispatchId}: liveness ${show.value.liveness ?? "missing"}` };
+    }
     const { taskId, runId } = show.value;
     if (asked.has(taskId)) continue;
     asked.add(taskId);
@@ -65,8 +70,9 @@ export async function openWork(
 /**
  * Decision 194 ②: an `evidence` row says where its file is; a file still inside the card would go
  * with it. Only the newest row per PR, head and kind counts, so recording the moved file clears the
- * block, and a file no longer at that path has nothing left to lose. A relative path is read against
- * the card only when the row is the card's own PR.
+ * block, and a file no longer at that path has nothing left to lose. A newer row without a path does
+ * not clear an older file. A relative path is read against the card only when the row is the card's
+ * own PR, which is a guess: the recorder is not the PR's author and may have meant its own checkout.
  */
 export function evidenceInWorktree(
   card: Pick<WorktreeRow, "path" | "projectId">,
@@ -81,7 +87,6 @@ export function evidenceInWorktree(
     const p = e.payload as { kind?: string; head_sha?: string; path?: string };
     const k = `${e.subject}\n${p.head_sha}\n${p.kind}`;
     if (typeof p.path === "string") newest.set(k, { subject: e.subject, path: p.path });
-    else newest.delete(k);
   }
   for (const { subject, path } of newest.values()) {
     const at = isAbsolute(path) ? path : subject === own ? join(card.path, path) : null;
