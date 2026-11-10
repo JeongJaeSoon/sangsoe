@@ -141,6 +141,12 @@ test("only an undispatched session's line that starts with the number answers a 
   assert.equal(answers(orch), 0, "a line that only mentions the number, or names two, answers nothing");
   await hook(orch, "user-prompt-submit", { session_id: "o1", prompt_id: "p3", prompt: "  d001 Path versioning" });
   assert.equal(answers(orch), 1);
+
+  // Decision 181 (Q1): a decision closes on the owner's answer that names it, and only that answer.
+  const closed = (w: SessionWorld) => w.store.events({ type: "decision_closed" }).map((e) => [e.payload.decision, e.payload.reason]);
+  assert.deepEqual(closed(worker), [], "a worker's line leaves the decision open");
+  assert.deepEqual(closed(lead), [], "a lead's line leaves the decision open");
+  assert.deepEqual(closed(orch), [["d001", "answered"]]);
 });
 
 test("waiting_human_released (hook side): the owner's words mark, the session moving releases, an end is moot", async () => {

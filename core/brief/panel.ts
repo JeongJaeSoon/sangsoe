@@ -81,7 +81,8 @@ export interface PanelPorts {
  */
 export const PANEL_RUN = "";
 
-export type PanelActed = DecisionAnswered | { readonly status: "done"; readonly item: string; readonly evidenceShort: boolean };
+// The panel shows `status` after the press: a to-do with a verify is not done yet (decision 181).
+export type PanelActed = DecisionAnswered | { readonly status: "done" | "pending_verify"; readonly item: string };
 
 export interface PanelCore {
   brief(target: PanelTarget): Promise<Result<PanelView>>;
@@ -119,7 +120,7 @@ export function panelCore(ports: PanelPorts): PanelCore {
   function closeItem(input: BriefInput, item: string): Promise<Result<PanelActed>> {
     return ports.withStore(async (store) => {
       const r = await ownerDone({ store, orca: ports.orca }, input, itemFacts(input), { task: item });
-      return r.ok ? done({ status: "done", item: r.value.alias, evidenceShort: r.value.evidenceShort }) : r;
+      return r.ok ? done({ status: r.value.pendingVerify ? "pending_verify" : "done", item: r.value.alias }) : r;
     });
   }
 

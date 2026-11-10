@@ -4,8 +4,6 @@ import type { ItemReading } from "../contract/index.ts";
 export interface OwnerConfig {
   /** verify.wait_minutes: a marked item whose probe stays false this long becomes "검증 안 됨" (row 11). */
   readonly waitMinutes: number;
-  /** verify.grace_hours: a closed owner item's verify is still read this long, to lift 🔍. */
-  readonly graceHours: number;
   /** waiting.lead_minutes: an unreleased waiting_human reaches the owner after this. */
   readonly leadMinutes: number;
   /** unlinked.show_hours: an owner_act_unlinked row is shown this long. */
@@ -16,7 +14,6 @@ export interface OwnerConfig {
 
 export const OWNER_DEFAULTS: OwnerConfig = {
   waitMinutes: 30,
-  graceHours: 24,
   leadMinutes: 10,
   showHours: 24,
   watchCommands: ["gh workflow run", "gh pr merge", "gh release", "sangsoe plugin approve"],

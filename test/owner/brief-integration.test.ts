@@ -42,7 +42,7 @@ test("a probe-verified owner item leaves owner_todo and the brief's to-do; the n
   assert.ok(buildBrief(w.input()).inProgress.rows.some((r) => r.id === "i001"), "now a 🟢 row in 진행 중");
 });
 
-test("an owner `!` line does not lift 🔍 on an item the button closed", async () => {
+test("an owner `!` line does not verify an item the button pressed: it stays ⏳ 검증 대기", async () => {
   const w = ownerWorld();
   w.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: "gh workflow run promote.yml" });
   const line = { uuid: "u1", command: "gh workflow run promote.yml -R acme/api", exitCode: 0, stdout: "https://github.com/acme/api/actions/runs/9", stderr: "", repo: "acme/api", ts: T0 };
@@ -50,5 +50,8 @@ test("an owner `!` line does not lift 🔍 on an item the button closed", async 
   const r = await ownerDone({ orca: w.orca, store: w.store }, w.input(), w.facts(), { task: T });
   assert.ok(r.ok);
   w.at(later(T0, 1));
-  assert.equal(buildBrief(w.input()).evidenceShort, 1);
+  const b = buildBrief(w.input());
+  assert.equal(w.state(T), "pending_verify");
+  assert.deepEqual([b.summary.done, b.evidenceShort], [0, 0], "not ✅ 🔍: not done at all");
+  assert.ok(b.inProgress.rows.some((r) => r.id === "i001" && r.cells[0]?.text === "⏳"));
 });

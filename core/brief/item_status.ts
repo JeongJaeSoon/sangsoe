@@ -42,6 +42,7 @@ const ALARMS = new Set(["worker_stuck", "worker_dead", "ci_failed", "land_failed
 // The author's session is gone while the item waits on the merge: only the PR's own alarms still apply.
 const PR_ALARMS = new Set(["ci_failed", "land_failed"]);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+const latest = (a: string | null, b: string | null): string | null => (a === null ? b : b === null || Date.parse(a) >= Date.parse(b) ? a : b);
 
 const RANK: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
 export const rank = (p: Priority): number => RANK[p];
@@ -116,9 +117,12 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     const closed = stateOf(t, x.hold === true && str(x.review_trigger) !== null, waiterReading(t, input.orca.gates), ready.has(t.id));
     // Decisions 175 and 178: the author's worker_done completes the Task in Orca before its PR merges.
     const p = closed === "done" ? taskPr(t, prFacts) : null;
-    const state: ItemReading =
+    const prRead: ItemReading =
       !p || p.state === "none" || p.state === "merged" ? closed : p.state === "open" ? "blocked" : p.state === "closed_unmerged" ? "pr_closed" : "unknown";
-    const prWait = p !== null && state !== "done";
+    // Decision 181: an owner to-do closes on verification, whoever completed the Task.
+    const verifiedAt = prFacts.ownerVerify.get(t.id);
+    const state: ItemReading = prRead === "done" && verifiedAt === null ? "pending_verify" : prRead;
+    const prWait = p !== null && prRead !== "done";
     const last = moved.get(t.id) ?? 0;
     // An alarm stands until the item moves again.
     const standing = [...(alarms.get(t.id) ?? new Map<string, number>())]
@@ -154,7 +158,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       unclear: (unclear.get(t.id) ?? 0) > last,
       evidenceShort: state === "done" && !evidence.has(t.id),
       // A worker_done or a lead's task-update closes a Task with no item_transition (decision 175, S7).
-      closedAt: state === "done" ? (closedAt.get(t.id) ?? mergedAt.get(t.id) ?? t.completedAt ?? null) : null,
+      closedAt: state === "done" ? latest(closedAt.get(t.id) ?? mergedAt.get(t.id) ?? t.completedAt ?? null, verifiedAt ?? null) : null,
     });
   }
   return out;

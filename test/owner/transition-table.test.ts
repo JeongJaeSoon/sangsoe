@@ -70,16 +70,16 @@ const ROWS: readonly Row[] = [
   {
     n: 2,
     input: "panel 완료 button",
-    ground: "explicit link (나): owner_action{button} + item_transition ready→done",
+    ground: "explicit link (나): owner_action{button} + item_transition ready→done; reads ⏳ until a probe (decision 181)",
     changes: "state",
     given: (w) => void w.item(T, { verify: RUN_OK, cmdHint: HINT }),
     act: async (w) => {
       const r = await ownerDone({ orca: w.orca, store: w.store }, w.input(), w.facts(), { task: T });
-      assert.ok(r.ok && r.value.evidenceShort, "verify with no probe yet: ✅ 🔍");
+      assert.ok(r.ok && r.value.pendingVerify, "verify with no probe yet: ⏳ 검증 대기");
     },
     check: (b, a, w) => {
       assert.equal(b.state, "ready");
-      assert.equal(a.state, "done");
+      assert.equal(a.state, "pending_verify", "a to-do closes on verification, not on the press");
       assert.equal(a.todo, b.todo - 1);
       assert.equal(w.store.events().filter(countsAsEvidence).length, 0, "the button is not evidence when a verify exists");
     },
