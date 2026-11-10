@@ -35,8 +35,9 @@ const EMOJI: Readonly<Record<ItemReading, string>> = {
   done: "✅",
   cancelled: "🗑️",
   unknown: "❔",
+  pending_verify: "⏳",
 };
-const ORDER: readonly ItemReading[] = ["pr_closed", "blocked", "unknown", "in_progress", "ready", "planned", "on_hold"];
+const ORDER: readonly ItemReading[] = ["pr_closed", "blocked", "unknown", "in_progress", "pending_verify", "ready", "planned", "on_hold"];
 const WAITS: Readonly<Record<WaitsOn, string>> = { owner: "오너", reviewer: "리뷰어", infra: "인프라", lead: "리드", worker: "워커" };
 const ALARM_NEXT: Readonly<Record<string, string>> = {
   ci_failed: "CI 수정",
@@ -82,6 +83,7 @@ function next(f: ItemFacts): string {
   else if (f.undelivered[0]) base = `${f.undelivered[0]} 전달`;
   else if (f.state === "pr_closed") base = "PR 이 머지 없이 닫힘: 다시 열거나 항목을 취소";
   else if (f.state === "unknown") base = "PR 상태를 아직 읽지 못함(pr-monitor)";
+  else if (f.state === "pending_verify") base = "검증 대기: verify probe 통과 전";
   else if (f.state === "blocked") base = f.lastReason ?? "—";
   else if (f.state === "ready") base = "시작";
   else if (f.state === "planned") base = "선행 대기";
@@ -157,7 +159,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
       continue;
     }
     if (f.state === "blocked" || f.state === "pr_closed") blocked++;
-    else if (f.state === "in_progress") doing++;
+    else if (f.state === "in_progress" || f.state === "pending_verify") doing++;
     else left++;
     groupRows.set(f.lead, [...(groupRows.get(f.lead) ?? []), f]);
   }
@@ -277,7 +279,7 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
   const label = (task: string) => alias.get(task)?.alias ?? task;
   const sectionOf: [string, ItemReading[]][] = [
     ["🚧 막힘", ["pr_closed", "blocked"]],
-    ["🔄 진행 중", ["in_progress"]],
+    ["🔄 진행 중", ["in_progress", "pending_verify"]],
     ["대기열", ["unknown", "ready", "planned", "on_hold"]],
   ];
   const sections = sectionOf

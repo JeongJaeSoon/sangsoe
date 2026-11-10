@@ -296,10 +296,16 @@ test("PN4: 완료 → U14 ownerDone closes a 🟢 owner item in Orca and the sto
   assert.equal(o.store.events({ type: "owner_action" }).length, 0, "a refused 완료 records nothing");
 
   const r = await core.act({ kind: "done", item: mine });
-  assert.deepEqual(r.ok ? r.value : r, { status: "done", item: mine, evidenceShort: false });
+  assert.deepEqual(r.ok ? r.value : r, { status: "done", item: mine });
   assert.equal(o.state("task_000000000010"), "done");
   assert.deepEqual(o.store.events({ type: "owner_action" }).map((e) => [e.source, e.payload.origin]), [["plugin:panel", "button"]]);
   assert.equal(o.store.events({ type: "item_transition" })[0]?.payload.reason, "owner_done");
+
+  // Decision 181: a to-do with a verify answers pending_verify, and the panel shows that, not done.
+  const v = o.item("task_000000000012", { who: "owner", verify: { kind: "pr_merged", pr: "acme/api#40" } });
+  const pv = await core.act({ kind: "done", item: v });
+  assert.deepEqual(pv.ok ? pv.value : pv, { status: "pending_verify", item: v });
+  assert.equal(o.state("task_000000000012"), "pending_verify");
 });
 
 test("다른 답 is masked before it is stored or handed to the Run", async () => {

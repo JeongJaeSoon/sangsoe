@@ -109,30 +109,25 @@ test("owner_item_probe_closes: a merge seen by the probe takes the item out with
   assert.ok(types.includes("close_suggested:verified"));
   assert.equal(w.state(T), "ready", "the holder closes it, not the probe");
 
-  // The button first: ✅ 🔍, then the probe inside grace_hours lifts 🔍.
+  // The button first: ⏳ 검증 대기 (decision 181), then the probe's merge makes it ✅.
   const v = ownerWorld();
   v.item(T, { verify });
   const r = await ownerDone({ orca: v.orca, store: v.store }, v.input(), v.facts(), { task: T });
-  assert.ok(r.ok && r.value.evidenceShort);
-  assert.equal(v.store.events().filter(countsAsEvidence).length, 0, "🔍");
+  assert.ok(r.ok && r.value.pendingVerify);
+  assert.equal(v.state(T), "pending_verify");
+  assert.equal(v.store.events().filter(countsAsEvidence).length, 0, "the button is not evidence when a verify exists");
   v.gh.set("repos/acme/api/pulls/40", { merged: true, merge_commit_sha: "abc1234" });
   v.at(later(T0, 60));
   await probeRound(ports(v), v.store, v.input(), v.facts());
-  assert.equal(v.store.events().filter(countsAsEvidence).length, 1, "🔍 lifted");
-  assert.equal(v.store.events().filter((e) => e.type === "close_suggested").length, 0, "a closed item gets no close suggestion");
-
-  // Past grace_hours the probe no longer reads it.
-  const g = ownerWorld();
-  g.item(T, { verify });
-  await ownerDone({ orca: g.orca, store: g.store }, g.input(), g.facts(), { task: T });
-  g.at(later(T0, 25 * 60));
-  assert.equal((await probeRound(ports(g), g.store, g.input(), g.facts())).read, 0);
+  assert.equal(v.store.events().filter(countsAsEvidence).length, 1);
+  assert.equal(v.state(T), "done");
+  assert.equal(v.store.events().filter((e) => e.type === "close_suggested").length, 0, "a pressed item gets no close suggestion");
 
   // No verify: the button is the evidence.
   const n = ownerWorld();
   n.item(T, {});
   const nr = await ownerDone({ orca: n.orca, store: n.store }, n.input(), n.facts(), { task: T });
-  assert.ok(nr.ok && !nr.value.evidenceShort);
+  assert.ok(nr.ok && !nr.value.pendingVerify);
   assert.equal(n.store.events().filter(countsAsEvidence).length, 1);
 });
 
@@ -154,6 +149,16 @@ test("owner_ran_command_marks_verifying: the real case, end to end", async () =>
   await w.orca.taskUpdate({ id: T, status: "completed" });
   w.store.append({ type: "item_transition", source: "mcp:lead", payload: { task: T, from: "ready", to: "done", reason: "close_suggested verified" }, entity: "task", entity_id: T });
   assert.equal(w.state(T), "done");
+
+  // Decision 181: 완료 pressed before the `!` line; the later line still links and gives the run id.
+  const p = ownerWorld();
+  p.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });
+  await ownerDone({ orca: p.orca, store: p.store }, p.input(), p.facts(), { task: T });
+  assert.equal(p.state(T), "pending_verify");
+  assert.equal(bang(p).kind, "seen", "a pending item still takes its `!` line");
+  p.gh.set("repos/acme/api/actions/runs/111", { status: "completed", conclusion: "success" });
+  assert.deepEqual((await probeRound(ports(p), p.store, p.input(), p.facts())).passed, [T]);
+  assert.equal(p.state(T), "done");
 
   // A failing line marks nothing; another workflow or another repo links to nothing.
   const f = ownerWorld();

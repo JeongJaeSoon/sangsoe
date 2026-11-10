@@ -1,7 +1,8 @@
 import {
   type GhClient,
   type GhResponse,
-  type ItemState,
+  type ItemReading,
+  itemFacts,
   type OrcaAdapter,
   type OrcaPluginRow,
   type OwnerItemFacts,
@@ -32,16 +33,7 @@ export interface OwnerWorld {
   item(task: string, a: { who?: string; verify?: VerifySpec; cmdHint?: string; status?: string }): string;
   input(): ViewInput;
   facts(): OwnerItemFacts[];
-  state(task: string): ItemState;
-}
-
-function stateOf(t: TaskRow | undefined): ItemState {
-  if (!t) return "planned";
-  if (t.status === "completed") return "done";
-  if (t.status === "failed") return t.result === "cancelled" ? "cancelled" : "blocked";
-  if (t.status === "dispatched") return "in_progress";
-  if (t.status === "ready") return "ready";
-  return "planned";
+  state(task: string): ItemReading;
 }
 
 export function ownerWorld(): OwnerWorld {
@@ -109,28 +101,12 @@ export function ownerWorld(): OwnerWorld {
         now: ts,
       };
     },
+    // The brief's own fold, so the owner queue reads what production reads (decision 181's ⏳ included).
     facts() {
-      const events = store.events();
-      return events
-        .filter((e) => e.type === "item_created")
-        .map((c) => {
-          const task = String(c.payload.task);
-          const extra: Record<string, unknown> = Object.assign({}, ...events.filter((e) => e.type === "item_extra_set" && e.payload.task === task).map((e) => e.payload));
-          const closed = events.filter((e) => e.type === "item_transition" && e.payload.task === task && e.payload.to === "done").at(-1);
-          return {
-            task,
-            alias: String(c.payload.alias),
-            state: stateOf(tasks.get(task)),
-            who: String(c.payload.who),
-            execBy: typeof extra.exec_by === "string" ? extra.exec_by : null,
-            whyOwner: typeof extra.why_owner === "string" ? extra.why_owner : null,
-            since: c.ts,
-            closedAt: closed?.ts ?? null,
-          };
-        });
+      return itemFacts(w.input());
     },
     state(task) {
-      return stateOf(tasks.get(task));
+      return itemFacts(w.input()).find((f) => f.task === task)?.state ?? "planned";
     },
   };
   return w;
