@@ -1,7 +1,7 @@
 // The copy of the facts only sangsoe owns (decisions 182-184). One append-only JSON-lines file beside
 // the database, written on the store's own write path: no timer, no second process. Host facts are
 // never copied here; after a loss the existing readers read them again from Orca and GitHub.
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, fstatSync, openSync, readFileSync, readSync } from "node:fs";
 import type { EventType, StoredEvent } from "../contract/index.ts";
 
 /**
@@ -112,11 +112,52 @@ export function backupPath(dbPath: string): string {
 }
 
 /** One line per own event row (every column, owner text excluded) or per issued number. */
-type Line = { row: Row } | { counter: string; last: number };
+export type Line = { row: Row } | { counter: string; last: number };
 
 export function appendLines(path: string, lines: readonly Line[]): void {
   if (lines.length === 0) return;
   appendFileSync(path, lines.map((l) => `${JSON.stringify(l)}\n`).join(""));
+}
+
+/** SQL for "an own row" over the event table, the same rule as isOwnRow. */
+export const OWN_ROW_SQL = `NOT (type IN (${HOST_TYPES.map((t) => `'${t}'`).join(", ")}) AND source IN (${HOST_SOURCES.map((s) => `'${s}'`).join(", ")}))`;
+
+const TAIL_SPAN = 64 * 1024;
+
+/**
+ * The seq of the file's last row line, read from its end; 0 when it holds none, undefined when there
+ * is no file. Every store appends under the write lock, so row lines run in seq order.
+ */
+export function lastRowSeq(path: string): number | undefined {
+  let fd: number;
+  try {
+    fd = openSync(path, "r");
+  } catch (e) {
+    if ((e as { code?: string }).code === "ENOENT") return undefined;
+    throw e;
+  }
+  try {
+    const size = fstatSync(fd).size;
+    for (let span = TAIL_SPAN; ; span *= 4) {
+      const start = Math.max(0, size - span);
+      const buf = Buffer.alloc(size - start);
+      readSync(fd, buf, 0, buf.length, start);
+      const lines = buf.toString("utf8").split("\n");
+      // The first piece of a window that starts mid-file may be a cut line.
+      if (start > 0) lines.shift();
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const seq = (JSON.parse(lines[i] ?? "") as { row?: Row }).row?.seq;
+          if (Number.isInteger(seq)) return Number(seq);
+        } catch {
+          // a torn line
+        }
+      }
+      if (start === 0) return 0;
+    }
+  } finally {
+    closeSync(fd);
+  }
 }
 
 export type BackupRead = {

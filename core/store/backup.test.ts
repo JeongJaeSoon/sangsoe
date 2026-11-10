@@ -172,3 +172,54 @@ test("a database written before the backup existed is copied on its first open",
   assert.equal((raw.prepare("SELECT count(*) AS n FROM event").get() as { n: number }).n, 1, "seeding writes no row");
   raw.close();
 });
+
+/** What a build without the backup (v0.1.0-rc.4) does: an own row and a number, with no line in the facts file. */
+function oldBuildWrites(path: string, decision: string): void {
+  const raw = new DatabaseSync(path);
+  raw.prepare("INSERT INTO event (ts, type, source, needs, dedupe_key, schema_v, after) VALUES (?, 'decision_opened', 'old', 'none', ?, 1, ?)").run(
+    T0,
+    dedupeKey(EVENTS.decision_opened, decision),
+    JSON.stringify({ decision, decision_key: decision }),
+  );
+  raw.prepare("INSERT INTO counter (name, last) VALUES ('d', 7) ON CONFLICT (name) DO UPDATE SET last = 7").run();
+  raw.close();
+}
+const copied = (path: string) =>
+  readFileSync(backupPath(path), "utf8")
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l) as { row?: { seq: number; type: string }; counter?: string; last?: number });
+
+test("own rows an older build wrote after the facts file existed are copied on the next open, and only once", () => {
+  const path = newPath();
+  const s = open(path);
+  s.append(decisionOpened("d001", "k1"));
+  s.close();
+  oldBuildWrites(path, "d007");
+  open(path).close();
+  const lines = copied(path);
+  assert.deepEqual(lines.filter((l) => l.row).map((l) => [l.row?.seq, l.row?.type]), [[1, "decision_opened"], [2, "decision_opened"]]);
+  assert.ok(lines.some((l) => l.counter === "d" && l.last === 7), "the number it issued is copied too");
+  const once = readFileSync(backupPath(path), "utf8");
+  open(path).close();
+  assert.equal(readFileSync(backupPath(path), "utf8"), once, "a second open adds nothing");
+
+  lose(path);
+  const r = open(path);
+  assert.equal(r.rebuilt?.restored, 2, "the older build's row comes back after a loss");
+  assert.equal(r.allocate("d"), "d008");
+  r.close();
+});
+
+test("an older build's row between two of this build's rows is copied before the later one", () => {
+  const path = newPath();
+  const s = open(path);
+  s.append(decisionOpened("d001", "k1"));
+  oldBuildWrites(path, "d007");
+  s.append(decisionOpened("d002", "k2"));
+  s.close();
+  assert.deepEqual(copied(path).filter((l) => l.row).map((l) => l.row?.seq), [1, 2, 3]);
+  const again = readFileSync(backupPath(path), "utf8");
+  open(path).close();
+  assert.equal(readFileSync(backupPath(path), "utf8"), again);
+});
