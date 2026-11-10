@@ -8,12 +8,15 @@ import { createFakeOrca, type FakeReply } from "../../test/fake-orca/index.ts";
 import type { CheckContext, PluginBuild } from "../checks/index.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { doctor, realCheckContext, realPluginBuild } from "./doctor.ts";
-import { type Host, type Marketplace, type RunResult, sangsoeOrca, treeRoot } from "./host.ts";
+import { type Host, type Marketplace, type RunResult, realHost, sangsoeOrca, treeRoot } from "./host.ts";
 import { install, uninstall } from "./install.ts";
 
 const ROOT = "/opt/homebrew/opt/sangsoe/libexec";
 // A fixture tree's version, deliberately not the release's: these tests must not need a bump per release.
 const V = "9.9.9-fixture";
+
+// Never created: the config-reading rows see no file instead of the real home's.
+const NO_HOME = join(tmpdir(), "sangsoe-install-test-no-home");
 
 // The start checks run against the fake Orca, whose sangsoe plugins are 0.1.0.
 function orcaCtx(o: { scenario?: string; replies?: Record<string, FakeReply>; pluginBuild?: PluginBuild } = {}) {
@@ -22,6 +25,7 @@ function orcaCtx(o: { scenario?: string; replies?: Record<string, FakeReply>; pl
     orca: createOrcaAdapter(fake.exec),
     exec: fake.exec,
     coreVersion: "0.1.0",
+    home: NO_HOME,
     ...(o.pluginBuild ? { pluginBuild: o.pluginBuild } : {}),
   };
   return { ctx, fake };
@@ -220,6 +224,39 @@ test("doctor warns on a disabled or missing plugin in Orca's selected profile, w
     const row = new RegExp(`^warn +orca claude profile: Orca starts sessions with ${ORCA_DIR}, where sangsoe@sangsoe ${state} — fix: sangsoe install$`);
     assert.ok(r.lines.some((l) => row.test(l)), r.lines.join("\n"));
     assert.ok(!calls.some((c) => /\benable\b/.test(c)), "doctor never enables");
+  }
+});
+
+test("doctor warns on a plugin version in Orca's selected profile that differs from the tree", async () => {
+  const plugins = [{ id: "sangsoe@sangsoe", version: "0.0.1", scope: "user", enabled: true }];
+  const { host } = fakeHost({ orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins } } });
+  const r = await doctor(host, ROOT, online());
+  const row = new RegExp(`^warn +orca claude profile: .* sangsoe@sangsoe is 0\\.0\\.1, tree is ${V} — fix: sangsoe install$`);
+  assert.ok(r.lines.some((l) => row.test(l)), r.lines.join("\n"));
+});
+
+test("a failed step in Orca's selected profile fails install before the Orca plugin step", async () => {
+  const { host, calls } = fakeHost({ orcaManifest: true, orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: disabledPlugin() } } });
+  const run = host.run;
+  host.run = (cmd, args, env) =>
+    env && args.join(" ").startsWith("plugin enable") ? { code: 1, stdout: "", stderr: "boom" } : run(cmd, args, env);
+  const r = await install(host, ROOT, online().ctx);
+  assert.equal(r.code, 1);
+  assert.match(r.lines.join("\n"), new RegExp(`claude \\(Orca profile ${ORCA_DIR}\\): enabled sangsoe@sangsoe failed`));
+  assert.ok(!calls.some((c) => c.startsWith("orca plugin dev load")));
+});
+
+test("realHost.run passes env overrides to the child and removes a variable set to undefined", () => {
+  process.env.SANGSOE_TEST_KEEP = "kept";
+  process.env.SANGSOE_TEST_DROP = "dropped";
+  try {
+    const script = "console.log([process.env.SANGSOE_TEST_KEEP, process.env.SANGSOE_TEST_SET, 'SANGSOE_TEST_DROP' in process.env].join(','))";
+    const r = realHost.run(process.execPath, ["-e", script], { SANGSOE_TEST_SET: "set", SANGSOE_TEST_DROP: undefined });
+    assert.equal(r.stdout.trim(), "kept,set,false");
+    assert.equal(process.env.SANGSOE_TEST_DROP, "dropped", "the parent's env is untouched");
+  } finally {
+    delete process.env.SANGSOE_TEST_KEEP;
+    delete process.env.SANGSOE_TEST_DROP;
   }
 });
 
