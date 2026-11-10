@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -16,6 +16,7 @@ import {
   type StoredEvent,
   systemClock,
 } from "../contract/index.ts";
+import { appendLines, backupPath, isOwnType, readBackup } from "./backup.ts";
 import { checkLocalFs, checkSqliteVersion, type FsProbe, type StartCheck } from "./checks.ts";
 import { DDL, EDGE_TRIGGERS, SCHEMA_V } from "./schema.ts";
 
@@ -77,7 +78,49 @@ export function defaultDbPath(home: string = homedir()): string {
   return join(home, ".local", "share", "sangsoe", "sangsoe.db");
 }
 
+/** What an open that found the database lost or unreadable did (decisions 182-184). */
+export type Rebuilt = {
+  /** Own rows read back from the backup file. */
+  restored: number;
+  /** What could not be restored, by name; doctor prints this list. */
+  lost: string[];
+  /** Files moved aside instead of deleted. */
+  setAside: string[];
+};
+
+/** The joiner of `signal{kind: store_rebuilt}.reason`, whose parts are the `lost` names. */
+export const LOST_SEPARATOR = " | ";
+
+// Host rows come back through the readers, which see only this much of the past (core/detect/pr/round.ts
+// CLOSED_PAGE, core/detect/orca/round.ts GLOBAL_PAGES).
+export const HOST_WINDOW_LOST =
+  "host rows outside the readers' window: pr rows of PRs past each repository's 30 most recently closed, and Dispatches past worker-list's first 3 pages";
+
 type Row = Record<string, string | number | null>;
+
+/** A damaged file can open and fail only on its first read. */
+function readable(db: DatabaseSync): boolean {
+  try {
+    db.prepare("SELECT count(*) FROM sqlite_master").get();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Renames the files that exist to `<file>.<why>-<stamp>`; nothing is deleted. */
+function moveAside(path: string, suffixes: readonly string[], why: string, clock: Clock): string[] {
+  const stamp = isoUtc(clock(), "clock").replace(/[-:.]/g, "");
+  const moved: string[] = [];
+  for (const s of suffixes) {
+    const from = `${path}${s}`;
+    if (!existsSync(from)) continue;
+    const to = `${from}.${why}-${stamp}`;
+    renameSync(from, to);
+    moved.push(to);
+  }
+  return moved;
+}
 
 // Reads one row: upcasts the payload from the row's schema_v to its type's current version and
 // validates it tolerantly. A type this build does not know (written by a newer one) passes through.
@@ -116,23 +159,40 @@ export function decodeRow(row: Row, lookup: (type: string) => EventDef | undefin
 export class Store {
   readonly #db: DatabaseSync;
   readonly #clock: Clock;
+  /** The own-facts file; null for ":memory:". */
+  readonly #backup: string | null;
+  /** Set when this open found the database lost or unreadable and rebuilt it; null otherwise. */
+  rebuilt: Rebuilt | null = null;
 
-  private constructor(db: DatabaseSync, clock: Clock) {
+  private constructor(db: DatabaseSync, clock: Clock, backup: string | null) {
     this.#db = db;
     this.#clock = clock;
+    this.#backup = backup;
   }
 
   /** Runs the start checks, then opens (creating if needed) the database. Refuses with StartRefused. */
   static open(opts: OpenOptions = {}): Store {
     const path = opts.path ?? defaultDbPath(opts.home);
+    const clock = opts.clock ?? systemClock;
     const checks: StartCheck[] = [];
+    const setAside: string[] = [];
+    let fresh = false;
     if (path !== ":memory:") {
       const fs = checkLocalFs(path, opts.fsProbe);
       checks.push(fs);
       if (!fs.ok) throw new StartRefused(checks);
       mkdirSync(dirname(path), { recursive: true });
+      fresh = !existsSync(path);
+      // A -wal left by a lost database must not be replayed into the new one.
+      if (fresh) setAside.push(...moveAside(path, ["-wal", "-shm"], "orphan", clock));
     }
-    const db = new DatabaseSync(path);
+    let db = new DatabaseSync(path);
+    if (path !== ":memory:" && !fresh && !readable(db)) {
+      db.close();
+      setAside.push(...moveAside(path, ["", "-wal", "-shm"], "unreadable", clock));
+      fresh = true;
+      db = new DatabaseSync(path);
+    }
     const version = String((db.prepare("SELECT sqlite_version() AS v").get() as Row).v);
     checks.push(checkSqliteVersion(version));
     if (checks.some((c) => !c.ok)) {
@@ -140,9 +200,59 @@ export class Store {
       throw new StartRefused(checks);
     }
     db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
-    const store = new Store(db, opts.clock ?? systemClock);
+    const backup = path === ":memory:" ? null : backupPath(path);
+    const store = new Store(db, clock, backup);
     store.#migrate();
+    if (backup && fresh && existsSync(backup)) store.rebuilt = store.#restore(backup, setAside);
+    else if (backup && !existsSync(backup)) store.#seed(backup);
     return store;
+  }
+
+  /**
+   * Reads the own facts back into a database found lost, keeping each row's seq (rows point at each
+   * other by seq), then records what could not come back. Another process that restored first wins.
+   */
+  #restore(backup: string, setAside: string[]): Rebuilt | null {
+    return this.#tx(() => {
+      if (this.#db.prepare("SELECT 1 FROM event LIMIT 1").get()) return null;
+      const read = readBackup(backup);
+      const cols = ["seq", "ts", "type", "source", "target", "subject", "entity", "entity_id", "actor", "needs", "severity", "dedupe_key", "schema_v", "before", "after"];
+      const insert = this.#db.prepare(`INSERT INTO event (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`);
+      const lost = [...read.skipped];
+      let restored = 0;
+      for (const r of read.rows) {
+        if (!isOwnType(String(r.type))) {
+          lost.push(`backup seq ${r.seq}: ${r.type} is not an own fact`);
+          continue;
+        }
+        try {
+          insert.run(...cols.map((c) => r[c] ?? null));
+          restored++;
+        } catch (e) {
+          lost.push(`backup seq ${r.seq} (${r.type}): ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      for (const [name, last] of read.counters) {
+        this.#db.prepare("INSERT INTO counter (name, last) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET last = max(last, excluded.last)").run(name, last);
+      }
+      const texts = Number((this.#db.prepare("SELECT count(*) AS n FROM event WHERE type = 'owner_action'").get() as Row).n);
+      if (texts > 0) lost.push(`owner_text: the masked text of ${texts} owner_action row(s), never copied (decision 183)`);
+      lost.push(HOST_WINDOW_LOST);
+      this.#insert({
+        type: "signal",
+        source: "store",
+        payload: { kind: "store_rebuilt", reason: lost.join(LOST_SEPARATOR) },
+      });
+      return { restored, lost, setAside };
+    });
+  }
+
+  /** First open of a database that has no backup file yet (one written before decision 182): copy what it holds. */
+  #seed(backup: string): void {
+    const rows = (this.#db.prepare("SELECT * FROM event ORDER BY seq").all() as Row[]).filter((r) => isOwnType(String(r.type)));
+    const counters = this.#db.prepare("SELECT name, last FROM counter").all() as Row[];
+    writeFileSync(backup, "", { flag: "a" });
+    appendLines(backup, [...rows.map((row) => ({ row })), ...counters.map((c) => ({ counter: String(c.name), last: Number(c.last) }))]);
   }
 
   #migrate(): void {
@@ -226,7 +336,13 @@ export class Store {
         null,
         JSON.stringify(e.payload),
       ) as Row | undefined;
-    if (row) return { seq: Number(row.seq), inserted: true };
+    if (row) {
+      // Before COMMIT: a fact whose copy cannot be written is rolled back with it.
+      if (this.#backup && isOwnType(e.type)) {
+        appendLines(this.#backup, [{ row: this.#db.prepare("SELECT * FROM event WHERE seq = ?").get(Number(row.seq)) as Row }]);
+      }
+      return { seq: Number(row.seq), inserted: true };
+    }
     const existing = this.#db.prepare("SELECT seq FROM event WHERE dedupe_key = ?").get(e.dedupe_key ?? null) as Row;
     return { seq: Number(existing.seq), inserted: false };
   }
@@ -290,6 +406,7 @@ export class Store {
           "INSERT INTO counter (name, last) VALUES (?, 1) ON CONFLICT (name) DO UPDATE SET last = last + 1 RETURNING last",
         )
         .get(kind) as Row;
+      if (this.#backup) appendLines(this.#backup, [{ counter: kind, last: Number(row.last) }]);
       return `${kind}${String(row.last).padStart(3, "0")}`;
     });
   }
