@@ -14,7 +14,7 @@ A read-only review of the whole design set: against itself, against the code on 
 - The session transcript records `"model":"claude-fable-5-2"` on every assistant record (256 of 256 when this report was written). The transcripts of the eight subagents used below record the same id on every record and no other.
 - The session's status line read `Fable 5.2 high`.
 
-**Commit reviewed.** `72fb3fed8ef78af1437348a0235607d0b32ee531` (main when the review began). Every `path:line` below is a line of that commit; `git show 72fb3fe:<path>` prints the file as cited. One change landed on main while the review ran (the model-selection table, decisions 164 and 165). It is not reviewed here, and it shifts line numbers in `docs/design.html`, `docs/design-appendix.html`, `docs/glossary.md`, `docs/decisions.md` and `docs/architecture.md`.
+**Commit reviewed.** `72fb3fed8ef78af1437348a0235607d0b32ee531` (main when the review began). Every `path:line` below is a line of that commit; `git show 72fb3fe:<path>` prints the file as cited. One change landed on main while the review ran (the model-selection table, decisions 164 and 165). It is not reviewed here. It shifts line numbers in `docs/design.html`, `docs/design-appendix.html`, `docs/glossary.md`, `docs/decisions.md`, `docs/architecture.md` and `claude-plugin/agents/worker.md`, and it adds a fourth MCP resource and one doctor check, so the counts in S19 and S20 are those of the reviewed commit.
 
 **Files read.**
 
