@@ -8,12 +8,15 @@ import { createFakeOrca, type FakeReply } from "../../test/fake-orca/index.ts";
 import type { CheckContext, PluginBuild } from "../checks/index.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { doctor, realCheckContext, realPluginBuild } from "./doctor.ts";
-import { type Host, type Marketplace, type RunResult, sangsoeOrca, treeRoot } from "./host.ts";
+import { type Host, type Marketplace, type RunResult, realHost, sangsoeOrca, treeRoot } from "./host.ts";
 import { install, uninstall } from "./install.ts";
 
 const ROOT = "/opt/homebrew/opt/sangsoe/libexec";
 // A fixture tree's version, deliberately not the release's: these tests must not need a bump per release.
 const V = "9.9.9-fixture";
+
+// Never created: the config-reading rows see no file instead of the real home's.
+const NO_HOME = join(tmpdir(), "sangsoe-install-test-no-home");
 
 // The start checks run against the fake Orca, whose sangsoe plugins are 0.1.0.
 function orcaCtx(o: { scenario?: string; replies?: Record<string, FakeReply>; pluginBuild?: PluginBuild } = {}) {
@@ -22,15 +25,23 @@ function orcaCtx(o: { scenario?: string; replies?: Record<string, FakeReply>; pl
     orca: createOrcaAdapter(fake.exec),
     exec: fake.exec,
     coreVersion: "0.1.0",
+    home: NO_HOME,
+    env: {},
     ...(o.pluginBuild ? { pluginBuild: o.pluginBuild } : {}),
   };
   return { ctx, fake };
 }
 const online = (scenario?: string) => ({ ctx: orcaCtx(scenario ? { scenario } : {}).ctx });
 
-type State = { markets: Marketplace[]; plugins: { id: string; version: string; scope: string; enabled: boolean }[]; orca: boolean };
+type Profile = { markets: Marketplace[]; plugins: { id: string; version: string; scope: string; enabled: boolean }[] };
+type State = Profile & { orca: boolean };
 
-// A stand-in for claude and orca that keeps just enough state to show idempotence.
+const HOME = "/home/u";
+const DEFAULT_DIR = join(HOME, ".claude");
+const ORCA_DIR = "/orca/claude-profiles/p1/home";
+
+// A stand-in for claude and orca that keeps just enough state to show idempotence. `state` is the
+// profile install runs under; `profiles` holds other Claude config dirs, keyed by directory.
 function fakeHost(
   opts: {
     orcaManifest?: boolean;
@@ -39,9 +50,28 @@ function fakeHost(
     devLoadCode?: number;
     orcaPlugin?: { status: string; isDev: boolean };
     files?: Record<string, string>;
+    /** Orca's selected Claude home: the default dir when unset, `null` when `orca account list` fails. */
+    orcaHome?: string | null;
+    env?: Record<string, string>;
+    profiles?: Record<string, Partial<Profile>>;
   } = {},
 ) {
   const state: State = { markets: [], plugins: [], orca: false, ...opts.state };
+  const hostEnv: Record<string, string> = { SANGSOE_ROOT: ROOT, HOME, ...opts.env };
+  const own = hostEnv.CLAUDE_CONFIG_DIR ?? DEFAULT_DIR;
+  const profiles = new Map<string, Profile>([[own, state]]);
+  for (const [dir, p] of Object.entries(opts.profiles ?? {})) profiles.set(dir, { markets: [], plugins: [], ...p });
+  const profileFor = (env?: Readonly<Record<string, string | undefined>>): Profile => {
+    const dir = env && "CLAUDE_CONFIG_DIR" in env ? (env.CLAUDE_CONFIG_DIR ?? DEFAULT_DIR) : own;
+    const p = profiles.get(dir) ?? { markets: [], plugins: [] };
+    profiles.set(dir, p);
+    return p;
+  };
+  const orcaHome = opts.orcaHome === undefined ? DEFAULT_DIR : opts.orcaHome;
+  const accounts =
+    orcaHome === DEFAULT_DIR
+      ? { accounts: [], activeAccountId: null, systemDefaultHome: DEFAULT_DIR }
+      : { accounts: [{ id: "p1", home: orcaHome }], activeAccountId: "p1", systemDefaultHome: DEFAULT_DIR };
   const calls: string[] = [];
   const files = new Map<string, string>([
     [join(ROOT, "package.json"), JSON.stringify({ version: V, engines: { node: ">=24.15" } })],
@@ -53,24 +83,34 @@ function fakeHost(
   const orcaPlugin = opts.orcaPlugin ?? { status: "running", isDev: true };
   const ok = (stdout = ""): RunResult => ({ code: 0, stdout, stderr: "" });
   const host: Host = {
-    env: { SANGSOE_ROOT: ROOT },
+    env: hostEnv,
     nodeVersion: "26.13.0",
     exists: (p) => files.has(p),
     readText: (p) => files.get(p) ?? "",
-    run(cmd, args) {
+    run(cmd, args, env) {
       const line = [cmd, ...args].join(" ");
-      calls.push(line);
+      const pinned = env && "CLAUDE_CONFIG_DIR" in env ? `CLAUDE_CONFIG_DIR=${env.CLAUDE_CONFIG_DIR ?? "(unset)"} ` : "";
+      calls.push(pinned + line);
       if (opts.fail && line.startsWith(opts.fail)) return { code: 1, stdout: "", stderr: "boom" };
       const a = args.join(" ");
       if (cmd === "claude") {
+        const p = profileFor(env);
         if (a === "--version") return ok("2.1.319 (Claude Code)\n");
-        if (a === "plugin marketplace list --json") return ok(JSON.stringify(state.markets));
-        if (a === "plugin list --json") return ok(JSON.stringify(state.plugins));
-        if (a.startsWith("plugin marketplace add ")) state.markets.push({ name: "sangsoe", source: "directory", path: args[3] ?? "" });
-        if (a.startsWith("plugin marketplace remove ")) state.markets = state.markets.filter((m) => m.name !== "sangsoe");
-        if (a.startsWith("plugin install ")) state.plugins.push({ id: "sangsoe@sangsoe", version: V, scope: "user", enabled: true });
-        if (a.startsWith("plugin uninstall ")) state.plugins = [];
+        if (a === "plugin marketplace list --json") return ok(JSON.stringify(p.markets));
+        if (a === "plugin list --json") return ok(JSON.stringify(p.plugins));
+        if (a.startsWith("plugin marketplace add ")) p.markets.push({ name: "sangsoe", source: "directory", path: args[3] ?? "" });
+        if (a.startsWith("plugin marketplace remove ")) p.markets = p.markets.filter((m) => m.name !== "sangsoe");
+        if (a.startsWith("plugin install ")) p.plugins.push({ id: "sangsoe@sangsoe", version: V, scope: "user", enabled: true });
+        if (a.startsWith("plugin uninstall ")) p.plugins = [];
+        if (a.startsWith("plugin enable ")) {
+          const row = p.plugins.find((x) => x.id === args[2]);
+          if (!row || row.enabled) return { code: 1, stdout: "", stderr: "already enabled" };
+          row.enabled = true;
+        }
         return ok();
+      }
+      if (a === "account list --json") {
+        return orcaHome === null ? { code: 1, stdout: "", stderr: "orca is not running" } : ok(JSON.stringify({ ok: true, result: { claude: accounts } }));
       }
       if (a === "plugin list --json") {
         const plugins = state.orca ? [{ pluginKey: "local.sangsoe", version: V, ...orcaPlugin }] : [];
@@ -85,7 +125,7 @@ function fakeHost(
       return ok();
     },
   };
-  return { host, calls, state };
+  return { host, calls, state, profiles };
 }
 
 const writes = (calls: string[]) => calls.filter((c) => !/ list --json$|--version$/.test(c));
@@ -111,6 +151,141 @@ test("a second install updates instead of adding again", async () => {
   assert.deepEqual(writes(calls), ["claude plugin marketplace update sangsoe", "claude plugin update sangsoe@sangsoe --scope user"]);
 });
 
+const disabledPlugin = () => [{ id: "sangsoe@sangsoe", version: V, scope: "user", enabled: false }];
+const added = (): Marketplace[] => [{ name: "sangsoe", source: "directory", path: ROOT }];
+
+test("decision 166: install enables a plugin that update left disabled, once, through claude plugin enable", async () => {
+  const { host, calls, state } = fakeHost({ state: { markets: added(), plugins: disabledPlugin() } });
+  const r = await install(host, ROOT, online().ctx);
+  assert.equal(r.code, 0, r.lines.join("\n"));
+  assert.deepEqual(writes(calls), [
+    "claude plugin marketplace update sangsoe",
+    "claude plugin update sangsoe@sangsoe --scope user",
+    "claude plugin enable sangsoe@sangsoe --scope user",
+  ]);
+  assert.equal(state.plugins[0]?.enabled, true);
+  assert.match(r.lines.join("\n"), /claude: enabled sangsoe@sangsoe/);
+});
+
+test("a failed enable fails install", async () => {
+  const { host } = fakeHost({ state: { markets: added(), plugins: disabledPlugin() }, fail: "claude plugin enable" });
+  const r = await install(host, ROOT, online().ctx);
+  assert.equal(r.code, 1);
+  assert.match(r.lines.join("\n"), /enabled sangsoe@sangsoe failed/);
+});
+
+test("decision 167: install also registers and enables in the Claude profile Orca selects, through CLAUDE_CONFIG_DIR", async () => {
+  const { host, calls, profiles } = fakeHost({ orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: disabledPlugin() } } });
+  const r = await install(host, ROOT, online().ctx);
+  assert.equal(r.code, 0, r.lines.join("\n"));
+  assert.deepEqual(writes(calls), [
+    `claude plugin marketplace add ${ROOT} --scope user`,
+    "claude plugin install sangsoe@sangsoe --scope user",
+    `CLAUDE_CONFIG_DIR=${ORCA_DIR} claude plugin marketplace update sangsoe`,
+    `CLAUDE_CONFIG_DIR=${ORCA_DIR} claude plugin update sangsoe@sangsoe --scope user`,
+    `CLAUDE_CONFIG_DIR=${ORCA_DIR} claude plugin enable sangsoe@sangsoe --scope user`,
+  ]);
+  assert.equal(profiles.get(ORCA_DIR)?.plugins[0]?.enabled, true);
+  assert.match(r.lines.join("\n"), new RegExp(`claude \\(Orca profile ${ORCA_DIR}\\): enabled sangsoe@sangsoe`));
+  assert.match(r.lines.join("\n"), new RegExp(`ok +orca claude profile: Orca starts sessions with ${ORCA_DIR}: sangsoe@sangsoe ${V}, enabled`));
+});
+
+test("an Orca selection of the default home runs claude with CLAUDE_CONFIG_DIR unset", async () => {
+  const { host, calls } = fakeHost({ env: { CLAUDE_CONFIG_DIR: ORCA_DIR } });
+  const r = await install(host, ROOT, online().ctx);
+  assert.equal(r.code, 0, r.lines.join("\n"));
+  assert.ok(writes(calls).includes("CLAUDE_CONFIG_DIR=(unset) claude plugin install sangsoe@sangsoe --scope user"), calls.join("\n"));
+});
+
+test("Orca selecting the profile install runs under adds no second registration", async () => {
+  const { host, calls } = fakeHost({ env: { CLAUDE_CONFIG_DIR: ORCA_DIR }, orcaHome: ORCA_DIR });
+  const r = await install(host, ROOT, online().ctx);
+  assert.ok(!calls.some((c) => c.startsWith("CLAUDE_CONFIG_DIR=")), calls.join("\n"));
+  assert.match(r.lines.join("\n"), new RegExp(`Orca starts new sessions with this profile \\(${ORCA_DIR}\\)`));
+});
+
+test("doctor names the profile it checked", async () => {
+  for (const [env, want] of [
+    [{}, `checked ${DEFAULT_DIR} \\(CLAUDE_CONFIG_DIR unset\\)`],
+    [{ CLAUDE_CONFIG_DIR: ORCA_DIR }, `checked ${ORCA_DIR} \\(CLAUDE_CONFIG_DIR\\)`],
+  ] as const) {
+    const { host } = fakeHost({ env });
+    const r = await doctor(host, ROOT, online());
+    assert.ok(r.lines.some((l) => new RegExp(`^ok +claude profile: ${want}$`).test(l)), r.lines.join("\n"));
+  }
+});
+
+test("doctor warns on a disabled or missing plugin in Orca's selected profile, with sangsoe install as the fix", async () => {
+  for (const [plugins, state] of [
+    [disabledPlugin(), "is disabled"],
+    [[], "is not installed"],
+  ] as const) {
+    const { host, calls } = fakeHost({ orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: [...plugins] } } });
+    const r = await doctor(host, ROOT, online());
+    const row = new RegExp(`^warn +orca claude profile: Orca starts sessions with ${ORCA_DIR}, where sangsoe@sangsoe ${state} — fix: sangsoe install$`);
+    assert.ok(r.lines.some((l) => row.test(l)), r.lines.join("\n"));
+    assert.ok(!calls.some((c) => /\benable\b/.test(c)), "doctor never enables");
+  }
+});
+
+test("doctor warns on a plugin version in Orca's selected profile that differs from the tree", async () => {
+  const plugins = [{ id: "sangsoe@sangsoe", version: "0.0.1", scope: "user", enabled: true }];
+  const { host } = fakeHost({ orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins } } });
+  const r = await doctor(host, ROOT, online());
+  const row = new RegExp(`^warn +orca claude profile: .* sangsoe@sangsoe is 0\\.0\\.1, tree is ${V} — fix: sangsoe install$`);
+  assert.ok(r.lines.some((l) => row.test(l)), r.lines.join("\n"));
+});
+
+test("a failed step in Orca's selected profile fails install before the Orca plugin step", async () => {
+  const { host, calls } = fakeHost({ orcaManifest: true, orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: disabledPlugin() } } });
+  const run = host.run;
+  host.run = (cmd, args, env) =>
+    env && args.join(" ").startsWith("plugin enable") ? { code: 1, stdout: "", stderr: "boom" } : run(cmd, args, env);
+  const r = await install(host, ROOT, online().ctx);
+  assert.equal(r.code, 1);
+  assert.match(r.lines.join("\n"), new RegExp(`claude \\(Orca profile ${ORCA_DIR}\\): enabled sangsoe@sangsoe failed`));
+  assert.ok(!calls.some((c) => c.startsWith("orca plugin dev load")));
+});
+
+test("realHost.run passes env overrides to the child and removes a variable set to undefined", () => {
+  process.env.SANGSOE_TEST_KEEP = "kept";
+  process.env.SANGSOE_TEST_DROP = "dropped";
+  try {
+    const script = "console.log([process.env.SANGSOE_TEST_KEEP, process.env.SANGSOE_TEST_SET, 'SANGSOE_TEST_DROP' in process.env].join(','))";
+    const r = realHost.run(process.execPath, ["-e", script], { SANGSOE_TEST_SET: "set", SANGSOE_TEST_DROP: undefined });
+    assert.equal(r.stdout.trim(), "kept,set,false");
+    assert.equal(process.env.SANGSOE_TEST_DROP, "dropped", "the parent's env is untouched");
+  } finally {
+    delete process.env.SANGSOE_TEST_KEEP;
+    delete process.env.SANGSOE_TEST_DROP;
+  }
+});
+
+test("an unreadable Orca account list is a doctor warning and an install line, never taken as the same profile", async () => {
+  const { host, calls } = fakeHost({ orcaHome: null });
+  const r = await install(host, ROOT, online().ctx);
+  assert.equal(r.code, 0, r.lines.join("\n"));
+  assert.ok(!calls.some((c) => c.startsWith("CLAUDE_CONFIG_DIR=")));
+  const text = r.lines.join("\n");
+  assert.match(text, /cannot read `orca account list --json`.* for Orca's selected profile/);
+  assert.match(text, /warn +orca claude profile: cannot read `orca account list --json`.* — fix: orca open/);
+});
+
+test("uninstall also unregisters Orca's selected profile", async () => {
+  const { host, calls, profiles } = fakeHost({ orcaHome: ORCA_DIR });
+  await install(host, ROOT, online().ctx);
+  calls.length = 0;
+  const r = uninstall(host);
+  assert.equal(r.code, 0, r.lines.join("\n"));
+  assert.deepEqual(writes(calls), [
+    "claude plugin uninstall sangsoe@sangsoe --scope user --keep-data",
+    "claude plugin marketplace remove sangsoe --scope user",
+    `CLAUDE_CONFIG_DIR=${ORCA_DIR} claude plugin uninstall sangsoe@sangsoe --scope user --keep-data`,
+    `CLAUDE_CONFIG_DIR=${ORCA_DIR} claude plugin marketplace remove sangsoe --scope user`,
+  ]);
+  assert.deepEqual(profiles.get(ORCA_DIR), { markets: [], plugins: [] });
+});
+
 test("a marketplace named sangsoe pointing elsewhere is replaced", async () => {
   const { host, calls } = fakeHost({ state: { markets: [{ name: "sangsoe", source: "directory", path: "/elsewhere" }] } });
   await install(host, ROOT, online().ctx);
@@ -132,7 +307,7 @@ test("with an Orca plugin, install dev-loads it and reads exit 3 as waiting for 
   const r = await install(host, ROOT, online().ctx);
   assert.ok(calls.includes(`orca plugin dev load ${join(ROOT, "orca-plugin")} --json`));
   assert.match(r.lines.join("\n"), /approval waits — fingerprint sha256-abc/);
-  assert.ok(!calls.some((c) => c.includes("enable")), "install never approves");
+  assert.ok(!calls.some((c) => c.startsWith("orca ") && c.includes("enable")), "install never approves");
 });
 
 test("uninstall removes the three registrations and keeps data", async () => {
