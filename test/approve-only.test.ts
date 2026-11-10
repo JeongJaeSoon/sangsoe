@@ -18,14 +18,17 @@ function walk(dir: string): string[] {
 }
 
 // Either the words in one string or as separate array items: "plugin enable", "plugin", "enable".
-// `claude plugin enable` (Claude Code's own plugin, e.g. a doctor fix hint) is a different gate.
-const ENABLE = /(?<!claude\s+)plugin\s+enable|["'`]plugin["'`]\s*,\s*["'`]enable["'`]/;
+// `claude plugin enable` (Claude Code's own plugin: a doctor fix hint, or install's run of
+// `claude` with its argv written right after the command name) is a different gate.
+const ENABLE = /(?<!claude\s+)plugin\s+enable|(?<!["'`]claude["'`]\s*,\s*\[\s*)["'`]plugin["'`]\s*,\s*["'`]enable["'`]/;
 
 test("the guard tells Orca's enable from Claude Code's", () => {
   assert.ok(ENABLE.test("orca plugin enable local.sangsoe"));
   assert.ok(ENABLE.test('["orca", "plugin", "enable"]'));
+  assert.ok(ENABLE.test('host.run("orca", ["plugin", "enable", key])'));
   assert.ok(ENABLE.test("run(`plugin  enable local.sangsoe`)"));
   assert.ok(!ENABLE.test("fix: `claude plugin enable sangsoe@sangsoe`"));
+  assert.ok(!ENABLE.test('host.run("claude", ["plugin", "enable", PLUGIN_ID, "--scope", "user"], env)'));
 });
 
 test("no code path calls orca plugin enable except sangsoe plugin approve", () => {

@@ -10,15 +10,21 @@ import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { VERSION } from "../version.ts";
 import {
+  type ClaudeProfile,
+  currentProfile,
   type Host,
   lastLine,
   listMarketplaces,
   listOrcaPlugins,
+  listPlugins,
   MARKETPLACE,
   orcaManifest,
   orcaPluginDir,
+  orcaProfile,
+  PLUGIN_ID,
   sangsoeOrca,
   UNREADABLE,
+  userPlugin,
 } from "./host.ts";
 import { stageCore } from "./stage.ts";
 
@@ -84,14 +90,40 @@ function treeChecks(host: Host, root: string): Check[] {
   return out;
 }
 
+// Decision 167: the rows above read the profile doctor runs under; this one reads the profile Orca
+// starts sessions with, through the same `claude plugin list` pointed at that directory.
+function orcaProfileCheck(host: Host, root: string, current: ClaudeProfile): Check {
+  const name = "orca claude profile";
+  const fix = "sangsoe install";
+  const orca = orcaProfile(host);
+  if (!orca) return { state: "warn", name, detail: `${UNREADABLE("orca account list --json")}: Orca's selected profile is unchecked`, fix: "orca open" };
+  if (orca.dir === current.dir) return { state: "ok", name, detail: "Orca starts new sessions with the checked profile" };
+  const plugins = listPlugins(host, orca.env);
+  if (!plugins) return { state: "warn", name, detail: `${orca.dir}: ${UNREADABLE("claude plugin list --json")}`, fix };
+  const p = userPlugin(plugins);
+  const want = readManifest(host, join(root, "package.json"))?.version;
+  if (!p) return { state: "warn", name, detail: `Orca starts sessions with ${orca.dir}, where ${PLUGIN_ID} is not installed`, fix };
+  if (p.enabled === false) return { state: "warn", name, detail: `Orca starts sessions with ${orca.dir}, where ${PLUGIN_ID} is disabled`, fix };
+  if (p.version !== want) return { state: "warn", name, detail: `Orca starts sessions with ${orca.dir}, where ${PLUGIN_ID} is ${p.version}, tree is ${want}`, fix };
+  return { state: "ok", name, detail: `Orca starts sessions with ${orca.dir}: ${PLUGIN_ID} ${p.version}, enabled` };
+}
+
 // The plugin row itself is the start check `claude-plugin-version`.
 function claudeChecks(host: Host, root: string): Check[] {
-  const where = host.env.CLAUDE_CONFIG_DIR ? ` (CLAUDE_CONFIG_DIR=${host.env.CLAUDE_CONFIG_DIR})` : "";
   const v = host.run("claude", ["--version"]);
   if (v.code !== 0) {
     return [{ state: "fail", name: "claude", detail: `not runnable: ${lastLine(v)}`, fix: "install Claude Code and put `claude` on PATH" }];
   }
-  const out: Check[] = [{ state: "ok", name: "claude", detail: `${v.stdout.trim()}${where}` }];
+  const current = currentProfile(host);
+  const out: Check[] = [
+    { state: "ok", name: "claude", detail: v.stdout.trim() },
+    {
+      state: "ok",
+      name: "claude profile",
+      detail: `checked ${current.dir} (${host.env.CLAUDE_CONFIG_DIR ? "CLAUDE_CONFIG_DIR" : "CLAUDE_CONFIG_DIR unset"})`,
+    },
+    orcaProfileCheck(host, root, current),
+  ];
 
   const markets = listMarketplaces(host);
   const m = markets?.find((x) => x.name === MARKETPLACE);

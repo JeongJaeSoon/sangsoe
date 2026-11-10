@@ -1,6 +1,9 @@
 import type { CheckContext } from "../checks/index.ts";
 import { doctor } from "./doctor.ts";
 import {
+  type ClaudeProfile,
+  currentProfile,
+  enableClaudePlugin,
   type Host,
   json,
   lastLine,
@@ -10,7 +13,10 @@ import {
   MARKETPLACE,
   orcaManifest,
   orcaPluginDir,
+  orcaProfile,
   PLUGIN_ID,
+  type RunEnv,
+  type RunResult,
   sangsoeOrca,
   UNREADABLE,
   userPlugin,
@@ -48,19 +54,21 @@ function orcaStep(host: Host, root: string, lines: string[]): boolean {
   return false;
 }
 
+const tag = (p: ClaudeProfile, current: boolean) => (current ? "claude" : `claude (Orca profile ${p.dir})`);
+
 // Idempotent: each step reads current state first and picks add/update or install/update.
-export async function install(host: Host, root: string, ctx: CheckContext): Promise<Outcome> {
-  const lines: string[] = [];
-  const step = (label: string, args: string[]) => {
-    const r = host.run("claude", args);
-    lines.push(r.code === 0 ? `claude: ${label}` : `claude: ${label} failed (exit ${r.code}): ${lastLine(r)}`);
+function registerClaude(host: Host, root: string, profile: ClaudeProfile, current: boolean, lines: string[]): boolean {
+  const who = tag(profile, current);
+  const report = (label: string, r: RunResult) => {
+    lines.push(r.code === 0 ? `${who}: ${label}` : `${who}: ${label} failed (exit ${r.code}): ${lastLine(r)}`);
     return r.code === 0;
   };
+  const step = (label: string, args: string[]) => report(label, host.run("claude", args, profile.env));
 
-  const markets = listMarketplaces(host);
+  const markets = listMarketplaces(host, profile.env);
   if (!markets) {
-    lines.push(`claude: ${UNREADABLE("plugin marketplace list --json")}`);
-    return { code: 1, lines };
+    lines.push(`${who}: ${UNREADABLE("plugin marketplace list --json")}`);
+    return false;
   }
   let m = markets.find((x) => x.name === MARKETPLACE);
   if (m && m.path !== root) {
@@ -72,24 +80,46 @@ export async function install(host: Host, root: string, ctx: CheckContext): Prom
       "--scope",
       "user",
     ]);
-    if (!removed) return { code: 1, lines };
+    if (!removed) return false;
     m = undefined;
   }
   const ok = m
     ? step(`updated marketplace ${MARKETPLACE}`, ["plugin", "marketplace", "update", MARKETPLACE])
     : step(`added marketplace ${MARKETPLACE} → ${root}`, ["plugin", "marketplace", "add", root, "--scope", "user"]);
-  if (!ok) return { code: 1, lines };
+  if (!ok) return false;
 
-  const plugins = listPlugins(host);
+  const plugins = listPlugins(host, profile.env);
   if (!plugins) {
-    lines.push(`claude: ${UNREADABLE("plugin list --json")}`);
-    return { code: 1, lines };
+    lines.push(`${who}: ${UNREADABLE("plugin list --json")}`);
+    return false;
   }
   const installed = userPlugin(plugins);
   const pluginOk = installed
     ? step(`updated ${PLUGIN_ID} (open a new session to use it)`, ["plugin", "update", PLUGIN_ID, "--scope", "user"])
     : step(`installed ${PLUGIN_ID}`, ["plugin", "install", PLUGIN_ID, "--scope", "user"]);
-  if (!pluginOk) return { code: 1, lines };
+  if (!pluginOk) return false;
+
+  // Decision 166: `claude plugin update` keeps a disabled plugin disabled, and `claude plugin enable`
+  // on an enabled one exits 1, so enable only what a fresh list shows off.
+  const after = listPlugins(host, profile.env);
+  if (!after) {
+    lines.push(`${who}: ${UNREADABLE("plugin list --json")}`);
+    return false;
+  }
+  if (userPlugin(after)?.enabled === false) return report(`enabled ${PLUGIN_ID}`, enableClaudePlugin(host, profile.env));
+  return true;
+}
+
+export async function install(host: Host, root: string, ctx: CheckContext): Promise<Outcome> {
+  const lines: string[] = [];
+  const current = currentProfile(host);
+  if (!registerClaude(host, root, current, true, lines)) return { code: 1, lines };
+
+  // Decision 167: Orca starts sangsoe's sessions, so the profile it selects must carry the plugin too.
+  const orca = orcaProfile(host);
+  if (!orca) lines.push(`claude: ${UNREADABLE("orca account list --json")} for Orca's selected profile`);
+  else if (orca.dir === current.dir) lines.push(`claude: Orca starts new sessions with this profile (${current.dir})`);
+  else if (!registerClaude(host, root, orca, false, lines)) return { code: 1, lines };
 
   if (!orcaStep(host, root, lines)) return { code: 1, lines };
 
@@ -100,28 +130,38 @@ export async function install(host: Host, root: string, ctx: CheckContext): Prom
 export function uninstall(host: Host): Outcome {
   const lines: string[] = [];
   let code = 0;
-  const step = (cmd: string, label: string, args: string[]) => {
-    const r = host.run(cmd, args);
+  const step = (who: string, label: string, args: string[], env?: RunEnv) => {
+    const r = host.run(who === "orca" ? "orca" : "claude", args, env);
     if (r.code !== 0) code = 1;
-    lines.push(r.code === 0 ? `${cmd}: ${label}` : `${cmd}: ${label} failed (exit ${r.code}): ${lastLine(r)}`);
+    lines.push(r.code === 0 ? `${who}: ${label}` : `${who}: ${label} failed (exit ${r.code}): ${lastLine(r)}`);
   };
 
-  const unreadable = (cmd: string, what: string) => {
+  const unreadable = (who: string, what: string) => {
     code = 1;
-    lines.push(`${cmd}: ${UNREADABLE(what)}`);
+    lines.push(`${who}: ${UNREADABLE(what)}`);
   };
 
-  const plugins = listPlugins(host);
-  if (!plugins) unreadable("claude", "plugin list --json");
-  else if (userPlugin(plugins)) {
-    step("claude", `uninstalled ${PLUGIN_ID}`, ["plugin", "uninstall", PLUGIN_ID, "--scope", "user", "--keep-data"]);
-  } else lines.push(`claude: ${PLUGIN_ID} was not installed`);
+  // Mirrors install: Orca's selected profile is unregistered too when it is another directory.
+  const current = currentProfile(host);
+  const orcaSide = orcaProfile(host);
+  const profiles: [ClaudeProfile, boolean][] = [[current, true]];
+  if (!orcaSide) lines.push(`claude: ${UNREADABLE("orca account list --json")} for Orca's selected profile`);
+  else if (orcaSide.dir !== current.dir) profiles.push([orcaSide, false]);
 
-  const markets = listMarketplaces(host);
-  if (!markets) unreadable("claude", "plugin marketplace list --json");
-  else if (markets.some((x) => x.name === MARKETPLACE)) {
-    step("claude", `removed marketplace ${MARKETPLACE}`, ["plugin", "marketplace", "remove", MARKETPLACE, "--scope", "user"]);
-  } else lines.push(`claude: marketplace ${MARKETPLACE} was not added`);
+  for (const [profile, isCurrent] of profiles) {
+    const who = tag(profile, isCurrent);
+    const plugins = listPlugins(host, profile.env);
+    if (!plugins) unreadable(who, "plugin list --json");
+    else if (userPlugin(plugins)) {
+      step(who, `uninstalled ${PLUGIN_ID}`, ["plugin", "uninstall", PLUGIN_ID, "--scope", "user", "--keep-data"], profile.env);
+    } else lines.push(`${who}: ${PLUGIN_ID} was not installed`);
+
+    const markets = listMarketplaces(host, profile.env);
+    if (!markets) unreadable(who, "plugin marketplace list --json");
+    else if (markets.some((x) => x.name === MARKETPLACE)) {
+      step(who, `removed marketplace ${MARKETPLACE}`, ["plugin", "marketplace", "remove", MARKETPLACE, "--scope", "user"], profile.env);
+    } else lines.push(`${who}: marketplace ${MARKETPLACE} was not added`);
+  }
 
   // Decided from Orca's own list, not the tree: an older tree may have loaded a plugin this one lacks.
   const orca = listOrcaPlugins(host);
