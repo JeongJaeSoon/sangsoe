@@ -195,12 +195,25 @@ test("reads unwrap the recorded result", async () => {
   const orca = createOrcaAdapter(createFakeOrca().exec);
   const tasks = await orca.taskList({ run: "run_000000000001" });
   assert.deepEqual(tasks.ok && tasks.value.map((t) => t.status), ["dispatched", "completed", "pending"]);
-  const inbox = await orca.inbox({ limit: 2 });
-  assert.equal(inbox.ok && inbox.value.length, 2);
+  const inbox = await orca.inbox({ limit: 3 });
+  assert.equal(inbox.ok && inbox.value.length, 3);
   const dispatch = await orca.dispatchShow({ task: "task_000000000001" });
   assert.equal(dispatch.ok && dispatch.value.depth, 1);
   const hooks = await orca.agentHooksStatus();
   assert.equal(hooks.ok && hooks.value.enabled, true);
+});
+
+test("inbox maps the --full record: read becomes handled, the handles from and to, payload ids parsed", async () => {
+  const inbox = await createOrcaAdapter(createFakeOrca().exec).inbox({ limit: 3 });
+  assert.ok(inbox.ok);
+  const [status, done, stop] = inbox.value;
+  assert.equal(status?.handled, false, "read 0 is unhandled, so wake_unconfirmed can fire");
+  assert.equal(done?.handled, true);
+  assert.equal(done?.from, "term_00000000-0000-4000-8000-000000000001");
+  assert.equal(done?.to, "run:run_000000000001");
+  assert.deepEqual(done?.payload, { taskId: "task_000000000001", dispatchId: "ctx_000000000001" }, "the outcome stays in Orca");
+  assert.equal(stop?.payload?.stopReason, "errored");
+  assert.equal(status?.payload, undefined);
 });
 
 test("gate-list reads options from the JSON text Orca returns; anything else leaves them unknown", async () => {

@@ -3,6 +3,8 @@ import type {
   ExecResult,
   GateRow,
   HostRow,
+  InboxMessage,
+  InboxPayload,
   LocalRows,
   OrcaAdapter,
   OrcaResult,
@@ -106,6 +108,31 @@ function gateRow(row: Json): GateRow {
   }
   const valid = Array.isArray(parsed) && parsed.every((x) => typeof x === "string");
   return { ...(rest as GateRow), ...(valid ? { options: parsed as string[] } : {}) };
+}
+
+const PAYLOAD_IDS = ["taskId", "dispatchId", "stopReason"] as const;
+
+/** `inbox --full` rows: `from_handle`·`to_handle`·`read` (0 or 1) and `payload` as JSON text. */
+export function inboxRow(row: Json): InboxMessage {
+  let raw: unknown = row.payload;
+  try {
+    raw = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    raw = undefined;
+  }
+  const payload: InboxPayload = {};
+  if (isObject(raw)) for (const k of PAYLOAD_IDS) if (typeof raw[k] === "string") payload[k] = raw[k];
+  const text = (v: unknown) => (typeof v === "string" ? v : "");
+  return {
+    id: row.id as string,
+    type: row.type as string,
+    from: text(row.from_handle ?? row.from),
+    to: text(row.to_handle ?? row.to),
+    subject: text(row.subject),
+    handled: row.read === 1 || row.read === true || row.handled === true,
+    ...(typeof row.body === "string" ? { body: row.body } : {}),
+    ...(Object.keys(payload).length > 0 ? { payload } : {}),
+  };
 }
 
 function placement(p: WorkerPlacement): string {
@@ -233,7 +260,10 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
         },
         o,
       ),
-    inbox: (a) => field("inbox", "messages", rowsWith({ id: "string", type: "string" }), { flags: { terminal: a.terminal, limit: a.limit, full: true } }),
+    inbox: async (a) => {
+      const r = await field<Json[]>("inbox", "messages", rowsWith({ id: "string", type: "string" }), { flags: { terminal: a.terminal, limit: a.limit, full: true } });
+      return r.ok ? { ok: true, value: r.value.map(inboxRow) } : r;
+    },
 
     workerStart: (a, o) =>
       run(

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   answerNotifiedKey,
+  awaitingResume,
   DEFAULT_RESTART_RULES,
   handoffSave,
   mask,
@@ -164,15 +165,22 @@ test("only an undispatched session's line that starts with the number answers a 
   assert.deepEqual(closed(orch), [["d001", "answered"]]);
 });
 
-test("waiting_human_released (hook side): the owner's words mark, the session moving releases, an end is moot", async () => {
+test("a dispatched session's Notification writes no wait and sends nothing: Orca's needs-input mail is its one source", async () => {
   const w = createSessionWorld({ spec: "sangsoe-role: worker\nx" });
   await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
+  await hook(w, "notification", { session_id: "s1", notification_type: "permission_prompt", message: "Claude needs your permission to use Bash" });
+  assert.equal(w.store.events({ type: "waiting_human" }).length, 0);
+  assert.deepEqual(w.sends, []);
+});
+
+test("waiting_human_released (hook side): the owner's words mark, the session moving releases, an end is moot", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  await hook(w, "session-start", { session_id: "s1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
   const ask = { session_id: "s1", notification_type: "permission_prompt", message: "Claude needs your permission to use Bash" };
   await hook(w, "notification", ask);
   await hook(w, "notification", ask);
   const waits = w.store.events({ type: "waiting_human" });
-  assert.deepEqual(waits.map((e) => [e.payload.tool, e.entity_id]), [["Bash", TASK]], "a repeat for the same open wait writes nothing");
-  assert.deepEqual(w.sends.map((s) => [s.to, s.type]), [[`run:${TASK_RUN}`, "escalation"]], "the owning lead is told first, once");
+  assert.deepEqual(waits.map((e) => e.payload.tool), ["Bash"], "a repeat for the same open wait writes nothing");
 
   await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: "p1", prompt: "yes go ahead" });
   await hook(w, "post-tool-use", { session_id: "s1", tool_name: "Read" });
@@ -181,7 +189,6 @@ test("waiting_human_released (hook side): the owner's words mark, the session mo
   await hook(w, "stop", { session_id: "s1", prompt_id: "p1" });
   const rel = w.store.events({ type: "waiting_released" });
   assert.deepEqual(rel.map((e) => e.payload), [{ ref: String(waits[0]?.seq), outcome: "answered", by: "owner", evidence: "tool:Bash" }]);
-  assert.deepEqual(rel.map((e) => e.entity_id), [TASK], "the release stays on the item's timeline");
 
   await hook(w, "notification", { session_id: "s1", notification_type: "idle_prompt", message: "Claude is waiting for your input" });
   await hook(w, "session-end", { session_id: "s1", reason: "clear" });
@@ -189,6 +196,46 @@ test("waiting_human_released (hook side): the owner's words mark, the session mo
   assert.deepEqual([last?.payload.outcome, last?.payload.by, last?.payload.evidence], ["moot", "unknown", "session_ended"]);
   await hook(w, "notification", { session_id: "s1", notification_type: "auth_success", message: "ok" });
   assert.equal(w.store.events({ type: "waiting_human" }).length, 2, "a notification that is no wait writes nothing");
+});
+
+test("C11: Orca's nudge, its mail turn, another session's message and a task notice are not the owner's words", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  await hook(w, "session-start", { session_id: "s1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+  await hook(w, "notification", { session_id: "s1", notification_type: "idle_prompt", message: "Claude is waiting for your input" });
+  const prompts = [
+    // Orca's nudge goes on to name its read command, which test/orca-boundary.test.ts keeps out of the tree.
+    "You have 1 orchestration message.",
+    "You have 3 orchestration messages.",
+    "You have new orchestration messages. They arrive next, one at a time; act on each.",
+    'Another Claude session sent a message:\n<agent-message from="abc">done</agent-message>',
+    "<task-notification>\n<task-id>b1</task-id>\n</task-notification>",
+  ];
+  for (const [i, prompt] of prompts.entries()) await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: `p${i}`, prompt });
+  assert.equal(w.store.events({ type: "owner_action" }).length, 0, "no owner_action for a prompt no person typed");
+  assert.deepEqual(awaitingResume({ events: w.store.events() } as unknown as Parameters<typeof awaitingResume>[0]), [], "nor a wait marked answered by the owner");
+  await hook(w, "stop", { session_id: "s1", prompt_id: "p9" });
+  assert.deepEqual(
+    w.store.events({ type: "waiting_released" }).map((e) => e.payload.by),
+    ["unknown"],
+    "the turn's end releases the wait, not as the owner",
+  );
+});
+
+test("worker_idle: a dispatched session's turn ends with its Dispatch still open; after worker_done it is not idle", async () => {
+  const w = createSessionWorld({ spec: "sangsoe-role: worker\nx" });
+  await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
+  await hook(w, "stop", { session_id: "s1", prompt_id: "p1" });
+  await hook(w, "stop", { session_id: "s1", prompt_id: "p1" });
+  const idle = w.store.events({ type: "worker_idle" });
+  assert.deepEqual(idle.map((e) => [e.payload.session, e.entity_id]), [["s1", TASK]], "one row per turn");
+  w.dispatchStatus = "completed";
+  await hook(w, "stop", { session_id: "s1", prompt_id: "p2" });
+  assert.equal(w.store.events({ type: "worker_idle" }).length, 1);
+
+  const o = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  await hook(o, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+  await hook(o, "stop", { session_id: "o1", prompt_id: "p1" });
+  assert.equal(o.store.events({ type: "worker_idle" }).length, 0, "a session holding no Dispatch is never idle");
 });
 
 const ITEM = "task_000000000002";

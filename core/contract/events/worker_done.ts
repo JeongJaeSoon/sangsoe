@@ -1,9 +1,9 @@
-import { defineEvent, oneOf, opt, orcaId } from "../define.ts";
+import { defineEvent, opt, orcaId } from "../define.ts";
 
-// The report body stays in the Orca message; this row keeps ids and the outcome.
+// A marker of Orca's worker_done message, written by orca-monitor. The outcome and body stay in
+// Orca (decision 196): a reader that needs them reads the message by msg_id.
 export default defineEvent("worker_done", {
   dispatch: orcaId,
   task: opt(orcaId),
   msg_id: opt(orcaId),
-  outcome: oneOf("succeeded", "failed"),
 });

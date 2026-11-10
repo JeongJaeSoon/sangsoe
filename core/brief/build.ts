@@ -337,7 +337,8 @@ const NINE: Readonly<Record<string, (s: (k: string) => string) => string>> = {
   worker_idle: () => "워커가 다음 지시를 기다림",
   observed_change: (s) => `Orca 에서 ${s("field")} 바뀜`,
   refusal_report: (s) => `${s("act")} 거부됨(${s("category")})`,
-  worker_done: (s) => `worker_done ${s("outcome") === "succeeded" ? "성공" : s("outcome") === "failed" ? "실패" : s("outcome")}`,
+  // A marker only (decision 196): the outcome stays in Orca.
+  worker_done: () => "워커 완료 보고 받음",
 };
 const SKIP = new Set(["item_extra_set", "priority_set", "item_ready"]);
 
