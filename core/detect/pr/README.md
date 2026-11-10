@@ -5,4 +5,5 @@
 
 - `config.ts` — 설정 `watch`(`repos` · `authors` · `linked_only`)와 `owners`.
 - `judge.ts` — 순수 함수: main CI 분류(`classifyMain`, 결정 143), Task 상태 → 항목 상태, `verify-tier:N` 라벨.
-- `round.ts` — 라운드: 열린 PR(`pr_opened` · `pr_base_changed` · `verify_tier_set` · `pr_ready_to_merge`), 최근 닫힌 PR(`pr_merged` · `pr_closed` · `close_suggested` · `owner_act_unlinked`), 머지 sha 의 push CI(`main_green` · `main_red` · `ci_failed`), 한도(`rate_limited`). Orca 쓰기(`task-update` · `reference add` · notify)는 `Act` 로 돌려주고 `runMonitor` 가 event 를 쓴 뒤에 실행한다. dry run 은 실행하지 않는다.
+- `reviews.ts` — 순수 함수: 리뷰 요청·리뷰·리뷰 코멘트 목록 → `pr_review_requested` · `pr_changes_requested` · `review_commented` · `review_replied`(GitHub id 로 키, 본문 없음, 결정 195).
+- `round.ts` — 라운드: 열린 PR(`pr_opened` · `pr_base_changed` · `verify_tier_set` · `pr_ready_to_merge` · 리뷰 사건 넷, 리뷰 목록은 ETag 로 읽는다), 최근 닫힌 PR(`pr_merged` · `pr_closed` · `close_suggested` · `owner_act_unlinked`), 머지 sha 의 push CI(`main_green` · `main_red` · `ci_failed`), 한도(`rate_limited`). Orca 쓰기(`task-update` · `reference add` · notify)는 `Act` 로 돌려주고 `runMonitor` 가 event 를 쓴 뒤에 실행한다. dry run 은 실행하지 않는다.

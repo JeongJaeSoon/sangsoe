@@ -41,6 +41,7 @@ test("(1) the shipped folders collect: the shipped tools, the version command", 
       "edge_remove",
       "evidence_record",
       "flow_expand",
+      "flow_step_skip",
       "handoff_save",
       "item_create",
       "land",
@@ -127,7 +128,7 @@ test("(4) unknown commands, arguments and tools write nothing and show the right
   assert.equal(writes.length, before, "an entrance reached the core on a bad call");
 });
 
-test("(5) tools/README.md lists the fourteen tools of design #mcp (decisions 160, 162, 171) and the MCP-only rule", () => {
+test("(5) tools/README.md lists the fifteen tools of design #mcp (decisions 160, 162, 171, 195) and the MCP-only rule", () => {
   const readme = readFileSync(new URL("../../claude-plugin/mcp/tools/README.md", import.meta.url), "utf8");
   const rows = [...readme.matchAll(/^\| `([a-z_]+)` \| ([^|]+) \| `\{[^`]*\}` \| (U\d+|미정) \|$/gm)].map((m) => m[1]);
   assert.deepEqual(rows, [
@@ -136,6 +137,7 @@ test("(5) tools/README.md lists the fourteen tools of design #mcp (decisions 160
     "edge_add",
     "edge_remove",
     "flow_expand",
+    "flow_step_skip",
     "decision_open",
     "decision_answer",
     "land",
@@ -217,6 +219,7 @@ test("the server answers initialize and tools/list over stdio", async () => {
       "edge_remove",
       "evidence_record",
       "flow_expand",
+      "flow_step_skip",
       "handoff_save",
       "item_create",
       "land",
