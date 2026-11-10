@@ -9,6 +9,8 @@ import { handle } from "../../claude-plugin/mcp/tools/start_unit.ts";
 import {
   checkLineage,
   createOrcaAdapter,
+  dedupeKey,
+  EVENTS,
   type ExecResult,
   MODEL_CATALOG,
   MODEL_POLICY,
@@ -418,7 +420,8 @@ test("decision 178: a Task Orca released at its predecessor's worker_done waits 
 
 test("decision 178: start_unit holds only on a merge wait in its own Run; another Run's predecessor and a hold are queue-monitor's", async () => {
   const h = harness();
-  h.store.append({ type: "edge_added", source: "test", payload: { pred: "item:task_other_run", succ: `item:${NEW_TASK}`, kind: "blocks" } });
+  const [pred, succ] = ["item:task_other_run", `item:${NEW_TASK}`];
+  h.store.append({ type: "edge_added", source: "GRAPH", payload: { pred, succ, kind: "blocks" }, dedupe_key: dedupeKey(EVENTS.edge_added, pred, succ, "blocks") });
   h.store.append({ type: "item_extra_set", source: "test", payload: { task: NEW_TASK, hold: true } });
   assert.equal((await start(h, request({ task: { id: NEW_TASK } }))).kind, "started");
 });
