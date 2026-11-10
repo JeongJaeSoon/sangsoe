@@ -111,6 +111,8 @@ One repository, four slots (see `docs/architecture.md` for the full map):
 | `orca-plugin/` | Orca plugin: monitors, REAPER timer, panel | none |
 | `claude-plugin/` | Claude Code plugin: `hooks/` and `mcp/` (no tokens), `skills/` and `agents/` (token-using) | mixed |
 
+The Orca plugin's manifest (`orca-plugin/orca-plugin.json`) declares two read capabilities, `workspace:read` and `agent:read`. The worker also runs two writes that the declaration does not name: `orca terminal create` for the panel's open command (`orca-plugin/panel/requests.ts:54`), and `orca worktree rm` in REAPER rounds (`core/reaper/round.ts`, decision 86). The manifest is not yet changed to match them.
+
 Orca CLI built-ins are called, not rebuilt. The design spec lives in `docs/` (`design.html` is the entry point).
 
 ## Development

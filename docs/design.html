@@ -355,7 +355,7 @@
 <tbody>
 <tr><td>상태</td><td>📅</td><td>예정</td><td>시작 trigger(날짜·PR 머지)나 선행 간선이 아직 안 찼다. 스크립트가 판정한다.</td></tr>
 <tr><td>상태</td><td>🟢</td><td>준비됨</td><td>지금 시작할 수 있고 아직 아무도 맡지 않았다.</td></tr>
-<tr><td>상태</td><td>🔄</td><td>진행 중</td><td>살아 있는 워커나 리드가 goal 을 걸고 쥐고 있다. 결정이 풀려 Orca 상태가 <code>ready</code> 가 됐어도 워커가 아직 쥐고 있으면(활성 Dispatch) 🟢 가 아니라 🔄 다.</td></tr>
+<tr><td>상태</td><td>🔄</td><td>진행 중</td><td>살아 있는 워커나 리드가 쥐고 있다. 결정이 풀려 Orca 상태가 <code>ready</code> 가 됐어도 워커가 아직 쥐고 있으면(활성 Dispatch) 🟢 가 아니라 🔄 다.</td></tr>
 <tr><td>상태</td><td>🚧</td><td>막힘</td><td>시작했으나 누군가 없이는 못 간다. 기다리는 쪽을 괄호에 적는다(오너·리뷰어·인프라·리드·워커). 리뷰 대기도 막힘(리뷰어)이고, land 요청 뒤 머지를 기다리는 PR 항목도 같다.</td></tr>
 <tr><td>상태</td><td>⏸️</td><td>보류</td><td>일부러 지금 안 한다. 다시 볼 trigger 가 있다. 시작 조건이 글뿐인 항목도 여기다.</td></tr>
 <tr><td>상태</td><td>✅</td><td>완료</td><td>Orca Task 가 <code>completed</code> 이고 그 Task 의 PR 이 있으면 머지됐다. 머지 없이 닫힌 PR 의 항목은 ✅ 가 아니라 🚧 막힘(리드, 읽기 <code>pr_closed</code>)이고, PR 상태를 아직 못 읽은 항목은 ❔ 모름(<code>unknown</code>)이다(결정 178, 보기 전용이라 Orca 상태는 그대로다). <code>verify</code> 가 있는 오너 항목은 누가 Task 를 닫았든 probe 가 통과할 때까지 ⏳ 검증 대기(<code>pending_verify</code>)로 읽히고, 후속도 그때까지 기다린다(결정 181). Task 는 받아들여진 <code>worker_done</code>(PR 작성자도 같다)이나 리드·오케스트레이터의 닫기로 <code>completed</code> 가 되고, PR 이 걸린 항목은 pr-monitor 의 머지 확인(<code>pr_merged</code>) 전까지 🚧 막힘(리뷰어)으로 읽힌다(결정 175). 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않는다. 증거 없이 닫힌 항목은 🔍 로 표시되어 리드가 확인한다.</td></tr>
