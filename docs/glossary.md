@@ -65,7 +65,8 @@
 | 🔄 진행 중 | 살아 있는 워커나 리드가 Dispatch 로 쥐고 있다. 결정이 풀려 Orca 상태가 `ready` 가 됐어도 활성 Dispatch 가 있으면(워커가 아직 쥐고 있으면) 🟢 가 아니라 🔄 다 | `in_progress` | 작업 중, 실행 중 |
 | 🚧 막힘 | 시작했으나 누군가 없이는 못 간다. 기다리는 쪽을 괄호에 적는다. 리뷰 대기도 막힘이다 | `blocked` | 대기, 리뷰 중, 정지 |
 | ⏸️ 보류 | 일부러 지금 안 한다. 재검토 trigger 가 있다 | `parked` | 연기, 나중에 |
-| ✅ 완료 | Orca Task 가 `completed` 다. (결정 175·178: PR 작성자의 `worker_done` 이 머지 전에 Task 를 닫으므로, 브리프는 그 PR 이 열려 있으면 🚧 막힘(리뷰어), 머지 없이 닫혔으면 🚧 막힘(리드, 읽기 `pr_closed`), 상태를 아직 못 읽었으면 ❔ 모름(읽기 `unknown`)으로 읽는다. 보기 전용이고 Orca 상태는 그대로다. 아래 문장의 "머지 확인 뒤에야 `completed`" 는 이것으로 바뀌었다.) PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로, 오너 항목은 오너의 완료 버튼으로 `completed` 가 된다. `close_suggested` 는 닫기 제안이지 완료가 아니고, REAPER 의 끝남 판정은 카드를 치워도 되는지이지 항목 상태가 아니다(결정 161). 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
+| ✅ 완료 | Orca Task 가 `completed` 다. (결정 175·178: PR 작성자의 `worker_done` 이 머지 전에 Task 를 닫으므로, 브리프는 그 PR 이 열려 있으면 🚧 막힘(리뷰어), 머지 없이 닫혔으면 🚧 막힘(리드, 읽기 `pr_closed`), 상태를 아직 못 읽었으면 ❔ 모름(읽기 `unknown`)으로 읽는다. 보기 전용이고 Orca 상태는 그대로다. 아래 문장의 "머지 확인 뒤에야 `completed`" 는 이것으로 바뀌었다.) PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로, 오너 항목은 오너의 완료 버튼으로 `completed` 가 된다(그 항목에 `verify` 가 있으면 probe 통과 전까지 ⏳ 검증 대기, 결정 181). `close_suggested` 는 닫기 제안이지 완료가 아니고, REAPER 의 끝남 판정은 카드를 치워도 되는지이지 항목 상태가 아니다(결정 161). 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
+| ⏳ 검증 대기 | 오너가 완료라고 한 오너 할 일인데 그 `verify` probe 가 아직 참을 보지 못했다(결정 181: 할 일은 검증으로 닫힌다). Orca Task 를 누가 닫았든 브리프·후속의 준비됨·`start_unit` 이 이렇게 읽고, probe 가 통과하면 ✅ 가 된다. 진행 중에 센다 | `pending_verify` | 완료(🔍), 오너 완료 |
 | 🗑️ 취소 | 하지 않기로 했다. 이유가 필수다 | `canceled` | 폐기, 삭제 |
 
 ## 3. 플래그 (상태 위에 0개 이상)
@@ -219,7 +220,7 @@
 | 세션 hook 신호 | 권한·입력 대기 | `waiting_human` | — |
 | | `waiting_human` 이 풀렸거나(패널 버튼·같은 도구의 실행·턴 종료·`agentWait` 해제. 오너의 말만으로는 풀지 않는다) 답 없이 사라짐(세션 종료). 값: outcome(`answered`·`moot`), by(`owner`·`button`·`unknown`), evidence. 먼저 보인 신호 하나만 남는다(결정 91) | `waiting_released` | — |
 | 오너 항목 검증 | 오너 항목이 가질 수 있는 기계가 읽는 끝나는 조건 `verify`. 종류 다섯: 머지(`pr_merged`) · Orca 상태 칸(`orca_field`) · plugin 승인(`plugin_approved`) · 워크플로 실행 결과(`run_ok`) · PR 존재(`pr_found`). 없는 항목은 "검증 없음" 으로 보인다. 통과하면 `evidence` 와 닫기 제안이 가고 monitor 가 닫지는 않는다 | `verify` · `cmd_hint` | — |
-| 입력 확인됨 · 검증 중 | 오너의 `!` 명령·프롬프트가 열린 오너 항목의 후보로 읽혔고 probe 를 기다린다는 뷰의 표지. 상태가 아니고 입력만으로는 어떤 상태도 바뀌지 않는다. probe 가 실패하거나 시간이 지나면 "검증 안 됨" 이 된다. 상태가 바뀌는 길은 probe 의 관측과 명시적 연결(`dNNN` 답·패널 버튼)뿐이다 | `owner_act:seen` | 실행됨(상태로), 동작확인 중(상태로) |
+| 입력 확인됨 · 검증 중 | 오너의 `!` 명령·프롬프트가 열린 오너 항목의 후보로 읽혔고 probe 를 기다린다는 뷰의 표지. 상태가 아니고 입력만으로는 어떤 상태도 바뀌지 않는다. probe 가 실패하거나 시간이 지나면 "검증 안 됨" 이 된다. 규칙은 결정 181 이다: 결정은 그 결정을 가리키는 오너의 답(`dNNN` 답·패널 버튼)으로 닫히고, 할 일은 검증(probe 의 관측)으로 닫힌다. 오너가 패널에서 완료를 눌러도 `verify` 가 있으면 ⏳ 검증 대기다 | `owner_act:seen` | 실행됨(상태로), 동작확인 중(상태로) |
 | 원인이 사라진 결정 | 게이트가 건 Task 가 모두 닫혔거나 가리키는 PR 이 닫혀 더 물을 이유가 없는 결정. 답 없이 닫고 뒤늦은 답은 기록만 한다 | `moot` | — |
 | | 턴 종료 | `turn_ended` | — |
 | | 일 없이 멈춘 워커 | `worker_idle` | — |
@@ -232,7 +233,7 @@
 | | 글 조건을 스크립트가 못 읽음(항목당 한 번) | `trigger_unclear` | — |
 | | 닫을 만하다는 제안 | `close_suggested` | — |
 | | 기한 안에 읽히지 않았거나 처리되지 않은 escalation, 답이 기록됐는데 열린 게이트가 남은 결정(queue-monitor 가 쓰고 한 단계 위로 `notify` 한다) | `escalation_stale` | — |
-| | 설치·승인된 Orca plugin(plugin worker 포함)의 버전·지문이 브루 트리(= 코어 버전)의 정의와 어긋남. Claude Code plugin 쪽 어긋남은 event 가 아니라 시작 점검·`sangsoe doctor` 가 한 줄로 알린다(결정 90) | `job_drift` | — |
+| | 설치·승인된 Orca plugin(plugin worker 포함)의 버전이 브루 트리(= 코어 버전)와 다르거나, 꺼졌거나, 재승인을 기다림(결정 185. 내용 해시 비교는 `sangsoe doctor` 의 몫). Claude Code plugin 쪽 어긋남은 event 가 아니라 시작 점검·`sangsoe doctor` 가 한 줄로 알린다(결정 90) | `job_drift` | — |
 | | 자원 누수 | `resource_leak` | — |
 | | 여유 생김 | `capacity_free` | — |
 | | 압박 높음 | `pressure_high` | — |
