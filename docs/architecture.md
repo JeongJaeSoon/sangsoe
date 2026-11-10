@@ -148,7 +148,7 @@ readMergeConditions(gh, { repo, base, pr, protectedPaths }): MergeConditions;
 type Check = { id: string; run(ctx: CheckContext): Promise<CheckResult> };
 type CheckResult = { id: string; status: "ok" | "notice" | "warn" | "fail"; summary: string; fix?: string };
 runChecks(START_CHECKS, ctx) → startReport(results) | doctorReport(results)
-DOCTOR_CHECKS = [...START_CHECKS, orcaPluginContent, sqliteVersion, reaperConfig, tierConfig, watchRepos, modelTable]   // sangsoe doctor·install 이 돌린다
+DOCTOR_CHECKS = [...START_CHECKS, orcaPluginContent, sqliteVersion, reaperConfig, tierConfig, watchRepos, modelTable, storeRestore]   // sangsoe doctor·install 이 돌린다
 ```
 
 - **내용 해시 점검(`orca-plugin-content`).** 설치된 `orca-plugin/` 의 `contentHash` 를 그 폴더의 빌드 커밋 트리와 그 커밋을 머지한 PR 의 리뷰된 head 트리(`sangsoe plugin approve` 가 비교하는 바이트)와 다시 비교한다. 다르면 `fail` + `sangsoe plugin approve`, 잴 수 없으면 `warn`. 빌드 트리는 내려받아야 하므로 `CheckContext.pluginBuild` 포트로 들어오고, 시작 점검은 그 포트를 비워 `DOCTOR_CHECKS` 에만 든다(결정 112).

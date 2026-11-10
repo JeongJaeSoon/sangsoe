@@ -23,7 +23,7 @@
 | 편입 | `resource` 기록이 없는 기존 카드나 Docker 자원을 REAPER 가 기록에 올리는 일. 치우기 전에 한다 | `resource_adopted` | 인수, 등록 |
 | REAPER 라운드 | REAPER 가 한 번 도는 것. 타이머가 돌리거나 힌트가 앞당긴다. 단일 실행이다. 루트를 읽어 표시하고, 정리 조건을 모두 만족한 후보만 정리하며, 끝에 `trigger`·`roots_ok`·표시/후보/정리/모름 수를 `reap_round` 로 남긴다 | `reap_round` | 청소 주기 |
 | GC | REAPER 라운드를 가리키는 비유 이름. 표시 → 정리로 도는 방식을 뜻한다. 별도 컴포넌트나 monitor 가 아니고 정본 용어는 REAPER 라운드다. REAPER 라운드를 설명하는 비유로만 쓴다 | — | gc-monitor, GC 부품 |
-| 루트 | 라운드가 읽는 "아직 쓰이는 것"의 출처: 열린 PR(`gh`) · 닫히지 않은 Orca Task · 살아 있는 워커·리드·오케스트레이터 세션 · 카드 목록 · 보호 목록(설정) · 메인 체크아웃(카드 목록 행의 `isMainWorktree`). 읽기만 하고 사본을 저장하지 않는다 | — | 기준점, 앵커 |
+| 루트 | 라운드가 읽는 "아직 쓰이는 것"의 출처: 열린 PR(`gh`) · 살아 있는 워커·리드·오케스트레이터 세션 · 카드 목록 · 보호 목록(설정) · 메인 체크아웃(카드 목록 행의 `isMainWorktree`). 읽기만 하고 사본을 저장하지 않는다. 열린 Orca Task 는 루트가 아니다(결정 177, 아직 만들지 않음) | — | 기준점, 앵커 |
 | 로컬 행 | 이 PC 의 sangsoe 가 다루는 `worktree list`·`worktree ps` 행. 행의 `hostId` 가 `local` 인 것이다(결정 88). REAPER 후보·대상·편입과 orca-monitor 판정은 로컬 행만 쓴다. 응답의 `hostScope`(`hostIds`·`omittedHostIds`)는 어느 호스트의 답을 덮었는지 알려 준다 | `hostId` | 이 머신, 내 PC 행 |
 | 비로컬 행 | `hostId` 가 `local` 이 아니거나 비었거나 오지 않은 행(Orca relay 로 보이는 다른 PC 나 SSH 호스트의 워크스페이스). 행의 `path` 는 그 호스트의 경로라 이 PC 의 git·`ports` 가 닿지 않으므로 지우지도 편입하지도 멈춘 것으로 판정하지도 않는다. 카드마다 한 번 `reap_blocked`(`remote_host`)로 남기고 모름으로 센다. `unavailableReason`·`unverifiableTerminalCount` 가 있는 행도 모름이다. 비로컬 행에서 `terminalPlatform` 을 포함해 어느 필드가 채워지는지는 시험 P11 이 본다. 다른 PC 는 그 PC 의 sangsoe 가 맡고 Orca relay 는 조작 채널일 뿐이며, 저장된 원격 환경(`--environment`)이나 SSH 워커 시작은 쓰지 않는다(대안 B, 나중) | `remote_host` | 원격 행, 외부 행 |
 | 표시 | 라운드의 첫 단계. 루트에서 소유 사슬(Task → worktree → 터미널·프로세스·브랜치·dev server → compose → 컨테이너·볼륨·네트워크·이미지)로 닿는 자원을 쓰이는 것으로 칠하는 일 | — | 마킹, 스캔 |
@@ -481,7 +481,7 @@
 | 판정 없음 | 독립 리뷰 판정이 비어 있는 경우의 표시 | `no verdict` | — |
 | 거부 사유 이름 | Orca 가 에이전트 세션 작업을 알 수 없을 때 내는 사유 | `agent_session_operation_unknown` | — |
 | 게이트 값 | 흐름 틀 단계의 게이트 값 | `gate = "owner"` | — |
-| 조사 자료 경로 | MCP 기능별 판정의 조사 기록 | `_research/mcp-review.md` | — |
+| 조사 자료 경로 | MCP 기능별 판정의 조사 기록 (비공개 조사 메모, 저장소에 싣지 않는다) | — | — |
 
 SQL 문장 조각, `<…>`·`{…}`·`(…)` 가 든 형식 예시, `칸=값` 표기는 용어가 아니라 예시 문법이어서 검사에서 뺀다.
 
