@@ -46,7 +46,7 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 <!-- roots: read only -->
 <path class="a" d="M355,300 L355,370"/><path class="a" d="M545,300 L545,370"/>
 <text class="l c" x="450" y="340">루트 읽기 (저장 안 함)</text>
-<g class="orc"><rect x="250" y="370" width="210" height="64" rx="8"/><text class="t c" x="355" y="392">Orca CLI (첫째 칸)</text><text class="m c" x="355" y="410">worker-list</text><text class="m c" x="355" y="425">worktree list · worktree ps</text></g>
+<g class="orc"><rect x="250" y="370" width="210" height="64" rx="8"/><text class="t c" x="355" y="392">Orca CLI (첫째 칸)</text><text class="m c" x="355" y="410">worker-list·show · task-list</text><text class="m c" x="355" y="425">worktree list · worktree ps</text></g>
 <g class="ext"><rect x="480" y="370" width="130" height="64" rx="8"/><text class="t c" x="545" y="392">gh</text><text class="s c" x="545" y="410">열린 PR</text><text class="s c" x="545" y="425">머지·닫힘 판정</text></g>
 
 <!-- ownership record -->
@@ -55,5 +55,5 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 <g class="st"><rect x="660" y="370" width="320" height="64" rx="8"/><text class="t c" x="820" y="392">공유 코어 sqlite (넷째 칸)</text><text class="m c" x="820" y="410">resource 소유 사슬 · resource_adopted</text><text class="m c" x="820" y="425">reap_candidate · reap_round</text></g>
 
 <text class="w" x="20" y="466">루트를 하나라도 못 읽으면 그 라운드는 정리하지 않는다 (roots_ok = false). 소유자를 모르면 모름으로 보고만 한다.</text>
-<text class="w" x="20" y="480">루트: 열린 PR · 세션 · 카드 목록 · 보호 목록(설정) · 메인 체크아웃 (Task 루트 짓지 않음)</text>
+<text class="w" x="20" y="480">루트: 열린 PR · 닫히지 않은 Task · 세션 · 카드 목록 · 보호 목록(설정) · 메인 체크아웃</text>
 </svg>
