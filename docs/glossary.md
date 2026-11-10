@@ -143,8 +143,8 @@
 | 참조 | 외부 객체를 가리키는 값(Orca Task id·게이트 id·메시지 id·PR 번호·dispatch id·세션 id + 메시지 uuid). 복사가 아니다 | — | 링크 |
 | 캐시 예외 | 외부 데이터를 복사해 두는 예외. 이유·TTL·갱신 주체를 적고 원본과 다르면 원본이 이긴다. Orca 값은 캐시도 두지 않는다. 한 번의 읽기 라운드 동안 메모리 안 스냅샷은 되지만 sqlite 에 쓰지 않는다. 예외는 `pr_ref`·`gh_budget`·`gh_seen` 이고 보존 사본 `owner_text` 는 캐시가 아니다 | `pr_ref` · `gh_budget` · `gh_seen` | 미러, 복제 |
 | PR 참조 | PR 상태를 가리키고 짧게 들고 있는 캐시 예외 | `pr_ref` | — |
-| 고유 사실 사본 | sqlite 파일 옆의 append-only 파일. 호스트 reader 가 다시 쓸 수 없는 event 행(sangsoe 만 가진 사실)과 발번을 같은 쓰기 길이 COMMIT 전에 한 줄씩 붙인다. 호스트 행과 `owner_text` 는 싣지 않으므로 이중 저장이 아니다. sqlite 파일을 잃었을 때만 읽는다(결정 183·184) | `<db>.facts.jsonl` · `OWN_TYPES` · `HOST_TYPES` | 백업 DB, sqlite 사본 |
-| 다시 세움 | sqlite 파일을 잃거나 읽을 수 없을 때 다음에 여는 쪽이 고유 사실 사본을 원래 seq 로 되살리고, monitor 가 첫 라운드 전에 호스트 행을 기존 reader 로 한 번 다시 읽는 것. 그 사이 깨움 act(머지 가능 알림)만 돌리고 Task 닫기·`reference add` 는 돌리지 않는다. 되살리지 못한 것은 이름 목록으로 남고 doctor 가 보여 준다(결정 184) | `store_rebuilt` · `host_rows_reread` · `store-restore` | 복구(`sangsoe recover` 와 겹친다) |
+| 고유 사실 사본 | sqlite 파일 옆의 append-only 파일. 호스트 reader 가 다시 쓸 수 없는 event 행(sangsoe 만 가진 사실)과 발번을 같은 쓰기 길이 COMMIT 전에 한 줄씩 붙인다. 호스트 행과 `owner_text` 는 싣지 않으므로 이중 저장이 아니다. 사본이 없던 빌드가 쓴 행은 다음 열기나 다음 쓰기가 따라 붙인다(결정 192). sqlite 파일을 잃었을 때만 통째로 읽는다(결정 183·184) | `<db>.facts.jsonl` · `OWN_TYPES` · `HOST_TYPES` | 백업 DB, sqlite 사본 |
+| 다시 세움 | sqlite 파일을 잃거나 읽을 수 없을 때 다음에 여는 쪽이 고유 사실 사본을 원래 seq 로 되살리고, monitor 가 첫 라운드 전에 호스트 행을 기존 reader 로 한 번 다시 읽는 것. 그 사이 깨움 act(머지 가능 알림)만 돌리고 Task 닫기·`reference add` 는 돌리지 않는다. Orca 가 열린 동안 잃으면 plugin worker 의 monitor·REAPER 가 다음 라운드 전에 다시 열어 다시 세운 파일에 붙는다(결정 191). 되살리지 못한 것은 이름 목록으로 남고 doctor 가 보여 준다(결정 184) | `store_rebuilt` · `host_rows_reread` · `store-restore` | 복구(`sangsoe recover` 와 겹친다) |
 | 따라잡기 | Orca 가 닫혀 있던 뒤 첫 REAPER 타이머 라운드가 놓친 칸 수를 한 번 적는 것. 칸마다 라운드를 다시 돌리지 않고, 멈춤 전 후보 관측과 짝을 이루지 않는다(결정 182) | `reap_round.missed` | 재실행 |
 | GitHub 한도 | GitHub 호출 예산과 이미 본 응답 표 | `gh_budget` · `gh_seen` | — |
 | 번호 표 | `iNNN`·`dNNN` 을 다시 쓰지 않게 세는 표 | `counter` | 시퀀스 표 |
