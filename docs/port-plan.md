@@ -24,7 +24,7 @@
 | D-1 | 일반 스킬 14개(`principles`·`write-plainly`·`tdd`·`architect` 등, 2.3) | general-skills 별도 저장소의 스킬 | sangsoe의 역할·상태에 의존하지 않아 본체 밖에 새로 쓴다(`evals`도 스킬과 함께 다시 쓴다). 다시 만듦 |
 | D-2 | 노트·티켓 도구(`use-notes`·`notes-writer`·`use-tracker`·`write-ticket`·`task-tracker`·`tracker_gate` 등 hook) | 노트 저장소 라우팅 스킬, 티켓 도구 스킬과 hook | 오너의 개인 설정에 묶여 본체 밖에 새로 쓴다. 식별자 형식을 가정하지 않는 hook 시험은 실제 값 모음으로 다시 쓴다. 다시 만듦 |
 | D-3 | 권한 규칙·비밀 입력 도구(`tune-automode`·`secure-fill`) | 권한 규칙 스크립트와 비밀 입력 스킬 | 거부 순환의 판정·드리프트 검사를 그 도구에서 키운다. 다시 만듦 |
-| D-4 | 공유·프리뷰 도구(`artifact_*`·`share_server`·`preview_watch`·`pstack-sync`·`S/share-caddy`) | 공유·프리뷰 도구 | 본체와 무관해 본체 밖에 새로 쓴다. 상주 프로세스는 의도 문서의 예외 표 사유가 있을 때만 두고, 프리뷰 회수 지연 상한(#417)은 그 도구에서 고친다. 다시 만듦 |
+| D-4 | 공유·프리뷰 도구(`artifact_*`·`share_server`·`preview_watch`·`pstack-sync`·`S/share-caddy`) | 공유·프리뷰 도구 | 본체와 무관해 본체 밖에 새로 쓴다. LaunchAgent·자체 상주 프로세스는 두지 않고(결정 176), 프리뷰 회수 지연 상한(#417)은 그 도구에서 고친다. 다시 만듦 |
 | D-5 | 오케스트레이터·리드·워커 역할, 위임 게이트, `dispatch-card`·`end-session`·`reboot` | 코어의 역할·세션 | 배정·닫기·전파 역할은 만들지 않는다: 리드가 `ready` 뷰에서 직접 시작하고(`capacity`) 막기·풀기는 Orca 게이트가 하며 깨움은 Orca 메시지가 한다. 다시 만듦 |
 | D-6 | 머지·배포 절차(`deliver-ticket`)와 머지 판정 | 랜드(land 판정 함수와 `sangsoe land`) | 머지 판정은 검토한 head sha와 남은 결함 수가 적힌 원문만 근거로 새로 쓴다. 다시 만듦 |
 | D-7 | 워커 감시·PR 감시·멘션 감시 자동화(자체 받은 편지함 감시 포함) | monitor(orca-monitor·pr-monitor·chat-monitor, plugin worker 타이머) | 자동화 등록 대신 worker 타이머가 돌고 받은 편지함 감시는 Orca 메시지 조회가 대신한다. 다시 만듦 |
@@ -164,7 +164,7 @@ queue-monitor 최소 라운드(`escalation_stale`·`close_suggested`·`item_read
 | `S/ci_tests.py` | 시험 파일 단위 실행기. 처음부터 병렬·시간 상한(PR #612, #624), 제외된 시험과 재실행 flake를 숨기지 않고 세어 출력 | 단독 실행을 가정하던 시험 | `S/test_ci.py` | 기반 |
 | `S/skill_tokens.py` | 플러그인이 세션에 싣는 정적 토큰 비용 측정, `skill_budget.json` 상한(#616) | — | `S/test_skill_tokens.py` | 기반 |
 | `S/test_public_shapes.py` | 공개 저장소에 들어가면 안 되는 모양 검사 | 목록은 저장소 밖 | 자기 자신 | 기반 |
-| `S/test_intent.py` | 내장 먼저: LaunchAgent·자체 주기 실행기·상주 프로세스는 예외 표에 사유(와 지울 조건)가 있어야 통과 | 옛 예외 표의 항목 | 자기 자신 | 기반 |
+| `S/test_intent.py` | 내장 먼저: 옛 저장소는 LaunchAgent·자체 주기 실행기·상주 프로세스를 예외 표의 사유로 통과시켰다. sangsoe 는 예외 없이 금지하고(결정 176) 트리에 `.plist` 가 없는지만 본다(`test/layout.test.ts`) | 옛 예외 표의 항목 | 자기 자신 | 기반 |
 | `S/test_script_modes.py` | 스크립트 실행 권한 구조 검사(#467) | — | 자기 자신 | 기반 |
 | `S/test_allowed_tools.py` | 스킬 frontmatter의 allowed-tools 검사 | — | 자기 자신 | 설치 |
 | `S/test_mcp_prefixes.py` | MCP 접두어 검사 | — | 자기 자신 | 설치 |

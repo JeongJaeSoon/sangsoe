@@ -56,6 +56,6 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
    - `merge_on_approval`: 승인이 찰 때 pr-monitor 가 리드를 깨우고, 리드가 같은 `land` 로 머지한다.
    - 거부 code(`evidence_missing`, `review_missing`, `review_stale`, `head_moved`, `stack_order`, `main_red` 등): `refusal.fix` 대로 원인을 고치고 다시 부른다. `review_stale`·`head_moved` 는 리뷰한 head 가 지금 head 가 아니라는 뜻이니, 새 head 를 다시 리뷰받는다. `main_red` 동안에는 `main_fix: true` 로 요청한 PR 만 들어간다.
    - 거부(hook·권한): 다른 길로 머지하지 않는다. 일을 맡긴 쪽에 거부 보고로 알린다.
-3. 예약이든 "승인되면 머지"든, `merge_ready` 를 담은 worker_done 을 보낸다: PR, head sha, 리뷰 판정과 리뷰어, 등급과 증거, 확인 못 한 것. 항목은 머지 확인 뒤 pr-monitor 가 닫는다. 네가 닫지 않는다.
+3. 머지했든 예약했든 "승인되면 머지"든, `merge_ready` 를 담은 worker_done 한 번으로 끝낸다: PR, head sha, 리뷰 판정과 리뷰어, 등급과 증거, 확인 못 한 것. `--type merge_ready` 메시지를 따로 보내지 않는다(결정 175, `[gate:self-land]` 가 막는다). Orca 는 worker_done 으로 Task 를 닫지만, 브리프는 PR 이 머지될 때까지 항목을 🚧 막힘(리뷰어)으로 읽는다. 네가 항목을 닫지 않는다.
 
 worker_done 전에 `end-session` skill 을 읽는다.
