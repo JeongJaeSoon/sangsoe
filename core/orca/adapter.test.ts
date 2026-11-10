@@ -242,9 +242,15 @@ test("ports reads one worktree's listeners, and only from the local host", async
   const far = await createOrcaAdapter(remote.exec).ports({ worktree: "id:x" });
   assert.equal(!far.ok && far.error.code, "non_local_host", "decision 88: a remote host's listeners are not this PC's");
 
-  const bad = createFakeOrca({ replies: { ports: { ok: true, result: { executionHostId: "local", ports: [{ port: 1 }] } } } });
-  const shape = await createOrcaAdapter(bad.exec).ports({ worktree: "id:x" });
-  assert.equal(!shape.ok && shape.error.code, "unexpected_shape");
+  const unnamed = createFakeOrca({ replies: { ports: { ok: true, result: { ports: [] } } } });
+  const unknown = await createOrcaAdapter(unnamed.exec).ports({ worktree: "id:x" });
+  assert.equal(!unknown.ok && unknown.error.code, "non_local_host", "decision 88: a missing host is not local");
+
+  for (const row of [{ port: 1 }, { id: "a", port: "5173" }]) {
+    const bad = createFakeOrca({ replies: { ports: { ok: true, result: { executionHostId: "local", ports: [row] } } } });
+    const shape = await createOrcaAdapter(bad.exec).ports({ worktree: "id:x" });
+    assert.equal(!shape.ok && shape.error.code, "unexpected_shape", JSON.stringify(row));
+  }
 });
 
 test("worker-start passes --keep-open bare and --repo with its selector", async () => {

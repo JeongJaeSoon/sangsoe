@@ -11,7 +11,7 @@ import type {
   WriteOptions,
 } from "../contract/orca.ts";
 import { type CommandName, ORCA_COMMANDS } from "./commands.ts";
-import { keepLocal } from "./host-filter.ts";
+import { isLocalHost, keepLocal } from "./host-filter.ts";
 
 type FlagValue = string | number | boolean | undefined;
 type Call = { pos?: readonly string[]; flags?: Record<string, FlagValue> };
@@ -135,9 +135,9 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     return unexpected(`orca ${ORCA_COMMANDS[name].path.join(" ")}: result has an unexpected shape`, r.value);
   }
 
-  type Kind = "string" | "array";
+  type Kind = "string" | "number" | "array";
   const kindOf = (x: unknown): Kind | undefined =>
-    typeof x === "string" ? "string" : Array.isArray(x) ? "array" : undefined;
+    typeof x === "string" ? "string" : typeof x === "number" ? "number" : Array.isArray(x) ? "array" : undefined;
   /** Rows that are objects carrying each named field with its kind. */
   const rowsWith =
     (fields: Record<string, Kind>) =>
@@ -265,10 +265,10 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
       local("worktreePs", "worktrees", "hostId", "worktreeId", { flags: { limit: a.limit, "agent-wait": a.agentWait } }),
     worktreeRm: (a) => run("worktreeRm", { flags: { worktree: a.worktree, "run-hooks": true, "delete-branch": true } }),
     ports: async (a) => {
-      const r = await shaped<Json>("ports", has("ports", rowsWith({ id: "string" })), { flags: { worktree: a.worktree } });
+      const r = await shaped<Json>("ports", has("ports", rowsWith({ id: "string", port: "number" })), { flags: { worktree: a.worktree } });
       if (!r.ok) return r;
       const host = r.value.executionHostId;
-      if (host !== undefined && host !== "local") {
+      if (!isLocalHost(host)) {
         return { ok: false, error: { code: "non_local_host", message: `orca ports scanned host ${String(host)}`, data: r.value } };
       }
       return { ok: true, value: r.value.ports as PortRow[] };
