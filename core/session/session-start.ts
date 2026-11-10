@@ -4,6 +4,7 @@ import { decision as decisionView } from "../store/views/decision.ts";
 import { roleLine } from "../start/start.ts";
 import type { Role } from "../start/types.ts";
 import { VERSION } from "../version.ts";
+import { handoffSubject } from "./handoff.ts";
 import { agentRole, type Located, locate, readRoleLine } from "./locate.ts";
 import { type SessionHookInput, toSessionRow } from "./session.ts";
 
@@ -56,7 +57,12 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   if (held) lines.push(`Run ${held} 을 쥐고 있다(run-current).`);
   else if (before && role !== "worker") lines.push(`run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use ${before}`);
   // Every read comes before the first `notified` row, so a failure while reading marks nothing delivered.
-  const handoff = run ? await lastHandoff(deps, run, input.session_id) : undefined;
+  // A session with a Dispatch saved its handoff in that Dispatch's Run under its Task (handoff_save).
+  const handoff = loc
+    ? await lastHandoff(deps, loc.run, input.session_id, handoffSubject(loc.task))
+    : run
+      ? await lastHandoff(deps, run, input.session_id, "handoff")
+      : undefined;
   const late = loc ? lateAnswers(deps, loc.task, input.session_id) : [];
   if (handoff) lines.push(...handoff());
   if (opts.pluginVersion && opts.pluginVersion !== VERSION) {
@@ -76,10 +82,10 @@ function previous(deps: CoreDeps, role: Role, loc: Located | undefined): string 
   return same.reverse().find((r) => r.heldRun)?.heldRun;
 }
 
-async function lastHandoff(deps: CoreDeps, run: string, session: string): Promise<Delivery | undefined> {
+async function lastHandoff(deps: CoreDeps, run: string, session: string, subject: string): Promise<Delivery | undefined> {
   const box = await deps.orca.inbox({ terminal: `run:${run}`, limit: 50 });
   if (!box.ok) return undefined;
-  const last = box.value.filter((m) => m.type === "handoff").at(-1);
+  const last = box.value.filter((m) => m.type === "handoff" && m.subject === subject).at(-1);
   const body = last?.body;
   if (!last || !body) return undefined;
   return () => {

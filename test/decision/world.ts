@@ -15,7 +15,7 @@ export interface World {
   readonly tasks: Map<string, WorldTask>;
   readonly gates: Map<string, WorldGate>;
   readonly sends: WorldSend[];
-  /** Every orca call as its subcommand words, e.g. "orchestration gate-resolve". */
+  /** Every orca call as its subcommand words; with a name ("orchestration gate-resolve"), those calls' full argv. */
   calls(name?: string): string[][];
   /** The Run run-current reports from now on, as when another Run's session makes the call. */
   useRun(run: string): void;
@@ -47,6 +47,7 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
   const gates = new Map<string, WorldGate>();
   const sends: WorldSend[] = [];
   let n = 0;
+  let created = 0;
   let current = o.currentRun ?? null;
   let deadAddress: string | null = null;
   let lose: boolean | null = null;
@@ -65,13 +66,19 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
       });
     },
     "orchestration-task-create": (args: readonly string[]) => {
-      const id = `task_9${String(++n).padStart(11, "0")}`;
+      // Its own counter, so a carrier Task does not shift the gate and message ids tests name.
+      const id = `task_9${String(++created).padStart(11, "0")}`;
       taskMap.set(id, { id, run: flag(args, "run") ?? "run_unbound", status: "pending", title: flag(args, "task-title") ?? id });
       return ok({ task: { id } });
     },
     "orchestration-gate-create": (args: readonly string[]) => {
       const task = flag(args, "task") ?? "";
       if (!taskMap.has(task)) return err("task_not_found");
+      // Orca refuses a gate on a Task whose supervised worker runs (test/fixtures/orca-refusals).
+      const t = taskMap.get(task);
+      if (t?.status === "dispatched" || t?.dispatchId) return err("task_not_startable");
+      // "Create a decision gate blocking a task" (gate-create --help).
+      if (t && (t.status === "pending" || t.status === "ready")) t.status = "blocked";
       const id = `gate_${String(++n).padStart(12, "0")}`;
       const options = flag(args, "options");
       gates.set(id, { id, taskId: task, status: "pending", question: flag(args, "question") ?? "", ...(options ? { options } : {}) });
@@ -138,8 +145,9 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
     gates,
     sends,
     calls: (name) => {
-      const words = fake.calls.filter((c) => c[0] === "orca").map((c) => c.slice(1, 3));
-      return name ? words.filter((w) => w.join(" ") === name) : words;
+      const orca = fake.calls.filter((c) => c[0] === "orca");
+      // Named: each call's full argv, so a test can read its flags.
+      return name ? orca.filter((c) => c.slice(1, 3).join(" ") === name).map((c) => c.slice(1)) : orca.map((c) => c.slice(1, 3));
     },
     useRun: (run) => {
       current = run;

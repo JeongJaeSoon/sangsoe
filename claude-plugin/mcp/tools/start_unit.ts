@@ -10,6 +10,7 @@ import {
   MODEL_TIERS,
   type ModelTier,
   nodeExec,
+  REPO_SELECTOR,
   type Role,
   resolveModel,
   runSlots,
@@ -77,8 +78,15 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
     ...(reason ? { reason } : {}),
   });
   if (!model.ok) return invalid(model.reason, "read resource models: raise effort along the row's ladder first, then its next tier with a reason");
+  const repo = s("repo");
+  if (repo && !REPO_SELECTOR.test(repo)) return invalid(`repo "${repo}" is not an Orca repo selector`, "repo: id:<id>, name:<name> or path:<path>");
+  const worktreeId = s("worktreeId");
+  if (!worktreeId && role !== "orchestrator") {
+    return invalid("worktreeId is missing", "pass your own worktreeId; only an orchestrator outside every worktree leaves it out, and then passes repo");
+  }
   const out = await startUnit(ports, {
-    requester: { role: role as Role, worktreeId: s("worktreeId") ?? "", runId: s("runId") ?? "", ...(taskId ? { taskId } : {}) },
+    requester: { role: role as Role, ...(worktreeId ? { worktreeId } : {}), runId: s("runId") ?? "", ...(taskId ? { taskId } : {}) },
+    ...(repo ? { repo } : {}),
     childRole,
     task: task
       ? { id: task }
@@ -111,7 +119,14 @@ export default {
     type: "object",
     properties: {
       role: { type: "string", enum: ["orchestrator", "lead", "worker"], description: "Your own role." },
-      worktreeId: { type: "string", description: "Your own Orca worktree id; the new worktree is its child." },
+      worktreeId: {
+        type: "string",
+        description: "Your own Orca worktree id; the new worktree is its child. Only an orchestrator running in no Orca worktree leaves it out, and then passes repo.",
+      },
+      repo: {
+        type: "string",
+        description: "The Orca repo selector (id:, name: or path:) the new worktree goes in, when it is not your own repo. Default: the repo item_create recorded, else yours.",
+      },
       taskId: { type: "string", description: "Your own Task id (lead or worker)." },
       runId: { type: "string", description: "The Run you hold." },
       childRole: { type: "string", enum: ["lead", "worker"] },
@@ -141,7 +156,7 @@ export default {
       tier: { type: "string", enum: [...MODEL_TIERS], description: "The kind's next tier, only from the ladder's last effort; needs reason." },
       reason: { type: "string", description: "Why the default model or effort falls short; recorded as model_changed." },
     },
-    required: ["role", "worktreeId", "runId", "childRole"],
+    required: ["role", "runId", "childRole"],
     additionalProperties: false,
   },
   async handler(input) {

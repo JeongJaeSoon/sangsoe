@@ -1,0 +1,33 @@
+{
+  "source": "Read from the Orca 1.4.250 app's bundled main-process code (read-only), 2026-11-11, decision 197. Each entry is the condition Orca checks and the error it throws; ${...} are Orca's own placeholders.",
+  "refusals": [
+    {
+      "code": "task_not_startable",
+      "verb": "orchestration gate-create (and a decision_gate message)",
+      "when": "the Task has a pending or dispatched Dispatch whose worker is not failed, succeeded, stopped or abandoned",
+      "message": "Task ${taskId} cannot open a gate while supervised Dispatch ${dispatchId} is active; stop or settle its worker first.",
+      "sangsoe": "decision_open joins such a waiter without a gate; the question goes on a carrier Task's gate in the caller's Run"
+    },
+    {
+      "code": "dispatch_run_mismatch",
+      "verb": "orchestration send",
+      "when": "the sender has an active Dispatch (or names one) and the target Run is not that Dispatch's Run",
+      "message": "Dispatch ${dispatchId} belongs to Run ${dispatchRun}, not ${targetRun}.",
+      "sangsoe": "handoff_save from a session holding a Dispatch sends to that Dispatch's Run under the subject `handoff <task>`"
+    },
+    {
+      "code": "sender_not_assignee",
+      "verb": "orchestration send --type escalation | decision_gate",
+      "when": "the sender holds no active Dispatch (a monitor, the orchestrator); from a process other than the Dispatch's own the same types are worker_identity_changed",
+      "message": "No active Dispatch belongs to this message sender.",
+      "sangsoe": "queue-monitor's verify_unconfirmed and decision release send `status`"
+    },
+    {
+      "code": "invalid_argument",
+      "verb": "orchestration worker-start --worktree new-child",
+      "when": "the dispatching terminal's workspace is not a git worktree Orca manages (Orca resolves it from the terminal, not the cwd); with --repo, new-child keeps parentWorktreeId = that workspace",
+      "message": "The dispatching terminal's workspace could not be resolved to a git worktree Orca manages, which --worktree new-child needs; run from one, or pass --worktree new-top-level --repo <selector>.",
+      "sangsoe": "start_unit uses new-top-level --repo only for an orchestrator in no worktree; its lineage is the Run alone"
+    }
+  ]
+}

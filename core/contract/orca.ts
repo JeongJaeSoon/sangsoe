@@ -157,6 +157,18 @@ export type GateRow = {
   resolution?: string | null;
 };
 
+/** The ids and stop reason Orca attaches to a message; only these are read. */
+export type InboxPayload = {
+  taskId?: string;
+  dispatchId?: string;
+  /** Orca's own stop escalations: `finished`, `errored`, `needs-input`. */
+  stopReason?: string;
+};
+
+/**
+ * One message as the adapter hands it on. `inbox --full` names the fields `from_handle`,
+ * `to_handle` and `read` and sends `payload` as JSON text; the adapter maps them to these.
+ */
 export type InboxMessage = {
   id: string;
   type: string;
@@ -165,6 +177,7 @@ export type InboxMessage = {
   subject: string;
   handled: boolean;
   body?: string;
+  payload?: InboxPayload;
 };
 
 export type WorkerRow = {
@@ -229,7 +242,8 @@ export type PortRow = {
 /** The receipt shape of a write is Orca's; the core reads ids from it and keeps the rest opaque. */
 export type Receipt = Record<string, unknown>;
 
-export type WorkerPlacement = "current" | "new-child" | { existing: string };
+/** `new-top-level` only for an orchestrator in no Orca worktree, with `repo` (decision 197). */
+export type WorkerPlacement = "current" | "new-child" | "new-top-level" | { existing: string };
 
 /**
  * The only path from the core to Orca (design §2, first-slot table). Not here on purpose:

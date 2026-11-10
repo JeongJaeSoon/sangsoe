@@ -9,7 +9,8 @@ export type UnitLineage = {
   problems: string[];
 };
 
-export type ExpectedUnit = { taskId: string; runId: string; parentWorktreeId: string };
+/** No `parentWorktreeId` for a new-top-level unit: its lineage is the Run alone (decision 197). */
+export type ExpectedUnit = { taskId: string; runId: string; parentWorktreeId?: string };
 
 /**
  * Regression scenario `unit_lineage_complete` (decision 94 (사)): for every started unit read its
@@ -54,6 +55,7 @@ export async function checkLineage(orca: OrcaAdapter, units: readonly ExpectedUn
       continue;
     }
     row.parentWorktreeId = tree.parentWorktreeId;
+    if (u.parentWorktreeId === undefined) continue;
     if (!tree.parentWorktreeId) row.problems.push("parentWorktreeId 가 없다");
     else if (tree.parentWorktreeId !== u.parentWorktreeId) row.problems.push(`부모가 다르다: ${tree.parentWorktreeId}`);
   }

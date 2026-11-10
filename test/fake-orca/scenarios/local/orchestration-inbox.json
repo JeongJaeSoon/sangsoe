@@ -5,20 +5,35 @@
       {
         "id": "msg_000000000001",
         "type": "status",
-        "from": "term_00000000-0000-4000-8000-000000000009",
-        "to": "run:run_000000000001",
+        "from_handle": "term_00000000-0000-4000-8000-000000000009",
+        "to_handle": "run:run_000000000001",
         "subject": "acme/api: wave 1 started",
-        "handled": false,
+        "read": 0,
+        "priority": "normal",
+        "payload": null,
         "body": "Two units started."
       },
       {
         "id": "msg_000000000002",
         "type": "worker_done",
-        "from": "term_00000000-0000-4000-8000-000000000001",
-        "to": "run:run_000000000001",
+        "from_handle": "term_00000000-0000-4000-8000-000000000001",
+        "to_handle": "run:run_000000000001",
         "subject": "feature-a merged",
-        "handled": true,
+        "read": 1,
+        "priority": "normal",
+        "payload": "{\"taskId\":\"task_000000000001\",\"dispatchId\":\"ctx_000000000001\",\"outcome\":\"succeeded\"}",
         "body": "Merged acme/api#40."
+      },
+      {
+        "id": "msg_stop_000000000000000000000003",
+        "type": "escalation",
+        "from_handle": "term_00000000-0000-4000-8000-000000000002",
+        "to_handle": "run:run_000000000001",
+        "subject": "Worker stopped on an error without reporting",
+        "read": 0,
+        "priority": "high",
+        "payload": "{\"taskId\":\"task_000000000002\",\"dispatchId\":\"ctx_000000000002\",\"handle\":\"term_00000000-0000-4000-8000-000000000002\",\"stopReason\":\"errored\"}",
+        "body": "Worker term_00000000-0000-4000-8000-000000000002 ended its turn on an error without sending worker_done for task \"feature-b\" (task_000000000002).\nThe Dispatch is still open.\nLast output:\n  ⎿  You've hit your 5-hour limit · resets 2:40am\n⏺ Usage limit reached · continuing automatically at 2:40am · esc to cancel"
       }
     ]
   }

@@ -36,7 +36,7 @@ effort: medium
 
 - resource `ready` 에서 시작할 항목을 고르고 `start_unit` 으로 워커를 시작한다(`start` skill). 시작할 항목을 대신 골라 주는 역할은 없다. 네가 고른다.
 - 워커의 질문·escalation 은 네가 풀 수 있으면 답하고(Orca `reply`), 브리프 범위나 승인 줄 밖이면 오케스트레이터에게 올린다.
-- 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다.
+- 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다. 확인을 마치면 `orca orchestration worker-release --dispatch <id>` 로 그 워커를 푼다. 새 worktree 에서 연 워커는 Orca 가 저절로 닫지 않는다(결정 197).
 - 리뷰 판정은 작성자가 기록하지 못한다. 워커가 보낸 리뷰한 head·리뷰어·증거로 `review_record` 에 판정을 기록하는 것은 너다(결정 111·162).
 - 검증 증거도 작성자가 기록하지 못한다. 워커가 보낸 실행 출력으로, 리뷰한 head 에 등급이 묻는 `kind` 마다 `evidence_record` 를 부르고, 머지 뒤 배포 단계는 `stage_record` 로 남긴다(결정 171).
 - "승인되면 머지"(`merge_on_approval`)인 PR 이 승인되어 깨면, 같은 `land` 요청으로 머지한다.
@@ -47,4 +47,6 @@ effort: medium
 
 ## 끝
 
-완료 조건마다 증거(event, 머지 커밋, main CI)를 확인한 뒤 자기 Dispatch 로 worker_done 을 한 번 보낸다. 본문에는 조건별 증거, 남은 보류 항목, 실패한 것을 적는다. 그 전에 `end-session` skill 로 네가 띄운 것을 내린다.
+완료 조건마다 증거(event, 머지 커밋, main CI)를 확인한 뒤 자기 Dispatch 로 worker_done 을 한 번 보낸다. 본문에는 조건별 증거, 남은 보류 항목, 실패한 것을 적는다. 그 전에 `end-session` skill 로 네가 띄운 것을 내린다. 네 터미널은 `--keep-open` 으로 열렸으므로 worker_done 뒤에도 남고, 오케스트레이터가 확인한 뒤 푼다. 네가 풀지 않는다(결정 197).
+
+`handoff_save` 의 인계는 네 Dispatch 의 Run(오케스트레이터의 Run)에 네 Task 이름으로 간다. Orca 는 Dispatch 를 쥔 세션이 다른 Run 우편함에 쓰는 것을 막는다(결정 197). 네 Run 이 아니라 그곳에서 다음 세션이 찾는다.

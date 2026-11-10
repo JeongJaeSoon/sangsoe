@@ -26,7 +26,7 @@ const NINE = [
   line("2026-11-10T11:05:00.000Z", "worker_idle", { session: "sess-26" }, { entity: "task", entity_id: "task_26" }),
   line("2026-11-10T11:06:00.000Z", "observed_change", { task: "task_26", field: "status" }),
   line("2026-11-10T11:07:00.000Z", "refusal_report", { act: "land", category: "no verdict", command_file: "/tmp/r/1.txt" }, { entity: "task", entity_id: "task_26" }),
-  line("2026-11-10T11:08:00.000Z", "worker_done", { dispatch: "ctx_26", task: "task_26", outcome: "succeeded" }),
+  line("2026-11-10T11:08:00.000Z", "worker_done", { dispatch: "ctx_26", task: "task_26", msg_id: "msg_26" }),
 ];
 
 test("the nine events each leave one chain row in the owner's words", () => {
@@ -43,7 +43,7 @@ test("the nine events each leave one chain row in the owner's words", () => {
     ["11-10 11:05", "대기", "워커가 다음 지시를 기다림"],
     ["11-10 11:06", "신호", "Orca 에서 status 바뀜"],
     ["11-10 11:07", "거부", "land 거부됨(no verdict)"],
-    ["11-10 11:08", "보고", "worker_done 성공"],
+    ["11-10 11:08", "보고", "워커 완료 보고 받음"],
   ]);
 });
 

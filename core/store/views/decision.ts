@@ -62,10 +62,14 @@ export const decision: DecisionView = (input) => {
   // closed-by-answer. A waiter has the answer once its gate is resolved. Only a closed Task's gate stays
   // open on purpose (91④(ii)); for it, the Run told under the answer's notified key is the delivery. A
   // live Task's key (SessionStart's injection) does not resolve its gate, so it stays undelivered.
+  // A waiter joined without a gate (its worker ran, decision 197) has the answer only by message:
+  // while its worker still runs, it is undelivered until that message is told. Once the Task waits
+  // again, the next session's SessionStart carries the answer.
+  const running = new Set(input.orca.tasks.filter((t) => t.status === "dispatched").map((t) => t.id));
   const pending = (r: Mutable, w: { task: string; gate: string | null }) =>
-    w.gate !== null &&
-    openGates.has(w.gate) &&
-    !(closedTasks.has(w.task) && told.has(answerNotifiedKey(r.decision, w.task).dedupe_key));
+    w.gate === null
+      ? running.has(w.task) && !told.has(answerNotifiedKey(r.decision, w.task).dedupe_key)
+      : openGates.has(w.gate) && !(closedTasks.has(w.task) && told.has(answerNotifiedKey(r.decision, w.task).dedupe_key));
   return [...rows.values()].map((r) => ({
     ...r,
     undelivered: (r.state === "answered" || r.closedReason === "answered") && r.waiters.some((w) => pending(r, w)),

@@ -1,7 +1,7 @@
 import { receiptId } from "../notify/receipt.ts";
 import { type CoreDeps, done, type Result, refuse } from "../notify/result.ts";
 import { decisionKey } from "./key.ts";
-import { type DecisionState, isOpenGate, readDecision, readDecisionByKey } from "./waiters.ts";
+import { type DecisionState, isClosedTask, isOpenGate, orcaReads, readDecision, readDecisionByKey } from "./waiters.ts";
 
 export interface DecisionOpenInput {
   /** `item:iNNN`, else `scope:<group>`. */
@@ -66,11 +66,40 @@ export async function decisionOpen(deps: CoreDeps, input: DecisionOpenInput): Pr
     return done({ status: "closed", decision: d, answer: state.row.answer, reason });
   }
 
-  let waiters = input.waiters;
-  if (waiters.length === 0) {
-    const carrier = await carrierTask(deps, state, input.carrierRun ?? "");
+  // Orca refuses a gate on a Task whose supervised worker runs (task_not_startable): such a waiter
+  // joins without one and hears the answer by message (release); the question then sits on a carrier
+  // in this Run unless another waiter's gate holds it (decision 197).
+  const reads = orcaReads(orca);
+  const running: { task: string; run: string }[] = [];
+  let waiters: { task: string; run: string }[] = [];
+  for (const w of input.waiters) {
+    const prior = state.waiters.find((x) => x.task === w.task);
+    if (prior) {
+      // A waiter joined without a gate stays so: a later gate would not be recorded and never resolve.
+      (prior.gate !== null ? waiters : running).push(w);
+      continue;
+    }
+    const t = await reads.task(w.run, w.task);
+    if (!t.ok) return t;
+    const live = t.value !== undefined && !isClosedTask(t.value) && (t.value.status === "dispatched" || t.value.dispatchId !== undefined);
+    (live ? running : waiters).push(w);
+  }
+  for (const w of running) {
+    store.append({
+      type: "decision_joined",
+      source: SOURCE,
+      dedupe_key: `decision_joined:${d}:${encodeURIComponent(w.task)}`,
+      payload: { decision: d, waiter: w.task, run: w.run },
+    });
+  }
+  const holders = state.waiters.filter((x) => x.gate !== null && x.run !== null);
+  if (waiters.length === 0 && holders.length > 0) {
+    waiters = holders.map((x) => ({ task: x.task, run: x.run as string }));
+  } else if (waiters.length === 0) {
+    const run = input.carrierRun ?? input.callerRun;
+    const carrier = await carrierTask(deps, state, run);
     if (!carrier.ok) return carrier;
-    waiters = [{ task: carrier.value, run: input.carrierRun ?? "" }];
+    waiters = [{ task: carrier.value, run }];
   }
 
   const gates: string[] = [];
@@ -115,7 +144,7 @@ async function carrierTask(deps: CoreDeps, state: DecisionState, run: string): P
   const d = state.row.decision;
   const marked = state.waiters.find((w) => w.carrier);
   if (marked) return done(marked.task);
-  const listed = await deps.orca.taskList({ run });
+  const listed = await deps.orca.taskList({ run, full: true });
   if (!listed.ok) return refuse("orca_error", `task-list ${run}: ${listed.error.code}`, "retry once Orca answers");
   let task = listed.value.find((t) => t.title === d)?.id;
   if (!task) {
