@@ -16,7 +16,7 @@ A read-only review of the whole design set: against itself, against the code on 
 - The session's status line showed that model's name followed by the effort setting `high`.
 - Section 10's help-text sweeps ran on smaller models, as the instruction for that section allowed. The judgment there, and every line of this report, is the session model's.
 
-**Commit reviewed.** `72fb3fed8ef78af1437348a0235607d0b32ee531` (main when the review began). Every `path:line` below is a line of that commit; `git show 72fb3fe:<path>` prints the file as cited. Two changes landed on main while the review ran: the model-selection table (decisions 164 and 165), and later two more rows in `docs/test-outcomes.md`. Neither is reviewed here. The second shifts line numbers in `docs/test-outcomes.md`. The first shifts them in `docs/design.html`, `docs/design-appendix.html`, `docs/glossary.md`, `docs/decisions.md`, `docs/architecture.md`, `core/checks/index.ts`, `claude-plugin/agents/lead.md` and `claude-plugin/agents/worker.md`, and it adds a fourth MCP resource and one doctor check, so the counts in S19 and S20 are those of the reviewed commit.
+**Commit reviewed.** `72fb3fed8ef78af1437348a0235607d0b32ee531` (main when the review began). Every `path:line` below is a line of that commit; `git show 72fb3fe:<path>` prints the file as cited. Three changes landed on main while the review ran: the model-selection table (decisions 164 and 165), then two more rows in `docs/test-outcomes.md`, then an install and doctor change (decisions 166 to 168). None is reviewed here. The second shifts line numbers in `docs/test-outcomes.md`. The third shifts them in `README.md`, `core/install/host.ts`, `core/checks/index.ts` and the later part of `docs/decisions.md`, and it adds doctor rows. The first shifts them in `docs/design.html`, `docs/design-appendix.html`, `docs/glossary.md`, `docs/decisions.md`, `docs/architecture.md`, `core/checks/index.ts`, `claude-plugin/agents/lead.md` and `claude-plugin/agents/worker.md`, and it adds a fourth MCP resource and one doctor check, so the counts in S19 and S20 are those of the reviewed commit.
 
 **Files read.**
 
@@ -432,7 +432,7 @@ What the inventory found that bears on the design and that sangsoe does not use,
 | Agent frontmatter `tools`, `disallowedTools` | C-agents lines 300 and 301 | B6, DROP |
 | `claude plugin validate`, `orca plugin validate` | C-cli; `docs/test-outcomes.md:7` | add: B5, LATER |
 | `/goal` | S14 | decision 121 moved off it; the design text still names it. S14 |
-| Model and effort settings | not reviewed | the change that landed during the review put them in one table; see 10.4 |
+| Model and effort settings | not reviewed | the first change that landed during the review put them in one table; see 10.4 |
 
 ### 10.4 Double storage
 
@@ -444,7 +444,7 @@ Facts sangsoe holds that a host already owns, or holds twice.
 | PR state cache | tables `pr_ref`, `gh_budget`, `gh_seen` | GitHub | created and never used: S18 |
 | "This session waits on a person" | `waiting_human`, written from the `Notification` hook with the tool and an excerpt (`core/session/record.ts:140`, `core/contract/events/waiting_human.ts:4`) | Orca computes the same fact as `agentWait`, which sangsoe also reads (`core/detect/orca/judge.ts:53`) and uses to release the row (`core/owner/release.ts:61`) | two records of one host fact. For the release the design says the first signal seen stands (`docs/design-appendix.html:126`, decision 91). It does not say what holds when Orca reports a wait and the hook wrote no row. LATER, revisit the first time the brief and Orca disagree about who is waiting |
 | The owner's words | `owner_text`, masked | the Claude Code transcript; Orca search finds the text and returns no message id (`docs/design-appendix.html:1040`) | kept on purpose. DROP |
-| Model and effort per role | one table since the change that landed during the review; the agent files gained `model` and `effort` lines in the same change | Claude Code reads the agent file | not reviewed. Worth one look: whether a test ties those lines to the table. LATER, at the next change to the table |
+| Model and effort per role | one table since the first change that landed during the review; the agent files gained `model` and `effort` lines in the same change | Claude Code reads the agent file | not reviewed. Worth one look: whether a test ties those lines to the table. LATER, at the next change to the table |
 
 Not double, checked: contracts refuse Orca-owned keys such as a Task's title and a gate's question (`core/contract/define.ts:44`); the gate question goes to Orca only (`core/decision/open.ts:90`); the parent link of a started unit is read back from Orca and not stored (`core/start/lineage.ts:20`).
 
