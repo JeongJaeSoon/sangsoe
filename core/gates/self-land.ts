@@ -62,10 +62,13 @@ export const selfLandGate: Gate = (call, facts) => {
     if (merge && facts.role() !== "general") {
       return verdict(`A direct merge skips the land checks. Merge through ${LAND}.`);
     }
+    const send = argv[0] === "orca" && pos[1] === "orchestration" && pos[2] === "send";
+    // Decision 175: merge_ready is the name of the report inside worker_done, not a message of its own.
+    if (send && option(argv, "--type") === "merge_ready" && (facts.role() === "worker" || facts.role() === "lead")) {
+      return verdict("A PR author ends with one worker_done that carries the merge-wait report. Send it as `--type worker_done`.");
+    }
     const done =
-      argv[0] === "orca" &&
-      pos[1] === "orchestration" &&
-      pos[2] === "send" &&
+      send &&
       option(argv, "--type") === "worker_done" &&
       option(argv, "--outcome") !== "failed";
     const sent = done ? body(argv, text, call.cwd, facts) : undefined;

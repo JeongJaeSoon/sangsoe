@@ -235,7 +235,7 @@ const codeWords = new Set(
 const NOT_BUILT = ["owner_class", "notify", "item_trigger", "item_transition", "priority_set"];
 // Words the judgment layer says that are not sangsoe code, each with whose word it is.
 const OTHER_WORDS = new Map([
-  ["merge_ready", "the worker_done report a worker sends after land (decision 162)"],
+  ["merge_ready", "the worker_done report a worker sends after land (decisions 162 and 175)"],
   ["worker_cannot_coordinate_own_run", "Orca's refusal of a Task created in the worker's own Run"],
   ["input_match", "a Claude Code plugin eval grader field"],
 ]);

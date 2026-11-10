@@ -37,6 +37,8 @@ export interface ItemFacts {
 }
 
 const ALARMS = new Set(["worker_stuck", "worker_dead", "ci_failed", "land_failed", "loop_detected", "decision_untracked"]);
+// The author's session is gone while the item waits on the merge: only the PR's own alarms still apply.
+const PR_ALARMS = new Set(["ci_failed", "land_failed"]);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
 const RANK: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
@@ -65,6 +67,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
   const created = new Map<string, StoredEvent>();
   const transition = new Map<string, StoredEvent>();
   const closedAt = new Map<string, string>();
+  const mergedAt = new Map<string, string>();
   const prio = new Map<string, Priority>();
   const prTask = new Map<string, string>();
   const prOpen = new Map<string, string>();
@@ -88,6 +91,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     } else if (e.type === "pr_merged" || e.type === "pr_closed") {
       const t = prTask.get(String(p.pr));
       if (t && prOpen.get(t) === p.pr) prOpen.delete(t);
+      if (t && e.type === "pr_merged") mergedAt.set(t, e.ts);
     } else if (countsAsEvidence(e) && e.entity === "task" && e.entity_id) evidence.add(e.entity_id);
     else if (e.type === "trigger_unclear") unclear.set(String(p.task), e.seq);
     if (ALARMS.has(e.type)) {
@@ -106,12 +110,19 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     const lead = str(x.lead) ?? OTHERS;
     const own = decisions.filter((d) => d.waiters.some((w) => w.task === t.id));
     const openDecisions = own.filter((d) => d.state === "open").map((d) => d.decision);
-    const state = stateOf(t, x.hold === true && str(x.review_trigger) !== null, waiterReading(t, input.orca.gates), ready.has(t.id));
+    const closed = stateOf(t, x.hold === true && str(x.review_trigger) !== null, waiterReading(t, input.orca.gates), ready.has(t.id));
+    // Decision 175: the author's worker_done completes the Task in Orca; the item waits on review until the merge.
+    const awaitingMerge = closed === "done" && prOpen.has(t.id);
+    const state: ItemState = awaitingMerge ? "blocked" : closed;
     const last = moved.get(t.id) ?? 0;
     // An alarm stands until the item moves again.
-    const standing = [...(alarms.get(t.id) ?? new Map<string, number>())].filter(([, seq]) => seq > last).map(([type]) => type);
+    const standing = [...(alarms.get(t.id) ?? new Map<string, number>())]
+      .filter(([type, seq]) => seq > last && (!awaitingMerge || PR_ALARMS.has(type)))
+      .map(([type]) => type);
     const undelivered = own.filter((d) => d.undelivered).map((d) => d.decision);
-    const waitsOn = (openDecisions.length > 0 || undelivered.length > 0 ? "owner" : (str(x.waits_on) as WaitsOn | null)) ?? null;
+    const waitsOn = awaitingMerge
+      ? "reviewer"
+      : ((openDecisions.length > 0 || undelivered.length > 0 ? "owner" : (str(x.waits_on) as WaitsOn | null)) ?? null);
     out.push({
       task: t.id,
       alias: String(c.payload.alias),
@@ -134,7 +145,8 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       alarms: state === "done" || state === "cancelled" ? [] : standing,
       unclear: (unclear.get(t.id) ?? 0) > last,
       evidenceShort: state === "done" && !evidence.has(t.id),
-      closedAt: state === "done" ? (closedAt.get(t.id) ?? null) : null,
+      // The author's worker_done closes the Task before the merge, so pr-monitor writes no transition (decision 175).
+      closedAt: state === "done" ? (closedAt.get(t.id) ?? mergedAt.get(t.id) ?? null) : null,
     });
   }
   return out;
