@@ -20,6 +20,8 @@ import { orcaRound } from "./orca/round.ts";
 import { readWatchConfig } from "./pr/config.ts";
 import { prRound } from "./pr/round.ts";
 import { queueRound, type StallReport, stallCheck } from "./queue/round.ts";
+import { hostRereadPending } from "../store/backup.ts";
+import { rereadHostRows } from "./rebuild.ts";
 import { resourceRound } from "./resource/round.ts";
 
 /** The one table both entrances run: the worker's timer rounds and `sangsoe monitor run <name>`. */
@@ -76,6 +78,7 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
     events: (f) => store.events(f),
     ...(o.dryRun ? {} : { append: (e) => store.append(e), core: { store, orca } }),
     now: () => Date.now(),
+    openedAt: Date.now(),
     config: DEFAULT_MONITOR_CONFIG,
     chat: nullChatProvider,
     sample: () => sampleLoad(),
@@ -85,5 +88,22 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
     tier: () => readLandConfig(o.home).tier,
     coreVersion: VERSION,
   };
-  return { run: (name, signal) => runMonitor(name, deps, signal), stall: () => stallCheck(deps), close: () => store.close() };
+  // After a lost database, the first round of this runner waits for one reread of the host rows, so
+  // the rounds after it see those rows as known and act only on what is new.
+  let reread: Promise<unknown> | null = null;
+  const firstReread = (signal?: AbortSignal) => {
+    if (o.dryRun || !hostRereadPending(store.events({ type: "signal" }))) return Promise.resolve();
+    reread ??= rereadHostRows(deps, signal).finally(() => {
+      reread = null;
+    });
+    return reread;
+  };
+  return {
+    run: async (name, signal) => {
+      await firstReread(signal);
+      return runMonitor(name, deps, signal);
+    },
+    stall: () => stallCheck(deps),
+    close: () => store.close(),
+  };
 }

@@ -26,6 +26,8 @@ export type ReaperDeps = {
   /** null with no readable `reaper` section: the round is mark-only (decision 174), not a failed root. */
   config: ReaperConfig | null;
   sample(): LoadSample;
+  /** The timer period. Absent: no round is judged a catch-up. */
+  intervalMs?: number;
 };
 
 export type ReapOptions = { trigger?: "timer" | "hint"; markOnly?: boolean; signal?: AbortSignal };
@@ -57,8 +59,21 @@ export type ReapReport = {
   blocked: Blocked[];
   unknown: string[];
   docker_skipped: boolean;
+  /** Timer slots that never ran before this round (Orca was closed); 0 when the round is on time. */
+  missed: number;
   planned: Planned[];
 };
+
+/**
+ * Decision 182: nothing runs while Orca is closed, and the first round after it catches up once.
+ * Slots that never ran are counted, not replayed; a gap under two periods is ordinary jitter.
+ */
+export function missedSlots(rounds: readonly StoredEvent[], now: number, intervalMs: number | undefined): number {
+  const last = rounds.at(-1);
+  if (!last || !intervalMs) return 0;
+  const gap = now - Date.parse(last.ts);
+  return gap > 2 * intervalMs ? Math.floor(gap / intervalMs) - 1 : 0;
+}
 
 const SOURCE = "reaper";
 const WORKER_PAGE = 100;
@@ -136,6 +151,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     blocked: [],
     unknown: [],
     docker_skipped: false,
+    missed: missedSlots(rounds, now, d.intervalMs),
     planned: [],
   };
   const write = (e: Planned) => {
@@ -165,6 +181,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
         reaped: r.reaped.length,
         unknown: r.unknown.length,
         docker_skipped: r.docker_skipped,
+        ...(r.missed > 0 ? { missed: r.missed } : {}),
       },
       dedupe_key: key("reap_round", String(round)),
     });
@@ -281,7 +298,8 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   for (const c of scope) {
     const last = sightings.get(`worktree\n${c.instanceId}`);
     if (isCandidate.has(c.instanceId)) {
-      if (!last || last.state === "cleared" || failedSince(last.round)) {
+      // A sighting from before a pause does not pair with the catch-up round: the run of two starts again.
+      if (!last || last.state === "cleared" || failedSince(last.round) || r.missed > 0) {
         sighting("seen", c.instanceId);
         firstSeen.set(c.instanceId, { state: "seen", round, at: now });
       } else firstSeen.set(c.instanceId, last);
