@@ -97,19 +97,24 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
 
 /**
  * After a lost database, the first round of a runner waits for one reread of the host rows, so
- * the rounds after it see those rows as known and act only on what is new (decision 184).
+ * the rounds after it see those rows as known and act only on what is new (decision 184). A reread
+ * another caller aborted is started again under this caller's signal; a caller aborted before the
+ * reread completes runs no round.
  */
 export function afterHostReread(deps: MonitorDeps, pending: () => boolean): MonitorRunner["run"] {
   let reread: Promise<unknown> | null = null;
-  const firstReread = (signal?: AbortSignal) => {
-    if (!pending()) return Promise.resolve();
-    reread ??= rereadHostRows(deps, signal).finally(() => {
-      reread = null;
-    });
-    return reread;
+  const firstReread = async (signal?: AbortSignal): Promise<boolean> => {
+    while (pending()) {
+      if (signal?.aborted) return false;
+      reread ??= rereadHostRows(deps, signal).finally(() => {
+        reread = null;
+      });
+      await reread;
+    }
+    return true;
   };
   return async (name, signal) => {
-    await firstReread(signal);
-    return runMonitor(name, deps, signal);
+    if (await firstReread(signal)) return runMonitor(name, deps, signal);
+    return { monitor: name, planned: [], written: [], unseen: ["host rows not read again yet"], calls: [], aborted: true, acts: [] };
   };
 }
