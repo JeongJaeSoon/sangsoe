@@ -8,8 +8,14 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { test } from "node:test";
 import {
+  ADVISOR_FROM_SETTING,
+  ADVISOR_NOT_APPLIED,
   MODEL_CATALOG as CATALOG,
   catalogAgeDays,
+  classKind,
+  launchModel,
+  modelPairing,
+  UNIT_CLASSES,
   EFFORTS,
   MODEL_KINDS as KINDS,
   MODEL_POLICY as POLICY,
@@ -125,7 +131,10 @@ test("resolve raises effort along the ladder first, then the next tier only with
   const up = resolve("design", { effort: top, tier: d.thenTier, reason: "r" });
   assert.ok(up.ok && up.value.tier === d.thenTier && up.value.escalated?.reason === "r");
   assert.equal(up.value.effort, "high", "the frontier tier starts at high, not at the ladder's max (decision 172)");
-  for (const kind of ["orchestrator", "lead", "worker", "review"] as const) {
+  // Decision 187: the implementation worker moves straight to primary at its starting effort.
+  const worker = resolve("worker", { tier: "primary", reason: "failed review twice" });
+  assert.ok(worker.ok && worker.value.tier === "primary" && worker.value.effort === "medium" && worker.value.advisorTier === "frontier");
+  for (const kind of ["orchestrator", "lead", "hard", "review"] as const) {
     const row = POLICY[kind];
     const [effort, tier] = [row.raiseEffort.at(-1), row.thenTier];
     assert.ok(effort && tier, kind);
@@ -153,18 +162,78 @@ test("doctor's model-table row: ok when fresh, warn past the floor, notice on a 
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const verified = Math.min(...CATALOG.map((c) => Date.parse(c.verified)));
   const fresh = new Date(verified + 86_400_000);
+  // Decision 187: no advisorModel key is a notice naming the owner's act; the key's value is never read.
+  const none = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home }));
+  assert.equal(none.status, "notice");
+  assert.match(none.summary, /advisor not applied/);
+  assert.match(none.fix ?? "", /owner's act/);
+  mkdirSync(join(home, ".claude"));
+  writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ advisorModel: "secret-value" }));
   const ok = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home }));
   assert.equal(ok.status, "ok", ok.summary);
+  assert.doesNotMatch(ok.summary, /secret-value/);
+  const off = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, env: { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1" } }));
+  assert.equal(off.status, "notice", "the advisor's off switch counts as no advisor");
   const old = new Date(verified + (STALE_DAYS + 1) * 86_400_000);
   assert.equal(catalogAgeDays(old), STALE_DAYS + 1);
   assert.equal((await modelTable.run(ctx({ now: old, version: VERIFIED_WITH_CLAUDE_CODE, home }))).status, "warn");
   assert.equal((await modelTable.run(ctx({ now: fresh, version: "999.0.0", home }))).status, "notice");
   const envPin = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, env: { ANTHROPIC_DEFAULT_OPUS_MODEL: "x" } }));
   assert.equal(envPin.status, "notice");
-  mkdirSync(join(home, ".claude"));
-  writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ env: { ANTHROPIC_DEFAULT_FABLE_MODEL: "y" }, modelSettings: { z: {} } }));
+  writeFileSync(
+    join(home, ".claude", "settings.json"),
+    JSON.stringify({ advisorModel: "a", env: { ANTHROPIC_DEFAULT_FABLE_MODEL: "y" }, modelSettings: { z: {} } }),
+  );
   const filePin = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home }));
   assert.equal(filePin.status, "notice");
   assert.match(filePin.summary, /ANTHROPIC_DEFAULT_FABLE_MODEL=y/);
   assert.match(filePin.summary, /modelSettings\.z/);
+});
+
+const aliasOf = (tier: string) => CATALOG.find((c) => c.tier === tier)?.alias;
+
+test("decision 187: every policy row's advisor pairs with its main tier, before and after its move", () => {
+  for (const [kind, row] of Object.entries(POLICY) as [keyof typeof POLICY, (typeof POLICY)[keyof typeof POLICY]][]) {
+    for (const adv of [row.advisor, row.thenAdvisor]) if (adv) assert.equal(modelPairing(row.tier, adv), null, `${kind} advisor`);
+    const plain = resolve(kind);
+    assert.ok(plain.ok, kind);
+    assert.equal(plain.value.advisor, row.advisor ? aliasOf(row.advisor) : undefined, `${kind} advisor alias`);
+    if (!row.thenTier) continue;
+    const top = row.raiseEffort.at(-1) ?? row.effort;
+    const moved = resolve(kind, { effort: top, tier: row.thenTier, reason: "r" });
+    assert.ok(moved.ok, `${kind} after its move: ${moved.ok ? "" : moved.reason}`);
+    if (moved.value.advisorTier) assert.equal(modelPairing(moved.value.tier, moved.value.advisorTier), null, kind);
+  }
+  assert.notEqual(POLICY.worker.tier, "fast", "never the fast tier for implementation");
+  assert.equal(POLICY[classKind("mechanical")].tier, "fast");
+  assert.deepEqual(UNIT_CLASSES.map(classKind), ["worker", "hard", "design", "sweep"]);
+});
+
+test("decision 187: an advisor below the main tier, or the fast tier as advisor, is refused", () => {
+  assert.match(modelPairing("everyday", "fast") ?? "", /does not advise/);
+  assert.match(modelPairing("primary", "everyday") ?? "", /ranks below/);
+  assert.equal(modelPairing("everyday", "primary"), null);
+  assert.equal(modelPairing("primary", "primary"), null, "the same tier may advise");
+});
+
+test("decision 187: launch passes --advisor only through Orca, and the worker row never runs its main tier without one", () => {
+  const w = resolve("worker");
+  assert.ok(w.ok && w.value.advisor);
+  const viaOrca = launchModel(w.value, { orcaFlag: true, ownerSetting: false });
+  assert.deepEqual(viaOrca, { model: aliasOf("everyday"), effort: "high", advisor: aliasOf("primary") });
+  const viaSetting = launchModel(w.value, { orcaFlag: false, ownerSetting: true });
+  assert.deepEqual(viaSetting, { model: aliasOf("everyday"), effort: "high", note: ADVISOR_FROM_SETTING });
+  const none = launchModel(w.value, { orcaFlag: false, ownerSetting: false });
+  assert.equal(none.model, aliasOf("primary"));
+  assert.equal(none.advisor, undefined);
+  assert.equal(none.note, ADVISOR_NOT_APPLIED);
+  assert.ok(none.fallback?.reason);
+  const hard = resolve("hard");
+  assert.ok(hard.ok);
+  const hardNone = launchModel(hard.value, { orcaFlag: false, ownerSetting: false });
+  assert.equal(hardNone.model, aliasOf("primary"), "a row already at its floor keeps its model");
+  assert.equal(hardNone.fallback, undefined);
+  const review = resolve("review");
+  assert.ok(review.ok);
+  assert.deepEqual(launchModel(review.value, { orcaFlag: true, ownerSetting: true }), { model: aliasOf("primary"), effort: "high" });
 });
