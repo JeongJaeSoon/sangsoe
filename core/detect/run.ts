@@ -106,10 +106,13 @@ export function afterHostReread(deps: MonitorDeps, pending: () => boolean): Moni
   const firstReread = async (signal?: AbortSignal): Promise<boolean> => {
     while (pending()) {
       if (signal?.aborted) return false;
+      const mine = reread === null;
       reread ??= rereadHostRows(deps, signal).finally(() => {
         reread = null;
       });
       await reread;
+      // Our own reread ran to its end and still left it owed (no `append`): stop rather than spin.
+      if (mine && pending()) return false;
     }
     return true;
   };

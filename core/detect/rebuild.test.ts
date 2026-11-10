@@ -222,10 +222,22 @@ test("a caller whose own reread was aborted runs no round; the next caller rerea
   const out = await a;
   assert.equal(w.acts.length, 0, "no act at all");
   assert.deepEqual(out.written, []);
+  assert.equal(out.aborted, true);
+  assert.deepEqual(out.unseen, ["host rows not read again yet"], "no round ran");
   assert.equal(hostRereadPending(r.events({ type: "signal" })), true, "the reread is still owed");
   await w.run("pr", new AbortController().signal);
   assert.deepEqual(w.acts.filter((x) => x.endsWith(" while pending")), []);
   assert.equal(hostRereadPending(r.events({ type: "signal" })), false);
+  r.close();
+});
+
+test("a reread that cannot record itself stops instead of spinning, and runs no round", async () => {
+  const h = hosts();
+  const r = await lose("no-append.db", () => {});
+  const { append: _, ...d } = h.deps(r);
+  const out = await afterHostReread(d, () => true)("pr", new AbortController().signal);
+  assert.equal(out.aborted, true);
+  assert.deepEqual(h.writes, []);
   r.close();
 });
 
