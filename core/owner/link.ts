@@ -59,13 +59,16 @@ function prMatches(v: VerifySpec | null, command: string): boolean {
   return new RegExp(`github\\.com/${esc(repo ?? "")}/pull/${n}(?![0-9])`).test(command.toLowerCase());
 }
 
-/** Owner items a line may answer: open, the owner's, created before the line (guard (가)). */
+/**
+ * Owner items a line may answer: open or pending verification (decision 181: 완료 pressed before the
+ * `!` line), the owner's, created before the line (guard (가)).
+ */
 function candidates(input: ViewInput, facts: readonly OwnerItemFacts[], line: ShellLine, cfg: Pick<OwnerConfig, "waitMinutes">) {
   const marks = ownerMarks(input, cfg);
   const repo = lineRepo(line);
   return facts.flatMap((f) => {
     const m = marks.get(f.task);
-    if (f.state !== "ready" || !isOwnerItem(f) || !m || (m.createdAt !== null && !(Date.parse(line.ts) >= Date.parse(m.createdAt)))) return [];
+    if ((f.state !== "ready" && f.state !== "pending_verify") || !isOwnerItem(f) || !m || (m.createdAt !== null && !(Date.parse(line.ts) >= Date.parse(m.createdAt)))) return [];
     // An item that names a repo links only a line whose repo is known and the same.
     const want = verifyRepo(m.verify);
     if (want && want !== repo) return [];

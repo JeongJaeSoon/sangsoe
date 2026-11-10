@@ -150,6 +150,16 @@ test("owner_ran_command_marks_verifying: the real case, end to end", async () =>
   w.store.append({ type: "item_transition", source: "mcp:lead", payload: { task: T, from: "ready", to: "done", reason: "close_suggested verified" }, entity: "task", entity_id: T });
   assert.equal(w.state(T), "done");
 
+  // Decision 181: 완료 pressed before the `!` line; the later line still links and gives the run id.
+  const p = ownerWorld();
+  p.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });
+  await ownerDone({ orca: p.orca, store: p.store }, p.input(), p.facts(), { task: T });
+  assert.equal(p.state(T), "pending_verify");
+  assert.equal(bang(p).kind, "seen", "a pending item still takes its `!` line");
+  p.gh.set("repos/acme/api/actions/runs/111", { status: "completed", conclusion: "success" });
+  assert.deepEqual((await probeRound(ports(p), p.store, p.input(), p.facts())).passed, [T]);
+  assert.equal(p.state(T), "done");
+
   // A failing line marks nothing; another workflow or another repo links to nothing.
   const f = ownerWorld();
   f.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });

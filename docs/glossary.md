@@ -223,7 +223,7 @@
 | 입력 확인됨 · 검증 중 | 오너의 `!` 명령·프롬프트가 열린 오너 항목의 후보로 읽혔고 probe 를 기다린다는 뷰의 표지. 상태가 아니고 입력만으로는 어떤 상태도 바뀌지 않는다. probe 가 실패하거나 시간이 지나면 "검증 안 됨" 이 된다. 규칙은 결정 181 이다: 결정은 그 결정을 가리키는 오너의 답(`dNNN` 답·패널 버튼)으로 닫히고, 할 일은 검증(probe 의 관측)으로 닫힌다. 오너가 패널에서 완료를 눌러도 `verify` 가 있으면 ⏳ 검증 대기다 | `owner_act:seen` | 실행됨(상태로), 동작확인 중(상태로) |
 | 원인이 사라진 결정 | 게이트가 건 Task 가 모두 닫혔거나 가리키는 PR 이 닫혀 더 물을 이유가 없는 결정. 답 없이 닫고 뒤늦은 답은 기록만 한다 | `moot` | — |
 | | 턴 종료 | `turn_ended` | — |
-| | 일 없이 멈춘 워커 | `worker_idle` | — |
+| | 일 없이 멈춘 워커(계약만: 쓰는 쪽이 아직 없다. 결정 186) | `worker_idle` | — |
 | | Stop 차단 상한에 닿음 | `loop_detected` | — |
 | | 세션 시작({session, role, model}. model 은 hook 이 줄 때만, 계약의 tier·effort 칸은 아직 채우지 않는다) | `session_started` | — |
 | | 게이트 거부({gate, command 파일 경로}) | `gate_denied` | — |
@@ -243,8 +243,8 @@
 | | 멈춘 Run | `run_stalled` | — |
 | | 답 없는 결정 질문 | `waiting_decision` | — |
 | | 항목에 연결된 PR 이 열림 | `pr_opened` | — |
-| | 리뷰 요청됨 | `pr_review_requested` | — |
-| | 수정 요청됨 | `pr_changes_requested` | — |
+| | 리뷰 요청됨(계약만. 결정 186) | `pr_review_requested` | — |
+| | 수정 요청됨(계약만. 결정 186) | `pr_changes_requested` | — |
 | | 머지 가능 | `pr_ready_to_merge` | — |
 | | 머지됨 | `pr_merged` | — |
 | | 머지 없이 닫힘 | `pr_closed` | — |
@@ -256,8 +256,8 @@
 | | 리뷰 의뢰·리마인드 한 건({pr, reviewer, head, action(request·remind), source(hand·auto·scheduled), scheduled_id, post_at}). `review_ask_record` tool 로만 쓴다 | `review_ask_sent` | — |
 | | 리뷰어 매핑이 설정에 없어 리마인드할 수 없음. 🚨 로 보인다 | `unmapped_reviewer` | — |
 | 사유 값 | 새 event 종류 없이 기존 `event` 의 `reason` 칸에 적는 값: `worker_dead` 의 `host_restart`(한꺼번에 많이 죽음) · `land_failed` 의 `main_red`(그 저장소의 최신 main 이 빨강) · `land_failed` 의 `evidence_missing`(등급이 요구하는 증거가 그 head 에 없음) · `gate_denied` 의 `report_address`(보고 주소가 `term_` 핸들) · `land_requested` 의 `merge_on_approval`(예약하지 않고 승인 뒤 머지를 남김) · `reap_blocked` 의 `uncommitted`(커밋 안 된 변경, 추적 안 된 파일 포함) · `unpushed`(원격에 없는 커밋) · `unpushed_other_patch`(메시지만 같고 패치가 다른 커밋, 사람에게 넘김) · `in_use`(쓰는 중인 Docker 자원) · `archive_hook_failed`(저장소의 archive hook 이 실패해 Orca 가 지우지 않음, `--allow-failed-archive-hook` 은 오너만) · `remote_host`(비로컬 행이라 지우지 않음, 카드마다 한 번, 결정 88) · `item_transition` 취소의 `superseded`(다른 항목으로 대체됨) · `escalation_stale` 의 `waiting_unreleased`(제때 풀리지 않은 `waiting_human`)·`verify_unconfirmed`(`입력 확인됨 · 검증 중` 가 길어짐) · `close_suggested` 의 `verified`(오너 항목의 probe 통과) · `decision_closed` 의 `moot`(원인이 사라짐, 결정 91) · `item_transition` 의 `owner_not_yet`(오너가 "아직") | `waiting_unreleased` · `verify_unconfirmed` · `verified` · `moot` · `owner_not_yet` · `host_restart` · `main_red` · `evidence_missing` · `report_address` · `merge_on_approval` · `uncommitted` · `unpushed` · `unpushed_other_patch` · `in_use` · `archive_hook_failed` · `remote_host` · `superseded` | — |
-| | 새 리뷰 코멘트 | `review_commented` | — |
-| | 새 리뷰 답글 | `review_replied` | — |
+| | 새 리뷰 코멘트(계약만. 결정 186) | `review_commented` | — |
+| | 새 리뷰 답글(계약만. 결정 186) | `review_replied` | — |
 | | GitHub 한도 부족 | `rate_limited` | — |
 | | Orca 메시지를 보낸 기록(`msg_id`·받는 쪽·type). 기록이지 깨움이 아니고 메시지 본문의 사본도 아니다 | `notified` | — |
 | | 대체 경로 전용 기록: 시험 P10 이 `worktree ps` 시각 필드를 못 믿는다고 보일 때만 orca-monitor 가 워커의 상태·단계·생존·세션 활동 중 하나가 바뀐 때 쓰고, 마지막 변화로부터의 경과로 `worker_stuck` 을 판정한다. 평소에는 쓰지 않는다(결정 87, 옛 방식은 결정 61) | `observed_change` | — |
@@ -278,7 +278,7 @@
 | | 열린 같은 결정 키에 대기자가 합류함 | `decision_joined` | — |
 | | 결정에 답이 달림. 답을 잇는 쪽을 `linked_by`(hook·button·orchestrator·observed)에 적는다(게이트를 푸는 대상) | `decision_answered` | — |
 | | 한 단계 위로 올림 | `escalation` | 에스컬레이션 보고(오너에게 간 것을 가리킬 때) |
-| | 거부 보고 | `refusal_report` | — |
+| | 거부 보고(계약만. 결정 186) | `refusal_report` | — |
 | | 증거·배포 확인. `evidence` 줄은 칸 `kind`(증거 종류: 테스트 출력 · 실행 출력 · 화면 · dev 확인 등) · `head_sha`(증거가 가리키는 머지할 head) · `exit_code`(명령의 종료 코드) · `not_verified`(확인하지 못한 것을 적는 칸)을 싣는다. 큰 파일은 증거 폴더에 두고 event 에는 경로와 sha256 만 둔다. head 가 바뀌면 이전 증거는 그 head 에 대해 무효다 | `evidence` · `kind` · `head_sha` · `exit_code` · `not_verified` · `stage_recorded` | — |
 | | 검증 등급이 정해지거나 바뀜(pr-monitor 가 쓰는 하나뿐인 쪽) | `verify_tier_set` | — |
 | | 워커 완료 보고. PR 이 걸린 일은 그 본문이 머지 대기 보고다(결정 175) | `worker_done` | — |
