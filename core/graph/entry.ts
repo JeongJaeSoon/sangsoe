@@ -5,7 +5,7 @@ import type { ViewInput } from "../contract/views.ts";
 import type { Result } from "../notify/result.ts";
 import { refuse } from "../notify/result.ts";
 import { Store } from "../store/store.ts";
-import { addEdge, type EdgeInput, type EdgeWritten, removeEdge } from "./edit.ts";
+import { addEdge, type EdgeInput, type EdgeWritten, removeEdge, type SkipInput, type SkipWritten, skipFlowStep } from "./edit.ts";
 import { type Expanded, expandFlow, type FlowPlan, loadFlow, planFlow } from "./flow.ts";
 import { readSnapshot } from "./snapshot.ts";
 import { TomlError } from "./toml.ts";
@@ -41,6 +41,9 @@ export const graphAdd = (ports: GraphPorts, a: EdgeInput & { runs: readonly stri
 
 export const graphRemove = (ports: GraphPorts, a: EdgeInput & { reason: string; runs: readonly string[] }): Promise<Result<EdgeWritten>> =>
   withGraphPorts(ports, (deps) => removeEdge(deps, a));
+
+/** `graph skip` / `flow_step_skip`: the store alone, no Run to read. */
+export const graphSkip = (ports: GraphPorts, a: SkipInput): Promise<Result<SkipWritten>> => withGraphPorts(ports, async (deps) => skipFlowStep(deps, a));
 
 export interface ExpandInput {
   readonly template: string;

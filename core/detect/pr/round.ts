@@ -2,11 +2,13 @@ import type { StoredEvent } from "../../contract/index.ts";
 import { canTransition } from "../../contract/transitions.ts";
 import { budgetLevel, type GhResponse } from "../../gh/client.ts";
 import { approvedAndGreen, mergeConfirm, type Pull, readDiff, readLabels, readPull } from "../../land/github.ts";
+import { hostRereadPending } from "../../store/backup.ts";
 import { verifyTier } from "../../verify/verify-tier.ts";
 import type { Act, MonitorDeps, Planned, Reading } from "../monitor.ts";
 import { sendNotice } from "../notice.ts";
 import type { WatchConfig } from "./config.ts";
 import { classifyMain, isClosedTask, itemStateOf, key, type MainRun, prRef, prUrl, requestedTier } from "./judge.ts";
+import { type IssueEvent, PAGE, type Review, type ReviewComment, type ReviewReads, reviewFacts } from "./reviews.ts";
 
 const SOURCE = "pr-monitor";
 const CLOSED_PAGE = 30;
@@ -40,6 +42,11 @@ type Reads = {
   planned: Planned[];
   unseen: string[];
   acts: Act[];
+  /**
+   * Review lists are read against the last ETag. Not while a lost database waits for its reread:
+   * the ETags outlive the rows they were judged into (decision 195).
+   */
+  conditional: boolean;
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
@@ -51,6 +58,18 @@ async function get<T>(r: Reads, path: string): Promise<T | null> {
   if (!res) return null;
   if (res.kind === "rate_limited") throw new RateLimited(res.resetAt);
   if (res.kind !== "ok" || res.data === null) {
+    r.unseen.push(`gh ${path}`);
+    return null;
+  }
+  return res.data;
+}
+
+/** A conditional read: `unchanged` on a 304, so a list already judged is not judged again. */
+async function changed<T>(r: Reads, path: string): Promise<T | "unchanged" | null> {
+  const res = (await r.d.gh?.get<T>(path, { conditional: r.conditional })) as GhResponse<T> | undefined;
+  if (res?.kind === "not_modified") return "unchanged";
+  if (res?.kind === "rate_limited") throw new RateLimited(res.resetAt);
+  if (res?.kind !== "ok" || res.data === null) {
     r.unseen.push(`gh ${path}`);
     return null;
   }
@@ -219,6 +238,26 @@ async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, 
 
   if (level === "normal") await tier(r, repo, p);
   await readyToMerge(r, repo, p, link);
+  await reviews(r, repo, p);
+}
+
+/** Decision 195: review requests, changes requested, comments and the author's replies, by GitHub id. */
+async function reviews(r: Reads, repo: string, p: ListedPull): Promise<void> {
+  const ref = prRef(repo, p.number);
+  const at = `repos/${repo}`;
+  const known = new Set(REVIEW_TYPES.flatMap((t) => rowsOf(r, t, ref).map((e) => e.dedupe_key)));
+  const none: ReviewReads = { requests: null, reviews: null, comments: null };
+  // Each list is planned as soon as it is read: its ETag is saved now, and a rate limit on the next
+  // list ends the round with only what is already planned.
+  const judge = (reads: ReviewReads) => {
+    const { facts, full } = reviewFacts(ref, p.user?.login.toLowerCase() ?? "", reads);
+    for (const f of facts) if (!known.has(f.dedupe_key ?? null)) plan(r, f);
+    for (const k of full) r.unseen.push(`${ref}: ${k} past the first ${PAGE}`);
+  };
+  judge({ ...none, requests: await changed<IssueEvent[]>(r, `${at}/issues/${p.number}/events?per_page=${PAGE}`) });
+  judge({ ...none, reviews: await changed<Review[]>(r, `${at}/pulls/${p.number}/reviews?per_page=${PAGE}`) });
+  // Newest first, so a long thread's page always holds the new comments.
+  judge({ ...none, comments: await changed<ReviewComment[]>(r, `${at}/pulls/${p.number}/comments?sort=created&direction=desc&per_page=${PAGE}`) });
 }
 
 /** A PR whose branch is a local workspace Orca did not link yet: attach it there (decision 64, one-way). */
@@ -362,7 +401,8 @@ async function mainCi(r: Reads): Promise<void> {
   }
 }
 
-const TYPES = ["pr_opened", "pr_merged", "pr_closed", "pr_base_changed", "verify_tier_set", "land_requested", "pr_ready_to_merge", "main_green", "main_red", "ci_failed", "item_transition"];
+const REVIEW_TYPES = ["pr_review_requested", "pr_changes_requested", "review_commented", "review_replied"];
+const TYPES = ["pr_opened", "pr_merged", "pr_closed", "pr_base_changed", "verify_tier_set", "land_requested", "pr_ready_to_merge", "main_green", "main_red", "ci_failed", "item_transition", ...REVIEW_TYPES];
 
 /**
  * One pr-monitor round. GitHub through core/gh only, Orca through the adapter only; the PR's link to
@@ -370,7 +410,8 @@ const TYPES = ["pr_opened", "pr_merged", "pr_closed", "pr_base_changed", "verify
  * merged PR's Task goes `completed`, as an act after `pr_merged` (decision 84 ①).
  */
 export async function prRound(d: MonitorDeps, signal: AbortSignal): Promise<Reading> {
-  const r: Reads = { d, watch: { repos: [], authors: [], linkedOnly: true, owners: [] }, rows: new Map(), planned: [], unseen: [], acts: [] };
+  const conditional = !hostRereadPending(d.events({ type: "signal" }));
+  const r: Reads = { d, watch: { repos: [], authors: [], linkedOnly: true, owners: [] }, rows: new Map(), planned: [], unseen: [], acts: [], conditional };
   if (!d.gh) return { planned: [], unseen: ["gh client"] };
   const watch = d.watch?.() ?? null;
   if (!watch || watch.repos.length === 0) return { planned: [], unseen: ["watch.repos setting"] };
