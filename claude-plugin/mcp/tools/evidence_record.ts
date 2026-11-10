@@ -2,7 +2,8 @@ import { approveExec, EVIDENCE_KINDS, type RecordPorts, recordEvidence, SANGSOE_
 import type { ToolDef } from "../contract.ts";
 import { recorderRefusal } from "../recorder.ts";
 
-// Word for word the CLI's fix, so both entrances return one Outcome.
+// Word for word the CLI's fix, so both entrances return one Outcome for input that passes the schema;
+// a kind outside the enum is the server's invalid_input here and the core's evidence_refused on the CLI.
 const FIX = "check --pr, --head (the PR's current head), --kind, --not-verified (at least one) and --recorder (not the author)";
 
 export function evidenceRecordTool(ports: () => RecordPorts): ToolDef {

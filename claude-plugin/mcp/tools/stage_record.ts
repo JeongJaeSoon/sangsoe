@@ -2,7 +2,8 @@ import { approveExec, type RecordPorts, recordStage, SANGSOE_REPO, STAGES, Store
 import type { ToolDef } from "../contract.ts";
 import { recorderRefusal } from "../recorder.ts";
 
-// Word for word the CLI's fix, so both entrances return one Outcome.
+// Word for word the CLI's fix, so both entrances return one Outcome for input that passes the schema;
+// a stage outside the enum is the server's invalid_input here and the core's stage_refused on the CLI.
 const FIX = "check --pr (merged), --stage, --sha and --recorder (not the author)";
 
 export function stageRecordTool(ports: () => RecordPorts): ToolDef {
