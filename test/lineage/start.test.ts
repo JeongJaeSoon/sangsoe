@@ -505,7 +505,8 @@ test("decision 164: worker-start gets the role row's alias and effort; an escala
   assert.equal(r.ok, true);
   const ws2 = h2.called("worker-start")[0] ?? [];
   assert.equal(flag(ws2, "model"), MODEL_CATALOG.find((c) => c.tier === MODEL_POLICY.design.thenTier)?.alias);
-  assert.equal(flag(ws2, "effort"), top);
+  const target = MODEL_CATALOG.find((c) => c.tier === MODEL_POLICY.design.thenTier);
+  assert.equal(flag(ws2, "effort"), target?.apiDefaultEffort, "the new tier starts at its own effort (decision 172)");
   const changed = h2.store.events({ type: "model_changed" });
   assert.equal(changed.length, 1);
   assert.equal(changed[0]?.payload.reason, "max still misses the race");

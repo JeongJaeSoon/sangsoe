@@ -5,7 +5,7 @@ import type { Exec, ExecResult } from "../contract/orca.ts";
 import { createGhClient, memoryGhCache } from "../gh/client.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { Store } from "../store/store.ts";
-import { parseTierConfig } from "../verify/verify-tier.ts";
+import { parseTierConfig, tierConfigGaps } from "../verify/verify-tier.ts";
 import { readPrGate } from "./github.ts";
 import type { LandConfig, LandDeps, MergeNowPort, MergePort } from "./land.ts";
 
@@ -21,7 +21,7 @@ export function readLandConfig(home: string = homedir()): LandConfig {
   try {
     raw = JSON.parse(readFileSync(join(home, ".config", "sangsoe", "config.json"), "utf8"));
   } catch {
-    return { tier: null, protectedPaths: null, verdictMergeRepos: [] };
+    return { tier: null, protectedPaths: null, verdictMergeRepos: [], tierGap: "~/.config/sangsoe/config.json is missing or not JSON" };
   }
   const paths = raw?.protected_paths;
   const protectedPaths = Array.isArray(paths) && paths.every((p) => typeof p === "string") ? (paths as string[]) : null;
@@ -29,7 +29,10 @@ export function readLandConfig(home: string = homedir()): LandConfig {
   const listed = raw?.verdict_merge_repos;
   const lowered = Array.isArray(listed) ? listed.map((r) => (typeof r === "string" ? r.toLowerCase() : "")) : [];
   const verdictMergeRepos = lowered.length > 0 && lowered.every((r) => REPO_NAME.test(r)) ? lowered : [];
-  return { tier: parseTierConfig({ ...section, protected_paths: raw?.protected_paths, owners: raw?.owners }), protectedPaths, verdictMergeRepos };
+  const fields = { ...section, protected_paths: raw?.protected_paths, owners: raw?.owners };
+  const tier = parseTierConfig(fields);
+  const gaps = tierConfigGaps(fields).map((k) => (k === "protected_paths" || k === "owners" ? k : `verify_tier.${k}`));
+  return { tier, protectedPaths, verdictMergeRepos, ...(tier ? {} : { tierGap: `config.json lacks ${gaps.join(", ")}` }) };
 }
 
 function merged(r: ExecResult, done: string): { ok: boolean; message: string } {

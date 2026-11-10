@@ -124,6 +124,16 @@ test("resolve raises effort along the ladder first, then the next tier only with
   assert.equal(resolve("design", { effort: "low", reason: "r" }).ok, false, "off the ladder");
   const up = resolve("design", { effort: top, tier: d.thenTier, reason: "r" });
   assert.ok(up.ok && up.value.tier === d.thenTier && up.value.escalated?.reason === "r");
+  assert.equal(up.value.effort, "high", "the frontier tier starts at high, not at the ladder's max (decision 172)");
+  for (const kind of ["orchestrator", "lead", "worker", "review"] as const) {
+    const row = POLICY[kind];
+    const [effort, tier] = [row.raiseEffort.at(-1), row.thenTier];
+    assert.ok(effort && tier, kind);
+    const moved = resolve(kind, { effort, tier, reason: "r" });
+    assert.ok(moved.ok && moved.value.tier === "frontier" && moved.value.effort === "high", kind);
+  }
+  const release = resolve("release-review");
+  assert.ok(release.ok && release.value.effort === "high", "the frontier row itself starts at high");
   assert.equal(resolve("release-review", { tier: "fast", reason: "cheaper" }).ok, false, "no tier below");
 });
 

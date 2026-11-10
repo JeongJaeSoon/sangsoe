@@ -31,7 +31,8 @@ export type Resolved = { ok: true; value: Choice } | { ok: false; reason: string
 
 /**
  * The model and effort for one kind of work. Effort goes up the row's ladder first; the tier moves
- * only to the row's `thenTier`, only from the ladder's last effort, and only with a reason.
+ * only to the row's `thenTier`, only from the ladder's last effort, and only with a reason, and
+ * then runs at that tier's `apiDefaultEffort` (decision 172).
  */
 export function resolve(kind: Kind, raise: Raise = {}): Resolved {
   const row = POLICY[kind];
@@ -49,6 +50,8 @@ export function resolve(kind: Kind, raise: Raise = {}): Resolved {
     const top = row.raiseEffort.at(-1) ?? row.effort;
     if (effort !== top) return { ok: false, reason: `${kind}: raise effort to ${top} before changing tier` };
     tier = raise.tier;
+    // The new tier starts at its own starting effort, not at the ladder top that earned the move.
+    effort = catalogRow(tier).apiDefaultEffort;
   }
   const changed = tier !== row.tier || effort !== row.effort;
   const reason = raise.reason?.trim();

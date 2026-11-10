@@ -43,12 +43,12 @@ export interface StatusBarItem {
 export const STATUS_TEXT_MAX = 64;
 
 /**
- * Status bar item B (decisions 92⑤, 170): a SANGSOE label, then 🚧 blocked · open decisions · 🔄 doing,
+ * Status bar item B (decisions 92⑤, 170): a ✨ SANGSOE label, then 🚧 blocked · open decisions · 🔄 doing,
  * read from the same Overview `sangsoe todo` and the brief's top line print. Danger while the owner
  * has anything to do.
  */
 export function statusBarItem(o: Overview): StatusBarItem {
-  const text = `SANGSOE  🚧 ${o.summary.blocked} · 결정 ${o.todo.decisions} · 🔄 ${o.summary.doing}`;
+  const text = `✨ SANGSOE  🚧 ${o.summary.blocked} · 결정 ${o.todo.decisions} · 🔄 ${o.summary.doing}`;
   return {
     text: text.slice(0, STATUS_TEXT_MAX),
     tone: o.todo.total > 0 ? "danger" : "neutral",

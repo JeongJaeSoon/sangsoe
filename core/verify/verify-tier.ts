@@ -37,6 +37,13 @@ export type TierVerdict = {
 
 const LISTS = ["docs_globs", "test_globs", "ui_globs", "v3_globs", "protected_paths"] as const;
 
+/** The lists `parseTierConfig` needs that `raw` lacks or holds as something other than strings. */
+export function tierConfigGaps(raw: unknown): string[] {
+  const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  const list = (v: unknown) => Array.isArray(v) && v.every((s) => typeof s === "string");
+  return [...LISTS.filter((k) => !list(r[k])), ...(r.owners === undefined || list(r.owners) ? [] : ["owners"])];
+}
+
 /** null when the config is not an object or any list is missing or not a list of strings. */
 export function parseTierConfig(raw: unknown): TierConfig | null {
   if (typeof raw !== "object" || raw === null) return null;
@@ -78,7 +85,13 @@ function tierOfFile(file: DiffFile, c: TierConfig): FileTier {
 
 const TIER_LABEL = /^verify-tier:([0-3])$/;
 
-export function verifyTier(diff: readonly DiffFile[] | null, labels: readonly TierLabel[] | null, config: TierConfig | null): TierVerdict {
+/** `unreadable` is the reason given when `config` is null; land names the lists it lacked there. */
+export function verifyTier(
+  diff: readonly DiffFile[] | null,
+  labels: readonly TierLabel[] | null,
+  config: TierConfig | null,
+  unreadable = "config unreadable",
+): TierVerdict {
   const reasons: string[] = [];
   let files: FileTier[] = [];
   let computed: Tier;
@@ -87,7 +100,7 @@ export function verifyTier(diff: readonly DiffFile[] | null, labels: readonly Ti
     reasons.push("diff unreadable");
   } else if (config === null) {
     computed = "V3";
-    reasons.push("config unreadable");
+    reasons.push(unreadable);
   } else {
     files = diff.map((d) => tierOfFile(d, config));
     computed = files.reduce<Tier>((t, x) => max(t, x.tier), "V0");
