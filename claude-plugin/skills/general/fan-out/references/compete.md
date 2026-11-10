@@ -10,7 +10,7 @@ Every candidate gets the same prompt, so the prompt is the contract.
 
 1. State the artifact each candidate produces.
 2. Derive the rubric: 3 to 6 concrete, gradeable criteria for success on this task. It is the picker's tool in Phase D. Candidates see only the task.
-3. Pick runners suited to the task within the authorized environment. Independent attempts may use the same model. Use the host's delegation tool; for the model, the row for this kind of work in resource `models` when sangsoe's MCP server is present, else the configured defaults. Do not require a particular vendor, model family, plugin, or install path.
+3. Pick runners suited to the task within the authorized environment. Independent attempts may use the same model. Use the host's delegation tool; for the model, the worker row in resource `models` (the design row for a design task) when sangsoe's MCP server is present, else the configured defaults. Do not require a particular vendor, model family, plugin, or install path.
 4. Assign output paths. Each candidate writes to its own location: a git worktree through `isolation: "worktree"` when the artifact lives in the repo, otherwise its own scratch folder (the **separate-before-serializing-shared-state** principle).
 
 ## Phase B: Fan out

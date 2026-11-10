@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 712" role="img" aria-labelledby="t5 d5">
 <title id="t5">정해진 코드로 도는 것과 토큰을 쓰는 것</title>
-<desc id="d5">왼쪽은 토큰이 들지 않는 hook, 게이트, 감지기, 스크립트 역할 둘(GRAPH, REAPER), 함수(ready 뷰, capacity, decision_open, decision_answer, notify), 뷰 계산. 오른쪽은 LLM 인 오케스트레이터, 리드, 워커, 서브에이전트와 기본 tier. 가운데 event 의 needs 값이 judgment 일 때만 Orca 메시지로 에이전트를 깨운다. 아래에 모델 선택 표의 자리와 결정 루프 네 단계, 원칙 한 줄이 있다.</desc>
+<desc id="d5">왼쪽은 토큰이 들지 않는 hook, 게이트, 감지기, 스크립트 역할 둘(GRAPH, REAPER), 함수(ready 뷰, capacity, decision_open, decision_answer, notify), 뷰 계산. 오른쪽은 LLM 인 오케스트레이터, 리드, 워커, 서브에이전트와 각자의 모델 행. 가운데 event 의 needs 값이 judgment 일 때만 Orca 메시지로 에이전트를 깨운다. 아래에 모델 선택 표의 자리와 결정 루프 네 단계, 원칙 한 줄이 있다.</desc>
 <style>
 :root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--warn:#b42318}
 @media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--warn:#fca5a5}}

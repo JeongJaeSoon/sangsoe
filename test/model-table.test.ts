@@ -1,6 +1,6 @@
 // Decisions 164-165: core/models/table.ts is the one model-selection table. This fails when a role or
 // kind has no row, when a row points nowhere, when a second copy of the table (or a version number)
-// appears anywhere else, and when an agent's frontmatter model disagrees with the table.
+// appears anywhere else, and when an agent's frontmatter model or effort disagrees with the table.
 
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -72,7 +72,7 @@ const COPY_PATTERNS: [string, RegExp][] = [
   ["a model version", /\b(Fable|Opus|Sonnet|Haiku) \d/],
   ["a model-and-effort table row", /^\s*(\|.*|.*<td>.*)\b(fable|opus|sonnet|haiku)\b.*\b(low|medium|high|xhigh|max)\b/i],
   ["a model paired with an effort", /\b(fable|opus|sonnet|haiku)\b[^\n]{0,30}\b(low|medium|high|xhigh|max)\b/i],
-  ["a role paired with a tier", /(\b(orchestrator|lead|worker)\b|오케스트레이터|리드|워커)[^\n]{0,40}\b(frontier|primary|everyday)\b(?! key)/],
+  ["a role paired with a tier", /(\b(orchestrator|lead|worker)\b|(?<![가-힣])(오케스트레이터|리드|워커))[^\n]{0,40}\b(frontier|primary|everyday)\b(?! key)/],
 ];
 
 test(`no second copy of the table: model versions, dated IDs and model/effort rows live only in ${HOME}`, () => {
@@ -97,7 +97,7 @@ test("the copy patterns catch what they are meant to", () => {
     "Sonnet 5 is",
   ];
   for (const b of bad) assert.ok(COPY_PATTERNS.some(([, re]) => re.test(b)), b);
-  for (const fine of ["pass --model sonnet from a file", "resource `models` picks the model"]) {
+  for (const fine of ["pass --model sonnet from a file", "resource `models` picks the model", "그리드 레이아웃의 primary 색"]) {
     assert.ok(!COPY_PATTERNS.some(([, re]) => re.test(fine)), fine);
   }
 });
