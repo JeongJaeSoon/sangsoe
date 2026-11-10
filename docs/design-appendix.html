@@ -740,7 +740,7 @@ done_when = "prod 배포가 stage_recorded 에 기록된다"</pre>
 
 <section id="gates">
 <h2>게이트와 원칙</h2>
-<p class="note">게이트는 명령의 모양을 패턴으로 맞추고, 읽지 못한 입력은 막지 않고 통과시킨다(<code>core/gates/delegate.ts:64</code>). 역할은 첫 프롬프트의 시작 문구로 정하므로(<code>core/gates/index.ts:62</code>), 게이트는 협력하지 않는 세션 사이의 경계를 막지 못한다. 이것은 기록 검사가 가진 같은 경계다.</p>
+<p class="note">게이트는 명령의 모양을 패턴으로 맞추고, 읽지 못한 입력은 막지 않고 통과시킨다(<code>core/gates/delegate.ts:64</code>). 역할은 먼저 선언된 agent 종류로 정하고, 선언이 없을 때만 첫 프롬프트의 시작 문구로 정하므로(<code>core/gates/index.ts:61-62</code>), 게이트는 협력하지 않는 세션 사이의 경계를 막지 못한다. 이것은 기록 검사가 가진 같은 경계다.</p>
 <table>
 <thead><tr><th style="width:22%">장치</th><th>막는 것 · 규칙</th></tr></thead>
 <tbody>
