@@ -1,4 +1,4 @@
-import type { ItemState, OwnerTodoRow, WaitsOn } from "../contract/index.ts";
+import type { ItemReading, ItemState, OwnerTodoRow, WaitsOn } from "../contract/index.ts";
 import { STATE_LABEL } from "../contract/index.ts";
 import { linkedActs } from "../owner/link.ts";
 import { item_timeline } from "../store/views/item_timeline.ts";
@@ -25,16 +25,18 @@ export interface BuildOptions extends BriefOptions {
   readonly graph?: GraphRead;
 }
 
-const EMOJI: Readonly<Record<ItemState, string>> = {
+const EMOJI: Readonly<Record<ItemReading, string>> = {
   planned: "📅",
   ready: "🟢",
   in_progress: "🔄",
   blocked: "🚧",
+  pr_closed: "🚧",
   on_hold: "⏸️",
   done: "✅",
   cancelled: "🗑️",
+  unknown: "❔",
 };
-const ORDER: readonly ItemState[] = ["blocked", "in_progress", "ready", "planned", "on_hold"];
+const ORDER: readonly ItemReading[] = ["pr_closed", "blocked", "unknown", "in_progress", "ready", "planned", "on_hold"];
 const WAITS: Readonly<Record<WaitsOn, string>> = { owner: "오너", reviewer: "리뷰어", infra: "인프라", lead: "리드", worker: "워커" };
 const ALARM_NEXT: Readonly<Record<string, string>> = {
   ci_failed: "CI 수정",
@@ -78,6 +80,8 @@ function next(f: ItemFacts): string {
   let base = "—";
   if (f.openDecisions[0]) base = `${f.openDecisions[0]} 답`;
   else if (f.undelivered[0]) base = `${f.undelivered[0]} 전달`;
+  else if (f.state === "pr_closed") base = "PR 이 머지 없이 닫힘: 다시 열거나 항목을 취소";
+  else if (f.state === "unknown") base = "PR 상태를 아직 읽지 못함(pr-monitor)";
   else if (f.state === "blocked") base = f.lastReason ?? "—";
   else if (f.state === "ready") base = "시작";
   else if (f.state === "planned") base = "선행 대기";
@@ -87,7 +91,7 @@ function next(f: ItemFacts): string {
 }
 
 function who(f: ItemFacts, now: string): string {
-  if (f.state === "blocked") return `${f.waitsOn ? WAITS[f.waitsOn] : "—"} ${since(f.since, now)}`;
+  if (f.state === "blocked" || f.state === "pr_closed") return `${f.waitsOn ? WAITS[f.waitsOn] : "—"} ${since(f.since, now)}`;
   if (f.state === "in_progress") return `${f.assignee ?? "워커"} ${since(f.since, now)}`;
   return "—";
 }
@@ -152,7 +156,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
       held.push(f);
       continue;
     }
-    if (f.state === "blocked") blocked++;
+    if (f.state === "blocked" || f.state === "pr_closed") blocked++;
     else if (f.state === "in_progress") doing++;
     else left++;
     groupRows.set(f.lead, [...(groupRows.get(f.lead) ?? []), f]);
@@ -271,10 +275,10 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
   const mine = facts.filter((f) => f.lead === key);
   const alias = new Map(facts.map((f) => [f.task, f]));
   const label = (task: string) => alias.get(task)?.alias ?? task;
-  const sectionOf: [string, ItemState[]][] = [
-    ["🚧 막힘", ["blocked"]],
+  const sectionOf: [string, ItemReading[]][] = [
+    ["🚧 막힘", ["pr_closed", "blocked"]],
     ["🔄 진행 중", ["in_progress"]],
-    ["대기열", ["ready", "planned", "on_hold"]],
+    ["대기열", ["unknown", "ready", "planned", "on_hold"]],
   ];
   const sections = sectionOf
     .map(([title, states]) =>

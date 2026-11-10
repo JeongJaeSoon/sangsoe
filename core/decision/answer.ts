@@ -72,7 +72,7 @@ export async function decisionAnswer(deps: CoreDeps, input: DecisionAnswerInput)
     keyFor: (task) => answerNotifiedKey(d, task),
     subject: `${d} answered`,
     resumeWith: "decision_answer",
-    resume: `decision_answer with decision=${d} owner_action=${answeredBy(store, d, input.ownerAction)} linked_by=${state.row.linkedBy ?? input.linkedBy} and the answer quoted above`,
+    resume: `decision_answer with decision=${d} owner_action=${answeredBy(store, d, input.ownerAction)} linked_by=${(state.row.linkedBy ?? input.linkedBy) === "observed" ? "observed" : "orchestrator"} and the answer quoted above`,
   });
   return r.ok ? done({ status: "answered", decision: d, ...r.value }) : r;
 }

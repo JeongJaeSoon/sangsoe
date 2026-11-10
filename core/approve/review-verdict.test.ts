@@ -29,14 +29,17 @@ test("review record writes one review_verdict with the author read from GitHub",
   const openStore = storeAt();
   const first = await recordReviewVerdict(input, { exec: ghAuthor("alice"), openStore });
   assert.deepEqual([first.ok, first.inserted, first.author], [true, true, "alice"]);
-  const again = await recordReviewVerdict({ ...input, reviewer: "Codex", actOn: 3 }, { exec: ghAuthor("Alice"), openStore });
-  assert.deepEqual([again.ok, again.inserted], [true, false], "a reviewer's first verdict on a head stands, whatever the case");
+  const again = await recordReviewVerdict({ ...input, reviewer: "Codex" }, { exec: ghAuthor("Alice"), openStore });
+  assert.deepEqual([again.ok, again.inserted], [true, false], "the same verdict again stands, whatever the case");
+  const worse = await recordReviewVerdict({ ...input, actOn: 3 }, { exec: ghAuthor("alice"), openStore });
+  assert.deepEqual([worse.ok, worse.inserted], [true, true], "S2: another count is a second row, never dropped");
   const s = openStore();
   const rows = s.events({ type: "review_verdict" });
   s.close();
-  assert.equal(rows.length, 1);
+  assert.equal(rows.length, 2);
   assert.deepEqual(rows[0]?.payload, { pr: "acme/api#7", head_sha: HEAD, act_on: 0, reviewer: "codex", author: "alice" });
-  assert.equal(rows[0]?.dedupe_key, `review_verdict:acme%2Fapi%237:${HEAD}:codex`);
+  assert.equal(rows[0]?.dedupe_key, `review_verdict:acme%2Fapi%237:${HEAD}:codex:0`);
+  assert.equal(reviewEvidenceFrom(rows, "acme/api", 7, HEAD)?.actOn, 3, "the row with findings is the one read");
 });
 
 test("review record refuses the PR's author as reviewer, an unreadable PR and a short head; nothing is written", async () => {

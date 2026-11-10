@@ -13,7 +13,9 @@ type DepsSource = CoreDeps | (() => CoreDeps);
 
 const bad = (field: string, want: string) => refuse("bad_input", `${field}: expected ${want}`, `pass ${field} as ${want}`);
 const text = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
-const LINKED_BY = ["hook", "button", "orchestrator", "observed"] as const;
+// `hook` and `button` are set by their own entrances (core/session/record.ts, core/brief/panel.ts),
+// never claimed by a caller (S4): an MCP or CLI call links as the orchestrator or an observed fact.
+const LINKED_BY = ["orchestrator", "observed"] as const;
 const DECISION = /^d\d{3,}$/;
 
 export function parseDecisionOpen(raw: Raw): Result<Omit<DecisionOpenInput, "callerRun">> {

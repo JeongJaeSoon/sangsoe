@@ -3,15 +3,33 @@ import type { OrcaSnapshot, ViewTask, ViewTaskStatus } from "../contract/views.t
 
 // U1's LATER: TaskRow is not a ViewTask. `task-list --full` rows also carry `deps` (a JSON array, as a
 // string in Orca's own output), `run_id`, `parent_id` and `result`; this maps them.
-export type FullTaskRow = TaskRow & {
+export type FullTaskRow = Omit<TaskRow, "result"> & {
   deps?: string | readonly string[];
   run_id?: string;
   parent_id?: string | null;
+  completed_at?: string | null;
+  /** A plain string (`cancelled`), or the worker report a worker_done left: `{subject, body, ...}`. */
+  result?: unknown;
 };
+
+const text = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined);
+
+/** The ViewTask fields Orca's `result` and `completed_at` carry. */
+export function resultFields(r: Pick<FullTaskRow, "result" | "completed_at">): Pick<ViewTask, "result" | "report" | "completedAt"> {
+  const raw = r.result;
+  const obj = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : undefined;
+  const report = obj ? [text(obj.subject), text(obj.body)].filter((x) => x !== undefined).join("\n") : "";
+  const completedAt = text(r.completed_at);
+  return {
+    ...(text(raw) ? { result: raw as string } : {}),
+    ...(report ? { report } : {}),
+    ...(completedAt ? { completedAt } : {}),
+  };
+}
 
 const STATUSES: readonly ViewTaskStatus[] = ["pending", "ready", "dispatched", "blocked", "completed", "failed"];
 
-function depsOf(raw: FullTaskRow["deps"]): string[] {
+export function depsOf(raw: FullTaskRow["deps"]): string[] {
   if (raw === undefined || raw === null) return [];
   const list: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
   if (!Array.isArray(list) || list.some((d) => typeof d !== "string")) throw new Error(`deps: expected a string array, got ${JSON.stringify(raw)}`);
@@ -25,7 +43,7 @@ export function snapshotTasks(rows: readonly FullTaskRow[], run: string): ViewTa
     runId: r.run_id ?? run,
     status: (STATUSES as readonly string[]).includes(r.status) ? (r.status as ViewTaskStatus) : "blocked",
     deps: depsOf(r.deps),
-    ...(r.result ? { result: r.result } : {}),
+    ...resultFields(r),
     ...(r.dispatchId ? { activeDispatchId: r.dispatchId } : {}),
   }));
 }

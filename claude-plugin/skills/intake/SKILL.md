@@ -9,7 +9,7 @@ description: "Use when the sangsoe orchestrator receives an owner's message and 
 
 ## 먼저: 열린 결정의 답인가
 
-말이 열린 결정(dNNN)에 답하면 가르지 않는다. `decision_answer` 로 그 결정에 잇는다(`owner_action` 의 seq, 마스킹한 답). dNNN 이 붙은 답은 hook 이 이미 이었을 수 있다. 다시 불러도 결과는 같다. 어느 결정의 답인지 확실하지 않으면 잇지 않고 오너에게 어느 것인지 묻는다.
+말이 열린 결정(dNNN)에 답하면 가르지 않는다. `decision_answer` 로 그 결정에 잇는다(`owner_action` 의 seq, 마스킹한 답). hook 은 이 세션(Dispatch 가 없는 오케스트레이터)에서 줄이 그 dNNN 으로 시작하고 다른 결정을 적지 않은 답만 이미 이었다(결정 173). 다시 불러도 결과는 같다. `linked_by` 는 비우거나 `orchestrator` 로 둔다: `hook`·`button` 은 그 입구가 스스로 정하고 tool 은 받지 않는다. 어느 결정의 답인지 확실하지 않으면 잇지 않고 오너에게 어느 것인지 묻는다.
 
 ## 여섯 갈래
 

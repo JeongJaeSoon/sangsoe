@@ -17,7 +17,12 @@ export interface ProbePorts {
   readonly gh: GhClient;
   /** The last gh_budget reading; below 10% no gh probe runs. */
   readonly budget?: RateBudget;
+  /** `watch.repos` as the owner spelled them: a verify's repo is lowercase, a private repo is not found that way. */
+  readonly repos?: readonly string[];
 }
+
+// The rule pr-monitor keeps (PR 45, U37): GitHub under the configured spelling, rows lowercase.
+const spelled = (ports: ProbePorts, repo: string) => ports.repos?.find((r) => r.toLowerCase() === repo.toLowerCase()) ?? repo;
 
 /** The five verify kinds, fixed (decision 91②). The last two read only while the item is marked. */
 export const VERIFY_KINDS = ["pr_merged", "orca_field", "plugin_approved", "run_ok", "pr_found"] as const;
@@ -42,13 +47,13 @@ export async function readProbe(spec: VerifySpec, ports: ProbePorts, ctx: { run?
   switch (spec.kind) {
     case "pr_merged": {
       const [repo, n] = spec.pr.split("#");
-      const r = await gh<{ merged?: boolean; merge_commit_sha?: string | null }>(ports, `repos/${repo}/pulls/${n}`);
+      const r = await gh<{ merged?: boolean; merge_commit_sha?: string | null }>(ports, `repos/${spelled(ports, repo ?? "")}/pulls/${n}`);
       if (!r.ok) return { kind: "unreadable", why: r.why };
       return r.data.merged === true ? { kind: "true", observed: `${spec.pr} merged ${r.data.merge_commit_sha ?? ""}`.trim() } : { kind: "false", observed: `${spec.pr} not merged` };
     }
     case "run_ok": {
       if (!spec.run) return { kind: "unreadable", why: "no run id yet: the owner's line has not named one" };
-      const r = await gh<{ status?: string; conclusion?: string | null }>(ports, `repos/${spec.repo}/actions/runs/${spec.run}`);
+      const r = await gh<{ status?: string; conclusion?: string | null }>(ports, `repos/${spelled(ports, spec.repo)}/actions/runs/${spec.run}`);
       if (!r.ok) return { kind: "unreadable", why: r.why };
       const c = r.data.conclusion ?? "pending";
       return c === "success" ? { kind: "true", observed: `run ${spec.run} success` } : { kind: "false", observed: `run ${spec.run} ${c}` };
@@ -57,7 +62,7 @@ export async function readProbe(spec: VerifySpec, ports: ProbePorts, ctx: { run?
       // Only a PR opened since the item counts: an older match is not this item's effect (guards (가)·(마)).
       if (!ctx.since) return { kind: "unreadable", why: "no item time to bound the search" };
       const since = new Date(Date.parse(ctx.since)).toISOString().replace(/\.\d{3}Z$/, "Z");
-      const q = encodeURIComponent(`repo:${spec.repo} is:pr created:>=${since} ${spec.search}`);
+      const q = encodeURIComponent(`repo:${spelled(ports, spec.repo)} is:pr created:>=${since} ${spec.search}`);
       const r = await gh<{ total_count?: number; items?: { html_url?: string }[] }>(ports, `search/issues?q=${q}&per_page=1`);
       if (!r.ok) return { kind: "unreadable", why: r.why };
       const url = r.data.items?.[0]?.html_url;

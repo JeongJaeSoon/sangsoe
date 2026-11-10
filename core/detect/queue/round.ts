@@ -84,7 +84,8 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   }
 
   const budget = d.ghBudget?.();
-  const ports = { orca: d.orca, gh: d.gh ?? NO_GH, ...(budget ? { budget } : {}) };
+  const repos = d.watch?.()?.repos;
+  const ports = { orca: d.orca, gh: d.gh ?? NO_GH, ...(budget ? { budget } : {}), ...(repos ? { repos } : {}) };
   const probes = await probeRound(ports, collect, input, itemFacts(input), OWNER_DEFAULTS, QUEUE_SOURCE);
   calls.push(`probeRound: read ${probes.read}, passed ${probes.passed.length}, skipped ${probes.skipped.length}`);
   if (!d.gh) unseen.push("gh client");

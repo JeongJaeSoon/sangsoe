@@ -9,6 +9,8 @@ import { handle } from "../../claude-plugin/mcp/tools/start_unit.ts";
 import {
   checkLineage,
   createOrcaAdapter,
+  dedupeKey,
+  EVENTS,
   type ExecResult,
   MODEL_CATALOG,
   MODEL_POLICY,
@@ -397,6 +399,33 @@ test("a failed start that reports a Dispatch writes worker_dead{start_failed}", 
   assert.equal(dead[0]?.entity_id, "ctx_dead");
 });
 
+test("decision 178: a Task Orca released at its predecessor's worker_done waits while that PR is open, starts once it merges", async () => {
+  const rows = () =>
+    ok({
+      tasks: [
+        { id: "task_pred", status: "completed", title: "p", deps: "[]" },
+        { id: NEW_TASK, status: "ready", title: "t", deps: JSON.stringify(["task_pred"]), spec: "sangsoe-role: worker\nbrief" },
+      ],
+    });
+  const h = harness({ taskList: rows });
+  h.store.append({ type: "pr_opened", source: "test", payload: { pr: "acme/api#41", task: "task_pred" } });
+  const held = await start(h, request({ task: { id: NEW_TASK } }));
+  assert.equal(held.kind === "waiting" && held.why, "not_ready");
+  assert.equal(h.called("worker-start").length, 0);
+  assert.equal(h.signals().length, 0, "a wait is not a refusal");
+
+  h.store.append({ type: "pr_merged", source: "test", payload: { pr: "acme/api#41", merge_sha: "a".repeat(40) } });
+  assert.equal((await start(h, request({ task: { id: NEW_TASK } }))).kind, "started");
+});
+
+test("decision 178: start_unit holds only on a merge wait in its own Run; another Run's predecessor and a hold are queue-monitor's", async () => {
+  const h = harness();
+  const [pred, succ] = ["item:task_other_run", `item:${NEW_TASK}`];
+  h.store.append({ type: "edge_added", source: "GRAPH", payload: { pred, succ, kind: "blocks" }, dedupe_key: dedupeKey(EVENTS.edge_added, pred, succ, "blocks") });
+  h.store.append({ type: "item_extra_set", source: "test", payload: { task: NEW_TASK, hold: true } });
+  assert.equal((await start(h, request({ task: { id: NEW_TASK } }))).kind, "started");
+});
+
 // ---- task-create, first prompt, references ----
 
 test("a new Task goes through task-create --deps on the requester's Run: role line first, late answers after the brief", async () => {
@@ -452,6 +481,11 @@ test("item_create writes the role it is given as the spec's first line; worker b
   const badCli = await itemNew({ ...cli, role: "orchestrator" }, ports);
   assert.equal(badCli.ok ? "" : badCli.refusal.code, "invalid_input");
   assert.deepEqual(specs.slice(2), ["sangsoe-role: lead\nbrief"], "the CLI entrance takes the same role");
+
+  const empty = await itemCreate({ ...base, role: "" }, ports);
+  const emptyCli = await itemNew({ ...cli, role: "" }, ports);
+  assert.deepEqual([empty.ok ? "" : empty.refusal.code, emptyCli.ok ? "" : emptyCli.refusal.code], ["invalid_input", "invalid_input"], "an empty role is refused by both");
+  assert.equal(specs.length, 3, "no Task for an empty role");
 });
 
 test("ticket references attach to the new worktree; a failure does not stop the start", async () => {

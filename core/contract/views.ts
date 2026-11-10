@@ -37,6 +37,10 @@ export interface ViewTask {
   readonly result?: string;
   readonly deps: readonly string[];
   readonly activeDispatchId?: string;
+  /** Orca's `completed_at`, when it has one. */
+  readonly completedAt?: string;
+  /** The subject and body of the worker report Orca keeps as the Task's result. */
+  readonly report?: string;
 }
 
 export interface ViewGate {
@@ -58,10 +62,17 @@ export interface ViewInput {
 
 export type WaitsOn = "owner" | "reviewer" | "infra" | "lead" | "worker";
 
+/**
+ * How the item view reads an item (decision 178): an Orca-backed ItemState, or one of two readings
+ * of a completed Task no transition writes: `pr_closed` (its PR closed without merging, the lead's
+ * call) and `unknown` (its PR's state not read yet).
+ */
+export type ItemReading = ItemState | "pr_closed" | "unknown";
+
 export interface ItemStatusRow {
   readonly task: string;
   readonly alias: string | null;
-  readonly state: ItemState | "unknown";
+  readonly state: ItemReading;
   readonly waitsOn: WaitsOn | null;
   readonly since: string | null;
   /** 🙋 open decision on the item. */
