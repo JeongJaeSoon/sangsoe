@@ -34,13 +34,27 @@ export interface ItemFacts {
   readonly undelivered: readonly string[];
   readonly alarms: readonly string[];
   readonly unclear: boolean;
+  /** In progress and its worker_idle (decision 186) is newer than its last move: the 대기 line. */
+  readonly idle: boolean;
   readonly evidenceShort: boolean;
   readonly closedAt: string | null;
 }
 
-const ALARMS = new Set(["worker_stuck", "worker_dead", "ci_failed", "land_failed", "loop_detected", "decision_untracked"]);
+// Decision 198: decision 186's events that ask for action or judgment (pr_changes_requested,
+// review_commented, refusal_report) join the 🚨 line, on the same "until the item moves" rule.
+const ALARMS = new Set([
+  "worker_stuck",
+  "worker_dead",
+  "ci_failed",
+  "land_failed",
+  "loop_detected",
+  "decision_untracked",
+  "pr_changes_requested",
+  "review_commented",
+  "refusal_report",
+]);
 // The author's session is gone while the item waits on the merge: only the PR's own alarms still apply.
-const PR_ALARMS = new Set(["ci_failed", "land_failed"]);
+const PR_ALARMS = new Set(["ci_failed", "land_failed", "pr_changes_requested", "review_commented"]);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const latest = (a: string | null, b: string | null): string | null => (a === null ? b : b === null || Date.parse(a) >= Date.parse(b) ? a : b);
 
@@ -78,6 +92,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
   const alarms = new Map<string, Map<string, number>>();
   const unclear = new Map<string, number>();
   const moved = new Map<string, number>();
+  const idle = new Map<string, number>();
 
   for (const e of input.events) {
     const p = e.payload;
@@ -100,6 +115,10 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     if (ALARMS.has(e.type)) {
       const t = taskOf(e, prTask);
       if (t) alarms.set(t, new Map(alarms.get(t)).set(e.type, e.seq));
+    }
+    if (e.type === "worker_idle") {
+      const t = taskOf(e, prTask);
+      if (t) idle.set(t, e.seq);
     }
   }
 
@@ -156,6 +175,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       undelivered,
       alarms: state === "done" || state === "cancelled" ? [] : standing,
       unclear: (unclear.get(t.id) ?? 0) > last,
+      idle: state === "in_progress" && (idle.get(t.id) ?? 0) > last,
       evidenceShort: state === "done" && !evidence.has(t.id),
       // A worker_done or a lead's task-update closes a Task with no item_transition (decision 175, S7).
       closedAt: state === "done" ? latest(closedAt.get(t.id) ?? mergedAt.get(t.id) ?? t.completedAt ?? null, verifiedAt ?? null) : null,

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { type FakeReply, createFakeOrca } from "../../test/fake-orca/index.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
@@ -106,12 +107,26 @@ test("a disabled plugin on either host is not green", async () => {
   });
   assert.deepEqual(
     [byId(rs, "claude-plugin-version")?.status, byId(rs, "claude-plugin-version")?.fix],
-    ["warn", "claude plugin enable sangsoe@sangsoe"],
+    ["fail", "claude plugin enable sangsoe@sangsoe --scope user"],
   );
   assert.deepEqual(
     [byId(rs, "orca-plugin-version")?.status, byId(rs, "orca-plugin-version")?.summary],
     ["warn", "Orca plugin 이 꺼져 있다"],
   );
+  assert.equal(doctorReport(rs).exitCode, 1, "decision 198: doctor is not green while sangsoe is off in Claude Code");
+});
+
+test("decision 198: the recorded list of a profile with sangsoe off (or its enabledPlugins entry gone) fails doctor", async () => {
+  const recorded = JSON.parse(readFileSync(new URL("../../test/fixtures/doctor/claude-plugin-list-disabled.json", import.meta.url), "utf8"));
+  const off = byId(await check("local", { "claude-plugin-list": recorded }), "claude-plugin-version");
+  assert.equal(off?.status, "fail");
+  // A project row enabled in another folder is not what a session loads: the user row decides.
+  const mixed = [{ ...recorded[1], enabled: true, projectEnabled: true }, recorded[0]];
+  assert.equal(byId(await check("local", { "claude-plugin-list": mixed }), "claude-plugin-version")?.status, "fail");
+  const unknown = [{ id: "sangsoe@sangsoe", version: CORE_VERSION, scope: "user" }];
+  const u = byId(await check("local", { "claude-plugin-list": unknown }), "claude-plugin-version");
+  assert.equal(u?.status, "warn", "no enabled field is unknown, not on");
+  assert.match(u?.summary ?? "", /모른다/);
 });
 
 test("a check that throws becomes a failed item instead of breaking the run", async () => {

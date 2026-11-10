@@ -2,7 +2,28 @@
 // The sangsoe html panel (decision 92): three stages down and back, decision and 완료 buttons. Every
 // button is a plugin.request to the worker, which calls the core; the panel changes nothing itself.
 import { STYLE } from "./style.ts";
-import { type Act, type Acted, actedNote, back, current, down, type Open, type PanelView, renderStage, TABS, type Tab, type Target, trail } from "./view.ts";
+import {
+  type Act,
+  type Acted,
+  actedNote,
+  autoRefresh,
+  back,
+  current,
+  down,
+  errorNote,
+  type Open,
+  openTarget,
+  type PanelView,
+  prunePending,
+  REFRESH_MS,
+  type Refusal,
+  renderError,
+  renderStage,
+  TABS,
+  type Tab,
+  type Target,
+  trail,
+} from "./view.ts";
 
 type Frame = { plugin: { request(name: string, input?: unknown): Promise<unknown> } };
 declare const orca: Frame;
@@ -21,35 +42,44 @@ function mount(): void {
   let tab: Tab = "all";
   let note = "";
   let busy = false;
-  // The terminal's `sangsoe brief` takes `<group> [<iNNN>]`: the item's group is the one above it.
-  const where = (): Target => {
-    const group = [...stack].reverse().find((t) => t.group)?.group;
-    const item = current(stack).item;
-    return { ...(group ? { group } : {}), ...(group && item ? { item } : {}) };
-  };
+  const where = (): Target => openTarget(stack);
 
   const esc = (text: string) => text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const failed = (e: unknown) => ({ ok: false as const, refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" } });
-  const say = (text: string, bad = false) => {
-    note = text ? `<p class="msg${bad ? " bad" : ""}" role="status">${esc(text)}</p>` : "";
+  const say = (text: string) => {
+    note = text ? `<p class="msg" role="status">${esc(text)}</p>` : "";
   };
-  const draw = async () => {
-    const r = (await orca.plugin.request("panel.brief", current(stack)).catch(failed)) as Reply<PanelView>;
-    if (!r.ok) {
-      root.innerHTML = `${note}<p class="msg bad">${esc(`${r.refusal.code}: ${r.refusal.reason}`)} <button type="button" class="link" data-refresh>새로 고침</button></p>`;
-      return;
-    }
-    // The message sits under the header row, above the tabs.
-    root.innerHTML = renderStage(r.value, trail(stack), tab, where()).replace("</header>", () => `</header>${note}`);
+  const sayRefused = (r: Refusal) => {
+    note = errorNote(r);
+  };
+  // Owner items this panel pressed into ⏳ 검증 대기: their 완료 stays off until a reading drops them.
+  const pending = new Set<string>();
+  let lastOk = false;
+  const draw = async (auto = false) => {
+    const r = (await orca.plugin.request("panel.brief", { ...current(stack), ...(auto ? { auto: true } : {}) }).catch(failed)) as Reply<PanelView>;
+    lastOk = r.ok;
+    if (r.ok) prunePending(pending, r.value.todo);
+    // The message sits under the header row, above the tabs or the back line.
+    const html = r.ok ? renderStage(r.value, trail(stack), tab, where(), pending) : renderError(r.refusal, trail(stack), where());
+    root.innerHTML = html.replace("</header>", () => `</header>${note}`);
   };
   const closeMenu = () => root.querySelector("details.menu")?.removeAttribute("open");
   const open = async (o: Open) => {
     closeMenu();
     const r = (await orca.plugin.request("panel.open", o).catch(failed)) as Reply<{ status: string }>;
     const stale = note !== "";
-    say(r.ok ? "" : `${r.refusal.reason} — ${r.refusal.fix}`, !r.ok);
+    if (r.ok) say("");
+    else sayRefused(r.refusal);
     if (!r.ok || stale) await draw();
   };
+  // Decision 198: the panel re-reads on the status bar's interval and when it is shown again, so its
+  // band and status bar B read the same moment; a failed reading waits for 새로 고침.
+  const tick = () => {
+    const formOpen = [...root.querySelectorAll<HTMLElement>("tr.other")].some((f) => !f.hidden);
+    if (autoRefresh({ visible: document.visibilityState === "visible", lastOk, busy, formOpen })) void draw(true);
+  };
+  setInterval(tick, REFRESH_MS);
+  document.addEventListener("visibilitychange", tick);
   document.addEventListener("click", (ev) => {
     if (!(ev.target as Element).closest("details.menu")) closeMenu();
   });
@@ -63,7 +93,9 @@ function mount(): void {
     for (const b of root.querySelectorAll<HTMLButtonElement>("button")) b.disabled = true;
     try {
       const r = (await orca.plugin.request("panel.act", a).catch(failed)) as Reply<Acted>;
-      say(r.ok ? actedNote(a, r.value) : `${r.refusal.reason} — ${r.refusal.fix}`, !r.ok);
+      if (r.ok) say(actedNote(a, r.value));
+      else sayRefused(r.refusal);
+      if (r.ok && a.kind === "done" && r.value.status === "pending_verify") pending.add(a.item);
       await draw();
     } finally {
       busy = false;
