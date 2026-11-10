@@ -133,7 +133,7 @@ U1 ──┬── U2 (REAPER)
 1. pr-monitor 라운드가 열린 PR 마다 GitHub 의 requested reviewers · reviews · review comments 를 읽는다(이미 쓰는 `memoryGhCache` 의 ETag 아래). 새 요청자 → `pr_review_requested`, `CHANGES_REQUESTED` 리뷰 → `pr_changes_requested`, PR 작성자가 아닌 사람의 코멘트 → `review_commented`, 작성자의 답 → `review_replied`. `dedupe_key` 는 GitHub 의 리뷰·코멘트 id. 본문은 저장하지 않는다(GitHub 가 원본).
 2. `flow_step_skip` 명령 하나(MCP tool 과 `sangsoe graph skip`): 이유가 비면 거부, 있으면 `flow_step_skipped{step, reason}`.
 
-**파일**: `core/detect/pr/round.ts`, `core/detect/pr/judge.ts`, 새 `core/detect/pr/reviews.ts`, `core/graph/edit.ts`, `claude-plugin/mcp/tools/` 의 새 파일 하나(서버가 폴더를 자동으로 읽는다), `cli/` 의 graph 명령(`cli/main.ts` 한 줄), `test/detect/pr*`.
+**파일**: `core/detect/pr/round.ts`, `core/detect/pr/judge.ts`, 새 `core/detect/pr/reviews.ts`, `core/graph/edit.ts`, `claude-plugin/mcp/tools/` 의 새 파일 하나(서버가 폴더를 자동으로 읽는다), 새 `cli/commands/` 파일 하나(라우터 `cli/main.ts` 는 그 폴더를 읽으므로 고치지 않는다), `test/detect/pr*`.
 
 **시험**: 녹화한 GitHub 응답으로 넷이 한 번씩 써지고 두 번째 라운드는 아무것도 쓰지 않음, ETag 304 에서 쓰지 않음; 이유 없는 건너뜀 거부.
 
@@ -154,7 +154,7 @@ U1 ──┬── U2 (REAPER)
 **하는 일**(1단계가 먼저다):
 1. **녹화**: 사용 한도로 멈춘 워커와 로그인 만료로 멈춘 워커 각각의 Orca escalation, `worker_done` 메시지, 거부 보고 escalation 을 `inbox --json` 으로 하나씩 녹화해 fixture 로 둔다. 필드 이름이 정해지기 전에는 판정을 쓰지 않는다.
 2. **orca-monitor 가 inbox 를 판정한다**(이미 읽는 같은 응답, 새 Orca 호출 없음): 오류로 멈춤 → `worker_dead{stop_failure}`(dispatch 당 한 번); 프롬프트 대기 → `waiting_human`. 원천은 하나로 가른다: Dispatch 를 쥔 세션은 Orca 메시지만, Dispatch 없는 세션은 Notification hook 만 쓴다(hook 은 Dispatch 가 있으면 쓰지 않는다). 이렇게 하면 plugin 이 꺼져 hook 이 돌지 않는 워커도 잡힌다. `waiting_human` 은 지금 `session` 만 받으므로(`core/contract/events/waiting_human.ts:4`) 선택 칸 `dispatch` 를 더하고, 그 행이 로컬 hook 에서 온다고 보는 읽는 쪽(`core/detect/queue/round.ts:93`, `core/owner/todo.ts:45`)을 함께 고친다. `worker_done` 메시지 → `worker_done{dispatch, task, msg_id}` 표지(본문은 옮기지 않는다). 계약의 `outcome` 은 Orca 가 원본인 사실이라 결정 196 이 계약에서 뺀다(읽는 쪽은 Orca 에서 읽는다). 거부 보고 → 본문이 가리키는 거부 파일의 머리 줄(행위·분류)을 읽어 `refusal_report{act, category, command_file}`. 거부 파일의 머리 줄 형식은 결정 196 이 고정한다.
-3. **escalation 이 리드와 brief 에 닿는다**: Orca 는 그 escalation 을 이미 코디네이터(리드)에게 보낸다. sangsoe 는 다시 보내지 않고 위 행으로 brief 의 🚨 줄에 올린다(표시는 U6).
+3. **escalation 이 리드와 brief 에 닿는다**: Orca 는 그 escalation 을 이미 코디네이터(리드)에게 보낸다. sangsoe 는 다시 보내지 않고 위 행으로 brief 의 🚨 줄에 올린다(표시는 U6b).
 4. **`worker_idle`**: 이미 등록한 Stop hook 이 턴 끝에서, 그 세션이 끝나지 않은 Dispatch 를 쥐고 `worker_done` 을 보내지 않았으면 쓴다(턴마다 dedupe). 새 hook 등록 없음.
 5. **`observed_change`**: 한 Dispatch 에 터미널이 둘 이상이라 `worktree ps` 시각을 못 믿는 행에만, 상태·단계·liveness 중 바뀐 필드 이름을 쓴다(값은 쓰지 않는다).
 6. **prompt 출처(#17)**: B1 의 첫 미지수(오케스트레이션 메시지 배달이 `agent.prompt.before` 를 지나는가)를 실제 Orca 에서 먼저 잰다. 지나면 manifest 에 관찰만 하는 hook 을 선언하고 worker 가 (터미널, prompt 해시) 한 줄을 쓰며, 채팅 hook 은 그 줄과 맞는 prompt 를 오너의 말로 보지 않는다. 지나지 않으면 결정 196 에 그 측정을 적고 결정 173 의 꼴 규칙을 그대로 둔다. manifest 를 바꾸면 오너가 plugin 을 다시 승인해야 한다(오너의 일).
@@ -190,7 +190,7 @@ U1 ──┬── U2 (REAPER)
 
 **층**: 토큰 X(코어). 토큰 O 는 오케스트레이터 글에 `repo` 를 쓰는 법 한 줄. 호스트 기능: Orca `worker-start --repo --keep-open`, `run-current`, Orca 메시지.
 
-**겹침**: `core/start/start.ts` 를 U5 와 나눈다(U5 가 뒤). `cli/main.ts` 에 U3a(graph skip)와 명령 줄을 하나씩 더한다: 끝줄 충돌뿐이다.
+**겹침**: `core/start/start.ts` 를 U5 와 나눈다(U5 가 뒤). CLI 명령은 `cli/commands/` 의 새 파일이라 U3a 와 겹치지 않는다.
 
 ## 8. U6a — 묶음 상세 화면 (L, 결정 199)
 
@@ -232,7 +232,7 @@ U1 ──┬── U2 (REAPER)
 | 크리티컬 패스에 상태·단계 이름 없음(`view.ts:215`, `:226`) | NOW | S | U6a |
 | 간선 범례가 네 종류뿐, 접힌 모양에서 종류와 뜻이 붙음(`style.ts:154`–`173`, `view.ts:216`–`218`) | NOW | S | U6a |
 | 스택 PR 체인 · 릴리스 묶음(단계 사실은 `core/graph/facts.ts` 에 있고 `GroupDetail` 에 없음) · 끊긴 선행 · 간선 목록 | NOW(#21) | M·M·M·S | U6a |
-| 왜 준비되지 않았나의 id 칸 잘못 씀(`view.ts:227`), `graph.why` 가 `after`·`stacked_on` 행을 버림(`core/graph/read.ts`) | NOW | M | U6a |
+| 왜 준비되지 않았나의 id 칸 잘못 씀(`view.ts:227`), `graph.why` 가 `after`·`stacked_on` 행을 보이지 않음(U51 관찰. `core/graph/read.ts:44` 의 거르기는 trigger·hold·orca 행만 버리므로 원인 자리는 U6a 가 찾는다) | NOW | M | U6a |
 | 추천대로 답이 이유 없이 꺼짐(`view.ts:124`) · 상태 절 배치(`view.ts:225`) · 완료 N건 각주(`view.ts:228`) · 검증 대기의 영어 문구 · 항목 상세 접힘 라벨 잡음과 남은 점(`view.ts:236`) | LATER(다음 패널 단위) | S | — |
 | U51 의 그림 하네스를 시각 회귀 fixture 로 남기기 | LATER(다음 패널 단위) | M | — |
 | 행마다 확인함(결정 91 이 시안을 대체) · 상태 표시줄 시안 글(결정 170 이 대체) | DROP | — | — |
