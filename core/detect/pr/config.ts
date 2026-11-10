@@ -4,7 +4,10 @@ import { join } from "node:path";
 
 /** Setting `watch` (decision 80 N7) plus the top-level `owners`, from `~/.config/sangsoe/config.json`. */
 export type WatchConfig = {
-  /** Lowercase `owner/name`. Empty: pr-monitor reads nothing. */
+  /**
+   * `owner/name` as written: GitHub calls keep this case, since a fine-grained token answers 404 for
+   * a private repo named in another case. Rows and keys lowercase it. Empty: pr-monitor reads nothing.
+   */
   repos: string[];
   /** Lowercase logins. Empty: any author. */
   authors: string[];
@@ -14,8 +17,8 @@ export type WatchConfig = {
   owners: string[];
 };
 
-const strings = (v: unknown): string[] | null =>
-  Array.isArray(v) && v.every((s) => typeof s === "string") ? v.map((s) => s.toLowerCase()) : null;
+const strings = (v: unknown): string[] | null => (Array.isArray(v) && v.every((s) => typeof s === "string") ? v : null);
+const lower = (v: string[] | null) => v?.map((s) => s.toLowerCase()) ?? null;
 
 /** null when `watch` is missing or malformed: the round then reads nothing (unknown means no action). */
 export function parseWatch(raw: unknown): WatchConfig | null {
@@ -25,8 +28,8 @@ export function parseWatch(raw: unknown): WatchConfig | null {
   if (typeof w !== "object" || w === null) return null;
   const watch = w as Record<string, unknown>;
   const repos = strings(watch.repos);
-  const authors = watch.authors === undefined ? [] : strings(watch.authors);
-  const owners = rec.owners === undefined ? [] : strings(rec.owners);
+  const authors = watch.authors === undefined ? [] : lower(strings(watch.authors));
+  const owners = rec.owners === undefined ? [] : lower(strings(rec.owners));
   if (!repos || !authors || !owners) return null;
   if (watch.linked_only !== undefined && typeof watch.linked_only !== "boolean") return null;
   return { repos, authors, linkedOnly: watch.linked_only !== false, owners };

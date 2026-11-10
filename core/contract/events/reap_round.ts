@@ -4,6 +4,7 @@ export default defineEvent("reap_round", {
   trigger: oneOf("timer", "hint"),
   roots_ok: bool,
   round: int,
+  mark_only: opt(bool),
   cards: opt(int),
   marked: opt(int),
   candidates: opt(int),

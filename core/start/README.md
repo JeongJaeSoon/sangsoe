@@ -15,7 +15,7 @@ sangsoe 가 여는 모든 세션은 `startUnit` 하나를 지난다(결정 94 (�
 
 **남은 것(LATER, 결정 91 ④(i))**: 기존 대기자 Task 에 새 워커를 시작할 때 늦은 답을 싣고 `notified` 를 쓰는 길은 없다. `worker-start` 에는 기존 Task 의 첫 프롬프트를 바꿀 입력이 없고, 결정 뷰와 `dNNN` 도 아직 없다. 지금은 그 조합을 거부해 답이 말없이 사라지지 않게만 한다. 결정 뷰가 생기면(U8) 다시 본다.
 
-새 Task 의 spec 첫 줄은 역할 줄 `sangsoe-role: <lead|worker>` 다(결정 46, `ROLE_LINE_PREFIX`). SessionStart hook 이 이 줄로 역할을 붙이고, 리드는 그때 자기 Run 을 만든다. `/goal` 줄은 `worker-start` 세션에서 걸리지 않는다(docs/test-outcomes.md).
+새 Task 의 spec 첫 줄은 역할 줄 `sangsoe-role: <lead|worker>` 다(결정 46, `ROLE_LINE_PREFIX`). SessionStart hook 이 이 줄로 역할을 붙이고, 리드는 그때 자기 Run 을 만든다. Orca 는 spec 을 고치지 못하므로, 기존 Task 는 첫 줄이 `childRole` 의 역할 줄일 때만 시작하고 아니면 `lineage_invalid` 로 거부한다(`task-list --full` 로 읽는다). 리드 항목은 `item_create` 에 `role: lead` 를 밝혀 만든다. `/goal` 줄은 `worker-start` 세션에서 걸리지 않는다(docs/test-outcomes.md).
 
 T5(결정 84 ④): 시작 함수는 Task 상태를 먼저 읽어 `dispatched` 인 Task 를 다시 시작하지 않고, 같은 Task 의 시작 시도 실패(`worker-start` 오류와 `no_dispatch`)를 event 로 세어 세 번째에 `loop_detected` 를 쓰고 그 뒤로는 Orca 를 부르지 않는다. 시작 전 읽기 실패는 세지 않는다.
 

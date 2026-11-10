@@ -8,7 +8,7 @@ import type { Appended, EventFilter } from "../store/store.ts";
 import { preDelete } from "./checks.ts";
 import type { ReaperConfig } from "./config.ts";
 import { dockerUp, sweepDocker } from "./docker.ts";
-import { branchOf, type Finished, judgeFinished, repoOf } from "./finished.ts";
+import { branchOf, type Finished, judgeFinished, repoOf, withRemoteCase } from "./finished.ts";
 import { blockedKey, dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
 
 /** The only Orca calls REAPER has: three reads and the one removal. No terminal call exists here. */
@@ -23,7 +23,7 @@ export type ReaperDeps = {
   /** Absent on a dry run: the round marks and reports, and never sweeps. */
   append?: (e: Planned) => Appended;
   now(): number;
-  /** null when the protect list cannot be read: a root failure. */
+  /** null with no readable `reaper` section: the round is mark-only (decision 174), not a failed root. */
   config: ReaperConfig | null;
   sample(): LoadSample;
 };
@@ -43,6 +43,8 @@ export type ReapReport = {
   round: number;
   trigger: "timer" | "hint";
   roots_ok: boolean;
+  /** No `reaper` config section (decisions 144, 174): the round marks and writes no candidate. */
+  mark_only: boolean;
   /** What the round could not read or decide; nothing was removed on its account. */
   unseen: string[];
   cards: number;
@@ -123,6 +125,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     round,
     trigger,
     roots_ok: true,
+    mark_only: d.config === null,
     unseen: [],
     cards: 0,
     marked: [],
@@ -155,6 +158,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
         trigger,
         roots_ok: r.roots_ok,
         round,
+        ...(r.mark_only ? { mark_only: true } : {}),
         cards: r.cards,
         marked: r.marked.length,
         candidates: r.candidates.length,
@@ -194,7 +198,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
       r.unknown.push(`worktree:${c.id}`);
       continue;
     }
-    scope.push(c as WorktreeRow & { instanceId: string });
+    scope.push(await withRemoteCase(c as WorktreeRow & { instanceId: string }, d.exec));
     if (!recorded.has(c.instanceId)) {
       write({
         type: "resource_adopted",
@@ -225,8 +229,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     }
   }
 
-  if (!d.config) rootFailed("protect list: no reaper section in ~/.config/sangsoe/config.json");
-  else {
+  if (d.config) {
     const protect = new Set(d.config.protect);
     for (const c of scope) if (protect.has(c.instanceId) || protect.has(c.path) || protect.has(branchOf(c))) marked.add(c.id);
   }
@@ -255,14 +258,16 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   r.marked = scope.filter((c) => marked.has(c.id)).map((c) => c.instanceId);
   const candidates = scope.filter((c) => !marked.has(c.id) && !unknown.has(c.id));
   r.candidates = candidates.map((c) => c.instanceId);
-  if (!r.roots_ok) return finish();
+  if (!r.roots_ok || !d.config) return finish();
+  const config = d.config;
 
   // Candidate rows: first sighting `seen`, reached again (or no longer a clean candidate) `cleared`.
   const sightings = lastSightings(d.events({ type: "reap_candidate" }));
+  // A round that wrote no sighting breaks the run of two, whether a root failed or it only marked.
   const failedSince = (r0: number) =>
     rounds.some((e) => {
-      const p = e.payload as { round: number; roots_ok: boolean };
-      return p.round > r0 && !p.roots_ok;
+      const p = e.payload as { round: number; roots_ok: boolean; mark_only?: boolean };
+      return p.round > r0 && (!p.roots_ok || p.mark_only === true);
     });
   const sighting = (state: "seen" | "cleared", ref: string) =>
     write({
@@ -285,7 +290,6 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
 
   // Targets: a candidate in two different rounds in a row, past the grace, and positively finished.
   const pressure = judgeLoad(d.sample()).level !== "ok";
-  const config = d.config as ReaperConfig;
   const grace = pressure ? config.minGapMs : config.graceMs;
   const workerRows = typeof workers === "string" ? [] : workers;
   const targets: { card: WorktreeRow & { instanceId: string }; finished: Extract<Finished, { state: "finished" }> }[] = [];

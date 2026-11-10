@@ -1,12 +1,14 @@
 // The seven named REAPER scenarios (split §2 U18; switch conditions R1–R7). Each one also asserts
 // what must not happen: no terminal closed, no forced removal, no Docker prune or label selection.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { recordResource, resourceRecord } from "../../core/index.ts";
+import { judgeStall, recordResource, resourceRecord } from "../../core/index.ts";
 import {
   assertNeverForbidden,
+  CONFIG,
   card,
   dropScratch,
   finishedCard,
@@ -22,11 +24,10 @@ after(dropScratch);
 const rms = (w: ReturnType<typeof world>) => w.orca.calls.filter((c) => c.startsWith("worktreeRm"));
 
 test("reap_roots_fail_no_sweep: one unreadable root skips candidates and sweep", async () => {
-  for (const broken of ["workerList", "worktreePs", "gh", "config"] as const) {
+  for (const broken of ["workerList", "worktreePs", "gh"] as const) {
     const w = world();
     finishedCard(w, `roots-${broken}`);
     if (broken === "gh") w.gh.down = true;
-    else if (broken === "config") w.config = null;
     else w.orca.failing.add(broken);
     const last = await rounds(w, 4, 30);
     assert.equal(last.roots_ok, false, broken);
@@ -36,6 +37,56 @@ test("reap_roots_fail_no_sweep: one unreadable root skips candidates and sweep",
     assert.equal(w.types("reap_round").length, 4);
     assertNeverForbidden(w);
   }
+});
+
+test("no reaper section: rounds are mark_only, not failed roots, and three of them raise no timer_stalled (M3)", async () => {
+  const w = world();
+  w.config = null;
+  finishedCard(w, "default-install");
+  const last = await rounds(w, 3, 30);
+  assert.equal(last.roots_ok, true);
+  assert.equal(last.mark_only, true);
+  assert.deepEqual(rms(w), [], "nothing removed");
+  assert.deepEqual(w.types("reap_candidate"), [], "no candidate rows");
+  assert.ok(w.types("reap_round").every((r) => r.roots_ok === true && r.mark_only === true));
+  assert.deepEqual(judgeStall(w.store.events(), w.clock.now, 30 * MIN), []);
+
+  w.gh.down = true;
+  await rounds(w, 3, 30);
+  assert.deepEqual(
+    judgeStall(w.store.events(), w.clock.now, 30 * MIN).map((p) => p.type),
+    ["timer_stalled"],
+    "a root that really fails still alarms",
+  );
+});
+
+test("a private repo Orca lists lowercase is asked under its remote's spelling", async () => {
+  const w = world();
+  w.gh.repo = "Acme/API";
+  const c = finishedCard(w, "cased");
+  assert.equal(c.projectId, "github:acme/api", "Orca lowercases projectId");
+  execFileSync("git", ["-C", c.path, "remote", "add", "origin", "git@github.com:Acme/API.git"]);
+  const last = await rounds(w, 3, 30);
+  assert.equal(last.roots_ok, true, last.unseen.join("; "));
+  assert.deepEqual(rms(w), [`worktreeRm id:${c.id}`]);
+  assert.ok(w.gh.paths.every((p) => p.startsWith("repos/Acme/API/")), w.gh.paths.join("\n"));
+});
+
+test("reap_two_rounds_grace: a mark_only stretch between two sightings restarts the count", async () => {
+  const w = world();
+  finishedCard(w, "unconfigured");
+  await w.round();
+  w.clock.now += 40 * MIN;
+  w.config = null;
+  await w.round();
+  w.config = CONFIG;
+  w.clock.now += 40 * MIN;
+  await w.round();
+  assert.deepEqual(rms(w), [], "the sighting before the mark_only round does not count");
+  assert.deepEqual(
+    w.types("reap_candidate").map((r) => r.round),
+    [1, 3],
+  );
 });
 
 test("reap_two_rounds_grace: a finished card goes only after two rounds and the grace period", async () => {

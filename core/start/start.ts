@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { REQUIRED_CAPABILITIES } from "../checks/orca-capabilities.ts";
-import type { OrcaAdapter, OrcaResult, Receipt, WriteOptions } from "../contract/orca.ts";
+import type { OrcaAdapter, OrcaResult, Receipt, TaskRow, WriteOptions } from "../contract/orca.ts";
 import { type Choice, resolve } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
@@ -238,14 +238,26 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   };
 
   // Ready and capacity: not refusals, the caller waits. An unreadable one is not "no room".
-  const tasks = await orca.taskList({ run: requester.runId });
+  const tasks = await orca.taskList({ run: requester.runId, full: true });
   if (!tasks.ok) return refuse("orca_error", `task-list 실패 (${tasks.error.code})`, taskId);
-  const task = tasks.value.find((t) => t.id === taskId);
+  const task = tasks.value.find((t) => t.id === taskId) as (TaskRow & { spec?: unknown }) | undefined;
   if (task?.status === "dispatched") {
     return { kind: "waiting", taskId, why: "already_dispatched", detail: "이미 Dispatch 된 Task 는 다시 시작하지 않는다(T5)" };
   }
   if (task?.status !== "ready") {
     return { kind: "waiting", taskId, why: "not_ready", detail: task ? `Task 상태 ${task.status}` : "Run 의 Task 목록에 없다" };
+  }
+  // SessionStart takes the role from the spec's first line, and Orca cannot rewrite a spec: an
+  // existing Task written for another role would start this child as that role.
+  // Read as SessionStart's readRoleLine reads it (core/session imports this module, so not shared).
+  const first = typeof task.spec === "string" ? (task.spec.split("\n", 1)[0] ?? "").trim() : "";
+  const role = first.startsWith(ROLE_LINE_PREFIX) ? first.slice(ROLE_LINE_PREFIX.length).trim() : "";
+  if ("id" in req.task && role !== req.childRole) {
+    return refuse(
+      "lineage_invalid",
+      `Task ${taskId} 의 spec 첫 줄이 "${first.slice(0, 60)}" 라 ${req.childRole} 로 시작하지 않는다. ${req.childRole} 항목은 role 을 밝혀 다시 만든다(item_create role)`,
+      taskId,
+    );
   }
   let free: number;
   try {

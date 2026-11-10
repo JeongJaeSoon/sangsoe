@@ -230,6 +230,30 @@ test("repo_level_main (main_* side): red after a failed rerun, then any later me
   assert.deepEqual((await w.round()).written, [], "a settled sha is not read again");
 });
 
+test("watch.repos keeps its case for every GitHub call; rows and keys stay lowercase", async () => {
+  // A fine-grained token answers 404 for a private repo named in another case.
+  const given = "Acme/API";
+  const w = world({ watch: { repos: [given] } });
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
+  w.merged(7, SHA);
+  mainRuns(w, SHA, [runAt(41, "success")]);
+  const paths: string[] = [];
+  const cased = Object.fromEntries(Object.entries(w.routes).map(([k, v]) => [k.replace(`repos/${REPO}`, `repos/${given}`), v]));
+  const gh: GhClient = {
+    get: async <T>(path: string) => {
+      paths.push(path);
+      return (cased[path] ?? { kind: "error", status: 404, message: "Not Found" }) as GhResponse<T>;
+    },
+  };
+
+  assert.deepEqual((await w.round({ gh })).written.map((x) => x.type), ["pr_merged"]);
+  assert.equal(w.rows("pr_merged")[0]?.payload.pr, "acme/api#7");
+  assert.deepEqual((await w.round({ gh })).written.map((x) => x.type), ["main_green"], "main CI reads the merge the round before wrote");
+  assert.deepEqual(w.rows("main_green")[0]?.payload, { repo: "acme/api", sha: SHA, run_id: "41" }, "land compares main state lowercase");
+  assert.ok(paths.length > 0 && paths.every((p) => p.startsWith(`repos/${given}`)), paths.join("\n"));
+});
+
 test("main CI judges only the repository's newest merge: an older sha's red never lands after a newer green", async () => {
   const w = world({ watch: { linkedOnly: false } });
   w.routes[CLOSED] = ok([listed(2, { merged_at: "2026-11-10T11:30:00Z" }), listed(1, { merged_at: "2026-11-10T09:00:00Z" })]);
