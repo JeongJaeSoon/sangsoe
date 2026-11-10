@@ -26,7 +26,8 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   const loc = await locate(orca, input.cwd ?? "");
   const role = declared ?? readRoleLine(loc?.spec);
   if (!role) {
-    if (!loc) return [];
+    // Only a Task sangsoe made is its to flag; a Dispatch another tool started is left alone (decisions 46, 192).
+    if (!loc || !store.events({ type: "item_created" }).some((e) => e.entity_id === loc.task)) return [];
     store.append({
       type: "worker_stuck",
       source: SOURCE,
