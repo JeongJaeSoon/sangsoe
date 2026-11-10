@@ -1,8 +1,9 @@
 import { requiredEvidence, type TierVerdict, verifyTier } from "../verify/verify-tier.ts";
 import { readDiff, readLabels, readPull } from "./github.ts";
-import type { LandDeps, LandRefusal } from "./land.ts";
+import { type LandDeps, type LandRefusal, tierSource, tierUnreadable } from "./land.ts";
 
-export type TierOfPr = TierVerdict & { pr: string; head_sha: string; evidence: string[] };
+/** `tier_source` is "config", or "none (fail-closed V3): <what was missing>". */
+export type TierOfPr = TierVerdict & { pr: string; head_sha: string; tier_source: string; evidence: string[] };
 
 /** Read-only: the verify tier land would use for this PR at its current head, and the evidence it asks. */
 export async function tierOfPr(
@@ -20,6 +21,7 @@ export async function tierOfPr(
   }
   const diff = await readDiff(deps.gh, repo, a.pr);
   const labels = await readLabels(deps.gh, repo, a.pr, pull.data);
-  const v = verifyTier(diff.kind === "ok" ? diff.data : null, labels.kind === "ok" ? labels.data : null, deps.config().tier);
-  return { ok: true, value: { pr: `${repo.toLowerCase()}#${a.pr}`, head_sha: pull.data.head.sha, ...v, evidence: requiredEvidence(v) } };
+  const config = deps.config();
+  const v = verifyTier(diff.kind === "ok" ? diff.data : null, labels.kind === "ok" ? labels.data : null, config.tier, tierUnreadable(config));
+  return { ok: true, value: { pr: `${repo.toLowerCase()}#${a.pr}`, head_sha: pull.data.head.sha, ...v, tier_source: tierSource(config), evidence: requiredEvidence(v) } };
 }

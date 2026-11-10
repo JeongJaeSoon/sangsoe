@@ -110,7 +110,7 @@ test("only the owner-only skills inject CLI output, and the model cannot invoke 
 
 test("deliver-ticket lands through the land tool with tiered evidence and merge_ready", () => {
   const text = read("claude-plugin/skills/deliver-ticket/SKILL.md");
-  for (const want of ["`land`", "`merge_ready`", "V0", "V1", "V2", "V3", "`evidence_missing"]) {
+  for (const want of ["`land`", "`merge_ready`", "V0", "V1", "V2", "V3", "`evidence_missing", "`evidence_record`", "`stage_record`"]) {
     assert.ok(text.includes(want), `deliver-ticket lacks ${want}`);
   }
   assert.doesNotMatch(text, /gh\s+pr\s+merge/, "deliver-ticket calls GitHub's merge directly");

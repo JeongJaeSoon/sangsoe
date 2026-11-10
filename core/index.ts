@@ -134,6 +134,16 @@ export {
 } from "./land/land.ts";
 export { mergeConfirm } from "./land/github.ts";
 export { ghMerge, readLandConfig, realLandDeps } from "./land/ports.ts";
+export {
+  EVIDENCE_KINDS,
+  type EvidenceRecordInput,
+  type RecordPorts,
+  type RecordResult,
+  recordEvidence,
+  recordStage,
+  STAGES,
+  type StageRecordInput,
+} from "./land/record.ts";
 export { type TierOfPr, tierOfPr } from "./land/tier.ts";
 export { type EvidenceGap, evidenceGaps, mergedItemMark } from "./verify/evidence.ts";
 export {

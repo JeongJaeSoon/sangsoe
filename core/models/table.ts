@@ -16,6 +16,7 @@ export const SOURCES = {
   overview: "https://platform.claude.com/docs/en/about-claude/models/overview",
   modelConfig: "https://code.claude.com/docs/en/model-config",
   subAgents: "https://code.claude.com/docs/en/sub-agents",
+  effort: "https://platform.claude.com/docs/en/build-with-claude/effort",
 } as const;
 export type Source = keyof typeof SOURCES;
 
@@ -193,6 +194,13 @@ export const POLICY: Readonly<Record<Kind, PolicyRow>> = {
 
 /** Guidance changes, newest first: readable without git. Each line also gets a decision. */
 export const CHANGELOG: readonly { date: string; change: string; source: Source; decision: number }[] = [
+  {
+    date: "2026-11-10",
+    change:
+      "A move to the next tier starts at that tier's apiDefaultEffort (frontier: high), not at the ladder's top effort that earned it: the effort guide starts the frontier tier at high, keeps xhigh for the hardest long-running work with a measured gain and max in reserve, and Claude Code's own default is lower, so start_unit always passes --effort.",
+    source: "effort",
+    decision: 172,
+  },
   {
     date: "2026-11-10",
     change:

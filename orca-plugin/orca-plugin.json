@@ -19,7 +19,7 @@
       { "on": "agent.status.changed" }
     ],
     "statusBarItems": [
-      { "id": "summary", "text": "SANGSOE", "icon": "layers", "tone": "neutral", "tooltip": "sangsoe", "command": "sangsoe.open" }
+      { "id": "summary", "text": "✨ SANGSOE", "tone": "neutral", "tooltip": "sangsoe", "command": "sangsoe.open" }
     ]
   }
 }
