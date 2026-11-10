@@ -385,7 +385,7 @@ CREATE TRIGGER event_no_delete BEFORE DELETE ON event BEGIN SELECT RAISE(ABORT, 
 <tr><td>🔄 진행 중</td><td><code>dispatched</code></td><td>Dispatch 가 걸려 있다.</td></tr>
 <tr><td>🚧 막힘</td><td><code>blocked</code></td><td><code>waits_on</code> 에 기다리는 쪽이 있다(열린 게이트가 있으면 그 결정).</td></tr>
 <tr><td>⏸️ 보류</td><td><code>blocked</code></td><td><code>hold</code> 가 켜져 있고 <code>review_trigger</code> 가 있다.</td></tr>
-<tr><td>✅ 완료</td><td><code>completed</code></td><td>Orca Task 가 <code>completed</code> 이면 ✅ 이다. PR 이 걸린 항목은 pr-monitor 가 실제 머지와 main 포함을 확인한 뒤에야 <code>completed</code> 가 되고, PR 이 없는 항목은 받아들여진 <code>worker_done</code> 이나 리드·오케스트레이터의 닫기로 <code>completed</code> 가 된다. 증거가 없거나 모자라면 🔍 근거 부족이 붙는다.</td></tr>
+<tr><td>✅ 완료</td><td><code>completed</code></td><td>Orca Task 가 <code>completed</code> 이고 그 Task 에 묶인 PR 이 있으면 머지됐다(결정 175·178). 열린 PR 은 🚧 막힘(리뷰어), 머지 없이 닫힌 PR 은 🚧 막힘(리드, 읽기 <code>pr_closed</code>), 상태를 못 읽은 PR 은 ❔ 모름(읽기 <code>unknown</code>)이고, 셋 다 보기 전용이다. 다음 문장의 "머지 확인 뒤에야 <code>completed</code>" 는 결정 175 가 바꿨다. PR 이 걸린 항목은 pr-monitor 가 실제 머지와 main 포함을 확인한 뒤에야 <code>completed</code> 가 되고, PR 이 없는 항목은 받아들여진 <code>worker_done</code> 이나 리드·오케스트레이터의 닫기로 <code>completed</code> 가 된다. 증거가 없거나 모자라면 🔍 근거 부족이 붙는다.</td></tr>
 <tr><td>🗑️ 취소</td><td><code>failed</code></td><td><code>result=cancelled</code>. 실패(<code>failed</code>)와는 <code>result</code> 로 가른다.</td></tr>
 </tbody></table>
 

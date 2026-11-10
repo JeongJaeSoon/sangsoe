@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readSnapshot } from "../../core/brief/load.ts";
-import type { OrcaAdapter } from "../../core/contract/orca.ts";
-import { ready, Store } from "../../core/index.ts";
+import { type OrcaAdapter, readSnapshot, ready, Store } from "../../core/index.ts";
 
 // Decision 178: the brief and the `ready` resource read the same Orca deps start_unit reads, so a
 // dependent of a completed Task with its PR open is not listed as ready.

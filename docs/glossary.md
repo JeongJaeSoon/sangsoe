@@ -65,7 +65,7 @@
 | 🔄 진행 중 | 살아 있는 워커나 리드가 Dispatch 로 쥐고 있다. 결정이 풀려 Orca 상태가 `ready` 가 됐어도 활성 Dispatch 가 있으면(워커가 아직 쥐고 있으면) 🟢 가 아니라 🔄 다 | `in_progress` | 작업 중, 실행 중 |
 | 🚧 막힘 | 시작했으나 누군가 없이는 못 간다. 기다리는 쪽을 괄호에 적는다. 리뷰 대기도 막힘이다 | `blocked` | 대기, 리뷰 중, 정지 |
 | ⏸️ 보류 | 일부러 지금 안 한다. 재검토 trigger 가 있다 | `parked` | 연기, 나중에 |
-| ✅ 완료 | Orca Task 가 `completed` 다. PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로, 오너 항목은 오너의 완료 버튼으로 `completed` 가 된다. `close_suggested` 는 닫기 제안이지 완료가 아니고, REAPER 의 끝남 판정은 카드를 치워도 되는지이지 항목 상태가 아니다(결정 161). 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
+| ✅ 완료 | Orca Task 가 `completed` 다. (결정 175·178: PR 작성자의 `worker_done` 이 머지 전에 Task 를 닫으므로, 브리프는 그 PR 이 열려 있으면 🚧 막힘(리뷰어), 머지 없이 닫혔으면 🚧 막힘(리드, 읽기 `pr_closed`), 상태를 아직 못 읽었으면 ❔ 모름(읽기 `unknown`)으로 읽는다. 보기 전용이고 Orca 상태는 그대로다. 아래 문장의 "머지 확인 뒤에야 `completed`" 는 이것으로 바뀌었다.) PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로, 오너 항목은 오너의 완료 버튼으로 `completed` 가 된다. `close_suggested` 는 닫기 제안이지 완료가 아니고, REAPER 의 끝남 판정은 카드를 치워도 되는지이지 항목 상태가 아니다(결정 161). 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
 | 🗑️ 취소 | 하지 않기로 했다. 이유가 필수다 | `canceled` | 폐기, 삭제 |
 
 ## 3. 플래그 (상태 위에 0개 이상)
@@ -167,12 +167,12 @@
 | 후속 | 간선의 끝. 항상 항목 | `succ` | 자식 |
 | 간선 종류 | 간선 하나의 의미. 네 종류(`blocks`·`after`·`stacked_on`·`deploys_after`)가 모두 후속을 막고, 막지 않는 참조 종류는 두지 않는다 | `kind` | — |
 | 간선 충족 | 간선 하나가 찼는지: 1 찼다 · 0 안 찼다 · 알 수 없음. 알 수 없음은 준비됨이 아니다 | `edge_ok` | — |
-| `blocks` | 선행이 ✅ 완료(선행이 결정이면 닫힘)여야 후속이 준비됨이 되는 간선 | `blocks` | depends_on |
-| `after` | 순서만 정하는 간선. 선행이 ✅ 완료나 🗑️ 취소면 후속이 준비됨이 된다 | `after` | — |
+| `blocks` | 선행이 ✅ 완료(선행이 결정이면 닫힘)여야 후속이 준비됨이 되는 간선. 선행 Task 에 pr-monitor 가 묶은 PR 이 있으면 그 PR 이 머지돼야 하고, 머지 없이 닫혔으면 끊긴 선행이다(결정 178, 흐름 단계인 선행은 예외) | `blocks` | depends_on |
+| `after` | 순서만 정하는 간선. 선행이 ✅ 완료나 🗑️ 취소면 후속이 준비됨이 된다. 선행에 묶인 PR 이 열려 있으면 머지나 닫힘을 기다린다(결정 178) | `after` | — |
 | `stacked_on` | 후속 PR 이 선행 PR 위에 쌓였다는 간선. 선행 PR 이 머지돼야 후속이 준비됨이 된다 | `stacked_on` | 부모 PR |
 | `deploys_after` | 선행에 `pr_merged` 가 있고 앞 단계에 `stage_recorded` 가 있으면 충족한다. 선행이 ✅ 완료일 필요는 없다(머지 확인이 `pr_merged` 와 ✅ 를 같은 라운드에 만든다) | `deploys_after` | — |
 | 끊긴 선행 | 🗑️ 취소된 선행에 `blocks`·`stacked_on`·`deploys_after` 로 걸린 후속의 표시. 자동으로 풀리지 않는다 | `dangling` | — |
-| ready | Orca Task 상태가 `pending`·`ready` 이고 Orca `deps` 의 선행이 모두 `completed` 이며 부가 간선·trigger 가 모두 차고 `hold` 가 아닌 항목을 내는 뷰. 리드·오케스트레이터가 시작할 일을 이 뷰(MCP)로 본다. Orca 의 `task-list --ready` 는 부가 간선과 trigger 를 몰라 더 많이 보인다. 계산 결과를 저장하지 않는다 | `ready` | 준비 목록, CLAIMER |
+| ready | Orca Task 상태가 `pending`·`ready` 이고 Orca `deps` 의 선행이 모두 `completed` 이고 그 선행에 묶인 PR 이 머지됐으며(결정 178) 부가 간선·trigger 가 모두 차고 `hold` 가 아닌 항목을 내는 뷰. 리드·오케스트레이터가 시작할 일을 이 뷰(MCP)로 본다. Orca 의 `task-list --ready` 는 부가 간선과 trigger 를 몰라 더 많이 보인다. 계산 결과를 저장하지 않는다 | `ready` | 준비 목록, CLAIMER |
 | `capacity` | 준비됨 항목과 여유(슬롯·압박)를 맞추는 함수(resource-monitor 모듈). 시작하는 쪽이 `worker-start` 전에 부르고 여유가 생기면 `capacity_free` 가 오케스트레이터를 깨운다 | `capacity` | 할당기 |
 | 순환 거부 | 간선을 더할 때 순환이 생기면 `event` 를 쓰지 않고 거부하는 것 | `edge_no_cycle` | — |
 | 흐름 틀 | 정해진 순서(예: 구현 → 리뷰 → 머지 → dev 배포 → 확인 → prod)를 선언형 데이터로 둔 것. 항목을 만들 때 하위 항목과 간선으로 펼친다 | `flow` | 템플릿(화면에서), 워크플로 |
