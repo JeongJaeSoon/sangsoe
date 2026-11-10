@@ -41,6 +41,8 @@ test("the flow templates are runtime assets the walk finds", () => {
 test("the packed tree carries every runtime asset under dist/ and expands both bundled flows", { timeout: 300_000 }, () => {
   const scratch = mkdtempSync(join(tmpdir(), "sangsoe-pack-"));
   try {
+    // A copy left by an earlier build must not pass for one this build made.
+    for (const a of sourceAssets()) rmSync(join(ROOT, "dist", a), { force: true });
     run("npm", ["run", "build"]);
     // --ignore-scripts: prepack would stage orca-plugin/vendor/ in the checkout while other tests run.
     const packed = JSON.parse(run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", scratch])) as {

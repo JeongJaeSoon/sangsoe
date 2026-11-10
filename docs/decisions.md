@@ -394,7 +394,7 @@
 148. **queue-monitor 는 Run 없는 호출자(`monitor:queue`)로 결정 함수를 부르고, 열린 게이트는 그 Run 의 리드에게 넘긴다.** monitor 가 게이트를 직접 풀지 않는다.
 149. **(`job_drift` 가 내용 해시를 비교한다는 부분은 결정 185 가 고친다: 버전·켜짐·재승인을 보고 해시는 doctor 의 몫이다.) queue 라운드는 `MONITORS` 표의 한 줄이고, 판정은 순수 함수 `judgeQueue` 다.** `job_drift` 는 내용 해시를 비교하고, `timer_stalled` 는 간격 세 배 또는 `roots_ok=false` 세 번이다(결정 83).
 150. **게이트의 선택지는 Orca 의 `gate-list` 에서 매번 읽는다.** 스냅샷이 선택지를 싣지 않아 실제 Orca 에서 "추천대로 답" 버튼이 늘 꺼져 있던 것을 고쳤다(결정 136). 선택지는 sqlite 에 저장하지 않는다(결정 74).
-152. **릴리스는 worker 가 돌리는 코어를 승인 폴더 안(`orca-plugin/vendor/`)에 싣고, 설치 트리의 worker 는 그 사본만 연다.** 결정 132 의 남는 틈(승인 뒤 폴더 밖 코어가 바뀌어도 doctor 가 `ok`)을 닫는다.
+152. (U46 머리말: 승인 폴더 밖의 실행 자산도 정한다. CLI 와 MCP 서버는 `dist/` 에서 돌고 `tsc` 는 `.js` 만 내므로, `core/`·`cli/`·`claude-plugin/mcp/` 아래에서 `.ts` 도 `README.md` 도 아닌 파일(지금은 `core/graph/flows/*.toml`)은 `npm run build` 의 `scripts/copy-assets.ts` 가 `dist/` 의 같은 상대 경로로 복사한다. 승인 폴더는 그대로다: `vendor/` 는 이미 `core/` 를 통째로 싣고 worker 는 흐름 틀을 펼치지 않는다. `test/packaging.test.ts` 가 빌드·pack 한 트리에 그 자산이 모두 있고 두 흐름 틀이 펼쳐지는지 본다.) **릴리스는 worker 가 돌리는 코어를 승인 폴더 안(`orca-plugin/vendor/`)에 싣고, 설치 트리의 worker 는 그 사본만 연다.** 결정 132 의 남는 틈(승인 뒤 폴더 밖 코어가 바뀌어도 doctor 가 `ok`)을 닫는다.
 153. **REAPER 가 표시만 하는 상태는 doctor 의 `notice` 행으로 알린다. `sangsoe install` 은 `reaper` 칸을 쓰지 않는다.** 설치는 사람의 설정을 쓰지 않는다(결정 90). 다시 볼 조건: 정리를 켜는 CLI 입구가 생길 때.
 154. **감지층의 Orca 메시지는 `core/detect/notice.ts` 의 `sendNotice` 한 길로 보내고, 오케스트레이터 Run 은 Orca 에서 읽는다.** 받는 순서·한 키 한 번은 그대로 `notify` 몫이다. 시험 "one notify path" 가 길이 하나인지 본다.
 155. **queue-monitor 의 probe 도 `gh_budget` 을 따른다.** 한도 10% 아래면 gh 를 읽는 probe 는 건너뛰고 Orca 를 읽는 probe 는 그대로 읽는다.
