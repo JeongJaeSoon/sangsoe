@@ -68,11 +68,13 @@ const released = (store: Store, signal: ReleaseSignal, source: string) => {
 // Orca's own prompts to a dispatched session (the brief, wrapped) are not the owner's words.
 const ORCA_PROMPT = /^(Please carry out this task from my Orca coordinator|You are working inside Orca, a multi-agent IDE\.)/;
 const DECISION_NO = /\bd\d{3,}\b/g;
+const ANSWER_SHAPE = /^\s*(d\d{3,})\b/;
 
 /**
- * The owner's chat line: owner_action with the masked text in owner_text. A line naming exactly one
- * dNNN links to it through U8's decision_answer (linked_by=hook); an iNNN alone links nothing, and a line
- * naming two decisions links neither (one owner_action answers one decision).
+ * The owner's chat line: owner_action with the masked text in owner_text. Decision 173: only a session
+ * that holds no Dispatch answers, and only with a line that starts with the dNNN and names no other
+ * decision; it links through U8's decision_answer (linked_by=hook). A dispatched session's prompt can
+ * be another session's message, so it never answers.
  */
 async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
   const text = input.prompt ?? "";
@@ -95,9 +97,9 @@ async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
     },
     masked,
   );
-  if (!action.inserted) return;
+  if (!action.inserted || row.task) return;
   const named = [...new Set(text.match(DECISION_NO) ?? [])];
-  const d = named.length === 1 ? named[0] : undefined;
+  const d = named.length === 1 ? ANSWER_SHAPE.exec(text)?.[1] : undefined;
   if (!d || !readDecision(deps.store, d)) return;
   const current = await deps.orca.runCurrent();
   const callerRun = current.ok && typeof current.value.runId === "string" ? current.value.runId : "";

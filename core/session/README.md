@@ -10,7 +10,7 @@ Claude Code 의 기록 hook 일곱(`claude-plugin/hooks/record.sh` → `sangsoe 
 | hook | 읽는 입력 칸 | 쓰는 event | dedupe_key |
 |---|---|---|---|
 | SessionStart | `session_id` · `source`(startup·resume·clear·compact) · `cwd` · `agent_type` · `model`(compact 때만 옴, P9) | `session_started{session, role, model}`(entity=task, subject=`run:<Task 의 Run>`, target=`run:<쥔 Run>`) · `worker_stuck{no_role_line}` · 주입마다 `notified` | `session_started:<session>:<source>` · `worker_stuck:<task>:no_role_line` · 아래 주입 순서 |
-| UserPromptSubmit | `prompt` · `prompt_id` · `transcript_path` | `owner_action{origin: chat}`(원문은 마스킹해 `owner_text`) · 문장에 `dNNN` 이 하나면 U8 `decision_answer`(linked_by=hook) · `!` 입력(아래) | `owner_action:<session>:<prompt_id>` |
+| UserPromptSubmit | `prompt` · `prompt_id` · `transcript_path` | `owner_action{origin: chat}`(원문은 마스킹해 `owner_text`) · Dispatch 를 쥐지 않은 세션에서 줄이 `dNNN` 으로 시작하고 다른 결정을 적지 않았으면 U8 `decision_answer`(linked_by=hook, 결정 173) · `!` 입력(아래) | `owner_action:<session>:<prompt_id>` |
 | Stop | `transcript_path` | `turn_ended{session, context_tokens}` · 이 세션의 열린 `waiting_human` 마다 `waiting_released{answered, evidence: turn_ended}` · `!` 입력 | `turn_ended:<session>:<prompt_id>` · `waiting_released:<seq>` |
 | Notification | `notification_type` · `message` | `waiting_human{session, tool, excerpt}` + 소유 리드 `notify`(type `escalation`) | `waiting_human:<session>:<n>` · `notify:<task>:waiting_human:<seq>` |
 | PostToolUse | `tool_name` | 같은 도구를 기다리던 `waiting_human` 의 `waiting_released{answered, evidence: tool:<tool>}` | `waiting_released:<seq>` |
