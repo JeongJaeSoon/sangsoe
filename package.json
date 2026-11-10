@@ -20,7 +20,7 @@
     "node": ">=24.15"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome lint .",
     "prepack": "node scripts/stage-core.ts",
