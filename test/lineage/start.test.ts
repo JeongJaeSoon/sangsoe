@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { handle as itemCreate } from "../../claude-plugin/mcp/tools/item_create.ts";
 import { handle } from "../../claude-plugin/mcp/tools/start_unit.ts";
 import {
   checkLineage,
@@ -46,6 +47,8 @@ type Setup = {
   /** What run-current answers for the calling session. */
   heldRun?: string | null;
   newTaskStatus?: string;
+  /** The role line task-list --full shows on task_new's spec; worker by default. */
+  existingRole?: string;
   /** What `dispatch-show --task task_new` answers after the start. */
   newDispatch?: "missing";
   taskList?: () => ExecResult;
@@ -100,7 +103,9 @@ function harness(s: Setup = {}) {
       "orchestration-run-current": ok({ runId: s.heldRun === undefined ? RUN : s.heldRun }),
       "orchestration-task-create": ok({ task: { id: NEW_TASK } }),
       "orchestration-task-list": () =>
-        s.taskList ? s.taskList() : ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t" }] }),
+        s.taskList
+          ? s.taskList()
+          : ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t", spec: `sangsoe-role: ${s.existingRole ?? "worker"}\nbrief` }] }),
       "orchestration-worker-start": () => (s.workerStart ? s.workerStart() : ok({ dispatchId: "ctx_new", worktreeId: CHILD_TREE })),
       ...s.replies,
     }),
@@ -406,6 +411,40 @@ test("a lead's Task carries the lead role line", async () => {
   const h = harness();
   await start(h, request({ requester: orchestrator, childRole: "lead" }));
   assert.match(flag(h.called("task-create")[0] ?? [], "spec") ?? "", /^sangsoe-role: lead\n/);
+});
+
+test("an existing Task starts only as the role its spec's first line names, for both roles", async () => {
+  // Orca cannot rewrite a spec: an item written for a worker would start a lead as a worker.
+  const asLead = harness();
+  assertRefused(asLead, await start(asLead, request({ requester: orchestrator, childRole: "lead", task: { id: NEW_TASK } })), "lineage_invalid");
+  const asWorker = harness({ existingRole: "lead" });
+  assertRefused(asWorker, await start(asWorker, request({ task: { id: NEW_TASK } })), "lineage_invalid");
+
+  const lead = harness({ existingRole: "lead" });
+  assert.equal((await start(lead, request({ requester: orchestrator, childRole: "lead", task: { id: NEW_TASK } }))).kind, "started");
+  const worker = harness();
+  assert.equal((await start(worker, request({ task: { id: NEW_TASK } }))).kind, "started");
+  assert.ok((worker.called("task-list")[0] ?? []).includes("--full"), "the spec comes from task-list --full");
+});
+
+test("item_create writes the role it is given as the spec's first line; worker by default", async () => {
+  const specs: string[] = [];
+  const fake = createFakeOrca({
+    replies: {
+      "orchestration-task-create": (args: readonly string[]) => {
+        specs.push(flag(args, "spec") ?? "");
+        return ok({ taskId: `task_${specs.length}` });
+      },
+    },
+  });
+  const ports = { orca: createOrcaAdapter(fake.exec), store: Store.open({ path: ":memory:" }) };
+  const base = { runId: RUN, spec: "brief", who: "lead:api", doneWhen: "merged" };
+  assert.ok((await itemCreate({ ...base, role: "lead" }, ports)).ok);
+  assert.ok((await itemCreate(base, ports)).ok);
+  assert.deepEqual(specs, ["sangsoe-role: lead\nbrief", "sangsoe-role: worker\nbrief"]);
+  const bad = await itemCreate({ ...base, role: "orchestrator" }, ports);
+  assert.equal(bad.ok ? "" : bad.refusal.code, "invalid_input");
+  assert.equal(specs.length, 2, "no Task for a role off the list");
 });
 
 test("ticket references attach to the new worktree; a failure does not stop the start", async () => {
