@@ -241,7 +241,11 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
 
   // A choice built outside resolve still gets the pairing check: Claude Code drops a lower advisor silently.
   const choice = req.model ?? defaultChoice(req.childRole);
-  const badPair = choice.advisorTier ? pairing(choice.tier, choice.advisorTier) : null;
+  const badPair = choice.advisorTier
+    ? pairing(choice.tier, choice.advisorTier)
+    : choice.advisor
+      ? "an advisor without its tier cannot be checked"
+      : null;
   if (badPair) return refuse("model_invalid", `${choice.kind}: ${badPair}`);
 
   // The Task: an existing one, or a new one with its deps and the child's role line first.

@@ -82,7 +82,9 @@ export const modelTable: Check = {
     if (!advisor) findings.push({ status: "notice", text: ADVISOR_NOT_APPLIED });
     if (findings.length === 0) return { id, status: "ok", summary: `모델 표 확인 ${age}일 전, 고정 없음, ${ADVISOR_FROM_SETTING}` };
     const status = findings.reduce<CheckStatus>((s, f) => (RANK[f.status] > RANK[s] ? f.status : s), "ok");
-    const fix = findings.length === 1 && pins.length > 0 ? PIN_FIX : findings.length === 1 && !advisor ? ADVISOR_FIX : FIX;
+    // Each finding's own fix: pins and the advisor key are the owner's settings, not a table update.
+    const stale = findings.length > (pins.length > 0 ? 1 : 0) + (advisor ? 0 : 1);
+    const fix = [...(stale ? [FIX] : []), ...(pins.length > 0 ? [PIN_FIX] : []), ...(advisor ? [] : [ADVISOR_FIX])].join("; ");
     return { id, status, summary: findings.map((f) => f.text).join("; "), fix };
   },
 };

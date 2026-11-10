@@ -668,6 +668,47 @@ test("decision 187: item_create records the class and start_unit starts the exis
   }
 });
 
+test("decision 187: sangsoe item new --class records the class start_unit reads; an explicit class or kind beats it", async () => {
+  const h = harness({ replies: withAdvisor });
+  const made = await itemNew({ run: RUN, spec: "brief", who: "lead:x", "done-when": "merged", class: "hard" }, { orca: h.orca, store: h.store });
+  assert.ok(made.ok);
+  const stored = h.store.events({ type: "item_extra_set" }).map((e) => e.payload.unit_class);
+  assert.deepEqual(stored, ["hard"]);
+  const byId = { ...unitBase, spec: undefined, task: NEW_TASK };
+  for (const [over, kind] of [
+    [{}, "hard"],
+    [{ class: "default" }, "worker"],
+    [{ kind: "review" }, "review"],
+  ] as const) {
+    const h2 = harness({ replies: withAdvisor });
+    h2.store.append({ type: "item_extra_set", source: "core:item", payload: { task: NEW_TASK, unit_class: "hard" }, entity: "task", entity_id: NEW_TASK });
+    const r = await handle({ ...byId, ...over }, ports(h2));
+    assert.equal(r.ok, true, JSON.stringify(over));
+    const ws = h2.called("worker-start")[0] ?? [];
+    assert.equal(flag(ws, "model"), aliasOf(MODEL_POLICY[kind].tier), JSON.stringify(over));
+    assert.equal(ws.includes("--advisor") ? flag(ws, "advisor") : undefined, aliasOf(MODEL_POLICY[kind].advisor), JSON.stringify(over));
+  }
+});
+
+test("decision 187: a class given with a new spec stays with the Task for a restart by id", async () => {
+  const h = harness();
+  const r = await handle({ ...unitBase, class: "hard" }, ports(h));
+  assert.equal(r.ok, true);
+  assert.deepEqual(
+    h.store.events({ type: "item_extra_set" }).map((e) => [e.payload.task, e.payload.unit_class]),
+    [[NEW_TASK, "hard"]],
+  );
+});
+
+test("decision 187: a choice with an advisor but no advisor tier is refused, since its pairing cannot be checked", async () => {
+  const h = harness();
+  const resolved = resolveModel("worker");
+  assert.ok(resolved.ok);
+  const { advisorTier: _t, ...noTier } = resolved.value;
+  const out = await startUnit(ports(h), request({ model: noTier }));
+  assertRefused(h, out, "model_invalid");
+});
+
 // ---- unit_lineage_complete on fake Orca ----
 
 const recorded = { "orchestration-dispatch-show": ok(dispatchRow("ctx_000000000001", "task_000000000001", 1, RUN)) };

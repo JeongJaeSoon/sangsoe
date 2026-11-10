@@ -100,7 +100,8 @@ export type Launch = {
   fallback?: { from: string; reason: string };
 };
 
-export const ADVISOR_FROM_SETTING = "advisor from the owner's advisorModel setting; Claude Code checks its pairing";
+export const ADVISOR_FROM_SETTING =
+  "advisor from the owner's advisorModel setting: sangsoe does not know its tier, and Claude Code drops one ranked below the main model";
 export const ADVISOR_NOT_APPLIED = "advisor not applied: Orca worker-start has no advisor flag and no advisorModel setting";
 
 /**

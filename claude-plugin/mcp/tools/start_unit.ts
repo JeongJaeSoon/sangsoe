@@ -64,7 +64,7 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
   }
   const kind = s("kind") ?? (unitClass ? classKind(unitClass) : childRole);
   if (!isModelKind(kind) || (childRole === "lead" ? kind !== "lead" : kind === "lead" || kind === "orchestrator")) {
-    return invalid(`kind "${kind}" does not fit childRole ${childRole}`, "a lead is kind lead; a worker is worker, design, review, release-review or sweep");
+    return invalid(`kind "${kind}" does not fit childRole ${childRole}`, "a lead is kind lead; a worker is worker, hard, design, review, release-review or sweep");
   }
   const effort = s("effort");
   const tier = s("tier");
@@ -87,6 +87,11 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
     ...(references ? { references } : {}),
     model: model.value,
   });
+  // A class given here stays with the Task, so a restart by id without one keeps it.
+  const startedTask = "taskId" in out ? out.taskId : undefined;
+  if (given && startedTask && storedClass(ports.store, startedTask) !== given) {
+    ports.store.append({ type: "item_extra_set", source: "mcp:start_unit", payload: { task: startedTask, unit_class: given }, entity: "task", entity_id: startedTask });
+  }
   if (out.kind === "refused") {
     const refusal: Refusal = {
       code: out.reason,

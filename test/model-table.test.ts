@@ -174,6 +174,13 @@ test("doctor's model-table row: ok when fresh, warn past the floor, notice on a 
   assert.doesNotMatch(ok.summary, /secret-value/);
   const off = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, env: { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1" } }));
   assert.equal(off.status, "notice", "the advisor's off switch counts as no advisor");
+  // Two owner-setting findings get both owner fixes, not the table-update fix.
+  const both = await modelTable.run(
+    ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, env: { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1", ANTHROPIC_DEFAULT_OPUS_MODEL: "x" } }),
+  );
+  assert.match(both.fix ?? "", /owner's act/);
+  assert.match(both.fix ?? "", /pins are the owner's settings/);
+  assert.doesNotMatch(both.fix ?? "", /re-read the pages/);
   const old = new Date(verified + (STALE_DAYS + 1) * 86_400_000);
   assert.equal(catalogAgeDays(old), STALE_DAYS + 1);
   assert.equal((await modelTable.run(ctx({ now: old, version: VERIFIED_WITH_CLAUDE_CODE, home }))).status, "warn");
