@@ -24,7 +24,7 @@ export const storeRestore: Check = {
         status: "notice",
         summary: [`${last.ts} 에 데이터베이스를 다시 세웠다. 되살리지 못한 것:`, ...lost.map((l) => `- ${l}`)].join("\n   "),
         fix: pending
-          ? "Orca 를 열면 monitor 가 Orca 와 GitHub 에서 호스트 행을 한 번 다시 읽는다"
+          ? "Orca 가 열려 있으면 monitor 의 다음 회차가, 닫혀 있으면 Orca 를 열 때 monitor 가 Orca 와 GitHub 에서 호스트 행을 한 번 다시 읽는다(결정 191)"
           : "할 일 없음: 위 목록은 되살릴 수 없는 것이다",
       };
     } finally {

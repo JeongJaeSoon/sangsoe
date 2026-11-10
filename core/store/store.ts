@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -16,7 +16,7 @@ import {
   type StoredEvent,
   systemClock,
 } from "../contract/index.ts";
-import { appendLines, backupPath, isOwnRow, readBackup } from "./backup.ts";
+import { appendLines, backupPath, isOwnRow, type Line, lastRowSeq, OWN_ROW_SQL, readBackup } from "./backup.ts";
 import { checkLocalFs, checkSqliteVersion, type FsProbe, type StartCheck } from "./checks.ts";
 import { DDL, EDGE_TRIGGERS, SCHEMA_V } from "./schema.ts";
 
@@ -66,6 +66,11 @@ export class StartRefused extends Error {
   }
 }
 
+/** A write on a connection whose file is no longer the one at its path (decision 191). */
+export class StoreReplaced extends Error {
+  override name = "StoreReplaced";
+}
+
 export interface OpenOptions {
   /** Database file, or ":memory:". Default ~/.local/share/sangsoe/sangsoe.db (decision 14). */
   readonly path?: string;
@@ -99,6 +104,8 @@ export const HOST_WINDOW_LOST =
   "host rows outside the readers' window: pr rows of PRs past each repository's 30 most recently closed and of every PR closed without a merge, main CI rows of all but each repository's newest merge, and Dispatches past worker-list's first 3 pages";
 
 type Row = Record<string, string | number | null>;
+
+const MAX_SEQ = Number.MAX_SAFE_INTEGER;
 
 // SQLITE_CORRUPT and SQLITE_NOTADB. Any other error (a lock held by another opener) is rethrown,
 // so a live database is never moved aside.
@@ -169,13 +176,36 @@ export class Store {
   readonly #clock: Clock;
   /** The own-facts file; null for ":memory:". */
   readonly #backup: string | null;
+  /** The path and the file identity this connection opened; null for ":memory:". */
+  readonly #file: { path: string; dev: number; ino: number } | null;
   /** Set when this open found the database lost or unreadable and rebuilt it; null otherwise. */
   rebuilt: Rebuilt | null = null;
 
-  private constructor(db: DatabaseSync, clock: Clock, backup: string | null) {
+  private constructor(db: DatabaseSync, clock: Clock, backup: string | null, path: string) {
     this.#db = db;
     this.#clock = clock;
     this.#backup = backup;
+    if (path === ":memory:") this.#file = null;
+    else {
+      const { dev, ino } = statSync(path);
+      this.#file = { path, dev, ino };
+    }
+  }
+
+  /**
+   * True once the file at this store's path is not the one it opened: moved aside, removed, or
+   * rebuilt by another opener. Its rows would then reach no reader, so it refuses to write
+   * (StoreReplaced) and a long-lived holder opens again (decision 191).
+   */
+  replaced(): boolean {
+    if (!this.#file) return false;
+    try {
+      const now = statSync(this.#file.path);
+      return now.dev !== this.#file.dev || now.ino !== this.#file.ino;
+    } catch (e) {
+      if ((e as { code?: string }).code === "ENOENT") return true;
+      throw e;
+    }
   }
 
   /** Runs the start checks, then opens (creating if needed) the database. Refuses with StartRefused. */
@@ -210,10 +240,14 @@ export class Store {
     }
     db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     const backup = path === ":memory:" ? null : backupPath(path);
-    const store = new Store(db, clock, backup);
+    const store = new Store(db, clock, backup, path);
     store.#migrate();
     if (backup && fresh && existsSync(backup)) store.rebuilt = store.#restore(backup, setAside);
-    else if (backup && !existsSync(backup)) store.#seed(backup);
+    else if (backup) {
+      if (store.#uncopied(backup, MAX_SEQ).length > 0) store.#tx(() => appendLines(backup, store.#uncopied(backup, MAX_SEQ)));
+      // An empty file still marks the database as one whose loss is rebuilt, not started over.
+      writeFileSync(backup, "", { flag: "a" });
+    }
     return store;
   }
 
@@ -256,18 +290,18 @@ export class Store {
     });
   }
 
-  /** First open of a database that has no backup file yet (one written before decision 182): copy what it holds. */
-  #seed(backup: string): void {
-    // "wx": of two first opens at once, only the one that creates the file copies the rows.
-    try {
-      writeFileSync(backup, "", { flag: "wx" });
-    } catch (e) {
-      if ((e as { code?: string }).code === "EEXIST") return;
-      throw e;
-    }
-    const rows = (this.#db.prepare("SELECT * FROM event ORDER BY seq").all() as Row[]).filter((r) => isOwnRow(String(r.type), String(r.source)));
+  /**
+   * The lines the facts file lacks below `below`: every own row past its last row line, then the
+   * issued numbers. That is all of them for a database written before decision 182 (no file), and
+   * after that the rows an older build wrote with no copy (decision 192). Exact only under the write
+   * lock, where no other store is appending.
+   */
+  #uncopied(backup: string, below: number): Line[] {
+    const last = lastRowSeq(backup);
+    const rows = this.#db.prepare(`SELECT * FROM event WHERE seq > ? AND seq < ? AND ${OWN_ROW_SQL} ORDER BY seq`).all(last ?? 0, below) as Row[];
+    if (rows.length === 0 && last !== undefined) return [];
     const counters = this.#db.prepare("SELECT name, last FROM counter").all() as Row[];
-    appendLines(backup, [...rows.map((row) => ({ row })), ...counters.map((c) => ({ counter: String(c.name), last: Number(c.last) }))]);
+    return [...rows.map((row) => ({ row })), ...counters.map((c) => ({ counter: String(c.name), last: Number(c.last) }))];
   }
 
   #migrate(): void {
@@ -301,6 +335,7 @@ export class Store {
   }
 
   #tx<T>(fn: () => T): T {
+    if (this.replaced()) throw new StoreReplaced(`${this.#file?.path} is no longer the file this connection opened: open the store again`);
     this.#db.exec("BEGIN IMMEDIATE");
     try {
       const out = fn();
@@ -354,7 +389,10 @@ export class Store {
     if (row) {
       // Before COMMIT: a fact whose copy cannot be written is rolled back with it.
       if (this.#backup && isOwnRow(e.type, e.source)) {
-        appendLines(this.#backup, [{ row: this.#db.prepare("SELECT * FROM event WHERE seq = ?").get(Number(row.seq)) as Row }]);
+        // Again under the lock: the file may have been rebuilt while BEGIN waited.
+        if (this.replaced()) throw new StoreReplaced(`${this.#file?.path} was replaced during this write: open the store again`);
+        const seq = Number(row.seq);
+        appendLines(this.#backup, [...this.#uncopied(this.#backup, seq), { row: this.#db.prepare("SELECT * FROM event WHERE seq = ?").get(seq) as Row }]);
       }
       return { seq: Number(row.seq), inserted: true };
     }

@@ -3,7 +3,7 @@
 
 Claude Code 의 기록 hook 일곱(`claude-plugin/hooks/record.sh` → `sangsoe hook <event>`)이 부르는 판정 함수와 MCP 기록 tool 둘(`handoff_save` · `review_ask_record`)의 코어다. 모두 막지 않는 기록자다: 무엇이 잘못돼도 0 으로 끝나고 아무것도 막지 않는다(막는 hook 은 U12 의 PreToolUse 하나). event 는 `core/store` 로만 쓰고 Orca 는 `core/orca` 어댑터로만 부른다. 형식을 못 읽으면 행동 0 이다.
 
-**sangsoe 세션.** SessionStart 가 이 세션을 찾는다: `agent_type` 이 `sangsoe:<role>` 이거나, cwd 의 Orca worktree 에 끝나지 않은 Dispatch 가 있고 그 Task spec 첫 줄이 역할 줄(`sangsoe-role: <role>`, U10 의 `startUnit` 이 쓴다)이면 sangsoe 세션이고 `session_started` 를 쓴다. Dispatch 는 있는데 역할 줄이 없으면 `worker_stuck{no_role_line}`(결정 46). 둘 다 아니면 사람이 연 일반 세션이라 아무것도 하지 않는다. 뒤 hook 들은 Orca 를 다시 부르지 않고 그 세션의 `session_started` 줄만 읽는다(없으면 행동 0).
+**sangsoe 세션.** SessionStart 가 이 세션을 찾는다: `agent_type` 이 `sangsoe:<role>` 이거나, cwd 의 Orca worktree 에 끝나지 않은 Dispatch 가 있고 그 Task spec 첫 줄이 역할 줄(`sangsoe-role: <role>`, U10 의 `startUnit` 이 쓴다)이면 sangsoe 세션이고 `session_started` 를 쓴다. Dispatch 는 있는데 역할 줄이 없으면, 그 Task 의 `item_created` 행이 있을 때(sangsoe 가 만든 Task)만 `worker_stuck{no_role_line}`(결정 46·192). 그 밖은 사람이 연 세션이거나 다른 도구가 띄운 Dispatch 라 아무것도 하지 않는다. 뒤 hook 들은 Orca 를 다시 부르지 않고 그 세션의 `session_started` 줄만 읽는다(없으면 행동 0).
 
 ## hook → event
 

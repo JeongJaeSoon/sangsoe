@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { dedupeKey, EVENTS, fixedClock } from "../contract/index.ts";
-import { backupPath, HOST_TYPES, OWN_TYPES } from "./backup.ts";
-import { HOST_WINDOW_LOST, LOST_SEPARATOR, Store } from "./store.ts";
+import { backupPath, HOST_TYPES, OWN_TYPES, readBackup } from "./backup.ts";
+import { holdStore } from "./held.ts";
+import { HOST_WINDOW_LOST, LOST_SEPARATOR, Store, StoreReplaced } from "./store.ts";
 
 const T0 = "2026-11-11T00:00:00.000Z";
 const tmp = mkdtempSync(join(tmpdir(), "sangsoe-backup-"));
@@ -171,4 +172,111 @@ test("a database written before the backup existed is copied on its first open",
   const raw = new DatabaseSync(path);
   assert.equal((raw.prepare("SELECT count(*) AS n FROM event").get() as { n: number }).n, 1, "seeding writes no row");
   raw.close();
+});
+
+/** What a build without the backup (v0.1.0-rc.4) does: an own row and a number, with no line in the facts file. */
+function oldBuildWrites(path: string, decision: string): void {
+  const raw = new DatabaseSync(path);
+  raw.prepare("INSERT INTO event (ts, type, source, needs, dedupe_key, schema_v, after) VALUES (?, 'decision_opened', 'old', 'none', ?, 1, ?)").run(
+    T0,
+    dedupeKey(EVENTS.decision_opened, decision),
+    JSON.stringify({ decision, decision_key: decision }),
+  );
+  raw.prepare("INSERT INTO counter (name, last) VALUES ('d', 7) ON CONFLICT (name) DO UPDATE SET last = 7").run();
+  raw.close();
+}
+const copied = (path: string) =>
+  readFileSync(backupPath(path), "utf8")
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l) as { row?: { seq: number; type: string }; counter?: string; last?: number });
+
+test("own rows an older build wrote after the facts file existed are copied on the next open, and only once", () => {
+  const path = newPath();
+  const s = open(path);
+  s.append(decisionOpened("d001", "k1"));
+  s.close();
+  oldBuildWrites(path, "d007");
+  open(path).close();
+  const lines = copied(path);
+  assert.deepEqual(lines.filter((l) => l.row).map((l) => [l.row?.seq, l.row?.type]), [[1, "decision_opened"], [2, "decision_opened"]]);
+  assert.ok(lines.some((l) => l.counter === "d" && l.last === 7), "the number it issued is copied too");
+  const once = readFileSync(backupPath(path), "utf8");
+  open(path).close();
+  assert.equal(readFileSync(backupPath(path), "utf8"), once, "a second open adds nothing");
+
+  lose(path);
+  const r = open(path);
+  assert.equal(r.rebuilt?.restored, 2, "the older build's row comes back after a loss");
+  assert.equal(r.allocate("d"), "d008");
+  r.close();
+});
+
+test("a connection whose file another opener rebuilt refuses to write, so the facts file keeps one row per seq", () => {
+  const path = newPath();
+  const held = open(path);
+  held.append(decisionOpened("d001", "k1"));
+  held.append(decisionOpened("d002", "k2"));
+  renameSync(path, `${path}.gone`);
+  const second = open(path);
+  assert.ok(second.rebuilt, "the next opener rebuilds");
+  assert.equal(held.replaced(), true);
+  assert.throws(() => held.append(decisionOpened("d003", "k3")), StoreReplaced);
+  assert.deepEqual(readBackup(backupPath(path)).skipped, [], "no seq holds two different rows");
+  held.close();
+  second.close();
+  lose(path);
+  const third = open(path);
+  assert.ok(third.events({ type: "signal" }).some((e) => e.payload.kind === "store_rebuilt"), "the first rebuild's signal survives a second loss");
+  third.close();
+});
+
+test("a held store reopens before its next use once the file at its path changed, and joins the rebuilt file", async () => {
+  const path = newPath();
+  const held = holdStore(() => open(path), (s) => s);
+  await held.use(async (s) => s.append(decisionOpened("d001", "k1")));
+  let inFlight: Store | undefined;
+  let release = () => {};
+  const slow = held.use(async (s) => {
+    inFlight = s;
+    await new Promise<void>((r) => {
+      release = r;
+    });
+    return s.events().length;
+  });
+  renameSync(path, `${path}.gone`);
+  const second = open(path);
+  assert.ok(second.rebuilt);
+  await held.use(async (s) => {
+    assert.equal(s.rebuilt, null, "it joins the rebuilt file, it does not rebuild again");
+    assert.notEqual(s, inFlight, "each use after the change has the new connection");
+    s.append(decisionOpened("d002", "k2"));
+  });
+  release();
+  assert.ok((await slow) > 0, "a use already in flight keeps its connection open to its end");
+  assert.ok(second.events().some((e) => e.dedupe_key === dedupeKey(EVENTS.decision_opened, "k2")), "the write reached the file other openers read");
+  assert.deepEqual(readBackup(backupPath(path)).skipped, []);
+  second.close();
+  held.close();
+
+  const alone = newPath();
+  const solo = holdStore(() => open(alone), (s) => s);
+  await solo.use(async (s) => s.append(decisionOpened("d001", "k1")));
+  renameSync(alone, `${alone}.gone`);
+  const rebuilt = await solo.use(async (s) => s.rebuilt);
+  assert.equal(rebuilt?.restored, 1, "with no other opener, the held store's own reopen rebuilds");
+  solo.close();
+});
+
+test("an older build's row between two of this build's rows is copied before the later one", () => {
+  const path = newPath();
+  const s = open(path);
+  s.append(decisionOpened("d001", "k1"));
+  oldBuildWrites(path, "d007");
+  s.append(decisionOpened("d002", "k2"));
+  s.close();
+  assert.deepEqual(copied(path).filter((l) => l.row).map((l) => l.row?.seq), [1, 2, 3]);
+  const again = readFileSync(backupPath(path), "utf8");
+  open(path).close();
+  assert.equal(readFileSync(backupPath(path), "utf8"), again);
 });

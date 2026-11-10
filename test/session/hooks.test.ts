@@ -64,8 +64,14 @@ test("a lead whose Run binding is gone is told to run-use the Run its earlier se
   assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use run_lead");
 });
 
+/** The row item_create leaves for a Task sangsoe made (core/start/item.ts). */
+function itemCreated(w: SessionWorld) {
+  w.store.append({ type: "item_created", source: "core:item", entity: "task", entity_id: TASK, payload: { task: TASK, alias: "i001", who: "agent", done_when: "d", owner_action: 0 } });
+}
+
 test("a sangsoe session without a role line is worker_stuck{no_role_line}; a session the owner opened gets nothing", async () => {
   const w = createSessionWorld({ spec: "fix the login page" });
+  itemCreated(w);
   const lines = await hook(w, "session-start", { session_id: "s1", source: "startup" });
   assert.equal(lines.length, 1);
   assert.match(lines[0] ?? "", /no_role_line/);
@@ -80,6 +86,15 @@ test("a sangsoe session without a role line is worker_stuck{no_role_line}; a ses
     assert.deepEqual(await hook(general, e, { session_id: "s9", prompt: "d001 yes", message: "Claude needs your permission to use Bash", trigger: "auto" }), []);
   }
   assert.deepEqual(types(general), [], "no row for a session sangsoe did not start");
+});
+
+test("a Dispatch another tool started, with no item_created row and no role line, gets nothing (decision 46)", async () => {
+  const w = createSessionWorld({ spec: "review the release" });
+  assert.deepEqual(await hook(w, "session-start", { session_id: "f1", source: "startup" }), []);
+  for (const e of ["user-prompt-submit", "stop", "notification", "post-tool-use", "post-compact", "session-end"] as const) {
+    assert.deepEqual(await hook(w, e, { session_id: "f1", prompt: "d001 yes", message: "Claude needs your permission to use Bash", trigger: "auto" }), []);
+  }
+  assert.deepEqual(types(w), [], "no worker_stuck for a Task sangsoe does not own");
 });
 
 test("an orchestrator opened with --agent has no Task and still gets its role and Run", async () => {
