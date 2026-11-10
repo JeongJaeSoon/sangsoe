@@ -48,10 +48,10 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 
 <!-- right -->
 <rect class="pr" x="610" y="10" width="380" height="400" rx="12"/><text class="t" x="624" y="32" style="fill:var(--llm)">LLM 판단 · 토큰 O · 깨울 때만</text>
-<text class="s" x="624" y="48">에이전트별 기본 tier</text>
-<g class="llm"><rect x="624" y="58" width="352" height="82" rx="8"/><text class="t" x="636" y="78">오케스트레이터</text><text x="636" y="96">분류 · 배치 · dNNN 없는 답 잇기</text><text class="m" x="636" y="114">primary</text><text class="s" x="710" y="114">막힌 설계 판단은 effort 먼저, 그다음 frontier</text><text class="s" x="636" y="130">완료 조건 없음 · 깨울 때만</text></g>
-<g class="llm"><rect x="624" y="148" width="352" height="74" rx="8"/><text class="t" x="636" y="168">리드</text><text x="636" y="186">범위 · 증거 · 프로그램 완료 판정</text><text class="m" x="636" y="206">primary</text><text class="s" x="710" y="206">두 번 실패하면 effort 먼저, 그다음 frontier</text></g>
-<g class="llm"><rect x="624" y="230" width="352" height="82" rx="8"/><text class="t" x="636" y="250">워커</text><text x="636" y="268">구현 · 조사 · 리뷰 초안</text><text class="s" x="636" y="286">일의 종류가 tier·effort 를 정한다</text><text class="m" x="636" y="304">primary · frontier · fast</text></g>
+<text class="s" x="624" y="48">에이전트별 모델: resource models 의 행</text>
+<g class="llm"><rect x="624" y="58" width="352" height="82" rx="8"/><text class="t" x="636" y="78">오케스트레이터</text><text x="636" y="96">분류 · 배치 · dNNN 없는 답 잇기</text><text class="m" x="636" y="114">models</text><text class="s" x="710" y="114">자기 행의 tier·effort, 승격은 effort 먼저</text><text class="s" x="636" y="130">완료 조건 없음 · 깨울 때만</text></g>
+<g class="llm"><rect x="624" y="148" width="352" height="74" rx="8"/><text class="t" x="636" y="168">리드</text><text x="636" y="186">범위 · 증거 · 프로그램 완료 판정</text><text class="m" x="636" y="206">models</text><text class="s" x="710" y="206">자기 행의 tier·effort, 승격은 effort 먼저</text></g>
+<g class="llm"><rect x="624" y="230" width="352" height="82" rx="8"/><text class="t" x="636" y="250">워커</text><text x="636" y="268">구현 · 조사 · 리뷰 초안</text><text class="s" x="636" y="286">일의 종류가 tier·effort 를 정한다</text><text class="m" x="636" y="304">models</text></g>
 <g class="llm"><rect x="624" y="320" width="352" height="74" rx="8"/><text class="t" x="636" y="340">서브에이전트</text><text x="636" y="358">읽기 전용 조사 (워커가 아니다)</text><text class="s" x="636" y="378">agent 정의의 model · effort</text></g>
 
 <!-- middle -->

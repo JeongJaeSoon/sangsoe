@@ -16,7 +16,7 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 | `core/start/start.ts` (`start_unit`) | 정책 + 카탈로그 | `resolve` → `worker-start --model <alias> --effort <level>`, 승격은 `model_changed` 로 기록 |
 | MCP resource `models` | 표 전체 | 판단 층(skill·agent)은 이 resource 로만 읽는다. 표를 본문에 옮겨 적지 않는다 |
 | `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice |
-| `claude-plugin/agents/*.md` frontmatter `model:` | 정책의 역할 행 | `test/model-table.test.ts` 가 표의 alias 와 같은지 본다 |
+| `claude-plugin/agents/*.md` frontmatter `model:`·`effort:` | 정책의 역할 행 | `test/model-table.test.ts` 가 표의 alias·effort 와 같은지 본다 |
 
 ## 갱신 절차
 

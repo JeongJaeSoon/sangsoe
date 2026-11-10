@@ -72,6 +72,7 @@ const COPY_PATTERNS: [string, RegExp][] = [
   ["a model version", /\b(Fable|Opus|Sonnet|Haiku) \d/],
   ["a model-and-effort table row", /^\s*(\|.*|.*<td>.*)\b(fable|opus|sonnet|haiku)\b.*\b(low|medium|high|xhigh|max)\b/i],
   ["a model paired with an effort", /\b(fable|opus|sonnet|haiku)\b[^\n]{0,30}\b(low|medium|high|xhigh|max)\b/i],
+  ["a role paired with a tier", /(\b(orchestrator|lead|worker)\b|오케스트레이터|리드|워커)[^\n]{0,40}\b(frontier|primary|everyday)\b(?! key)/],
 ];
 
 test(`no second copy of the table: model versions, dated IDs and model/effort rows live only in ${HOME}`, () => {
@@ -91,6 +92,7 @@ test("the copy patterns catch what they are meant to", () => {
     "| deep | Opus / high | design |",
     "<tr><td>light</td><td>Haiku / low</td></tr>",
     '<text x="20">Opus · high — 설계</text>',
+    '<text>리드</text><text class="m">primary</text>',
     "use claude-opus-5-5",
     "Sonnet 5 is",
   ];
@@ -100,13 +102,14 @@ test("the copy patterns catch what they are meant to", () => {
   }
 });
 
-test("each agent's frontmatter model is its role row's alias", () => {
+test("each agent's frontmatter model and effort are its role row's", () => {
   for (const name of readdirSync(join(ROOT, "claude-plugin/agents")).filter((n) => n.endsWith(".md"))) {
     const role = name.replace(/\.md$/, "") as keyof typeof POLICY;
     const head = /^---\n([\s\S]*?)\n---/.exec(read(`claude-plugin/agents/${name}`))?.[1] ?? "";
     const want = CATALOG.find((c) => c.tier === POLICY[role]?.tier)?.alias;
     assert.ok(want, `${name}: no policy row for ${role}`);
     assert.match(head, new RegExp(`^model: ${want}$`, "m"), `${name} frontmatter model`);
+    assert.match(head, new RegExp(`^effort: ${POLICY[role]?.effort}$`, "m"), `${name} frontmatter effort`);
   }
 });
 
