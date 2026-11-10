@@ -103,8 +103,10 @@ export async function land(input: LandInput, deps: LandDeps): Promise<LandOutcom
     const why = e instanceof Error ? e.message : String(e);
     return { ok: false, refusal: { code: "store_unavailable", reason: `cannot open the store: ${why}`, fix: "run sangsoe doctor" } };
   }
-  const repo = input.repo.toLowerCase();
-  const pr = `${repo}#${input.pr}`;
+  // GitHub calls keep the caller's case: a fine-grained token answers 404 for a private repo
+  // named in another case. Only the event key is lowercased.
+  const repo = input.repo;
+  const pr = `${repo.toLowerCase()}#${input.pr}`;
   let head: string | undefined;
   try {
     const value = await judge({ ...input, repo }, pr, deps, store.events(), (sha) => {
@@ -145,7 +147,7 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
     throw new Refused("head_moved", "", `${pr}'s head is ${short(head)}, not ${short(input.headSha)}`, `review and verify ${short(head)}, then land with --head ${head}`);
   }
 
-  const main = events.filter((e) => (e.type === "main_red" || e.type === "main_green") && e.payload.repo === repo).at(-1);
+  const main = events.filter((e) => (e.type === "main_red" || e.type === "main_green") && e.payload.repo === repo.toLowerCase()).at(-1);
   if (main?.type === "main_red" && !input.mainFix) {
     throw new Refused("main_red", "", `${repo}'s main is red at ${short(String(main.payload.sha))} (run ${String(main.payload.run_id)})`, "fix main first; only a PR landed with --main-fix passes");
   }
@@ -201,7 +203,7 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   const approved = must(await approvedAndGreen(gh, repo, input.pr, pull, config.tier?.owners ?? []), "pr_unreadable", "call land again");
   if (approved) return { ...base, action: "merge_approved", note: [...note, "approved and green at the head"].join("; ") };
   const waitApproval = (why: string): LandValue => ({ ...base, action: "merge_on_approval", note: [...note, why].join("; ") });
-  if (!(config.verdictMergeRepos ?? []).includes(repo)) return waitApproval("merge once approved; the lead calls land again");
+  if (!(config.verdictMergeRepos ?? []).includes(repo.toLowerCase())) return waitApproval("merge once approved; the lead calls land again");
 
   // Decision 158: the opted-in repo's approval is the recorded verdict; the owner's cases stay with the owner.
   if (tier.effective === "V3") return waitApproval("V3 needs the owner's approval; merge once approved");
