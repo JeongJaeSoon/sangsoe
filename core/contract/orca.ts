@@ -40,7 +40,8 @@ export type WriteOptions = { retryRequest?: string };
  */
 export type LocalRows<T> = {
   rows: T[];
-  nonLocal: { rows: number; hostIds: string[] };
+  /** `ids` only where the reader needs a non-local row by name (REAPER's `remote_host`, decision 88 ①). */
+  nonLocal: { rows: number; hostIds: string[]; ids?: string[] };
   omittedHostIds: string[];
   /** More rows exist than this page holds. */
   truncated: boolean;
@@ -49,7 +50,11 @@ export type LocalRows<T> = {
 };
 
 export type WorktreeRow = {
+  /** `<repoId>::<path>`; `worktree rm --worktree id:<id>` selects the row by it. */
   id: string;
+  /** The path-free id sqlite keeps for a card (a worktree `ref` may not hold a path). */
+  instanceId?: string;
+  head?: string;
   hostId?: string;
   repoId: string;
   /** `github:<owner>/<repo>` when the checkout's origin is on GitHub. */
@@ -273,7 +278,7 @@ export interface OrcaAdapter {
 
   // Worker and Dispatch
   workerStart(
-    a: { task: string; agent: string; worktree: WorkerPlacement; run?: string },
+    a: { task: string; agent: string; worktree: WorkerPlacement; run?: string; model?: string; effort?: string },
     o?: WriteOptions,
   ): Promise<OrcaResult<Receipt>>;
   workerShow(a: { dispatch: string }): Promise<OrcaResult<WorkerShow>>;

@@ -4,14 +4,24 @@ import { type MergeCondition, readMergeConditions } from "../gh/merge-conditions
 import type { NewEvent } from "../store/store.ts";
 import { evidenceGaps } from "../verify/evidence.ts";
 import { requiredEvidence, type Tier, type TierConfig, verifyTier } from "../verify/verify-tier.ts";
-import { approvedAndGreen, patchId, type Read, readDiff, readLabels, readPull } from "./github.ts";
+import {
+  approvedAndGreen,
+  type MergeMethod,
+  type PrGate,
+  type Pull,
+  patchId,
+  type Read,
+  readDiff,
+  readLabels,
+  readPull,
+} from "./github.ts";
 
 // The land judgment (decisions 72, 79, 81, 85; appendix #role-cards): one function for the dry
 // run, the real run and every entrance (R-03). Every refusal after the PR is named is a
 // land_failed row with the reason the refusal carries.
 
 export type LandInput = { repo: string; pr: number; headSha?: string; dryRun?: boolean; mainFix?: boolean };
-export type LandAction = "auto_merge" | "merge_approved" | "merge_on_approval";
+export type LandAction = "auto_merge" | "merge_approved" | "merge_verdict" | "merge_on_approval";
 export type LandValue = {
   pr: string;
   head_sha: string;
@@ -20,6 +30,8 @@ export type LandValue = {
   dry_run: boolean;
   conditions: MergeCondition[];
   note: string;
+  /** Set on `merge_verdict` only. */
+  merge_method?: MergeMethod;
 };
 export type LandRefusal = { code: string; reason: string; fix: string };
 export type LandOutcome = { ok: true; value: LandValue } | { ok: false; refusal: LandRefusal };
@@ -29,11 +41,25 @@ export type LandStore = {
   append(e: NewEvent<"land_failed"> | NewEvent<"land_requested">): unknown;
   close(): void;
 };
-/** `tier` null and `protectedPaths` null mean that setting could not be read. */
-export type LandConfig = { tier: TierConfig | null; protectedPaths: readonly string[] | null };
+/**
+ * `tier` null and `protectedPaths` null mean that setting could not be read. `verdictMergeRepos`
+ * (decision 158) lists the lowercased repos where a recorded verdict is the approval; absent is none.
+ */
+export type LandConfig = { tier: TierConfig | null; protectedPaths: readonly string[] | null; verdictMergeRepos?: readonly string[] };
 /** Asks GitHub to merge once its requirements hold (`gh pr merge --auto`), pinned to `head`. */
 export type MergePort = (a: { repo: string; pr: number; head: string }) => Promise<{ ok: boolean; message: string }>;
-export type LandDeps = { gh: GhClient; openStore: () => LandStore; merge: MergePort; config: () => LandConfig };
+/** Merges now with `method`, pinned to `head` (decision 158). */
+export type MergeNowPort = (a: { repo: string; pr: number; head: string; method: MergeMethod }) => Promise<{ ok: boolean; message: string }>;
+export type PrGatePort = (a: { repo: string; pr: number }) => Promise<Read<PrGate>>;
+/** `mergeNow` and `prGate` serve decision 158 only; without them that path refuses. */
+export type LandDeps = {
+  gh: GhClient;
+  openStore: () => LandStore;
+  merge: MergePort;
+  config: () => LandConfig;
+  mergeNow?: MergeNowPort;
+  prGate?: PrGatePort;
+};
 
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const FULL_SHA = /^[0-9a-f]{40}$/;
@@ -86,10 +112,13 @@ export async function land(input: LandInput, deps: LandDeps): Promise<LandOutcom
     });
     if (!input.dryRun) {
       if (value.action !== "merge_on_approval") {
-        const merged = await deps.merge({ repo, pr: input.pr, head: value.head_sha });
+        const merged =
+          value.action === "merge_verdict"
+            ? await mergeNow(deps, { repo, pr: input.pr, head: value.head_sha, method: value.merge_method })
+            : await deps.merge({ repo, pr: input.pr, head: value.head_sha });
         if (!merged.ok) throw new Refused("merge_refused", "", `GitHub refused the merge: ${merged.message}`, "read the PR's merge box; land again once it is fixed");
       }
-      const reason = value.action === "auto_merge" ? undefined : value.action === "merge_approved" ? "approved" : "merge_on_approval";
+      const reason = { auto_merge: undefined, merge_approved: "approved", merge_verdict: "verdict_approved", merge_on_approval: "merge_on_approval" }[value.action];
       store.append({ type: "land_requested", source: "land", payload: { pr, head_sha: value.head_sha, ...(reason ? { reason } : {}) } });
     }
     return { ok: true, value };
@@ -171,7 +200,71 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   if (read.kind === "read" && read.autoMerge) return { ...base, action: "auto_merge", note: [...note, "all four conditions hold"].join("; ") };
   const approved = must(await approvedAndGreen(gh, repo, input.pr, pull, config.tier?.owners ?? []), "pr_unreadable", "call land again");
   if (approved) return { ...base, action: "merge_approved", note: [...note, "approved and green at the head"].join("; ") };
-  return { ...base, action: "merge_on_approval", note: [...note, "merge once approved; the lead calls land again"].join("; ") };
+  const waitApproval = (why: string): LandValue => ({ ...base, action: "merge_on_approval", note: [...note, why].join("; ") });
+  if (!(config.verdictMergeRepos ?? []).includes(repo)) return waitApproval("merge once approved; the lead calls land again");
+
+  // Decision 158: the opted-in repo's approval is the recorded verdict; the owner's cases stay with the owner.
+  if (tier.effective === "V3") return waitApproval("V3 needs the owner's approval; merge once approved");
+  const paths = conditions.find((c) => c.id === "no_protected_paths");
+  if (!paths?.ok) return waitApproval(`${paths?.reason ?? "protected paths unread"}; merge once the owner approves`);
+  const by = verdictApproval(events, pr, head, pull);
+  const method = await verdictGate(deps, { repo, number: input.pr, pr, head, pull });
+  return { ...base, action: "merge_verdict", merge_method: method, note: [...note, `verdict by ${by} at ${short(head)}, checks green, ${method} now`].join("; ") };
+}
+
+async function mergeNow(deps: LandDeps, a: { repo: string; pr: number; head: string; method: MergeMethod | undefined }) {
+  if (!deps.mergeNow || !a.method) return { ok: false, message: "no merge-now port or method" };
+  return deps.mergeNow({ repo: a.repo, pr: a.pr, head: a.head, method: a.method });
+}
+
+/** The reviewers whose verdict at exactly `head` decision 158 counts; refuses when there is none. */
+function verdictApproval(events: readonly StoredEvent[], pr: string, head: string, pull: Pull): string {
+  const atHead = events.filter((e) => e.type === "review_verdict" && e.payload.pr === pr && e.payload.head_sha === head);
+  const recordHead = `record a verdict on ${short(head)} with sangsoe review record`;
+  if (atHead.length === 0) throw new Refused("verdict_not_at_head", "", `no verdict was recorded at ${short(head)} itself`, recordHead);
+  const author = pull.user.login.toLowerCase();
+  const counted = atHead.filter((e) => {
+    const { reviewer, act_on } = e.payload;
+    return (
+      e.source === "review record" &&
+      typeof reviewer === "string" &&
+      e.actor === reviewer &&
+      e.payload.author === author &&
+      reviewer !== author &&
+      act_on === 0
+    );
+  });
+  if (counted.length === 0) {
+    throw new Refused("verdict_unaccepted", "", `no verdict at ${short(head)} was recorded by its reviewer through review record for author ${author} with 0 Act-on`, recordHead);
+  }
+  return counted.map((e) => String(e.payload.reviewer)).join(", ");
+}
+
+/** Decision 158's GitHub side: mergeable, the same head, no open thread, checks green, a merge method. */
+async function verdictGate(deps: LandDeps, a: { repo: string; number: number; pr: string; head: string; pull: Pull }): Promise<MergeMethod> {
+  const state = a.pull.mergeable_state ?? "unknown";
+  if (state !== "clean" && state !== "has_hooks") {
+    throw new Refused("not_mergeable", state, `GitHub calls ${a.pr} ${state}, not clean`, "fix what the merge box shows (or wait while GitHub computes it), then land again");
+  }
+  if (!deps.prGate) throw new Refused("gate_unreadable", "", "no PR gate reader", "run land from the sangsoe CLI or MCP tool");
+  const gate: PrGate = must(await deps.prGate({ repo: a.repo, pr: a.number }), "gate_unreadable", "call land again");
+  if (gate.headSha !== a.head) {
+    throw new Refused("head_moved", "", `${a.pr}'s head is now ${short(gate.headSha)}, not ${short(a.head)}`, `review ${short(gate.headSha)}, record its verdict, then land again`);
+  }
+  if (gate.unresolvedThreads > 0) {
+    throw new Refused("threads_unresolved", String(gate.unresolvedThreads), `${gate.unresolvedThreads} review thread(s) unresolved`, "answer and resolve them, then land again");
+  }
+  // GitHub naming no required check is read as every check being required.
+  const required = gate.checks.filter((c) => c.required);
+  const counted = required.length > 0 ? required : gate.checks;
+  if (counted.length === 0) throw new Refused("checks_missing", "", `no check has reported on ${short(a.head)}`, "wait for CI to start, then land again");
+  const red = counted.find((c) => c.state === "fail");
+  if (red) throw new Refused("checks_red", red.name, `${red.name} failed at ${short(a.head)}`, "fix it, push, and have the new head reviewed");
+  const pending = counted.find((c) => c.state === "pending");
+  if (pending) throw new Refused("checks_pending", pending.name, `${pending.name} has not finished at ${short(a.head)}`, "wait for it, then land again");
+  const method = gate.methods[0];
+  if (!method) throw new Refused("merge_method_unreadable", "", `${a.repo} allows no merge method`, "allow a merge method in the repo's settings");
+  return method;
 }
 
 type StackNode = { kind: "pr" | "task" | "unmapped"; id: string };

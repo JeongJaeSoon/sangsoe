@@ -3,7 +3,7 @@
   "execution": "trusted-worker",
   "id": "sangsoe",
   "name": "sangsoe",
-  "version": "0.1.0-rc.3",
+  "version": "0.1.0-rc.4",
   "description": "Status bar, panel and timer-driven monitors for sangsoe, the orchestration layer for Claude Code sessions on Orca.",
   "repository": "https://github.com/JeongJaeSoon/sangsoe",
   "engines": { "orca": ">=1.4.248" },
@@ -19,7 +19,7 @@
       { "on": "agent.status.changed" }
     ],
     "statusBarItems": [
-      { "id": "summary", "text": "sangsoe", "icon": "layers", "tone": "neutral", "tooltip": "sangsoe", "command": "sangsoe.open" }
+      { "id": "summary", "text": "SANGSOE", "icon": "layers", "tone": "neutral", "tooltip": "sangsoe", "command": "sangsoe.open" }
     ]
   }
 }

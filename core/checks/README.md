@@ -16,3 +16,5 @@ SessionStart 의 시작 점검과 `sangsoe doctor` 가 같은 목록(`START_CHEC
 | `orca-plugin-version` | warn · `sangsoe install` 또는 `sangsoe plugin approve` | 결정 90 |
 | `orca-plugin-content`(doctor 만, `DOCTOR_CHECKS`) | fail · `sangsoe plugin approve`, 잴 수 없으면 warn | 결정 105·112 |
 | `sqlite-version`(doctor 만, `DOCTOR_CHECKS`. 시작은 `Store.open` 이 같은 하한으로 거부한다) | fail · Node 갱신 | 결정 35 |
+| `reaper-config`(doctor 만, `DOCTOR_CHECKS`) | `reaper` 칸이 없으면 notice · 그 칸을 더하는 한 줄(REAPER 는 표시만) | 결정 144·153 |
+| `watch-repos`(doctor 만, `DOCTOR_CHECKS`) | `watch.repos` 가 없거나 비면 notice · 그 칸을 더하는 한 줄(pr monitor 가 아무것도 읽지 않는다) | 결정 168 |

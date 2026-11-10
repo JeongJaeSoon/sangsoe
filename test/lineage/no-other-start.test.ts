@@ -24,7 +24,7 @@ function walk(dir: string): string[] {
 const RAW_STARTS: [string, RegExp][] = [
   ["fallback start", /agent["'`,\s]+launch/],
   ["worktree create with a prompt or agent", /worktree["'`,\s]+create\b[^;)]{0,200}(--prompt|--agent|--spec)/],
-  ["claude run directly", /(exec|spawn|execFile|execSync|spawnSync)\w*\(\s*["'`]claude["'`]\s*,\s*\[(?!\s*["'`]plugin["'`])/],
+  ["claude run directly", /(exec|spawn|execFile|execSync|spawnSync)\w*\(\s*["'`]claude["'`]\s*,\s*\[(?!\s*["'`](plugin|--version)["'`])/],
   ["claude run directly", /\bclaude\s+-p\b|nohup\s+claude\b/],
   ["unsupervised dispatch", /["'`]orchestration["'`]\s*,\s*["'`]dispatch["'`]|orchestration\s+dispatch(?![-\w])/],
 ];
@@ -75,6 +75,6 @@ test("the patterns catch what they are meant to", () => {
   const multiline = `execFile(\n  "orca",\n  ["worktree", "create",\n   "--agent", "claude"],\n)`;
   assert.ok(rawStarts(flat(multiline)).length > 0, "a call split over lines");
   assert.ok(rawStarts(flat(`spawn(\n  "claude",\n  ["-p", x],\n)`)).length > 0);
-  const fine = [`exec("claude", ["plugin", "list", "--json"])`, `orca.workerStart({ task, worktree: "new-child" })`];
+  const fine = [`exec("claude", ["plugin", "list", "--json"])`, `exec("claude", ["--version"])`, `orca.workerStart({ task, worktree: "new-child" })`];
   for (const f of fine) assert.ok(!RAW_STARTS.some(([, re]) => re.test(f)), f);
 });

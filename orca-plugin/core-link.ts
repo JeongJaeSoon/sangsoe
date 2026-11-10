@@ -18,6 +18,19 @@ export type MonitorRunner = {
   close(): void;
 };
 
+/** The slice of the core's ReaperRunner the worker calls. */
+export type ReaperRunner = {
+  run(o: { trigger: "timer" | "hint"; signal?: AbortSignal }): Promise<{
+    round: number;
+    roots_ok: boolean;
+    candidates: unknown[];
+    reaped: unknown[];
+  }>;
+  close(): void;
+};
+
+export type Runners = { monitors: MonitorRunner; reaper: ReaperRunner };
+
 /** The slice of the core's PanelCore the worker calls; declared by hand for the same reason. */
 export type PanelCore = {
   brief(target: { group?: string; item?: string }): Promise<Reply<unknown>>;
@@ -25,7 +38,11 @@ export type PanelCore = {
   act(a: unknown): Promise<Reply<unknown>>;
 };
 
-type CoreModule = { openMonitors(o?: { dryRun?: boolean }): MonitorRunner; openPanelCore(): PanelCore };
+type CoreModule = {
+  openMonitors(o?: { dryRun?: boolean }): MonitorRunner;
+  openReaper(): ReaperRunner;
+  openPanelCore(): PanelCore;
+};
 
 const STAGED = "./vendor/core/index.ts";
 const CHECKOUT = "../core/index.ts";
@@ -46,8 +63,17 @@ async function open<T>(pick: (core: CoreModule) => T): Promise<T | string> {
   }
 }
 
-/** Opens the monitors over the store, or explains why not; the worker then runs without them. */
-export const loadMonitors = (): Promise<MonitorRunner | string> => open((core) => core.openMonitors());
+/** Opens the monitors and REAPER over the store, or explains why not; the worker then runs without them. */
+export const loadRunners = (): Promise<Runners | string> =>
+  open((core) => {
+    const monitors = core.openMonitors();
+    try {
+      return { monitors, reaper: core.openReaper() };
+    } catch (e) {
+      monitors.close();
+      throw e;
+    }
+  });
 
 /** The panel's core, or why it did not open; the worker then answers every panel request with that. */
 export const loadPanelCore = (): Promise<PanelCore | string> => open((core) => core.openPanelCore());

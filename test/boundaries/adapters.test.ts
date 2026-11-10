@@ -43,7 +43,9 @@ test("(1) the shipped folders collect: the shipped tools, the version command", 
       "handoff_save",
       "item_create",
       "land",
+      "resource_record",
       "review_ask_record",
+      "review_record",
       "start_unit",
     ],
   );
@@ -123,22 +125,22 @@ test("(4) unknown commands, arguments and tools write nothing and show the right
   assert.equal(writes.length, before, "an entrance reached the core on a bad call");
 });
 
-test("(5) tools/README.md lists the twelve tools of design #mcp and the MCP-only rule", () => {
+test("(5) tools/README.md lists the twelve tools of design #mcp (decisions 160, 162) and the MCP-only rule", () => {
   const readme = readFileSync(new URL("../../claude-plugin/mcp/tools/README.md", import.meta.url), "utf8");
   const rows = [...readme.matchAll(/^\| `([a-z_]+)` \| ([^|]+) \| `\{[^`]*\}` \| (U\d+|미정) \|$/gm)].map((m) => m[1]);
   assert.deepEqual(rows, [
     "item_create",
-    "item_transition",
-    "priority_set",
+    "start_unit",
     "edge_add",
     "edge_remove",
     "flow_expand",
     "decision_open",
     "decision_answer",
-    "notify",
     "land",
     "handoff_save",
     "review_ask_record",
+    "resource_record",
+    "review_record",
   ]);
   assert.match(readme, /에이전트는 sangsoe 를 MCP 로만 부른다/);
 });
@@ -213,7 +215,9 @@ test("the server answers initialize and tools/list over stdio", async () => {
       "handoff_save",
       "item_create",
       "land",
+      "resource_record",
       "review_ask_record",
+      "review_record",
       "start_unit",
     ],
   );

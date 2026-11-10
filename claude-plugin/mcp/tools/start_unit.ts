@@ -1,4 +1,20 @@
-import { createOrcaAdapter, nodeExec, type Role, runSlots, type StartPorts, Store, startUnit } from "../../../core/index.ts";
+import {
+  createOrcaAdapter,
+  EFFORTS,
+  type Effort,
+  isEffort,
+  isModelKind,
+  MODEL_KINDS,
+  MODEL_TIERS,
+  type ModelTier,
+  nodeExec,
+  type Role,
+  resolveModel,
+  runSlots,
+  type StartPorts,
+  Store,
+  startUnit,
+} from "../../../core/index.ts";
 import type { Outcome, Refusal, ToolDef } from "../contract.ts";
 
 const DEFAULT_LIMIT = 4;
@@ -27,6 +43,21 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
     return invalid("lateAnswers go only into a new Task's first prompt", "omit task and pass spec with lateAnswers to create and start a new Task");
   }
   const references = list("references");
+  const kind = s("kind") ?? childRole;
+  if (!isModelKind(kind) || (childRole === "lead" ? kind !== "lead" : kind === "lead" || kind === "orchestrator")) {
+    return invalid(`kind "${kind}" does not fit childRole ${childRole}`, "a lead is kind lead; a worker is worker, design, review, release-review or sweep");
+  }
+  const effort = s("effort");
+  const tier = s("tier");
+  if (effort && !isEffort(effort)) return invalid(`effort "${effort}" is not a level`, `effort: ${EFFORTS.join("|")}`);
+  if (tier && !(MODEL_TIERS as readonly string[]).includes(tier)) return invalid(`tier "${tier}" is not a tier`, "read resource models for the tiers");
+  const reason = s("reason");
+  const model = resolveModel(kind, {
+    ...(effort ? { effort: effort as Effort } : {}),
+    ...(tier ? { tier: tier as ModelTier } : {}),
+    ...(reason ? { reason } : {}),
+  });
+  if (!model.ok) return invalid(model.reason, "read resource models: raise effort along the row's ladder first, then its next tier with a reason");
   const out = await startUnit(ports, {
     requester: { role: role as Role, worktreeId: s("worktreeId") ?? "", runId: s("runId") ?? "", ...(taskId ? { taskId } : {}) },
     childRole,
@@ -35,6 +66,7 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
       : { spec: spec ?? "", ...(title ? { title } : {}), ...(deps ? { deps } : {}), ...(lateAnswers ? { lateAnswers } : {}) },
     agent: s("agent") ?? "claude",
     ...(references ? { references } : {}),
+    model: model.value,
   });
   if (out.kind === "refused") {
     const refusal: Refusal = {
@@ -70,6 +102,14 @@ export default {
       },
       references: { type: "array", items: { type: "string" }, description: "Ticket URLs." },
       agent: { type: "string", description: "Orca agent id, default claude." },
+      kind: {
+        type: "string",
+        enum: MODEL_KINDS.filter((k) => k !== "orchestrator"),
+        description: "The kind of work; picks the model and effort from resource models. Default: the childRole.",
+      },
+      effort: { type: "string", enum: [...EFFORTS], description: "A higher effort from the kind's ladder; needs reason." },
+      tier: { type: "string", enum: [...MODEL_TIERS], description: "The kind's next tier, only from the ladder's last effort; needs reason." },
+      reason: { type: "string", description: "Why the default model or effort falls short; recorded as model_changed." },
     },
     required: ["role", "worktreeId", "runId", "childRole"],
     additionalProperties: false,

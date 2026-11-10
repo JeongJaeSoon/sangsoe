@@ -41,6 +41,7 @@
 | verify_tier_set | 등급이 정해지거나 바뀐 때 pr-monitor 가 쓰는 event({pr, head_sha, computed, requested, effective, actor, accepted, reason, owner_action_ref?}). 라벨 이벤트와 새 push 로 계산값이 바뀔 때 쓴다. 오너가 말로 바꾼 경우 `owner_action_ref` 가 그 `owner_action` 을 가리킨다. 현재 등급은 이 event 에서 읽는 뷰이고 사본 표는 없다 | `verify_tier_set` | — |
 | evidence_missing | 등급이 요구하는 증거가 그 head 에 없거나, 종료 코드가 0 이 아니거나, `not_verified` 칸이 비어 있어 land 판정 함수의 증거 점검이 실패한 사유. `land_failed` 의 사유로 `evidence_missing:<kind>` 로 쓰고 머지 예약도 `merge_on_approval` 도 만들지 않는다 | `evidence_missing` | — |
 | 승인되면 머지 | 조건 넷 중 하나가 거짓이라 머지를 예약하지 않고 남기는 표시. `land_requested` 의 사유 `merge_on_approval` 이고 머지 대기 보고에도 같은 말을 적어 Orca Task 에 남긴다. 승인과 필수 검사가 차면 pr-monitor 가 소유 리드를 깨우고 리드가 land 요청으로 머지한다 | `merge_on_approval` | 오너 머지 대기 |
+| 판정으로 머지 | 설정 `verdict_merge_repos` 에 든 저장소에서 GitHub 승인 대신 그 head 에 기록된 독립 리뷰 판정을 세어 바로 머지한 것. `land_requested` 의 사유 `verdict_approved` 다. V3·보호 경로는 여기서도 승인되면 머지다(결정 158) | `verdict_approved` · `verdict_merge_repos` | 셀프 승인 |
 | 머지 예약 | 조건 넷이 참인 PR 에 건 자동 머지. 사람 승인과 CI 가 차면 GitHub 이 머지한다. 머지됐다는 사실은 pr-monitor 가 머지 확인 뒤 `pr_merged` 로 쓴다 | `gh pr merge --auto` | — |
 | 머지 대기 보고 | land 요청을 마친 PR 작성자가 `worker_done` 대신 보내는 Orca 메시지(`send --type merge_ready`). 작성자는 이것으로 끝나지만 Task 는 닫히지 않고 🚧 막힘(리뷰어)로 머지 확인까지 열려 있다. 보고에는 PR 과 "예약함"·"승인되면 머지" 중 하나를 적는다 | `merge_ready` | 완료 보고(PR 항목에는) |
 | 머지 확인 | pr-monitor 가 (가) GitHub 이 그 PR 을 머지로 표시하고 (나) 그 머지 커밋이 main 에 들어 있음을 읽은 것. 둘이 모두 참일 때만 `pr_merged` 를 쓰고, 같은 라운드에서 그 항목의 Task 를 `completed` 로 닫는다. PR 이 걸린 항목을 sangsoe 가 닫는 유일한 경우다 | `pr_merged` | 머지됨 알림(머지 확인 없이) |
@@ -51,8 +52,9 @@
 | 대시보드 | Orca plugin 패널이 `event`·뷰·Orca 읽기를 그리는 화면. 열 때와 plugin worker 가 알릴 때 읽는다. 별도 서버·포트가 없고 스스로 수집·생성하지 않는다 | — | 콘솔, 웹 대시보드 |
 | 묶음 | 오케스트레이터 바로 아래의 한 단위. 리드 하나가 맡은 프로그램, 또는 리드 없는 단일 워커들을 모은 "그 외" | `group` · `others` | 팀, 그룹(화면에서) |
 | 프로그램 | 한 리드가 완료 조건을 정해 끌고 가는 일의 묶음. 묶음의 안쪽 말 | `programs/<slug>` | 프로젝트, 에픽 |
-| 프로필 | 모델 + effort 묶음. 브리프는 프로필만 적는다. `deep`=Opus·high, `standard`=Sonnet 또는 Opus·medium, `light`=Haiku 또는 Sonnet·low, `wait`=가장 싼 모델·low | `deep` · `standard` · `light` · `wait` | 모델 등급, 티어(화면에서) |
-| tier | 프로필의 이름(`deep`·`standard`·`light`·`wait`). 모델과 effort 는 프로필 정의가 적고, 설정이 모델 id 로 옮긴다 | `tier` | — |
+| 모델 선택 표 | 모델을 고르는 유일한 표. 카탈로그(tier → alias·현재 ID·가격·출처·확인 날짜)와 정책(일의 종류 → tier·effort·사다리·승격 조건)의 두 층이다. 표는 여기에 옮겨 적지 않는다(결정 164) | `core/models/table.ts` · resource `models` | 프로필, 모델 등급 |
+| tier | 카탈로그의 모델 자리 이름. alias 하나가 붙고 버전은 카탈로그 행에만 있다 | `frontier` · `primary` · `everyday` · `fast` | 프로필(옛 `deep`·`standard`·`light`·`wait`) |
+| 일의 종류 | 정책 행의 열쇠. 역할 셋과 워커가 맡는 일의 종류 | `kind` · `orchestrator` · `lead` · `worker` · `design` · `review` · `release-review` · `sweep` | — |
 
 ## 2. 상태 (항목은 늘 정확히 하나)
 
@@ -63,7 +65,7 @@
 | 🔄 진행 중 | 살아 있는 워커나 리드가 goal 을 걸고 쥐고 있다. 결정이 풀려 Orca 상태가 `ready` 가 됐어도 활성 Dispatch 가 있으면(워커가 아직 쥐고 있으면) 🟢 가 아니라 🔄 다 | `in_progress` | 작업 중, 실행 중 |
 | 🚧 막힘 | 시작했으나 누군가 없이는 못 간다. 기다리는 쪽을 괄호에 적는다. 리뷰 대기도 막힘이다 | `blocked` | 대기, 리뷰 중, 정지 |
 | ⏸️ 보류 | 일부러 지금 안 한다. 재검토 trigger 가 있다 | `parked` | 연기, 나중에 |
-| ✅ 완료 | Orca Task 가 `completed` 다. PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로 `completed` 가 된다. 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
+| ✅ 완료 | Orca Task 가 `completed` 다. PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로, 오너 항목은 오너의 완료 버튼으로 `completed` 가 된다. `close_suggested` 는 닫기 제안이지 완료가 아니고, REAPER 의 끝남 판정은 카드를 치워도 되는지이지 항목 상태가 아니다(결정 161). 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
 | 🗑️ 취소 | 하지 않기로 했다. 이유가 필수다 | `canceled` | 폐기, 삭제 |
 
 ## 3. 플래그 (상태 위에 0개 이상)
@@ -148,9 +150,7 @@
 | 대화 기록 가리킴 | 세션 id 와 메시지 uuid 로 대화 기록을 가리키는 값 | `cc_session` · `cc_message` | — |
 | 오너만 할 수 있는 이유 | 오너 항목이 오너에게 가는 이유 한 줄 | `why_owner` | — |
 | 버튼 | 패널에서 `plugin.request` 로 plugin worker 를 거쳐 코어의 같은 함수를 부르는 동작. `owner_action` 의 `origin` 이 `button` 이 된다 | `button` · `plugin.request` | — |
-| 모델 프로필 표 | 프로필 이름을 모델·effort 로 옮기는 설정 | `model_profiles` | — |
 | 열쇠 접두 | `dedupe_key` 의 종류 접두 | `notify:` · `edge:` · `decision:` · `decision:dNNN` · `item:iNNN` · `pr:acme/app#1` | — |
-| 프로필 줄 | 브리프에서 프로필과 이유를 적는 줄. 낮은 프로필에서 올릴 때 effort 도 적는다 | `PROFILE deep` · `PROFILE <tier> — <이유>` · `PROFILE deep (effort max)` | — |
 | 승인 줄 | 브리프의 승인 근거. 오너의 말을 인용한 `오너(dNNN, 날짜)` 줄 | `오너(dNNN, 날짜)` | — |
 | 이모지 체계 | 오너가 승인한 상태 7·플래그 4 | — | — |
 | 스키마 버전 | `event` 한 줄이 어느 형식인지 적는 칸. 읽는 쪽이 옛 줄을 받아들인다 | `schema_v` | — |
@@ -224,7 +224,7 @@
 | | 턴 종료 | `turn_ended` | — |
 | | 일 없이 멈춘 워커 | `worker_idle` | — |
 | | Stop 차단 상한에 닿음 | `loop_detected` | — |
-| | 세션 시작({role, tier, model, effort}) | `session_started` | — |
+| | 세션 시작({session, role, model}. model 은 hook 이 줄 때만, 계약의 tier·effort 칸은 아직 채우지 않는다) | `session_started` | — |
 | | 게이트 거부({gate, command 파일 경로}) | `gate_denied` | — |
 | | chat-monitor: 새 멘션 | `mention_new` | — |
 | | queue-monitor: 새로 준비됨이 된 항목을 `notify` 로 알린 기록(`ready` 뷰가 가리킨다) | `item_ready` | item_claimed |
@@ -288,6 +288,8 @@
 | | 오너 말과 분류 | `owner_action` · `owner_class` | — |
 | | 원문 지우기 | `owner_text_redacted` | — |
 | 저장소 단위 기록 | 머지·main 상태를 저장소마다 하나로 쌓는 event 묶음 | `land_*` · `main_*` | — |
+| plugin 승인 기록 | `sangsoe plugin approve` 가 `orca plugin enable` 에 성공한 뒤에만 쓰는 줄. Orca 의 승인 상태를 복사하지 않고 sangsoe 가 승인했다는 사실만 남긴다(결정 104) | `plugin_approved` | — |
+| 리뷰 판정 | 독립 리뷰 하나가 PR head 하나에 낸 판정(Act-on 수 · 리뷰어 · 작성자). 쓰는 곳은 코어 기록 함수 하나이고, 입구는 리드가 부르는 MCP tool `review_record` 와 사람이 부르는 `sangsoe review record` 다(결정 111·162) | `review_verdict` | 리뷰 통과 표시 |
 | event 칸 | 한 줄의 칸 | `seq` · `ts` · `type` · `source` · `target` · `subject` · `entity` · `entity_id` · `actor` · `needs` · `severity` · `dedupe_key` · `before` · `after` · `schema_v` | by |
 | `needs` 값 | 누구를 깨우나: 기록만·스크립트나 지정 수행자·에이전트 | `none` · `action` · `judgment` | — |
 
@@ -296,9 +298,9 @@
 | 용어 | 정의 | 영문 식별자 | 쓰지 않는 말 |
 |---|---|---|---|
 | goal | 한 단위의 완료 판정(`/goal`). 리드는 프로그램, 워커는 받은 작업 | `/goal` | 목표 |
-| escalation | 못 푼 문제·결정을 에이전트 트리 위로 한 단계씩 올리는 것. 이 뜻 하나뿐이다 | `escalation` | 에스컬레이트(프로필 변경이나 거부에) |
+| escalation | 못 푼 문제·결정을 에이전트 트리 위로 한 단계씩 올리는 것. 이 뜻 하나뿐이다 | `escalation` | 에스컬레이트(모델 승격이나 거부에) |
 | 거부 보고 | 거부된 행위를 일을 준 쪽에 바로 알리는 것. escalation 이 아니다 | `refusal_report` | 거부 escalation |
-| 프로필 승격/강등 | 도중에 프로필을 바꾸는 것. escalation 이 아니다 | `model_changed` | — |
+| 모델 승격 | 정책 행의 기본값을 벗어나는 것. effort 를 사다리대로 먼저 올리고, 끝에서도 모자라면 이유를 적고 다음 tier 로 간다. escalation 이 아니다 | `model_changed` | 프로필 승격/강등 |
 | 재시도 1회 | 거부된 행위를 조건을 갖춰 한 번만 다시 하고 보고하는 형식 | `재시도 1회: <더한 증거>` | — |
 | 위임 게이트 | 오케스트레이터가 조율 밖 도구 호출을 못 하게 막는 게이트 | `[gate:delegate]` | — |
 | 압박 게이트 | 머신 부하가 높을 때 무거운 시작을 거부하는 게이트 | `[gate:pressure]` | — |
@@ -325,8 +327,8 @@
 | plugin 승인 | plugin worker 를 켜는 오너 승인. `sangsoe plugin approve` 코어 함수 하나로만 하고, 오너가 `permissions.allow` 에 이 명령 한 줄만 넣는다. 명령이 독립 리뷰 지적 0으로 main 에 머지된 버전인지, `orca plugin inspect` 의 지문이 리뷰된 빌드와 같은지, 대상이 sangsoe plugin 자신인지 검사하고 통과할 때만 `orca plugin enable --approve <지문>` 을 부르며 승인 event 를 남긴다. `orca plugin enable` 자체는 허용 목록에 두지 않는다. MCP tool 이 아닌 호출 경로 규칙의 예외다 | `plugin approve` · `orca plugin enable` · `orca plugin inspect` · `permissions.allow` | — |
 | 첫 빌드 시험 | 구현의 첫 단계가 돌리는 시험 T1~T6. 결과가 설계의 갈래를 정하고, 실패하면 정해 둔 대체가 적용된다: T1 worker 안 `node:sqlite` → 코어 프로세스를 CLI 로 부름 · T2 worker 타이머 → `orca automations --precheck` · T3 패널 그림 → 상태 표시줄과 `sangsoe brief` 출력 · T4 승인 뒤 자율 범위와 재승인 빈도 · T5 Dispatch 재시작 거부와 세 번 실패 차단, 머지 대기 보고로 끝낸 Task 가 열린 채 남는지(아니면 머지 확인 하위 Task). T6(결정 90) 경로 마켓플레이스 설치와 `brew upgrade` 뒤 갱신, hook PATH 의 `sangsoe`, 개발 폴더로 올린 Orca plugin 이 앱 재시작 뒤에도 남는지. 어느 것도 오너 결정을 기다리지 않는다 | `T1`~`T6` | 오너 결정 대기 |
 | Orca·Node 호스트 낱말 | 호스트가 정한 이름이라 sangsoe 가 바꾸지 않는 것: worker 가 돌리는 파일 형식 `.ts`, Orca plugin 매니페스트의 빈 칸 `mcpServers`, Node 의 내장 sqlite `node:sqlite`, command hook 만 갖는 실패 시 막기 `onFailure: "block"`, plugin 로컬 시험 `orca plugin test`, worktree 삭제 `orca worktree rm`, 입력을 받을 때까지 기다리는 `tui-idle`(대체 시작이 없어져 쓰지 않는다, 결정 94), Orca 가 돌려주는 거부·승인 코드 `approval_required`·`approval_stale`·`consumer_fenced`·`task_not_startable`·`task_id` | `approval_required` · `approval_stale` · `consumer_fenced` · `task_not_startable` · `task_id` · `.ts` · `mcpServers` · `node:sqlite` · `onFailure: "block"` · `orca plugin test` · `orca worktree rm` · `tui-idle` | — |
-| 패널 | Orca plugin 이 오른쪽 사이드바에 그리는 화면. 현황 세 단계·오너 할 일·결정 버튼을 낸다. 폭은 사이드바가 정한다 | `panels` | 웹 화면, 페이지(패널을 가리킬 때) |
-| 상태 표시줄 항목 | Orca 상태 표시줄에 건수 줄의 짧은 꼴(`🚧2 · 결정2 · 🔄5`: 막힌 것 · 열린 결정 · 진행 중)을 올리는 항목. 숫자는 `BriefModel.summary`·`owner_todo` 에서 오고 따로 세지 않는다. 오너가 할 일이 있으면 `danger` 색이고 누르면 명령이 실행된다(패널 열기는 미확인, 결정 92) | `statusBarItems` · `statusBar.update` | 오너 할 일 수·🚨 항목 |
+| 패널 | Orca plugin 이 오른쪽 사이드바에 그리는 화면. 현황 세 단계·오너 할 일·결정 버튼을 낸다. 폭은 사이드바가 정한다. Orca 패널처럼 머리 행(새로 고침·터미널에서 전체 현황·더 보기)과 1단계의 탭(전체 · 할 일 · 진행 중)을 두고 색은 Orca 테마 변수를 따른다(결정 169) | `panels` | 웹 화면, 페이지(패널을 가리킬 때) |
+| 상태 표시줄 항목 | Orca 상태 표시줄에 이름표와 건수 줄의 짧은 꼴(`SANGSOE  🚧 2 · 결정 2 · 🔄 5`: 막힌 것 · 열린 결정 · 진행 중, 결정 170)을 올리는 항목. 숫자는 `BriefModel.summary`·`owner_todo` 에서 오고 따로 세지 않는다. 오너가 할 일이 있으면 `danger` 색이고 누르면 명령이 실행된다(패널 열기는 미확인, 결정 92) | `statusBarItems` · `statusBar.update` | 오너 할 일 수·🚨 항목 |
 | 호출 경로 규칙 | 코어는 하나이고 에이전트(리드·워커·오케스트레이터)는 MCP 만 쓴다. Bash 로 CLI 를 부르지 않는다. CLI 는 셸에서만 도는 호출자 여섯 행(시작 hook·막는 hook·기록 hook·오너 전용 skill 의 상태 주입 줄·사람 터미널·시험·CI·승인 명령)용으로 얇게 둔다. plugin worker(패널 버튼·monitor 타이머)는 코어를 직접 import 한다 | — | — |
 | 폴백 웹 화면 | 패널로 안 되는 기능만 맡는 최소 웹 화면(같은 코어·같은 읽기 뷰, 새 수집기 없음). 지금은 범위가 비어 있어 두지 않는다 | — | 웹 대시보드 |
 | 외부 plugin | sangsoe 밖에서 만든 Orca plugin. Orca 에는 plugin 사이 공식 데이터 교환 경로가 없어서 sangsoe 는 기대지 않는다 | — | — |
@@ -373,6 +375,7 @@
 | 인계 저장 | 재시작해도 남아야 하는 판단 상태 넷(다음에 할 일 · 기다리는 답 · 답 없는 질문 · 오너 요청의 회신 경로)의 모양을 검사해 Orca 메시지 type `handoff` 로 자기 Run 우편함에 남기는 MCP tool. 새 세션이 같은 우편함에서 읽는다 | `handoff_save` | — |
 | 복구 계획 | 머신·Orca 재시작 뒤 항목 ↔ 마지막 세션(`orca search`)·`/goal` 유무를 한 표로 모으고 Orca 가 내는 `worker-list` 의 `next` 를 그대로 보여 주는 읽기 전용 코어 함수. 죽은 워커 찾기와 되살리기는 Orca 가 하고 이 함수는 실행하지 않는다 | `recover_plan` | — |
 | 의뢰 기록 입구 | 리뷰 의뢰를 `review_ask_sent` 로 남기는 MCP tool. 손으로 보낸 의뢰도 자동 의뢰도 이 입구 하나를 지난다 | `review_ask_record` | — |
+| 판정 기록 입구 | 리드가 독립 리뷰 판정을 `review_verdict` 로 남기는 MCP tool. 부른 세션의 checkout 이 그 PR 의 head 를 쥐었으면(PR 을 쓴 세션) 거부한다(결정 162) | `review_record` | — |
 | 리마인드 대상 | 리마인드할 때가 된 의뢰를 `review_ask_sent` 에서 계산하는 뷰 | `ask_due` | — |
 | 릴리스 묶음 틀 | 여러 항목이 dev 배포·확인·prod 승격 한 번을 함께 쓰는 흐름 틀. 구성원 여럿의 `pr_merged` 를 `blocks` 로 기다리고 `stage_recorded` 의 `members` 칸이 전체의 증거다. 단독 긴급 수정은 `ship-change` 다 | `ship-batch` | — |
 | main 수정 land | 그 저장소의 최신 main 이 `main_red` 인 동안 land 판정 함수가 받는 유일한 요청 종류 | `main_fix` | — |
@@ -401,6 +404,13 @@
 | item new | 항목 하나를 만든다 | `sangsoe item new` | — |
 | priority | 우선순위를 정한다 | `sangsoe priority set` | — |
 | owner-text redact | 원문을 지운다(오너 승인 필요) | `sangsoe owner-text redact` | — |
+| hook | Claude Code hook 의 입구. PreToolUse 한 번의 게이트 판정이나 기록 hook 하나를 표준 입력으로 받는다. `--replay` 는 실제 명령 모음으로 게이트를 잰다 | `sangsoe hook` | — |
+| monitor run | monitor 라운드 한 번. Orca plugin worker 의 타이머와 같은 함수다. `--dry-run` 은 쓸 event 와 Orca 쓰기를 보이기만 한다 | `sangsoe monitor run` | — |
+| reap run | REAPER 라운드 한 번(표시 → 정리). `--dry-run`·`--mark-only` 는 아무것도 지우지 않는다 | `sangsoe reap run` | — |
+| resource record | 막 만든 Docker id(또는 compose 프로젝트의 id 전부)를 소유자와 함께 `resource` 로 남긴다. MCP `resource_record` 와 같은 함수다 | `sangsoe resource record` | — |
+| review record | 독립 리뷰 판정 하나를 `review_verdict` 로 남긴다(결정 111). 리뷰어가 작성자이면 거부한다 | `sangsoe review record` | — |
+| migrate | 옛 저장소의 열린 항목·결정을 한 번 가져온다. 옛 DB 는 읽기만 하고 `--apply` 없이는 쓰지 않는다(결정 140) | `sangsoe migrate` | — |
+| version | 버전을 출력한다(`--version` 과 같다) | `sangsoe version` | — |
 | `--help` | 도움말. 아무것도 바꾸지 않는다 | `--help` | — |
 | `--done` | 접힌 완료 목록을 펼친다 | `--done` | — |
 | `--dry-run` | 펼치기·적용 전 미리보기 | `--dry-run` | — |
@@ -432,7 +442,7 @@
 | 용어 | 정의 | 영문 식별자 | 쓰지 않는 말 |
 |---|---|---|---|
 | sqlite 파일 | `event` 와 번호 표·`owner_text`·캐시 예외 표가 든 파일 하나. Orca plugin 저장소가 아니라 plugin 밖 경로에 두고 양쪽 매니페스트가 같은 파일을 연다 | `~/.local/share/sangsoe/sangsoe.db` | — |
-| 설정 | 프로필 매핑·언어·규칙 수준. 사람이 고친다 | `~/.config/sangsoe/config.json` · `~/.config/sangsoe/` | — |
+| 설정 | 언어·규칙 수준. 사람이 고친다. 모델 선택은 설정이 아니라 `core/models/table.ts` 다 | `~/.config/sangsoe/config.json` · `~/.config/sangsoe/` | — |
 | 등급 설정 키 | 검증 등급이 읽는 설정 키. 경로 패턴 목록 셋과 내리기 권한자 목록이다. 값은 설정에만 있고 설계에는 없으며, 읽지 못하면 V3 다(`protected_paths` 는 자동 머지 조건 넷과 같은 키) | `docs_globs` · `test_globs` · `ui_globs` · `owners` · `protected_paths` | — |
 | 틀 폴더 | 오너가 덮어쓰는 흐름 틀 | `~/.config/sangsoe/flows/` | — |
 | 프로그램 폴더 | 리드의 보고·계획·브리프 | `~/.local/share/sangsoe/programs/<slug>/` · `~/.local/share/sangsoe/programs/<slug>/briefs/*.md` | — |
@@ -467,12 +477,12 @@
 
 SQL 문장 조각, `<…>`·`{…}`·`(…)` 가 든 형식 예시, `칸=값` 표기는 용어가 아니라 예시 문법이어서 검사에서 뺀다.
 
-`port-plan.md` 의 백틱 낱말과 HTML 파일의 `<code>` 낱말은 아래 규칙으로 검사한다. ① sangsoe 의 이름(event 종류·뷰·명령·시나리오·역할 줄)은 이 파일에 글자 그대로 있어야 한다. ② 파일 이름·경로(`_research/` 조사 자료 경로 포함)·명령 옵션(`--apply`·`--task-id` 같은 것)·묶음 글(`gate-*`)·예시 안의 값·커밋 해시·`#절` 앵커(부록에 실제 id 가 있는지 따로 검사)·화면에 뜬 문구를 그대로 인용한 것은 용어가 아니어서 뺀다. ③ agent-skills 의 옛 파일·시험·스크립트·스킬 이름은 첫 문단의 예외 문장이 정한 자리에서만 쓰고 sangsoe 용어가 아니다. 모델 id는 브리프·코드에 쓰지 않는다. 모델 계열 이름은 프로필 정의(glossary §1, 부록 §모델 프로필, 도식 4)에만 쓴다.
+`port-plan.md` 의 백틱 낱말과 HTML 파일의 `<code>` 낱말은 아래 규칙으로 검사한다. ① sangsoe 의 이름(event 종류·뷰·명령·시나리오·역할 줄)은 이 파일에 글자 그대로 있어야 한다. ② 파일 이름·경로(`_research/` 조사 자료 경로 포함)·명령 옵션(`--apply`·`--task-id` 같은 것)·묶음 글(`gate-*`)·예시 안의 값·커밋 해시·`#절` 앵커(부록에 실제 id 가 있는지 따로 검사)·화면에 뜬 문구를 그대로 인용한 것은 용어가 아니어서 뺀다. ③ agent-skills 의 옛 파일·시험·스크립트·스킬 이름은 첫 문단의 예외 문장이 정한 자리에서만 쓰고 sangsoe 용어가 아니다. 모델 id 와 버전은 `core/models/table.ts` 에만 쓰고, 브리프에는 모델을 쓰지 않는다(결정 164, `test/model-table.test.ts` 가 검사한다).
 
 ## 14. 문서 절 이름
 
 `design.html`(여섯 절): 무엇을 만드는가(안의 절: 설계 관점) · 네 칸 배치(안의 절: 배치표 · 첫째 칸: Orca CLI 내장 기능을 어디서 어떻게 부르나 · 한 저장소, 매니페스트 둘, 설치) · 컴포넌트(안의 절: 역할과 완료 판정 · 호출 경로 규칙 · monitor 다섯 · 오너가 보는 것 · 상태와 용어 · MCP 인터페이스) · 데이터(안의 절: 데이터 소유 · 의존 관리) · 흐름(안의 절: 오너 지시 하나 · 유닛 시작 · 결정 · 머지와 정리 · 모니터에서 깨움까지 · 경계마다 무엇이 오가나) · 구현 순서와 전환. 도식은 1 네 칸 배치 · 2 컴포넌트와 상호작용 · 3 토큰 · 3a GC 가 도는 자리 · 4 데이터 저장 · 5 오너 지시 · 6~9 흐름 넷 · 10 모듈 의존 순서다.
-`design-appendix.html`: 차례 · 신호 흐름 · 역할 카드(안의 절: 역할과 완료 판정 표 · 당사자 원칙 표) · sqlite 스키마(안의 절: 데이터 소유 · 캐시 예외 · 키와 불변식) · 의존 관리 상세 · 지시 분류 표(안의 절: 지시가 흐르는 그림) · 전달 규칙(안의 절: 일이 기다리는 곳 · 결정 루프 · Orca 연동 우회) · 게이트와 원칙 · 모델 프로필 · 남는 파일과 플러그인 경계 · 패널 화면 · MCP 인터페이스 · 기존 설계 참고(안의 절: Orca 기능 활용 표).
+`design-appendix.html`: 차례 · 신호 흐름 · 역할 카드(안의 절: 역할과 완료 판정 표 · 당사자 원칙 표) · sqlite 스키마(안의 절: 데이터 소유 · 캐시 예외 · 키와 불변식) · 의존 관리 상세 · 지시 분류 표(안의 절: 지시가 흐르는 그림) · 전달 규칙(안의 절: 일이 기다리는 곳 · 결정 루프 · Orca 연동 우회) · 게이트와 원칙 · 모델 선택 · 남는 파일과 플러그인 경계 · 패널 화면 · MCP 인터페이스 · 기존 설계 참고(안의 절: Orca 기능 활용 표).
 
 링크 글은 이 이름 그대로 쓴다. 약칭 "데이터 소유 상세"·"결정 루프 상세"는 쓰지 않는다.
 

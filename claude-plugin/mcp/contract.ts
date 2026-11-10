@@ -34,8 +34,10 @@ export type ToolDef = {
 export type ResourceDef = {
   /** Equals the file's base name. */
   name: string;
-  uri: string;
   description: string;
   mimeType: string;
-  read(): string | Promise<string>;
-};
+} & (
+  | { uri: string; read(): string | Promise<string> }
+  /** RFC 6570 level 1: each `{var}` matches one path segment, handed to read() decoded. */
+  | { uriTemplate: string; read(vars: Record<string, string>): string | Promise<string> }
+);

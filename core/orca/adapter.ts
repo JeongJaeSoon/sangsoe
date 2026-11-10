@@ -156,6 +156,7 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     hostKey: string,
     idKey: string,
     call?: Call,
+    nonLocalId?: (row: Json) => unknown,
   ): Promise<OrcaResult<LocalRows<T>>> {
     const r = await run<Json>(name, call);
     if (!r.ok) return r;
@@ -167,7 +168,12 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     const omitted = Array.isArray(scope.omittedHostIds) ? scope.omittedHostIds.map(String) : [];
     const nextCursor = typeof v.nextCursor === "string" && v.nextCursor !== "" ? v.nextCursor : undefined;
     const page = { omittedHostIds: omitted, truncated: v.truncated === true || nextCursor !== undefined };
-    const rows = keepLocal(v[key] as T[], (row) => (row as Json)[hostKey], page);
+    const rows = keepLocal(
+      v[key] as T[],
+      (row) => (row as Json)[hostKey],
+      page,
+      nonLocalId && ((row: T) => nonLocalId(row as Json)),
+    );
     return { ok: true, value: nextCursor ? { ...rows, nextCursor } : rows };
   }
 
@@ -233,7 +239,11 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     inbox: (a) => field("inbox", "messages", rowsWith({ id: "string", type: "string" }), { flags: { terminal: a.terminal, limit: a.limit, full: true } }),
 
     workerStart: (a, o) =>
-      run("workerStart", { flags: { task: a.task, agent: a.agent, worktree: placement(a.worktree), run: a.run } }, o),
+      run(
+        "workerStart",
+        { flags: { task: a.task, agent: a.agent, worktree: placement(a.worktree), run: a.run, model: a.model, effort: a.effort } },
+        o,
+      ),
     workerShow: (a) => shaped("workerShow", isObject, { flags: { dispatch: a.dispatch } }),
     workerList: (a) =>
       local("workerList", "workers", "host", "dispatchId", { flags: { run: a.run, limit: a.limit, cursor: a.cursor } }),
@@ -241,7 +251,8 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     dispatchShow: (a) => field("dispatchShow", "dispatch", isObject, { flags: { task: a.task } }),
     requestShow: (a) => shaped("requestShow", isObject, { flags: { request: a.request } }),
 
-    worktreeList: (a) => local("worktreeList", "worktrees", "hostId", "id", { flags: { repo: a.repo, limit: a.limit } }),
+    worktreeList: (a) =>
+      local("worktreeList", "worktrees", "hostId", "id", { flags: { repo: a.repo, limit: a.limit } }, (row) => row.instanceId),
     worktreePs: (a) =>
       local("worktreePs", "worktrees", "hostId", "worktreeId", { flags: { limit: a.limit, "agent-wait": a.agentWait } }),
     worktreeSet: (a) =>

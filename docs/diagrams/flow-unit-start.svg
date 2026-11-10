@@ -63,7 +63,7 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 <text class="m" x="796" y="415">sqlite: session_started</text><text class="m" x="796" y="429">세션 id 를 같이 쓴다</text>
 <g class="num"><circle cx="24" cy="468" r="9"/><text x="24" y="472">8</text></g>
 <path class="a" d="M322,468 L712,468"/><text class="l c" x="517" y="461">역할 줄 · 브리프 경로를 표준 출력으로</text>
-<text class="m" x="796" y="463">원본: 브리프 파일 · 프로필</text><text class="m" x="796" y="477">없으면 시작 거부</text>
+<text class="m" x="796" y="463">원본: 브리프 파일 · 일의 종류</text><text class="m" x="796" y="477">없으면 시작 거부</text>
 <g class="num"><circle cx="24" cy="516" r="9"/><text x="24" y="520">9</text></g>
 <path class="a" d="M712,516 L582,516"/><text class="l c" x="647" y="509">hook 출력 = 컨텍스트</text>
 <text class="m" x="796" y="520">워커가 브리프를 읽고 일한다</text>

@@ -24,14 +24,16 @@
 | 실행 | `core/gates/` | X | ④ 공유 코어 | 막는 hook 의 판정 함수: 게이트 4종 · 시작 가드 · 모양 검사 · 합치기 · `gate_denied` 기록 |
 | 실행 | `core/start/` | X | ④ 공유 코어 | 세션을 여는 유일한 시작 함수(Task + Dispatch + new-child lineage)와 lineage·깊이 검사, `unit_lineage_complete` 읽기(결정 94) |
 | 실행 | `core/capacity/` | X | ④ 공유 코어 | 부하 판정 함수 하나(압박 게이트·resource-monitor·REAPER·`capacity` 공용, 결정 83) |
+| 실행 | `core/reaper/` | X | ④ 공유 코어 | REAPER 라운드(표시 → 정리): 루트 읽기 · 끝남 판정 · 삭제 전 검사 · `worktree rm --run-hooks` · 기록된 Docker id · `resource_record` 몸체(결정 82·83·86·88, 결정 144·145) |
 | 실행 | `core/recover/` | X | ④ 공유 코어 | `sangsoe recover` 의 읽기 전용 표(결정 80 N4) |
 | 실행 | `core/decision/` | X | ④ 공유 코어 | 결정 루프: `decision_open`(재질문 게이트) · `decision_answer` · `moot` 닫기 · 결정 84③ 읽기 |
 | 실행 | `core/notify/` | X | ④ 공유 코어 | `notify`: Orca 메시지 한 번 + `notified`, 받는 순서 · `term_` 거부 |
 | 실행 | `core/owner/` | X | ④ 공유 코어 | 오너 큐: `owner_todo` 몸체 · `verify` probe 다섯 · 입력 연결 규칙 · 표지 · `waiting_released` · 완료 버튼(결정 89·91) |
 | 감지 | `core/session/` | X | ④ 공유 코어 | 기록 hook 일곱의 판정(`session_started` · `owner_action` · `waiting_human`/`waiting_released` · `turn_ended` · `compacted` · `!` 입력), SessionStart 주입, `restart_due`, `handoff_save` · `review_ask_record` |
 | 실행 | `core/graph/` | X | ④ 공유 코어 | GRAPH: 간선의 유일한 입구 · 순환 거부 · `ready` · `why` · 크리티컬 패스 · 영향 범위 · 흐름 틀 · `graph sync` |
-| 실행 | `core/brief/` | X | ④ 공유 코어 | 현황 세 단계: `buildBrief`·`renderMarkdown` 한 쌍과 `item_status`·`group_*` 뷰 몸체(`owner_todo` 는 `core/owner/` 에 넘긴다)(결정 89, 구현 결정 128·129) |
-| 실행 | `core/migrate/` | X | ④ 공유 코어 | `sangsoe migrate`: agent-skills 의 열린 항목·결정을 읽기 전용으로 한 번 가져오기(D-13, 구현 결정 140) |
+| 실행 | `core/brief/` | X | ④ 공유 코어 | 현황 세 단계: `buildBrief`·`renderMarkdown` 한 쌍과 `item_status`·`group_*` 뷰 몸체(`owner_todo` 는 `core/owner/` 에 넘긴다)(결정 89, 결정 128·129) |
+| 실행 | `core/migrate/` | X | ④ 공유 코어 | `sangsoe migrate`: agent-skills 의 열린 항목·결정을 읽기 전용으로 한 번 가져오기(D-13, 결정 140) |
+| 실행 | `core/models/` | X | ④ 공유 코어 | 모델 선택 표 하나(카탈로그 + 정책 + 변경 이력)와 `resolve`: 모델을 고르는 모든 자리가 읽는다(결정 164·165) |
 | 실행 | `cli/` | X | ④ 공유 코어 | 셸 호출자 전용 `sangsoe` |
 | 실행 | `orca-plugin/reaper/` | X | ② Orca plugin | REAPER 라운드 타이머 |
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |
@@ -74,7 +76,7 @@
 - **B. npm workspaces 네 패키지**: `packages/core` 등에 각자 `package.json`·`exports`. 내부 import 를 빌드가 막는 장점이 있으나, 버전 문자열이 네 곳에 생기고(손으로 맞추는 목록), 프로젝트 참조·배포 단위가 늘며, Claude Code plugin 의 `skills/`·`agents/` 관례 위치와 겹쳐 폴더가 한 단계 깊어진다.
 - 버린 꼴: 최상위를 `token-free/`·`token-using/` 으로 가르는 안. 토큰 구분은 가장 잘 보이지만 한 plugin(③)이 두 뿌리로 찢어져 매니페스트가 가리킬 폴더가 둘이 된다.
 
-결정 번호와 이유는 `decisions-impl/`(결정 96–101).
+결정 번호와 이유는 `decisions.md` 의 결정 96–101.
 
 ## 어댑터 등록 계약 (MCP tool · CLI 명령)
 

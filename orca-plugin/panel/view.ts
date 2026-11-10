@@ -97,10 +97,13 @@ function tableHtml(t: Table, rows: string[], acts: boolean): string {
   return `<table class="tbl"><thead><tr>${head}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
 
-function section(id: string, t: Table, rows: string[], acts = false, hint = ""): string {
-  const body = t.rows.length === 0 ? '<p class="empty">없음</p>' : tableHtml(t, rows, acts);
-  const h = hint ? `<span class="hint">${esc(hint)}</span>` : "";
-  return `<section aria-labelledby="h-${id}"><div class="sec-h"><h2 id="h-${id}">${esc(t.title)} <span class="count">${t.count}</span></h2>${h}</div>${body}</section>`;
+// An empty section is its heading line alone, count 0 and "없음" on the same line (decision 169).
+function section(id: string, t: Table, rows: string[], acts = false, hint = "", tab = ""): string {
+  const empty = t.rows.length === 0;
+  const h = empty ? '<span class="none">없음</span>' : hint ? `<span class="hint">${esc(hint)}</span>` : "";
+  const attrs = `${empty ? ' class="nil"' : ""}${tab ? ` data-tab="${tab}"` : ""}`;
+  const body = empty ? "" : tableHtml(t, rows, acts);
+  return `<section aria-labelledby="h-${id}"${attrs}><div class="sec-h"><h2 id="h-${id}">${esc(t.title)} <span class="count">${t.count}</span></h2>${h}</div>${body}</section>`;
 }
 
 const btn = (label: string, act: Act | null, primary = false) =>
@@ -128,12 +131,12 @@ function overview(m: Overview, todo: readonly TodoRow[]): string {
   });
   const s = m.summary;
   return [
-    `<h1>현황 · ${stamp(m.now)} · 묶음 ${m.groups} · 내가 할 일 <span>${m.todo.total}</span> <span class="dim">(결정 ${m.todo.decisions} + 할 일 ${m.todo.other})</span></h1>`,
+    `<h1>현황 · 묶음 ${m.groups} · 내가 할 일 <span>${m.todo.total}</span> <span class="dim">(결정 ${m.todo.decisions} + 할 일 ${m.todo.other})</span></h1>`,
     `<p class="sumline">✅ 완료 ${s.done}건 · 🔄 진행 중 ${s.doing}건 · 남은 것 ${s.left}건 · 🚧 막힌 것 ${s.blocked}건</p>`,
-    section("dec", m.decisions, decisions, true),
-    section("me", m.ownerTodo, todoRows, true),
-    section("prog", m.inProgress, progress, false, "우선순위, 오래된 🚧 순"),
-    m.onHold ? section("hold", m.onHold, m.onHold.rows.map((r) => rowHtml(m.onHold as Table, r, { nav: { item: r.id } }))) : "",
+    section("dec", m.decisions, decisions, true, "", "todo"),
+    section("me", m.ownerTodo, todoRows, true, "", "todo"),
+    section("prog", m.inProgress, progress, false, "우선순위, 오래된 🚧 순", "prog"),
+    m.onHold ? section("hold", m.onHold, m.onHold.rows.map((r) => rowHtml(m.onHold as Table, r, { nav: { item: r.id } })), false, "", "prog") : "",
     `<p class="foot">완료는 최근 ${m.doneDays}일 · 🔍 근거 부족 ${m.evidenceShort} · 상세: <code>sangsoe brief &lt;묶음&gt;</code></p>`,
   ].join("");
 }
@@ -229,13 +232,60 @@ function item(m: ItemDetail): string {
   ].join("");
 }
 
-/** The body of one stage. `crumbs` is the way back; the entry wires data-nav, data-act and back. */
-export function renderStage(v: PanelView, crumbs: readonly string[] = []): string {
+// Lucide paths (ISC), the set Orca's own panels draw with: `layers` is the manifest's panel icon.
+const ICONS: Record<string, string> = {
+  layers:
+    '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  refresh:
+    '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  terminal: '<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+};
+export const icon = (name: string): string =>
+  `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] ?? ""}</svg>`;
+
+/** What a header button asks the worker to open in an Orca terminal; the worker builds the command. */
+export type Open = { view: "brief"; group?: string; item?: string } | { view: "doctor" } | { view: "todo" };
+
+const iconBtn = (name: string, label: string, data: string) =>
+  `<button type="button" class="ibtn" ${data} aria-label="${esc(label)}" title="${esc(label)}">${icon(name)}</button>`;
+
+// The header row (decision 169): title with the panel icon, last-updated time, refresh, open the
+// full brief in a terminal, and an overflow menu. A plain <details> menu needs no script state.
+function header(now: string, at: Target): string {
+  const open: Open = { view: "brief", ...at };
+  const menu =
+    `<details class="menu"><summary class="ibtn" aria-label="더 보기" title="더 보기">${icon("more")}</summary><div class="pop" role="menu">` +
+    `<button type="button" role="menuitem" data-open="${attr({ view: "todo" })}">터미널에서 sangsoe todo</button>` +
+    `<button type="button" role="menuitem" data-open="${attr({ view: "doctor" })}">터미널에서 sangsoe doctor</button></div></details>`;
+  return (
+    `<header class="top"><span class="brand">${icon("layers")}상쇠<small>sangsoe</small></span>` +
+    `<span class="fresh" title="갱신 ${esc(now)}">${stamp(now)}</span>` +
+    `<span class="tools">${iconBtn("refresh", "새로 고침", "data-refresh")}${iconBtn("terminal", "터미널에서 전체 현황", `data-open="${attr(open)}"`)}${menu}</span></header>`
+  );
+}
+
+/** Stage 1's views (decision 169): one table set, filtered by a segmented control. Counts are model fields. */
+export const TABS = ["all", "todo", "prog"] as const;
+export type Tab = (typeof TABS)[number];
+
+function tabs(m: Overview, active: Tab): string {
+  // The same number as the 진행 중 section heading; 보류 rides along in the view but is not counted.
+  const prog = m.inProgress.count;
+  const one = (t: Tab, label: string, n: number | null) =>
+    `<button type="button" role="tab" aria-selected="${t === active}" data-tab-to="${t}">${label}${n === null ? "" : ` <span class="count">${n}</span>`}</button>`;
+  return `<nav class="seg" role="tablist" aria-label="현황 보기">${one("all", "전체", null)}${one("todo", "할 일", m.todo.total)}${one("prog", "진행 중", prog)}</nav>`;
+}
+
+/** The body of one stage. `crumbs` is the way back; the entry wires data-nav, data-act, back and tabs. */
+export function renderStage(v: PanelView, crumbs: readonly string[] = [], tab: Tab = "all", at: Target = {}): string {
   const m = v.model;
-  const trail =
-    crumbs.length === 0 ? "" : `<p class="crumbs"><button type="button" class="link" data-back>‹ 뒤로</button> ${crumbs.map(esc).join(" › ")}</p>`;
+  const nav =
+    m.stage === 1
+      ? tabs(m, tab)
+      : `<p class="crumbs"><button type="button" class="link" data-back>‹ 뒤로</button> ${crumbs.map(esc).join(" › ")}</p>`;
   const body = m.stage === 1 ? overview(m, v.todo) : m.stage === 2 ? group(m) : item(m);
-  return `<header class="top"><span class="brand">상쇠<small>sangsoe</small></span><span class="fresh">갱신 ${stamp(m.now)}</span></header>${trail}<main>${body}</main>`;
+  return `${header(m.now, at)}${nav}<main data-view="${m.stage === 1 ? tab : "all"}">${body}</main>`;
 }
 
 /** Row ids in drawing order (PN2: the same list as the model's tables). */

@@ -1,4 +1,4 @@
-import { createItem, createOrcaAdapter, nodeExec, type OrcaAdapter, parseOwnerExtra, recordOwnerExtra, Store } from "../../../core/index.ts";
+import { ContractError, createItem, createOrcaAdapter, EVENTS, nodeExec, type OrcaAdapter, parseOwnerExtra, Store } from "../../../core/index.ts";
 import type { Outcome, ToolDef } from "../contract.ts";
 
 /** Same Outcome as `sangsoe item new`; ports are passed in so tests drive it with a fake Orca. */
@@ -7,6 +7,19 @@ export async function handle(input: Record<string, unknown>, ports: { orca: Orca
   const deps = Array.isArray(input.deps) ? input.deps.map(String) : undefined;
   const extra = parseOwnerExtra(input.verify, input.cmdHint);
   if (!extra.ok) return { ok: false, refusal: { code: "invalid_verify", reason: extra.error, fix: FIX.invalid_verify } };
+  const fields: Record<string, unknown> = {
+    ...(extra.value.verify ? { verify: extra.value.verify } : {}),
+    ...(extra.value.cmdHint ? { cmd_hint: extra.value.cmdHint } : {}),
+    ...Object.fromEntries(TIMING.filter((k) => input[k] !== undefined).map((k) => [k, input[k]])),
+  };
+  // Checked against the event contract before the Task exists: a row that fails after it would
+  // leave an item with no trigger, visible as ready.
+  try {
+    EVENTS.item_extra_set.payload({ task: "unchecked", ...fields }, "item_extra_set");
+  } catch (e) {
+    if (!(e instanceof ContractError)) throw e;
+    return { ok: false, refusal: { code: "invalid_input", reason: e.message, fix: FIX.invalid_timing } };
+  }
   const r = await createItem(ports.orca, ports.store, {
     run: s("runId"),
     spec: s("spec"),
@@ -15,14 +28,20 @@ export async function handle(input: Record<string, unknown>, ports: { orca: Orca
     ...(s("title") ? { title: s("title") } : {}),
     ...(deps?.length ? { deps } : {}),
   });
-  if (r.ok) recordOwnerExtra(ports.store, r.task, extra.value);
+  if (r.ok && Object.keys(fields).length > 0) {
+    ports.store.append({ type: "item_extra_set", source: "core:item", payload: { task: r.task, ...fields }, entity: "task", entity_id: r.task });
+  }
   return r.ok ? { ok: true, value: { task: r.task, alias: r.alias } } : { ok: false, refusal: { code: r.code, reason: r.error, fix: FIX[r.code] } };
 }
+
+// item_extra_set fields that decide when the item may start (decision 162).
+const TIMING = ["trigger", "review_trigger", "hold", "exec_by"] as const;
 
 // Same mapping as `sangsoe item new`, so both entrances give the same Outcome.
 const FIX = {
   invalid_input: "give run, spec, who and done-when, none empty",
   task_create_failed: "check that the Run id is right and the deps are Tasks of that Run",
+  invalid_timing: "trigger and review_trigger are non-empty text, hold a boolean, exec_by owner, lead or worker",
   invalid_verify: "verify is one of pr_merged{pr} · orca_field{target,field,value} · plugin_approved{key} · run_ok{repo} · pr_found{repo,search}; cmdHint a non-empty command prefix",
 } as const;
 
@@ -44,6 +63,14 @@ export default {
           "Owner items: the observed fact that shows the owner did it (decision 91②). kind is one of pr_merged{pr: owner/repo#N}, orca_field{target, field, value}, plugin_approved{key}, run_ok{repo}, pr_found{repo, search}; run_ok and pr_found are read only after the owner's `!` line matched cmdHint.",
       },
       cmdHint: { type: "string", description: "Owner items: the command's prefix and key arguments, e.g. `gh workflow run promote.yml`; an owner `!` line containing every piece links to this item." },
+      trigger: {
+        type: "string",
+        description:
+          "📅 scheduled: the item is not ready before this ISO date (2026-11-17 or a full timestamp) or until this PR (owner/repo#N) merges. Any other text is not ready and raises trigger_unclear for a lead to judge.",
+      },
+      hold: { type: "boolean", description: "⏸️ on hold: not ready until a lead or the owner reopens it." },
+      review_trigger: { type: "string", description: "With hold: the condition, in words, to look at the item again." },
+      exec_by: { type: "string", enum: ["owner", "lead", "worker"], description: "Who starts it; owner items go to the owner's to-do once ready." },
     },
     required: ["runId", "spec", "who", "doneWhen"],
     additionalProperties: false,

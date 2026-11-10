@@ -20,7 +20,7 @@ import {
   type Table,
 } from "../../core/index.ts";
 import type { PanelCore } from "../../orca-plugin/core-link.ts";
-import { panelHandlers, parseAct, STATUS_UNKNOWN } from "../../orca-plugin/panel/requests.ts";
+import { openCommand, openHandler, panelHandlers, parseAct, STATUS_UNKNOWN } from "../../orca-plugin/panel/requests.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
 import { back, current, down, drawnRowIds, type PanelView, renderStage, trail } from "../../orca-plugin/panel/view.ts";
 import { createWorld } from "../decision/world.ts";
@@ -38,6 +38,27 @@ const view = (target: { group?: string; item?: string }): PanelView => {
   const r = panelView(input, target);
   assert.ok(r.ok, JSON.stringify(r));
   return r.value as unknown as PanelView;
+};
+// The first-day panel: every count 0 and every table empty (ref: the owner's screenshot of rc.4).
+const emptyOverview = (): PanelView => {
+  const one = view({});
+  if (one.model.stage !== 1) throw new Error("stage");
+  const none = <T extends { rows: unknown[]; count: number }>(t: T): T => ({ ...t, rows: [], count: 0 });
+  const m = one.model;
+  return {
+    todo: [],
+    model: {
+      ...m,
+      groups: 0,
+      todo: { total: 0, decisions: 0, other: 0 },
+      summary: { done: 0, doing: 0, left: 0, blocked: 0 },
+      decisions: none(m.decisions),
+      ownerTodo: none(m.ownerTodo),
+      inProgress: none(m.inProgress),
+      onHold: null,
+      evidenceShort: 0,
+    },
+  };
 };
 const ids = (...tables: (Table | null)[]) => tables.flatMap((t) => (t ? t.rows.map((r) => r.id) : []));
 
@@ -101,7 +122,7 @@ test("PN3: status bar B reads the same numbers as sangsoe todo and the brief's t
   assert.ok(r.ok);
   const m = r.value.model as Overview;
   const s = statusBarItem(m);
-  assert.equal(s.text, `🚧${m.summary.blocked} · 결정${m.todo.decisions} · 🔄${m.summary.doing}`);
+  assert.equal(s.text, `SANGSOE  🚧 ${m.summary.blocked} · 결정 ${m.todo.decisions} · 🔄 ${m.summary.doing}`);
   assert.equal(s.tone, m.todo.total > 0 ? "danger" : "neutral");
   const md = renderMarkdown(m, { maxWidth: 78 });
   assert.ok(md.includes(`🚧 막힌 것 ${m.summary.blocked}건`) && md.includes(`🔄 진행 중 ${m.summary.doing}건`));
@@ -120,19 +141,66 @@ test("preview pages for the screenshots (only with PANEL_PREVIEW_DIR)", { skip: 
   mkdirSync(dir, { recursive: true });
   const stages: [string, PanelView, string[]][] = [
     ["stage1", view({}), []],
+    ["stage1-empty", emptyOverview(), []],
     ["stage2", view({ group: "api-migration" }), ["현황", "api-migration"]],
     ["stage3", view({ item: "i031" }), ["현황", "api-migration", "i031"]],
   ];
   for (const [name, v, crumbs] of stages) {
     for (const theme of ["light", "dark"]) {
-      for (const [w, width] of [["360", "360px"], ["wide", "1280px"]]) {
+      for (const [w, width] of [["360", "360px"], ["sidebar", "665px"], ["wide", "1280px"]]) {
         // The script writes the drawn row heights into the page, so `--dump-dom` carries the measurement.
         const measure = `<script>addEventListener("load",()=>{const h=[...document.querySelectorAll("tr[data-id]")].map(r=>Math.round(r.getBoundingClientRect().height));const c={};for(const x of h)c[x]=(c[x]||0)+1;const p=document.createElement("pre");p.id="measure";p.textContent=JSON.stringify({rows:h.length,heights:c,svg:document.querySelectorAll("svg.dag").length});document.body.append(p);});</script>`;
-        const page = `<!doctype html><html lang="ko" data-theme="${theme}"><head><meta charset="utf-8"><style>${STYLE}</style></head><body><div id="root" style="width:${width}">${renderStage(v, crumbs)}</div>${measure}</body></html>`;
+        const page = `<!doctype html><html lang="ko" class="${theme}" data-theme="${theme}"><head><meta charset="utf-8"><style>${STYLE}</style></head><body><div id="root" style="width:${width}">${renderStage(v, crumbs)}</div>${measure}</body></html>`;
         writeFileSync(join(dir, `${name}-${w}-${theme}.html`), page);
       }
     }
   }
+});
+
+test("decision 169: header row, stage 1 tabs with model counts, empty sections on one line", () => {
+  const one = view({});
+  if (one.model.stage !== 1) throw new Error("stage");
+  const m = one.model;
+  const html = renderStage(one);
+  assert.match(html, /<header class="top">.*data-refresh.*data-open=.*<details class="menu">/s);
+  assert.match(html, /<main data-view="all">/, "every section shows by default");
+  assert.ok(html.includes(`data-tab-to="todo">할 일 <span class="count">${m.todo.total}</span>`));
+  assert.ok(html.includes(`data-tab-to="prog">진행 중 <span class="count">${m.inProgress.count}</span>`), "the tab says the section heading's number");
+  assert.match(renderStage(one, [], "prog"), /<main data-view="prog">/);
+  assert.equal(html.match(/data-tab="todo"/g)?.length, 2, "결정 필요 and 지금 오너가 할 일");
+
+  const empty: PanelView = { ...one, model: { ...m, decisions: { ...m.decisions, rows: [], count: 0 } } };
+  const sec = /<section aria-labelledby="h-dec"[^>]*>(.*?)<\/section>/s.exec(renderStage(empty))?.[0] ?? "";
+  assert.match(sec, /class="nil"/);
+  assert.match(sec, /결정 필요 <span class="count">0<\/span><\/h2><span class="none">없음<\/span>/);
+  assert.doesNotMatch(sec, /<table/);
+
+  const two = renderStage(view({ group: "api-migration" }), ["현황", "api-migration"]);
+  assert.match(two, /data-back/);
+  assert.doesNotMatch(two, /role="tablist"/, "tabs are stage 1's; stages 2 and 3 keep the way back");
+});
+
+test("panel.open builds the terminal command itself; panel text never reaches the shell", async () => {
+  assert.equal(openCommand({ view: "brief" }), "sangsoe brief");
+  assert.equal(openCommand({ view: "brief", group: "api-migration", item: "i033" }), "sangsoe brief api-migration i033");
+  assert.equal(openCommand({ view: "brief", item: "i033" }), "sangsoe brief", "an item needs its group");
+  assert.equal(openCommand({ view: "brief", group: "a; rm -rf ~" }), "sangsoe brief");
+  assert.equal(openCommand({ view: "brief", group: "$(id)" }), "sangsoe brief");
+  assert.equal(openCommand({ view: "doctor" }), "sangsoe doctor");
+  assert.equal(openCommand({ view: "todo" }), "sangsoe todo");
+  for (const bad of [null, {}, { view: "sh" }, { view: "doctor; id" }]) assert.equal(openCommand(bad), null, JSON.stringify(bad));
+
+  const calls: string[][] = [];
+  const h = openHandler(async (cmd, args) => {
+    calls.push([cmd, ...args]);
+    return { ok: true, code: 0, out: "{}", err: "" };
+  });
+  assert.deepEqual(await h({ view: "doctor" }), { ok: true, value: { status: "opened" } });
+  assert.deepEqual(calls[0], ["orca", "terminal", "create", "--worktree", "active", "--title", "sangsoe doctor", "--command", "sangsoe doctor", "--focus", "--json"]);
+  assert.equal(((await h({ view: "x" })) as { ok: boolean }).ok, false);
+  assert.equal(calls.length, 1, "a refused view runs nothing");
+  const failing = openHandler(async () => ({ ok: false, code: 1, out: "", err: "no active worktree" }));
+  assert.deepEqual(await failing({ view: "todo" }), { ok: false, refusal: { code: "open_failed", reason: "no active worktree", fix: "run sangsoe todo in a terminal" } });
 });
 
 test("parseAct lets through the three button acts only", () => {
@@ -244,7 +312,7 @@ test("다른 답 is masked before it is stored or handed to the Run", async () =
   assert.match(String(w.store.events({ type: "decision_answered" })[0]?.payload.answer), /^use /);
 });
 
-test("a core that throws becomes a refusal and status falls back to 'sangsoe ?'", async () => {
+test("a core that throws becomes a refusal and status falls back to 'SANGSOE  ?'", async () => {
   const boom = async () => {
     throw new Error("disk gone");
   };
@@ -265,6 +333,7 @@ test("no row is painted by its state (decision 92①): only lead rows and hover 
   assert.doesNotMatch(STYLE, /tr\.own|--bad-soft|background:\s*var\(--bad/);
   const shaded = [...STYLE.matchAll(/([^{}]*)\{[^}]*background:\s*var\(--paper/g)]
     .map((m) => (m[1] ?? "").trim())
-    .filter((sel) => /\b(tr|td)[^\s]*$/.test(sel));
+    .filter((sel) => /(?:^|[\s>])(?:\.\w+\s+)*(tr|td)\b[^\s]*$/.test(sel));
+  assert.ok(shaded.length >= 2, "the check sees the lead and hover rules");
   for (const sel of shaded) assert.match(sel, /tr\.lead|tr:hover/, sel);
 });

@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import { REQUIRED_CAPABILITIES } from "../checks/orca-capabilities.ts";
 import type { OrcaAdapter, OrcaResult, Receipt, WriteOptions } from "../contract/orca.ts";
+import { type Choice, resolve } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
 import type { NewTask, RefusalReason, Role, StartOutcome, StartPorts, StartRefusal, StartRequest } from "./types.ts";
@@ -25,6 +26,12 @@ export function findKey(v: unknown, keys: readonly string[], depth = 0): string 
 const DISPATCH_KEYS = ["dispatchId", "dispatch_id"] as const;
 const TASK_KEYS = ["taskId", "task_id"] as const;
 const WORKTREE_KEYS = ["worktreeId", "worktree_id", "workspace"] as const;
+
+function defaultChoice(childRole: "lead" | "worker"): Choice {
+  const r = resolve(childRole);
+  if (!r.ok) throw new Error(r.reason);
+  return r.value;
+}
 
 const LOOP_LIMIT = 3;
 /** `target` of a refusal that came from a start attempt itself; only these count toward T5. */
@@ -249,7 +256,15 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   if (free <= 0) return { kind: "waiting", taskId, why: "no_capacity", detail: `빈 자리 ${free}` };
 
   // ④ orca_error
-  const startArgs = { task: taskId, agent: req.agent, worktree: "new-child" as const, run: requester.runId };
+  const choice = req.model ?? defaultChoice(req.childRole);
+  const startArgs = {
+    task: taskId,
+    agent: req.agent,
+    worktree: "new-child" as const,
+    run: requester.runId,
+    model: choice.model,
+    effort: choice.effort,
+  };
   const started = await write(orca, orca.workerStart(startArgs), (o) => orca.workerStart(startArgs, o));
   if (!started.ok) {
     const dead = findKey(started.error.data, DISPATCH_KEYS);
@@ -267,6 +282,16 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   if (!dispatchId) {
     const left = [findKey(started.value, ["terminal", "handle"]), worktreeId].filter(Boolean).join(" · ");
     return failedAttempt("no_dispatch", `worker-start 는 끝났지만 Dispatch 가 없다${left ? ` (남은 것: ${left})` : ""}`);
+  }
+
+  if (choice.escalated) {
+    store.append({
+      type: "model_changed",
+      source,
+      payload: { from: choice.escalated.from, to: `${choice.model}/${choice.effort}`, reason: choice.escalated.reason },
+      entity: "task",
+      entity_id: taskId,
+    });
   }
 
   const notes: string[] = [];

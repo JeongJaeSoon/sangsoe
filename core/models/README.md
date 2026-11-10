@@ -1,0 +1,36 @@
+<!-- layout: slot=④ layer=실행 tokens=free -->
+# core/models — 모델 선택 표 하나 · 실행 · 토큰 X
+
+sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정 164). 두 층이 한 파일에 있다.
+
+- **카탈로그(`CATALOG`)**: tier 마다 Claude Code alias · 지금 alias 가 가리키는 ID · 가이드가 적은 역할 · 가격 · context/output · API 기본 effort · 출처 · 확인 날짜 · 선택적 `pin`. 새 모델이 나오면 이 행만 바뀐다.
+- **정책(`POLICY`)**: 일의 종류(`Kind`) → tier · effort · effort 사다리 · 다음 tier · 승격 조건 · 인용한 가이드 문장. 가이드 문구가 바뀌면 이 행만 바뀐다. 정책 행은 tier 만 적고 모델 이름이나 버전을 적지 않는다.
+- **변경 이력(`CHANGELOG`)**: 날짜 · 무엇이 바뀌었나 · 출처 · 결정 번호. git 없이 읽힌다.
+
+`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort` 로 푼다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다.
+
+## 읽는 곳
+
+| 읽는 곳 | 무엇을 | 어떻게 |
+|---|---|---|
+| `core/start/start.ts` (`start_unit`) | 정책 + 카탈로그 | `resolve` → `worker-start --model <alias> --effort <level>`, 승격은 `model_changed` 로 기록 |
+| MCP resource `models` | 표 전체 | 판단 층(skill·agent)은 이 resource 로만 읽는다. 표를 본문에 옮겨 적지 않는다 |
+| `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice |
+| `claude-plugin/agents/*.md` frontmatter `model:`·`effort:` | 정책의 역할 행 | `test/model-table.test.ts` 가 표의 alias·effort 와 같은지 본다 |
+
+## 갱신 절차
+
+세션이 한다. 타이머가 이 파일을 쓰는 일은 없다. `doctor` 의 `model-table` 행이 warn·notice 를 내면 시작한다.
+
+1. 다시 읽을 쪽: `SOURCES` 의 네 URL(Choosing a model · Models overview · Claude Code model-config · sub-agents).
+2. 고칠 곳을 고른다.
+   - alias 가 새 버전을 가리킬 뿐이면: 카탈로그 행의 `currentId`·가격·`verified` 만 고친다. 코드와 정책은 그대로다.
+   - 새 tier, 역할·가격 변화: 카탈로그 행을 고치거나 더한다(`TIERS` 도).
+   - 가이드의 권고 문구가 바뀌면: 정책 행과 그 `quote` 를 고친다.
+   - 모두 `VERIFIED_WITH_CLAUDE_CODE` 를 지금 `claude --version` 으로 고친다.
+3. `CHANGELOG` 맨 위에 한 줄(날짜 · 무엇 · 출처 · 결정 번호)을 더하고, `docs/decisions.md` 에 같은 번호의 결정을 날짜와 URL 과 함께 적는다.
+4. `npm test` — `test/model-table.test.ts` 가 역할마다 행이 있는지, 표의 사본이나 버전 번호가 다른 곳에 없는지, agent frontmatter 가 표와 같은지 본다.
+
+## 고정(pin)
+
+alias 는 바깥에서 고정될 수 있다: `ANTHROPIC_DEFAULT_*_MODEL` 이 alias 의 대상을, `modelSettings` 가 모델별 effort 를 바꾼다. 그래서 `--model opus` 를 넘긴 쪽은 alias 가 아니라 실제로 풀린 모델(상태 줄이나 stream-json 의 init event)을 확인한다. `doctor` 는 이 고정을 읽기만 하고(설정을 고치지 않는다) 있는 동안 매번 보인다. sangsoe 가 버전을 고정해야 하면(안정 릴리스의 리뷰 등) 카탈로그 행의 `pin` 한 곳에 dated ID·이유·날짜를 적는다.

@@ -6,5 +6,8 @@
 | resource | uri | 내용 | 단위 |
 |---|---|---|---|
 | `brief` | `sangsoe://brief` | 현황 1단계 표 글. 코어 `renderMarkdown(buildBrief(...))` 그대로이고 `sangsoe brief` 출력과 같다(결정 89) | U9 |
+| `ready` | `sangsoe://ready` | 리드가 시작할 수 있는 🟢 항목(코어 `readiness`, 오너가 시작할 것은 빼고), 이어서 기다리는 항목마다 `renderWhy` 의 "왜 준비되지 않았나" 표. `brief` 와 같은 Run 들을 읽는다(결정 162) | U31 |
+| `models` | `sangsoe://models` | 모델 선택 표 하나(`core/models/table.ts`): 카탈로그 · 정책 · 변경 이력 · 출처. `start_unit` 의 `kind`·`effort`·`tier`·`reason` 이 이 표에서 고른다. JSON(결정 164) | U32 |
+| `item_timeline` | `sangsoe://item/{task}/timeline` | 한 항목의 event 를 순서대로(코어 뷰 `item_timeline`, 잡음 제외). `{task}` 는 Orca Task id 나 `iNNN`. JSON `{task, rows}`(결정 162) | U31 |
 
-2·3단계(`sangsoe brief <묶음> [<항목>]`)는 아직 resource 로 내지 않는다: 서버가 uri 를 정확히 맞춰 찾으므로 묶음·항목을 받으려면 resource template(`resources/templates/list`)이 서버에 먼저 있어야 한다.
+`uri` 대신 `uriTemplate` 을 둔 resource 는 template 이다. 서버는 `resources/templates/list` 로 따로 내고, `resources/read` 의 uri 를 고정 resource 에서 먼저 찾은 뒤 template 에 맞춘다. `{var}` 하나는 경로 한 칸이다. 현황 2·3단계(`sangsoe brief <묶음> [<항목>]`)는 아직 resource 로 내지 않는다.
