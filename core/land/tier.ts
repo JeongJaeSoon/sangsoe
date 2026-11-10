@@ -12,7 +12,7 @@ export async function tierOfPr(
   const fix = "sangsoe verify-tier --pr <N> [--repo <owner/name>]";
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(a.repo)) return { ok: false, refusal: { code: "invalid_input", reason: `repo must be owner/name, got ${a.repo}`, fix } };
   if (!Number.isInteger(a.pr) || a.pr < 1) return { ok: false, refusal: { code: "invalid_input", reason: `pr must be a PR number, got ${a.pr}`, fix } };
-  const repo = a.repo.toLowerCase();
+  const { repo } = a; // GitHub calls keep the given case, as in land()
   const pull = await readPull(deps.gh, repo, a.pr);
   if (pull.kind !== "ok") {
     const reason = pull.kind === "rate_limited" ? `GitHub's rate limit resets at epoch ${pull.resetAt}` : pull.why;
@@ -21,5 +21,5 @@ export async function tierOfPr(
   const diff = await readDiff(deps.gh, repo, a.pr);
   const labels = await readLabels(deps.gh, repo, a.pr, pull.data);
   const v = verifyTier(diff.kind === "ok" ? diff.data : null, labels.kind === "ok" ? labels.data : null, deps.config().tier);
-  return { ok: true, value: { pr: `${repo}#${a.pr}`, head_sha: pull.data.head.sha, ...v, evidence: requiredEvidence(v) } };
+  return { ok: true, value: { pr: `${repo.toLowerCase()}#${a.pr}`, head_sha: pull.data.head.sha, ...v, evidence: requiredEvidence(v) } };
 }

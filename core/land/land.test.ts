@@ -6,6 +6,7 @@ import { Store } from "../store/store.ts";
 import type { TierConfig } from "../verify/verify-tier.ts";
 import { mergeConfirm } from "./github.ts";
 import { type LandDeps, type LandInput, land } from "./land.ts";
+import { tierOfPr } from "./tier.ts";
 
 const REPO = "acme/api";
 const PR = "acme/api#12";
@@ -115,6 +116,15 @@ test("GitHub calls keep the repo's given case; only the event key is lowercased"
   assert.equal(r.value.pr, PR);
   assert.ok(h.gh.paths.every((p) => p.startsWith(`repos/${given}/`)), h.gh.paths.join("\n"));
   assert.deepEqual(h.merges, [{ repo: given, pr: 12, head: HEAD }]);
+
+  h.store.append({ type: "main_red", source: "pr-monitor", payload: { repo: REPO, sha: "d".repeat(40), run_id: "77" } });
+  const frozen = await land(input({ repo: given }), h.deps);
+  assert.equal(frozen.ok ? "" : frozen.refusal.code, "main_red", "the stored lowercase main state still matches");
+
+  const tier = await tierOfPr(h.deps, { repo: given, pr: 12 });
+  assert.ok(tier.ok, JSON.stringify(tier));
+  assert.equal(tier.value.pr, PR);
+  assert.ok(h.gh.paths.every((p) => p.startsWith(`repos/${given}/`)));
 });
 
 test("a condition false: land_requested{merge_on_approval} and no merge", async () => {
