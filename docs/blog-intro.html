@@ -61,7 +61,7 @@ svg .halo{fill:var(--card)}
 <h1>sangsoe 소개: 여러 에이전트 세션을 한 사람이 이끄는 법</h1>
 
 <blockquote>
-<p>이 글은 아직 구현 전인 <strong>설계</strong>를 소개한다. 저장소(<code>JeongJaeSoon/sangsoe</code>)의 첫 커밋은 설계 검토가 끝난 뒤에 들어간다. 그래서 아래 "동작한다"는 "이렇게 동작하도록 설계했다"로 읽어 주길 바란다. 돌려서 확인하지 못한 부분은 6절에 따로 모았다. 설계 전체는 <a href="design.html">design.html</a>, 세부는 <a href="design-appendix.html">design-appendix.html</a>에 있다.</p>
+<p>이 글은 저장소(<code>JeongJaeSoon/sangsoe</code>)에 있는 <strong>설계와 그 첫 빌드</strong>를 소개한다. 지금 있는 것은 첫 안정판(<code>v0.1.0</code>, Homebrew 로 설치)이다. 첫 빌드 시험 T0~T6(매니페스트, worker 안 sqlite, worker 타이머, 패널 그림, 승인 뒤 자율 범위, 시작 거부, 설치·갱신·재설치)은 실제 Orca 에서 돌렸고(일부 칸은 미실행) 결과는 <a href="test-outcomes.md">test-outcomes.md</a> 에 있다. 아직 돌리지 않은 것(여러 세션이 함께 도는 스모크, 시험 P5·P7 등)이 있으니, 아래 "동작한다"는 그 표에 결과가 있는 것만 확인된 것으로 읽어 주길 바란다. 확인하지 못한 부분은 6절에 따로 모았다. 설계 전체는 <a href="design.html">design.html</a>, 세부는 <a href="design-appendix.html">design-appendix.html</a>에 있다.</p>
 </blockquote>
 
 <p>상쇠(sangsoe)는 풍물패 맨 앞에서 꽹과리 소리로 패 전체의 박자를 이끄는 사람이다. 이 프로젝트가 하는 일이 그렇다. Claude Code와 Orca에서 여러 세션에 일을 나눠 맡겼을 때, 누가 어디까지 했고 누가 막혀 있는지 놓치지 않게 하고, 필요한 쪽에만 신호를 보낸다.</p>
@@ -274,7 +274,7 @@ svg .halo{fill:var(--card)}
 <p><strong>② 감시.</strong> 일이 도는 동안 모델 없이 도는 감시자 다섯이 각자 한 가지를 본다. 타이머로 도는 코드라 토큰이 들지 않는다.</p>
 
 <ul>
-<li><code>chat-monitor</code>: 나에게 온 새 멘션과 내 스레드의 답글</li>
+<li><code>chat-monitor</code>: 나에게 온 새 멘션과 내 스레드의 답글을 볼 자리. 공개 저장소에는 아무것도 읽지 않는 빈 provider 만 있다(<code>core/detect/chat/provider.ts</code>)</li>
 <li><code>queue-monitor</code>: 시작 조건이 찬 예정 항목, 오래 안 읽힌 에스컬레이션, 답은 있는데 안 풀린 결정</li>
 <li><code>resource-monitor</code>: 프로세스, 메모리, CPU, worktree, Docker 자원</li>
 <li><code>orca-monitor</code>: Orca가 아는 워커, Run, 답 없는 질문, 열린 게이트</li>
@@ -307,7 +307,7 @@ svg .halo{fill:var(--card)}
 
 <p>가장 중요한 원칙은 하나다. <strong>Orca나 Claude Code가 이미 하는 일은 만들지 않는다.</strong> 판정 순서는 Orca 기능, Claude Code 기본 기능, 자체 스크립트 순이다. 자체 상주 프로세스, 포트, 웹 서버는 없다. 웹 대시보드도 없다.</p>
 
-<p>sangsoe가 직접 만들던 것을 Orca의 hook과 내장 기능이 대신할 수 있는지, 후보 23개를 하나씩 따져 봤다(<code>_research/orca-hooks-review.md</code>). 결과는 "그대로 쓴다" 11, "틈만 메운다" 6, "쓰지 않는다" 6이다. 대표 사례만 적는다.</p>
+<p>sangsoe가 직접 만들던 것을 Orca의 hook과 내장 기능이 대신할 수 있는지, 후보 23개를 하나씩 따져 봤다(그 조사 메모는 이 저장소에 없고, 결론은 <a href="design.html">design.html</a> 의 Orca 기능 표에 있다). 결과는 "그대로 쓴다" 11, "틈만 메운다" 6, "쓰지 않는다" 6이다. 대표 사례만 적는다.</p>
 
 <ul>
 <li><strong>그대로 쓴다</strong>: 저장소의 archive hook(위 정리 단계), worktree 목록의 <code>isMainWorktree</code> 필드(메인 체크아웃을 건드리지 않으려고), <code>worktree rm --delete-branch</code>(머지를 증명한 브랜치만 지움), 워커 터미널 자동 해제. 일부(재시도 체인과 세 번 실패 차단)는 도움말로만 확인했고 실행 확인 전이다. <code>/goal</code> 입력의 제출 확인도 "그대로 쓴다"였지만, 그것을 쓰던 대체 시작이 없어져 지금은 쓰지 않는다.</li>
@@ -325,7 +325,7 @@ svg .halo{fill:var(--card)}
 
 <h3>설치</h3>
 
-<p>지금은 사전 배포판(<code>v0.1.0-rc.N</code>)만 있다. 아래 절차는 저장소 <code>README.md</code> 의 Install · Update · Uninstall 과 같다.</p>
+<p>지금 안정판은 <code>v0.1.0</code> 이다. 아래 절차는 저장소 <code>README.md</code> 의 Install · Update · Uninstall 과 같다.</p>
 
 <p>설치 길은 하나다. Homebrew가 코어와 매니페스트 둘(<code>.claude-plugin/plugin.json</code>과 <code>orca-plugin.json</code>)이 든 트리 하나를 깔고, <code>sangsoe install</code>이 그 트리를 각 호스트의 공식 명령으로 Claude Code plugin과 Orca plugin에 등록한다(결정 90·108). 필요한 것은 macOS 의 Homebrew, Claude Code, Orca, 인증된 <code>gh</code> 다. 사람이 순서대로 실행한다.</p>
 
@@ -351,13 +351,13 @@ svg .halo{fill:var(--card)}
 <tbody>
 <tr><td><code>sangsoe brief [묶음] [항목]</code></td><td>오너</td><td>현황을 세 단계(묶음 → 묶음 상세 → 항목 상세)로 본다</td></tr>
 <tr><td><code>sangsoe todo</code></td><td>오너</td><td>내가 할 일만 모아 본다</td></tr>
-<tr><td><code>sangsoe land &lt;pr&gt;</code></td><td>워커, 리드</td><td>증거를 점검하고 머지를 예약하거나 "승인되면 머지"로 남긴다</td></tr>
-<tr><td><code>sangsoe recover</code></td><td>오너, 리드</td><td>머신 재시작 뒤 항목별로 마지막 세션과 <code>/goal</code> 유무를 표로 본다. 읽기 전용이다</td></tr>
-<tr><td><code>sangsoe verify-tier &lt;pr&gt;</code></td><td>누구나</td><td>PR의 검증 등급을 계산해 본다</td></tr>
+<tr><td><code>sangsoe land --pr &lt;N&gt;</code></td><td>워커, 리드</td><td>증거를 점검하고 머지를 예약하거나 "승인되면 머지"로 남긴다</td></tr>
+<tr><td><code>sangsoe recover</code></td><td>오너, 리드</td><td>머신 재시작 뒤 Orca 의 워커를 Task · Dispatch · 상태 · liveness · 터미널 · worktree 표로 보고 잃었을 수 있는 워커를 표시한다. 읽기 전용이다</td></tr>
+<tr><td><code>sangsoe verify-tier --pr &lt;N&gt;</code></td><td>누구나</td><td>PR의 검증 등급을 계산해 본다</td></tr>
 </tbody>
 </table>
 
-<p>에이전트(오케스트레이터, 리드, 워커)는 Bash로 CLI를 부르지 않고 <strong>MCP tool만</strong> 쓴다. 인자의 타입이 정해져 있고, 거부 오류가 글자가 아니라 구조로 오기 때문이다. 쓰는 tool은 열한 개다. 항목 만들기, 의존 더하기·빼기·펼치기, 결정 열기·답하기, 세션 시작이 일곱 개의 행동이고, 여기에 land 요청 하나와 기록 셋(인계 저장, 리뷰 의뢰 기록, 만든 자원 기록)이 더해진다. 상태 전환은 Orca 의 Task 명령을 그대로 쓴다(결정 160). 읽기는 tool이 아니라 resource(현황 1~3단계)로 열린다. CLI는 MCP를 못 쓰는 호출자(hook, 사람 터미널, CI)용으로 얇게만 둔다.</p>
+<p>에이전트(오케스트레이터, 리드, 워커)는 Bash로 CLI를 부르지 않고 <strong>MCP tool만</strong> 쓴다. 인자의 타입이 정해져 있고, 거부 오류가 글자가 아니라 구조로 오기 때문이다. 쓰는 tool은 열네 개다. 항목 만들기, 의존 더하기·빼기·펼치기, 결정 열기·답하기, 세션 시작이 일곱 개의 행동이고, 여기에 land 요청 하나와 기록 여섯(인계 저장, 리뷰 의뢰 기록, 리뷰 판정 기록, 만든 자원 기록, 검증 증거 기록, 배포 단계 기록)이 더해진다. 상태 전환은 Orca 의 Task 명령을 그대로 쓴다(결정 160). 읽기는 tool이 아니라 resource 넷(현황 1단계, 시작할 수 있는 항목, 모델 선택 표, 항목 이력)으로 열린다. CLI는 MCP를 못 쓰는 호출자(hook, 사람 터미널, CI)용으로 얇게만 둔다.</p>
 
 <h3>패널이 보여 주는 것</h3>
 
@@ -369,9 +369,9 @@ svg .halo{fill:var(--card)}
 <li><strong>항목 상세</strong>: 오너가 한 말에서 시작해 분류, 전환, 증거, 연결된 PR과 결정까지.</li>
 </ol>
 
-<p>세 화면을 한 캔버스에서 확대하며 오가는 줌 화면은 보조로 따로 있다. 패널 맨 위에는 Orca 자신의 패널처럼 머리 행(새로 고침 · 터미널에서 전체 현황 · 더 보기)과 <code>전체 · 할 일 · 진행 중</code> 탭이 있고, 비어 있는 절은 한 줄로 접힌다. Orca 상태 표시줄에는 이름표와 같은 건수의 짧은 꼴(<code>SANGSOE  🚧 2 · 결정 2 · 🔄 5</code>)이 뜨고, 오너가 할 일이 있으면 붉게 바뀐다.</p>
+<p>패널 맨 위에는 Orca 자신의 패널처럼 머리 행(새로 고침 · 터미널에서 전체 현황 · 더 보기)과 <code>전체 · 할 일 · 진행 중</code> 탭이 있고, 비어 있는 절은 한 줄로 접힌다. Orca 상태 표시줄에는 이름표와 같은 건수의 짧은 꼴(<code>✨ SANGSOE  🚧 2 · 결정 2 · 🔄 5</code>)이 뜨고, 오너가 할 일이 있으면 붉게 바뀐다.</p>
 
-<p>상태는 📅 예정 · 🟢 준비됨 · 🔄 진행 중 · 🚧 막힘(누가 막는지 괄호에 적는다) · ⏸️ 보류 · ✅ 완료 · 🗑️ 취소, 플래그는 🙋 결정 필요 · 🚨 오류·멈춤 · 🔍 근거 부족이다. 이모지는 이 뜻 외에는 쓰지 않는다. 패널, 상태 표시줄, <code>sangsoe todo</code>의 "내가 할 일" 숫자는 같은 계산에서 나오므로 어디서 봐도 같다.</p>
+<p>상태는 📅 예정 · 🟢 준비됨 · 🔄 진행 중 · ⏳ 검증 대기 · 🚧 막힘(누가 막는지 괄호에 적는다) · ⏸️ 보류 · ✅ 완료 · 🗑️ 취소, 플래그는 🙋 결정 필요 · 🚨 오류·멈춤 · 🔍 근거 부족이다. 이모지는 이 뜻 외에는 쓰지 않는다. 패널, 상태 표시줄, <code>sangsoe todo</code>의 "내가 할 일" 숫자는 같은 계산에서 나오므로 어디서 봐도 같다.</p>
 
 <h3>오너가 직접 해야 하는 것</h3>
 
@@ -384,14 +384,14 @@ svg .halo{fill:var(--card)}
 
 <h3>큐는 어떻게 스스로 닫히나</h3>
 
-<p>오너 앞에 쌓인 것(결정, 오너가 할 일, 권한 대기)은 <strong>관측한 사실</strong> 아니면 <strong>기록된 답</strong>으로만 닫힌다. 오너가 터미널에 무엇을 쳤다는 것만으로는 닫히지 않는다. 입력은 "이 일에 대한 것일 수 있다"는 단서일 뿐이어서, 항목에는 <code>입력 확인됨 · 검증 중</code> 표지만 붙고 상태는 그대로다. 명령은 실패해도 쳐지고, 비슷한 다른 명령을 쳤을 수도 있고, "했다"고 적고 안 했을 수도 있기 때문이다.</p>
+<p>규칙은 두 갈래다. <strong>결정은 오너의 답으로 닫히고, 할 일은 검증으로 닫힌다.</strong> 결정은 오너의 판단 그 자체라서 그 결정을 가리키는 오너의 답이 닫는다. 할 일은 오너가 완료를 눌러도 ⏳ 검증 대기로 남았다가, 기계가 읽는 확인(머지됐는가, 워크플로가 성공했는가 같은 것)이 통과해야 ✅ 가 된다. 권한 대기는 그 세션이 다시 움직인 관측으로 풀린다. 오너가 터미널에 무엇을 쳤다는 것만으로는 닫히지 않는다. 입력은 "이 일에 대한 것일 수 있다"는 단서일 뿐이어서, 항목에는 <code>입력 확인됨 · 검증 중</code> 표지만 붙고 상태는 그대로다. 명령은 실패해도 쳐지고, 비슷한 다른 명령을 쳤을 수도 있고, "했다"고 적고 안 했을 수도 있기 때문이다.</p>
 
 <p>일은 세 층이 나눠 한다.</p>
 
 <ul>
 <li><strong>감지</strong> (hook과 monitor, 토큰 없음): 사실과 표지만 쓴다. 오너의 말, 증거, 권한 대기가 풀렸다는 관측(세션이 다시 움직임), 검증이 참이라는 <code>닫기 제안</code>. 항목은 닫지 않는다.</li>
 <li><strong>실행</strong> (코어 함수와 패널 버튼): <code>d012</code>처럼 번호를 붙인 답이나 패널 버튼처럼 어느 항목의 답인지 명시된 것만 처리한다. 결정의 게이트를 풀고, 패널의 "완료" 버튼으로 오너 항목을 닫는다.</li>
-<li><strong>판단</strong> (리드, 오케스트레이터): 닫기 제안과 증거를 보고 오너 항목을 닫는다.</li>
+<li><strong>판단</strong> (리드, 오케스트레이터): 닫기 제안과 증거를 보고, 완료 버튼을 누를 항목이라고 오너에게 알린다. 오너 항목은 오너가 닫는다(결정 162).</li>
 </ul>
 
 <p>오너가 할 일에는 선택적으로 "끝났다는 걸 기계가 읽는 조건"(머지됨, 워크플로 실행 성공, PR 존재, plugin 승인 등)을 달 수 있다. 이 조건이 참이 되면 오너가 채팅 한 줄 쓰지 않아도 할 일에서 사라지고 리드에게 닫기 제안이 간다. 조건이 없는 항목은 "검증 없음"으로 보이고 패널 버튼이 답이 된다. 원인이 사라진 결정(막던 작업이 닫힘, PR이 닫힘)은 답 없이 닫히고, 뒤늦게 온 답은 기록만 된다. 오너 입력 하나로는 어떤 항목도 답한 것으로 치지 않는다.</p>
@@ -416,7 +416,7 @@ svg .halo{fill:var(--card)}
 
 <h2 id="scope">6. 범위와 한계</h2>
 
-<p><strong>범위.</strong> PC 한 대마다 sangsoe가 하나씩 돈다. 각 sangsoe는 자기 PC의 로컬 worktree만 읽고 쓰고, sqlite 파일(<code>~/.local/share/sangsoe/sangsoe.db</code>)도 PC마다 따로 둔다. 이 파일을 PC 사이에 동기화하면 안 된다(WAL 모드가 네트워크 파일시스템에서 깨진다). 다른 PC에서 일을 시키려면 Orca의 relay로 그 PC에 닿고, 거기서는 <strong>그 PC의 sangsoe가 자기 worktree를 맡는다</strong>. 한 sangsoe가 원격 호스트의 worktree까지 건드리는 설계는 하지 않는다. 이유가 있다. 원격 행에서는 로컬 <code>git</code>과 포트 조회가 틀리게 읽히고, 게이트도 그 호스트의 Claude Code에 plugin이 설치돼 있어야만 걸리기 때문이다. 이 범위는 오너가 2026-11-09에 정한 결정이다(<a href="decisions.md">결정 88</a>). 코어는 Orca 행의 <code>hostId</code>가 <code>local</code>인 것만 후보·대상·판정에 쓰고, 나머지는 지우지도 멈춘 것으로 보지도 않으며 <code>remote_host</code>라는 사유로 남기기만 한다. 시작 점검은 그런 행이 보이면 "건드리지 않는다"는 경고를 한 줄 낸다. 첫 빌드는 relay를 연결한 채 다른 PC의 행이 어떻게 보이고 이 필터가 지켜지는지를 시험한다(시험 P11). 조사 메모(<code>_research/remote-env-impact.md</code>)는 원격 행에서 틀리게 동작할 곳을 한 군데로 좁혔고, 그 한 군데가 이 필터로 닫힌다.</p>
+<p><strong>범위.</strong> PC 한 대마다 sangsoe가 하나씩 돈다. 각 sangsoe는 자기 PC의 로컬 worktree만 읽고 쓰고, sqlite 파일(<code>~/.local/share/sangsoe/sangsoe.db</code>)도 PC마다 따로 둔다. 이 파일을 PC 사이에 동기화하면 안 된다(WAL 모드가 네트워크 파일시스템에서 깨진다). 다른 PC에서 일을 시키려면 Orca의 relay로 그 PC에 닿고, 거기서는 <strong>그 PC의 sangsoe가 자기 worktree를 맡는다</strong>. 한 sangsoe가 원격 호스트의 worktree까지 건드리는 설계는 하지 않는다. 이유가 있다. 원격 행에서는 로컬 <code>git</code>과 포트 조회가 틀리게 읽히고, 게이트도 그 호스트의 Claude Code에 plugin이 설치돼 있어야만 걸리기 때문이다. 이 범위는 오너가 2026-11-09에 정한 결정이다(<a href="decisions.md">결정 88</a>). 코어는 Orca 행의 <code>hostId</code>가 <code>local</code>인 것만 후보·대상·판정에 쓰고, 나머지는 지우지도 멈춘 것으로 보지도 않으며 <code>remote_host</code>라는 사유로 남기기만 한다. 시작 점검은 그런 행이 보이면 "건드리지 않는다"는 경고를 한 줄 낸다. 첫 빌드는 relay를 연결한 채 다른 PC의 행이 어떻게 보이고 이 필터가 지켜지는지를 시험한다(시험 P11). 비공개 조사 메모(저장소에 싣지 않는다)는 원격 행에서 틀리게 동작할 곳을 한 군데로 좁혔고, 그 한 군데가 이 필터로 닫힌다.</p>
 
 <figure id="fig3">
 <svg viewBox="0 0 800 400" role="img" aria-labelledby="d3t d3d">
@@ -473,20 +473,19 @@ svg .halo{fill:var(--card)}
 <figcaption>그림 3. 범위. PC마다 sangsoe가 하나씩 돌고, 두 PC를 잇는 것은 Orca relay뿐이다. 이 범위는 오너가 2026-11-09에 정한 결정이다(결정 88).</figcaption>
 </figure>
 
-<p><strong>구현 전에 재 봐야 할 것.</strong> 첫 빌드가 가장 먼저 아래를 시험한다. 설계가 틀리면 괄호 안의 대체 경로로 간다.</p>
+<p><strong>첫 빌드가 잰 것.</strong> 설계가 "구현 전에 재 봐야 할 것"으로 남긴 목록은 첫 빌드가 먼저 시험했다. 결과와 명령, 출력 발췌는 <a href="test-outcomes.md">test-outcomes.md</a> 의 행 하나씩에 있다.</p>
 
 <ul>
-<li>Orca plugin worker 안에서 <code>node:sqlite</code>가 열리는가 (실패하면 sqlite 접근만 CLI 호출로)</li>
-<li>worker 타이머가 정해진 간격으로 감시자를 돌리는가 (실패하면 Orca 자동화의 <code>--precheck</code>)</li>
-<li>패널이 Orca 안에서 실제로 그려지는 모양 (실패하면 상태 표시줄과 <code>sangsoe brief</code>)</li>
-<li>승인 뒤 worker가 계속 자율로 도는지, 재승인이 얼마나 자주 필요한지</li>
-<li>이미 시작된 Task의 재시작을 Orca가 거부하는지, 세 번 실패 차단이 걸리는지</li>
-<li>archive hook이 어느 자리에서 도는지, <code>orca.yaml</code>의 키 이름 (실패하면 훅 없이 id로 치우는 규칙이 전부 맡는다)</li>
-<li>활동 시각 필드의 뜻 (뜻이 안 맞으면 값이 바뀐 때를 직접 기록하는 방식으로)</li>
-<li>라벨 이벤트의 지연, 주석만 바뀐 줄을 가려내는 파서의 범위, 실제 PR로 돌려 본 등급 분포</li>
+<li>Orca plugin worker 안에서 <code>node:sqlite</code>가 열린다 (T1 통과, 대체 없음)</li>
+<li>worker 타이머가 정해진 간격으로 감시자를 돌린다 (T2 통과. Orca 자동화의 <code>--precheck</code> 대체는 쓰지 않는다)</li>
+<li>패널이 Orca 안에서 그려진다 (T3 통과)</li>
+<li>승인 뒤 worker 가 자율로 돌고, 재승인은 능력·명령·실행 단계가 바뀔 때만 든다 (T4 통과)</li>
+<li>Dispatch 를 가진 워커는 자기 Run 에 Task 를 만들 수 없다. 이중 시작 거부와 세 번 실패 차단은 미실행이라 시작 함수가 스스로 거른다 (T5, 결정 114)</li>
+<li><code>--force</code> 없는 <code>worktree rm</code> 은 더러운 worktree 를 지우지 않지만 푸시 안 된 커밋은 막지 않아, REAPER 가 먼저 검사한다. archive hook 의 동작은 미실행 (P6 부분 통과)</li>
+<li>활동 시각 필드는 일하는 세션에서 움직이지 않아, 멈춤 판정은 마지막 출력 시각을 쓴다 (P10)</li>
 </ul>
 
-<p>구현은 한 번에 짓고 한 번에 전환한다. 기존 도구(agent-skills)는 구축하는 동안 계속 쓰고, 전환 조건 46개가 모두 통과한 뒤에야 끈다. 하나라도 실패하면 끄지 않는다.</p>
+<p>아직 돌리지 않은 것: 여러 세션이 함께 도는 스모크, 라벨 이벤트의 지연과 실제 PR 로 돌려 본 등급 분포, 그리고 같은 표에 "미실행"으로 남은 행. 기존 도구(agent-skills)는 전환 조건 46개(<a href="switch-conditions.md">switch-conditions.md</a>)가 모두 통과한 뒤에야 끈다. 그 표에 증거가 빈 줄이 아직 있다.</p>
 
 <h2 id="more">7. 더 읽을 곳</h2>
 
@@ -495,7 +494,8 @@ svg .halo{fill:var(--card)}
 <li><a href="design-appendix.html">design-appendix.html</a>: 부록. <a href="design-appendix.html#role-cards">역할 카드</a> · <a href="design-appendix.html#signal-flow">신호 흐름</a> · <a href="design-appendix.html#schema">sqlite 스키마</a> · <a href="design-appendix.html#delivery">전달 규칙</a> · <a href="design-appendix.html#gates">게이트와 원칙</a> · <a href="design-appendix.html#mcp">MCP 인터페이스</a> · <a href="design-appendix.html#files">남는 파일과 plugin 경계</a></li>
 <li><a href="decisions.md">decisions.md</a>: 고른 것과 버린 대안, 이유</li>
 <li><a href="glossary.md">glossary.md</a>: 용어의 정본</li>
-<li><code>dashboard/</code>: 패널 시안과 <code>sangsoe brief</code> 출력 예시(<code>cli-samples.txt</code>)</li>
+<li><code>dashboard/hallmark-final/</code>: 패널 시안</li>
+<li><a href="test-outcomes.md">test-outcomes.md</a>: 첫 빌드 시험의 명령과 결과</li>
 </ul>
 
 </article>

@@ -1,4 +1,6 @@
-import type { ItemState, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, WaitsOn } from "../contract/index.ts";
+import type { ItemReading, ItemState, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, WaitsOn } from "../contract/index.ts";
+import { foldFacts } from "../graph/facts.ts";
+import { taskPr } from "../graph/task-pr.ts";
 import { waiterReading } from "../decision/held.ts";
 import { countsAsEvidence } from "../owner/marks.ts";
 import { decision } from "../store/views/decision.ts";
@@ -14,7 +16,7 @@ export interface ItemFacts {
   readonly task: string;
   readonly alias: string;
   readonly title: string;
-  readonly state: ItemState;
+  readonly state: ItemReading;
   readonly waitsOn: WaitsOn | null;
   /** When the item entered its state: last item_transition, else item_created. */
   readonly since: string | null;
@@ -37,7 +39,10 @@ export interface ItemFacts {
 }
 
 const ALARMS = new Set(["worker_stuck", "worker_dead", "ci_failed", "land_failed", "loop_detected", "decision_untracked"]);
+// The author's session is gone while the item waits on the merge: only the PR's own alarms still apply.
+const PR_ALARMS = new Set(["ci_failed", "land_failed"]);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+const latest = (a: string | null, b: string | null): string | null => (a === null ? b : b === null || Date.parse(a) >= Date.parse(b) ? a : b);
 
 const RANK: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
 export const rank = (p: Priority): number => RANK[p];
@@ -65,6 +70,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
   const created = new Map<string, StoredEvent>();
   const transition = new Map<string, StoredEvent>();
   const closedAt = new Map<string, string>();
+  const mergedAt = new Map<string, string>();
   const prio = new Map<string, Priority>();
   const prTask = new Map<string, string>();
   const prOpen = new Map<string, string>();
@@ -88,6 +94,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     } else if (e.type === "pr_merged" || e.type === "pr_closed") {
       const t = prTask.get(String(p.pr));
       if (t && prOpen.get(t) === p.pr) prOpen.delete(t);
+      if (t && e.type === "pr_merged") mergedAt.set(t, e.ts);
     } else if (countsAsEvidence(e) && e.entity === "task" && e.entity_id) evidence.add(e.entity_id);
     else if (e.type === "trigger_unclear") unclear.set(String(p.task), e.seq);
     if (ALARMS.has(e.type)) {
@@ -96,6 +103,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     }
   }
 
+  const prFacts = foldFacts(input.events);
   const decisions = decision(input);
   const ready = new Set(graph.ready(input).map((r) => r.task));
   const out: ItemFacts[] = [];
@@ -106,18 +114,33 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     const lead = str(x.lead) ?? OTHERS;
     const own = decisions.filter((d) => d.waiters.some((w) => w.task === t.id));
     const openDecisions = own.filter((d) => d.state === "open").map((d) => d.decision);
-    const state = stateOf(t, x.hold === true && str(x.review_trigger) !== null, waiterReading(t, input.orca.gates), ready.has(t.id));
+    const closed = stateOf(t, x.hold === true && str(x.review_trigger) !== null, waiterReading(t, input.orca.gates), ready.has(t.id));
+    // Decisions 175 and 178: the author's worker_done completes the Task in Orca before its PR merges.
+    const p = closed === "done" ? taskPr(t, prFacts) : null;
+    const prRead: ItemReading =
+      !p || p.state === "none" || p.state === "merged" ? closed : p.state === "open" ? "blocked" : p.state === "closed_unmerged" ? "pr_closed" : "unknown";
+    // Decision 181: an owner to-do closes on verification, whoever completed the Task.
+    const verifiedAt = prFacts.ownerVerify.get(t.id);
+    const state: ItemReading = prRead === "done" && verifiedAt === null ? "pending_verify" : prRead;
+    const prWait = p !== null && prRead !== "done";
     const last = moved.get(t.id) ?? 0;
     // An alarm stands until the item moves again.
-    const standing = [...(alarms.get(t.id) ?? new Map<string, number>())].filter(([, seq]) => seq > last).map(([type]) => type);
+    const standing = [...(alarms.get(t.id) ?? new Map<string, number>())]
+      .filter(([type, seq]) => seq > last && (!prWait || PR_ALARMS.has(type)))
+      .map(([type]) => type);
     const undelivered = own.filter((d) => d.undelivered).map((d) => d.decision);
-    const waitsOn = (openDecisions.length > 0 || undelivered.length > 0 ? "owner" : (str(x.waits_on) as WaitsOn | null)) ?? null;
+    const waitsOn: WaitsOn | null =
+      state === "pr_closed"
+        ? "lead"
+        : prWait
+          ? "reviewer"
+          : ((openDecisions.length > 0 || undelivered.length > 0 ? "owner" : (str(x.waits_on) as WaitsOn | null)) ?? null);
     out.push({
       task: t.id,
       alias: String(c.payload.alias),
       title: t.title ?? t.id,
       state,
-      waitsOn: state === "blocked" ? waitsOn : null,
+      waitsOn: state === "blocked" || state === "pr_closed" ? waitsOn : null,
       since: transition.get(t.id)?.ts ?? c.ts,
       lead,
       priority: prio.get(t.id) ?? (str(x.priority) as Priority | null) ?? prio.get(`lead:${lead}`) ?? "P2",
@@ -128,13 +151,14 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       reviewTrigger: str(x.review_trigger),
       lastReason: str(transition.get(t.id)?.payload.reason),
       assignee: t.assignee ?? null,
-      pr: prOpen.get(t.id) ?? null,
+      pr: prOpen.get(t.id) ?? (prWait ? (p?.prs[0] ?? null) : null),
       openDecisions,
       undelivered,
       alarms: state === "done" || state === "cancelled" ? [] : standing,
       unclear: (unclear.get(t.id) ?? 0) > last,
       evidenceShort: state === "done" && !evidence.has(t.id),
-      closedAt: state === "done" ? (closedAt.get(t.id) ?? null) : null,
+      // A worker_done or a lead's task-update closes a Task with no item_transition (decision 175, S7).
+      closedAt: state === "done" ? latest(closedAt.get(t.id) ?? mergedAt.get(t.id) ?? t.completedAt ?? null, verifiedAt ?? null) : null,
     });
   }
   return out;

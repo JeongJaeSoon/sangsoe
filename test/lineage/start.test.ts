@@ -3,10 +3,19 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { itemNew } from "../../cli/commands/item-new.ts";
+import { handle as itemCreate } from "../../claude-plugin/mcp/tools/item_create.ts";
 import { handle } from "../../claude-plugin/mcp/tools/start_unit.ts";
 import {
+  ADVISOR_FROM_SETTING,
+  ADVISOR_NOT_APPLIED,
   checkLineage,
+  classKind,
   createOrcaAdapter,
+  resolveModel,
+  UNIT_CLASSES,
+  dedupeKey,
+  EVENTS,
   type ExecResult,
   MODEL_CATALOG,
   MODEL_POLICY,
@@ -46,6 +55,8 @@ type Setup = {
   /** What run-current answers for the calling session. */
   heldRun?: string | null;
   newTaskStatus?: string;
+  /** The role line task-list --full shows on task_new's spec; worker by default. */
+  existingRole?: string;
   /** What `dispatch-show --task task_new` answers after the start. */
   newDispatch?: "missing";
   taskList?: () => ExecResult;
@@ -100,7 +111,9 @@ function harness(s: Setup = {}) {
       "orchestration-run-current": ok({ runId: s.heldRun === undefined ? RUN : s.heldRun }),
       "orchestration-task-create": ok({ task: { id: NEW_TASK } }),
       "orchestration-task-list": () =>
-        s.taskList ? s.taskList() : ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t" }] }),
+        s.taskList
+          ? s.taskList()
+          : ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t", spec: `sangsoe-role: ${s.existingRole ?? "worker"}\nbrief` }] }),
       "orchestration-worker-start": () => (s.workerStart ? s.workerStart() : ok({ dispatchId: "ctx_new", worktreeId: CHILD_TREE })),
       ...s.replies,
     }),
@@ -125,7 +138,14 @@ const request = (over: Partial<StartRequest> = {}): StartRequest => ({
 type H = ReturnType<typeof harness>;
 /** The calling session runs inside the api worktree (PARENT_TREE's path in the recording). */
 const CALLER_CWD = "/home/dev/src/api/packages/web";
-const ports = (h: H, slots: () => number = () => 1, cwd = CALLER_CWD) => ({ orca: h.orca, store: h.store, slots, cwd: () => cwd });
+// The owner's advisorModel is fixed here so the launch does not depend on this machine's settings.
+const ports = (h: H, slots: () => number = () => 1, cwd = CALLER_CWD) => ({
+  orca: h.orca,
+  store: h.store,
+  slots,
+  cwd: () => cwd,
+  advisorSetting: () => true,
+});
 async function start(h: H, req: StartRequest = request(), slots: () => number = () => 1) {
   return startUnit(ports(h, slots), req);
 }
@@ -318,7 +338,15 @@ test("worker_start_dispatched (1): too little depth → refused, one start_refus
 test("worker_start_dispatched (2): enough depth → a Dispatch and no event", async () => {
   const h = harness();
   const out = await start(h, request({ maxDepth: 3 }));
-  assert.deepEqual(out, { kind: "started", taskId: NEW_TASK, dispatchId: "ctx_new", worktreeId: CHILD_TREE, notes: [] });
+  const worker = MODEL_POLICY.worker;
+  assert.deepEqual(out, {
+    kind: "started",
+    taskId: NEW_TASK,
+    dispatchId: "ctx_new",
+    worktreeId: CHILD_TREE,
+    launch: { model: MODEL_CATALOG.find((c) => c.tier === worker.tier)?.alias, effort: worker.effort },
+    notes: [ADVISOR_FROM_SETTING],
+  });
   assert.equal(h.store.events().length, 0);
   const ws = h.called("worker-start")[0] ?? [];
   assert.equal(flag(ws, "worktree"), "new-child");
@@ -391,6 +419,33 @@ test("a failed start that reports a Dispatch writes worker_dead{start_failed}", 
   assert.equal(dead[0]?.entity_id, "ctx_dead");
 });
 
+test("decision 178: a Task Orca released at its predecessor's worker_done waits while that PR is open, starts once it merges", async () => {
+  const rows = () =>
+    ok({
+      tasks: [
+        { id: "task_pred", status: "completed", title: "p", deps: "[]" },
+        { id: NEW_TASK, status: "ready", title: "t", deps: JSON.stringify(["task_pred"]), spec: "sangsoe-role: worker\nbrief" },
+      ],
+    });
+  const h = harness({ taskList: rows });
+  h.store.append({ type: "pr_opened", source: "test", payload: { pr: "acme/api#41", task: "task_pred" } });
+  const held = await start(h, request({ task: { id: NEW_TASK } }));
+  assert.equal(held.kind === "waiting" && held.why, "not_ready");
+  assert.equal(h.called("worker-start").length, 0);
+  assert.equal(h.signals().length, 0, "a wait is not a refusal");
+
+  h.store.append({ type: "pr_merged", source: "test", payload: { pr: "acme/api#41", merge_sha: "a".repeat(40) } });
+  assert.equal((await start(h, request({ task: { id: NEW_TASK } }))).kind, "started");
+});
+
+test("decision 178: start_unit holds only on a merge wait in its own Run; another Run's predecessor and a hold are queue-monitor's", async () => {
+  const h = harness();
+  const [pred, succ] = ["item:task_other_run", `item:${NEW_TASK}`];
+  h.store.append({ type: "edge_added", source: "GRAPH", payload: { pred, succ, kind: "blocks" }, dedupe_key: dedupeKey(EVENTS.edge_added, pred, succ, "blocks") });
+  h.store.append({ type: "item_extra_set", source: "test", payload: { task: NEW_TASK, hold: true } });
+  assert.equal((await start(h, request({ task: { id: NEW_TASK } }))).kind, "started");
+});
+
 // ---- task-create, first prompt, references ----
 
 test("a new Task goes through task-create --deps on the requester's Run: role line first, late answers after the brief", async () => {
@@ -408,11 +463,56 @@ test("a lead's Task carries the lead role line", async () => {
   assert.match(flag(h.called("task-create")[0] ?? [], "spec") ?? "", /^sangsoe-role: lead\n/);
 });
 
+test("an existing Task starts only as the role its spec's first line names, for both roles", async () => {
+  // Orca cannot rewrite a spec: an item written for a worker would start a lead as a worker.
+  const asLead = harness();
+  assertRefused(asLead, await start(asLead, request({ requester: orchestrator, childRole: "lead", task: { id: NEW_TASK } })), "lineage_invalid");
+  const asWorker = harness({ existingRole: "lead" });
+  assertRefused(asWorker, await start(asWorker, request({ task: { id: NEW_TASK } })), "lineage_invalid");
+
+  const lead = harness({ existingRole: "  lead " });
+  assert.equal((await start(lead, request({ requester: orchestrator, childRole: "lead", task: { id: NEW_TASK } }))).kind, "started");
+  const worker = harness();
+  assert.equal((await start(worker, request({ task: { id: NEW_TASK } }))).kind, "started");
+  assert.ok((worker.called("task-list")[0] ?? []).includes("--full"), "the spec comes from task-list --full");
+});
+
+test("item_create writes the role it is given as the spec's first line; worker by default", async () => {
+  const specs: string[] = [];
+  const fake = createFakeOrca({
+    replies: {
+      "orchestration-task-create": (args: readonly string[]) => {
+        specs.push(flag(args, "spec") ?? "");
+        return ok({ taskId: `task_${specs.length}` });
+      },
+    },
+  });
+  const ports = { orca: createOrcaAdapter(fake.exec), store: Store.open({ path: ":memory:" }) };
+  const base = { runId: RUN, spec: "brief", who: "lead:api", doneWhen: "merged" };
+  assert.ok((await itemCreate({ ...base, role: "lead" }, ports)).ok);
+  assert.ok((await itemCreate(base, ports)).ok);
+  assert.deepEqual(specs, ["sangsoe-role: lead\nbrief", "sangsoe-role: worker\nbrief"]);
+  const bad = await itemCreate({ ...base, role: "orchestrator" }, ports);
+  assert.equal(bad.ok ? "" : bad.refusal.code, "invalid_input");
+  assert.equal(specs.length, 2, "no Task for a role off the list");
+
+  const cli = { run: RUN, spec: "brief", who: "lead:api", "done-when": "merged" };
+  assert.ok((await itemNew({ ...cli, role: "lead" }, ports)).ok);
+  const badCli = await itemNew({ ...cli, role: "orchestrator" }, ports);
+  assert.equal(badCli.ok ? "" : badCli.refusal.code, "invalid_input");
+  assert.deepEqual(specs.slice(2), ["sangsoe-role: lead\nbrief"], "the CLI entrance takes the same role");
+
+  const empty = await itemCreate({ ...base, role: "" }, ports);
+  const emptyCli = await itemNew({ ...cli, role: "" }, ports);
+  assert.deepEqual([empty.ok ? "" : empty.refusal.code, emptyCli.ok ? "" : emptyCli.refusal.code], ["invalid_input", "invalid_input"], "an empty role is refused by both");
+  assert.equal(specs.length, 3, "no Task for an empty role");
+});
+
 test("ticket references attach to the new worktree; a failure does not stop the start", async () => {
   const h = harness({ replies: { "reference-add": fail("no_such_worktree") } });
   const out = await start(h, request({ references: ["https://tracker.example/acme-1"] }));
   assert.equal(out.kind, "started");
-  assert.equal(out.kind === "started" && out.notes.length, 1);
+  assert.equal(out.kind === "started" && out.notes.filter((n) => n.startsWith("reference add")).length, 1);
   const ref = h.fake.calls.find((c) => c[1] === "reference" && c[2] === "add") ?? [];
   assert.equal(flag(ref, "worktree"), CHILD_TREE);
   assert.ok(ref.includes("https://tracker.example/acme-1"));
@@ -459,7 +559,8 @@ test("decision 164: worker-start gets the role row's alias and effort; an escala
   assert.equal(r.ok, true);
   const ws2 = h2.called("worker-start")[0] ?? [];
   assert.equal(flag(ws2, "model"), MODEL_CATALOG.find((c) => c.tier === MODEL_POLICY.design.thenTier)?.alias);
-  assert.equal(flag(ws2, "effort"), top);
+  const target = MODEL_CATALOG.find((c) => c.tier === MODEL_POLICY.design.thenTier);
+  assert.equal(flag(ws2, "effort"), target?.apiDefaultEffort, "the new tier starts at its own effort (decision 172)");
   const changed = h2.store.events({ type: "model_changed" });
   assert.equal(changed.length, 1);
   assert.equal(changed[0]?.payload.reason, "max still misses the race");
@@ -480,6 +581,132 @@ test("MCP start_unit refuses a model choice off the table before calling Orca", 
     assert.equal(r.ok === false && r.refusal.code, "invalid_input", JSON.stringify(input));
     assert.equal(h.fake.calls.length, 0);
   }
+});
+
+// ---- decision 187: unit class → main model + advisor at launch ----
+
+const aliasOf = (tier: string | undefined) => MODEL_CATALOG.find((c) => c.tier === tier)?.alias;
+const contextDoc = JSON.parse(readFileSync(new URL("../fake-orca/scenarios/local/agent-context.json", import.meta.url), "utf8"));
+/** The recorded command schema plus the `--advisor` an Orca with an advisor launch option would list. */
+const withAdvisor = {
+  "agent-context": () => {
+    const doc = structuredClone(contextDoc);
+    doc.commands.find((c: { command: string }) => c.command === "orchestration worker-start").flags.push("advisor");
+    return { code: 0, stdout: JSON.stringify(doc), stderr: "" };
+  },
+};
+const unitBase = { role: "lead", worktreeId: PARENT_TREE, taskId: "task_lead", runId: RUN, childRole: "worker", spec: "brief" };
+
+test("decision 187: each unit class launches its row's main model and, through Orca's option, its advisor", async () => {
+  for (const cls of UNIT_CLASSES) {
+    const row = MODEL_POLICY[classKind(cls)];
+    const h = harness({ replies: withAdvisor });
+    const r = await handle({ ...unitBase, class: cls }, { ...ports(h), advisorSetting: () => false });
+    assert.equal(r.ok, true, cls);
+    const ws = h.called("worker-start")[0] ?? [];
+    assert.equal(flag(ws, "model"), aliasOf(row.tier), `${cls} model`);
+    assert.equal(flag(ws, "effort"), row.effort, `${cls} effort`);
+    assert.equal(ws.includes("--advisor") ? flag(ws, "advisor") : undefined, aliasOf(row.advisor), `${cls} advisor`);
+  }
+});
+
+test("decision 187: without Orca's option the advisor flag is never sent; the owner's setting or the worker's floor decides", async () => {
+  const worker = MODEL_POLICY.worker;
+  const h = harness();
+  const r = await handle(unitBase, { ...ports(h), advisorSetting: () => true });
+  const ws = h.called("worker-start")[0] ?? [];
+  assert.ok(!ws.includes("--advisor"));
+  assert.equal(flag(ws, "model"), aliasOf(worker.tier));
+  assert.ok(r.ok && (r.value as { notes: string[] }).notes.includes(ADVISOR_FROM_SETTING));
+  assert.deepEqual(h.store.events({ type: "model_changed" }), []);
+
+  const h2 = harness();
+  const r2 = await handle(unitBase, { ...ports(h2), advisorSetting: () => false });
+  const ws2 = h2.called("worker-start")[0] ?? [];
+  assert.ok(!ws2.includes("--advisor"));
+  assert.equal(flag(ws2, "model"), aliasOf(worker.withoutAdvisor), "a worker never runs its main tier without an advisor");
+  assert.equal(flag(ws2, "effort"), MODEL_CATALOG.find((c) => c.tier === worker.withoutAdvisor)?.apiDefaultEffort);
+  assert.ok(r2.ok && (r2.value as { notes: string[] }).notes.includes(ADVISOR_NOT_APPLIED));
+  const changed = h2.store.events({ type: "model_changed" });
+  assert.equal(changed.length, 1);
+  assert.equal(changed[0]?.payload.reason, ADVISOR_NOT_APPLIED);
+});
+
+test("decision 187: a choice whose advisor ranks below its main tier is refused before any Task exists", async () => {
+  const h = harness();
+  const resolved = resolveModel("worker");
+  assert.ok(resolved.ok);
+  const bad = { ...resolved.value, advisor: aliasOf("fast") ?? "", advisorTier: "fast" as const };
+  const out = await startUnit({ ...ports(h), advisorSetting: () => true }, request({ model: bad }));
+  assertRefused(h, out, "model_invalid");
+  assert.equal(h.called("task-create").length, 0);
+});
+
+test("decision 187: item_create records the class and start_unit starts the existing Task on it; bad classes are refused", async () => {
+  const h = harness({ replies: withAdvisor });
+  const made = await itemCreate({ runId: RUN, spec: "brief", who: "lead:x", doneWhen: "merged", class: "hard" }, { orca: h.orca, store: h.store });
+  assert.ok(made.ok);
+  const r = await handle({ ...unitBase, spec: undefined, task: NEW_TASK }, { ...ports(h), advisorSetting: () => false });
+  assert.equal(r.ok, true);
+  const ws = h.called("worker-start")[0] ?? [];
+  assert.equal(flag(ws, "model"), aliasOf(MODEL_POLICY.hard.tier));
+  assert.equal(flag(ws, "advisor"), aliasOf(MODEL_POLICY.hard.advisor));
+
+  for (const input of [{ class: "huge" }, { class: "hard", role: "lead" }]) {
+    const h2 = harness();
+    const bad = await itemCreate({ runId: RUN, spec: "brief", who: "lead:x", doneWhen: "merged", ...input }, { orca: h2.orca, store: h2.store });
+    assert.equal(bad.ok === false && bad.refusal.code, "invalid_input", JSON.stringify(input));
+    const cli = await itemNew({ run: RUN, spec: "brief", who: "lead:x", "done-when": "merged", ...input }, { orca: h2.orca, store: h2.store });
+    assert.equal(cli.ok === false && cli.refusal.code, "invalid_input", JSON.stringify(input));
+    assert.equal(h2.called("task-create").length, 0);
+  }
+  for (const input of [{ class: "huge" }, { class: "hard", kind: "review" }, { class: "hard", childRole: "lead" }]) {
+    const h3 = harness();
+    const r3 = await handle({ ...unitBase, ...input }, ports(h3));
+    assert.equal(r3.ok === false && r3.refusal.code, "invalid_input", JSON.stringify(input));
+    assert.equal(h3.fake.calls.length, 0);
+  }
+});
+
+test("decision 187: sangsoe item new --class records the class start_unit reads; an explicit class or kind beats it", async () => {
+  const h = harness({ replies: withAdvisor });
+  const made = await itemNew({ run: RUN, spec: "brief", who: "lead:x", "done-when": "merged", class: "hard" }, { orca: h.orca, store: h.store });
+  assert.ok(made.ok);
+  const stored = h.store.events({ type: "item_extra_set" }).map((e) => e.payload.unit_class);
+  assert.deepEqual(stored, ["hard"]);
+  const byId = { ...unitBase, spec: undefined, task: NEW_TASK };
+  for (const [over, kind] of [
+    [{}, "hard"],
+    [{ class: "default" }, "worker"],
+    [{ kind: "review" }, "review"],
+  ] as const) {
+    const h2 = harness({ replies: withAdvisor });
+    h2.store.append({ type: "item_extra_set", source: "core:item", payload: { task: NEW_TASK, unit_class: "hard" }, entity: "task", entity_id: NEW_TASK });
+    const r = await handle({ ...byId, ...over }, ports(h2));
+    assert.equal(r.ok, true, JSON.stringify(over));
+    const ws = h2.called("worker-start")[0] ?? [];
+    assert.equal(flag(ws, "model"), aliasOf(MODEL_POLICY[kind].tier), JSON.stringify(over));
+    assert.equal(ws.includes("--advisor") ? flag(ws, "advisor") : undefined, aliasOf(MODEL_POLICY[kind].advisor), JSON.stringify(over));
+  }
+});
+
+test("decision 187: a class given with a new spec stays with the Task for a restart by id", async () => {
+  const h = harness();
+  const r = await handle({ ...unitBase, class: "hard" }, ports(h));
+  assert.equal(r.ok, true);
+  assert.deepEqual(
+    h.store.events({ type: "item_extra_set" }).map((e) => [e.payload.task, e.payload.unit_class]),
+    [[NEW_TASK, "hard"]],
+  );
+});
+
+test("decision 187: a choice with an advisor but no advisor tier is refused, since its pairing cannot be checked", async () => {
+  const h = harness();
+  const resolved = resolveModel("worker");
+  assert.ok(resolved.ok);
+  const { advisorTier: _t, ...noTier } = resolved.value;
+  const out = await startUnit(ports(h), request({ model: noTier }));
+  assertRefused(h, out, "model_invalid");
 });
 
 // ---- unit_lineage_complete on fake Orca ----

@@ -6,6 +6,7 @@ import { Store } from "../store/store.ts";
 import type { TierConfig } from "../verify/verify-tier.ts";
 import { mergeConfirm } from "./github.ts";
 import { type LandDeps, type LandInput, land } from "./land.ts";
+import { tierOfPr } from "./tier.ts";
 
 const REPO = "acme/api";
 const PR = "acme/api#12";
@@ -77,7 +78,7 @@ const verdict = (store: Store, head = HEAD, actOn = 0, reviewer = "codex") =>
     type: "review_verdict",
     source: "review record",
     actor: reviewer,
-    dedupe_key: dedupeKey(EVENTS.review_verdict, PR, head, reviewer),
+    dedupe_key: dedupeKey(EVENTS.review_verdict, PR, head, reviewer, String(actOn)),
     payload: { pr: PR, head_sha: head, act_on: actOn, reviewer, author: "alice" },
   });
 const stackEdge = (store: Store, pred: string, succ: string) =>
@@ -103,6 +104,27 @@ test("all checks pass and the four conditions hold: gh pr merge --auto, land_req
   assert.equal(r.value.tier, "V2");
   assert.deepEqual(h.merges, [{ repo: REPO, pr: 12, head: HEAD }]);
   assert.deepEqual(landRows(h.store), ["land_requested:"]);
+});
+
+test("GitHub calls keep the repo's given case; only the event key is lowercased", async () => {
+  // A fine-grained token answers 404 for a private repo named in another case.
+  const given = "Acme/API";
+  const h = harness(Object.fromEntries(Object.entries(routes()).map(([k, v]) => [k.replace(REPO, given), v])));
+  ready(h.store);
+  const r = await land(input({ repo: given }), h.deps);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.equal(r.value.pr, PR);
+  assert.ok(h.gh.paths.every((p) => p.startsWith(`repos/${given}/`)), h.gh.paths.join("\n"));
+  assert.deepEqual(h.merges, [{ repo: given, pr: 12, head: HEAD }]);
+
+  h.store.append({ type: "main_red", source: "pr-monitor", payload: { repo: REPO, sha: "d".repeat(40), run_id: "77" } });
+  const frozen = await land(input({ repo: given }), h.deps);
+  assert.equal(frozen.ok ? "" : frozen.refusal.code, "main_red", "the stored lowercase main state still matches");
+
+  const tier = await tierOfPr(h.deps, { repo: given, pr: 12 });
+  assert.ok(tier.ok, JSON.stringify(tier));
+  assert.equal(tier.value.pr, PR);
+  assert.ok(h.gh.paths.every((p) => p.startsWith(`repos/${given}/`)));
 });
 
 test("a condition false: land_requested{merge_on_approval} and no merge", async () => {

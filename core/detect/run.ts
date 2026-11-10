@@ -3,6 +3,7 @@ import { createGhClient, memoryGhCache } from "../gh/client.ts";
 import { readLandConfig } from "../land/ports.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
+import { holdStore } from "../store/held.ts";
 import { Store } from "../store/store.ts";
 import { VERSION } from "../version.ts";
 import { nullChatProvider } from "./chat/provider.ts";
@@ -20,6 +21,8 @@ import { orcaRound } from "./orca/round.ts";
 import { readWatchConfig } from "./pr/config.ts";
 import { prRound } from "./pr/round.ts";
 import { queueRound, type StallReport, stallCheck } from "./queue/round.ts";
+import { hostRereadPending } from "../store/backup.ts";
+import { rereadHostRows } from "./rebuild.ts";
 import { resourceRound } from "./resource/round.ts";
 
 /** The one table both entrances run: the worker's timer rounds and `sangsoe monitor run <name>`. */
@@ -63,27 +66,68 @@ export type MonitorRunner = {
   close(): void;
 };
 
-/** Real deps over one open store. `dryRun` reads the store but never appends, writes to Orca nor calls a writing function. */
+/**
+ * Real deps over one held store, opened again when its file changes (decision 191). `dryRun` reads
+ * the store but never appends, writes to Orca nor calls a writing function.
+ */
 export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: string } = {}): MonitorRunner {
-  const store = Store.open(o.dbPath ? { path: o.dbPath } : o.home ? { home: o.home } : {});
   const exec = nodeExec(30_000);
   const orca = createOrcaAdapter(exec);
-  // One cache for the runner's life, so the budget carries from round to round.
+  // One cache and one start time for the runner's life, so the budget carries from round to round.
   const ghCache = memoryGhCache();
-  const deps: MonitorDeps = {
-    orca,
-    exec,
-    events: (f) => store.events(f),
-    ...(o.dryRun ? {} : { append: (e) => store.append(e), core: { store, orca } }),
-    now: () => Date.now(),
-    config: DEFAULT_MONITOR_CONFIG,
-    chat: nullChatProvider,
-    sample: () => sampleLoad(),
-    gh: createGhClient({ exec, cache: ghCache, now: () => Date.now() }),
-    ghBudget: () => ghCache.budget("core"),
-    watch: () => readWatchConfig(o.home),
-    tier: () => readLandConfig(o.home).tier,
-    coreVersion: VERSION,
+  const openedAt = Date.now();
+  const held = holdStore(
+    () => Store.open(o.dbPath ? { path: o.dbPath } : o.home ? { home: o.home } : {}),
+    (store) => {
+      const deps: MonitorDeps = {
+        orca,
+        exec,
+        events: (f) => store.events(f),
+        ...(o.dryRun ? {} : { append: (e) => store.append(e), core: { store, orca } }),
+        now: () => Date.now(),
+        openedAt,
+        config: DEFAULT_MONITOR_CONFIG,
+        chat: nullChatProvider,
+        sample: () => sampleLoad(),
+        gh: createGhClient({ exec, cache: ghCache, now: () => Date.now() }),
+        ghBudget: () => ghCache.budget("core"),
+        watch: () => readWatchConfig(o.home),
+        tier: () => readLandConfig(o.home).tier,
+        coreVersion: VERSION,
+      };
+      return { deps, run: afterHostReread(deps, () => !o.dryRun && hostRereadPending(store.events({ type: "signal" }))) };
+    },
+  );
+  return {
+    run: (name, signal) => held.use((b) => b.run(name, signal)),
+    stall: () => held.use((b) => stallCheck(b.deps)),
+    close: () => held.close(),
   };
-  return { run: (name, signal) => runMonitor(name, deps, signal), stall: () => stallCheck(deps), close: () => store.close() };
+}
+
+/**
+ * After a lost database, the first round of a runner waits for one reread of the host rows, so
+ * the rounds after it see those rows as known and act only on what is new (decision 184). A reread
+ * another caller aborted is started again under this caller's signal; a caller aborted before the
+ * reread completes runs no round.
+ */
+export function afterHostReread(deps: MonitorDeps, pending: () => boolean): MonitorRunner["run"] {
+  let reread: Promise<unknown> | null = null;
+  const firstReread = async (signal?: AbortSignal): Promise<boolean> => {
+    while (pending()) {
+      if (signal?.aborted) return false;
+      const mine = reread === null;
+      reread ??= rereadHostRows(deps, signal).finally(() => {
+        reread = null;
+      });
+      await reread;
+      // Our own reread ran to its end and still left it owed (no `append`): stop rather than spin.
+      if (mine && pending()) return false;
+    }
+    return true;
+  };
+  return async (name, signal) => {
+    if (await firstReread(signal)) return runMonitor(name, deps, signal);
+    return { monitor: name, planned: [], written: [], unseen: ["host rows not read again yet"], calls: [], aborted: true, acts: [] };
+  };
 }

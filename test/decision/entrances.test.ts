@@ -36,6 +36,22 @@ test("the parsers refuse malformed input before anything runs", () => {
   }
 });
 
+test("S4: a caller cannot claim the hook or button link; only their own entrances set it", async () => {
+  for (const linked of ["hook", "button"]) {
+    const r = parseDecisionAnswer({ decision: "d001", answer: "a", owner_action: 1, linked_by: linked });
+    assert.equal(r.ok ? "" : r.refusal.code, "bad_input", linked);
+  }
+  const both = await expectSameViaBothEntrances({
+    tool: "decision_answer",
+    input: { decision: "d007", answer: "a", owner_action: 1, linked_by: "hook" },
+    argv: ["decision", "answer", "--decision", "d007", "--answer", "a", "--owner-action", "1", "--linked-by", "hook"],
+  });
+  assert.deepEqual(both, {
+    ok: false,
+    refusal: { code: "bad_input", reason: "linked_by: expected orchestrator|observed", fix: "pass linked_by as orchestrator|observed" },
+  });
+});
+
 test("a malformed call opens no store: the deps factory is never called", async () => {
   const never = () => assert.fail("deps opened for a malformed call");
   assert.ok(!(await decisionOpenFrom({ subject: "i012", question: "q" }, never)).ok);

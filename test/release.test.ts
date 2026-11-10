@@ -29,3 +29,20 @@ test("the release tarball's file list carries the build, both plugins and the ma
     assert.ok(pkg.files.includes(want), `package.json files lacks ${want}`);
   }
 });
+
+// U46 finding 1: the packaging test proves expand in CI, but only the release job sees the tarball users get.
+test("the release smoke expands both bundled flows from the packed tree with an empty HOME", () => {
+  const yml = readFileSync(join(ROOT, ".github/workflows/release.yml"), "utf8");
+  const smoke = yml.split(/\n {6}- name: /).find((s) => s.startsWith("Smoke-test the packed tree"));
+  assert.ok(smoke, "release.yml has no smoke step");
+  // Step counts as in test/packaging.test.ts: an expand that answers with the wrong plan fails too.
+  for (const [flow, steps] of [["ship-change", 6], ["ship-batch", 3]] as const) {
+    assert.ok(smoke.includes(`= "${flow} ${steps}"`), `smoke does not check ${flow}'s flow name and ${steps} steps`);
+    const line = smoke.split("\n").find((l) => l.includes(`--template ${flow}`));
+    assert.ok(line, `smoke does not expand ${flow}`);
+    assert.match(line, /HOME="\$\(mktemp -d\)"/, `${flow}: HOME is not an empty directory`);
+    assert.match(line, /smoke\/package\/dist\/cli\/main\.js graph expand /, `${flow}: not run from the packed tree`);
+    assert.match(line, /--dry-run/, `${flow}: would write to Orca`);
+  }
+  assert.match(smoke, /set -euo pipefail/, "a failed expand must fail the step");
+});

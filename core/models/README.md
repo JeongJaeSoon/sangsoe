@@ -7,7 +7,9 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 - **정책(`POLICY`)**: 일의 종류(`Kind`) → tier · effort · effort 사다리 · 다음 tier · 승격 조건 · 인용한 가이드 문장. 가이드 문구가 바뀌면 이 행만 바뀐다. 정책 행은 tier 만 적고 모델 이름이나 버전을 적지 않는다.
 - **변경 이력(`CHANGELOG`)**: 날짜 · 무엇이 바뀌었나 · 출처 · 결정 번호. git 없이 읽힌다.
 
-`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort` 로 푼다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다.
+정책 행은 advisor tier(`advisor`, 다음 tier 로 옮긴 뒤는 `thenAdvisor`)와, advisor 를 붙일 수 없을 때의 본 tier(`withoutAdvisor`)도 적는다(결정 187). `pairing` 이 짝을 본다: advisor tier 는 본 tier 와 같거나 위이고, fast tier 는 advisor 가 되지 않는다. 워커 단위의 class(`UNIT_CLASSES`)는 `CLASS_KIND` 로 행 하나를 가리키고, 서브에이전트가 쓸 tier 는 `SUBAGENTS` 다(결정 188).
+
+`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort`·advisor 로 풀고, `launch` 가 그 advisor 가 닿는 길(Orca 의 옵션, 오너 설정 `advisorModel`, 없음)에 맞춰 시작 인자를 정한다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다. 옮긴 tier 는 카탈로그의 API 기본 effort 에서 시작한다(frontier 는 `high`, 결정 172).
 
 ## 읽는 곳
 
@@ -15,14 +17,14 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 |---|---|---|
 | `core/start/start.ts` (`start_unit`) | 정책 + 카탈로그 | `resolve` → `worker-start --model <alias> --effort <level>`, 승격은 `model_changed` 로 기록 |
 | MCP resource `models` | 표 전체 | 판단 층(skill·agent)은 이 resource 로만 읽는다. 표를 본문에 옮겨 적지 않는다 |
-| `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice |
+| `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice, `advisorModel` 키가 없거나 advisor 가 꺼져 있으면 notice(정하는 것은 오너) |
 | `claude-plugin/agents/*.md` frontmatter `model:`·`effort:` | 정책의 역할 행 | `test/model-table.test.ts` 가 표의 alias·effort 와 같은지 본다 |
 
 ## 갱신 절차
 
 세션이 한다. 타이머가 이 파일을 쓰는 일은 없다. `doctor` 의 `model-table` 행이 warn·notice 를 내면 시작한다.
 
-1. 다시 읽을 쪽: `SOURCES` 의 네 URL(Choosing a model · Models overview · Claude Code model-config · sub-agents).
+1. 다시 읽을 쪽: `SOURCES` 의 URL(Choosing a model · Models overview · Claude Code model-config · sub-agents · effort · Claude Code advisor · API advisor tool).
 2. 고칠 곳을 고른다.
    - alias 가 새 버전을 가리킬 뿐이면: 카탈로그 행의 `currentId`·가격·`verified` 만 고친다. 코드와 정책은 그대로다.
    - 새 tier, 역할·가격 변화: 카탈로그 행을 고치거나 더한다(`TIERS` 도).

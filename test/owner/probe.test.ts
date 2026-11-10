@@ -37,6 +37,16 @@ test("each kind reads through its port and reports what it observed", async () =
   assert.equal((await readProbe({ kind: "pr_merged", pr: "acme/api#1" }, ports)).kind, "unreadable", "a gh error is not false");
 });
 
+test("a private repo's verify is asked under the spelling watch.repos gives, not the lowercase ref", async () => {
+  const w = ownerWorld();
+  const ports = { orca: w.orca, gh: w.ghClient, repos: ["Acme/Private-API"] };
+  w.gh.set("repos/Acme/Private-API/pulls/9", { merged: true, merge_commit_sha: "abc1234" });
+  w.gh.set("repos/Acme/Private-API/actions/runs/5", { status: "completed", conclusion: "success" });
+  assert.deepEqual(await readProbe({ kind: "pr_merged", pr: "acme/private-api#9" }, ports), { kind: "true", observed: "acme/private-api#9 merged abc1234" });
+  assert.equal((await readProbe({ kind: "run_ok", repo: "acme/private-api", run: "5" }, ports)).kind, "true");
+  assert.ok(w.ghCalls.every((c) => !c.includes("acme/private-api")), "no GitHub call under the lowercase spelling");
+});
+
 test("pr_found is bounded by the item's creation, not by when the hook wrote the mark", async () => {
   const w = ownerWorld();
   w.item(T, { verify: { kind: "pr_found", repo: "acme/api", search: "promote" }, cmdHint: "gh workflow run promote.yml" });

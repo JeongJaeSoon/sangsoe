@@ -5,6 +5,7 @@ import { test } from "node:test";
 import {
   type BriefInput,
   type BriefSnapshot,
+  decisionMoot,
   decisionOpen,
   type OrcaAdapter,
   type Overview,
@@ -19,6 +20,8 @@ import {
   statusBarItem,
   type Table,
 } from "../../core/index.ts";
+// A namespace import: a missing export reads as undefined and fails an assertion, not the module link.
+import * as coreNs from "../../core/index.ts";
 import type { PanelCore } from "../../orca-plugin/core-link.ts";
 import { openCommand, openHandler, panelHandlers, parseAct, STATUS_UNKNOWN } from "../../orca-plugin/panel/requests.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
@@ -122,7 +125,7 @@ test("PN3: status bar B reads the same numbers as sangsoe todo and the brief's t
   assert.ok(r.ok);
   const m = r.value.model as Overview;
   const s = statusBarItem(m);
-  assert.equal(s.text, `SANGSOE  🚧 ${m.summary.blocked} · 결정 ${m.todo.decisions} · 🔄 ${m.summary.doing}`);
+  assert.equal(s.text, `✨ SANGSOE  🚧 ${m.summary.blocked} · 결정 ${m.todo.decisions} · 🔄 ${m.summary.doing}`);
   assert.equal(s.tone, m.todo.total > 0 ? "danger" : "neutral");
   const md = renderMarkdown(m, { maxWidth: 78 });
   assert.ok(md.includes(`🚧 막힌 것 ${m.summary.blocked}건`) && md.includes(`🔄 진행 중 ${m.summary.doing}건`));
@@ -296,10 +299,46 @@ test("PN4: 완료 → U14 ownerDone closes a 🟢 owner item in Orca and the sto
   assert.equal(o.store.events({ type: "owner_action" }).length, 0, "a refused 완료 records nothing");
 
   const r = await core.act({ kind: "done", item: mine });
-  assert.deepEqual(r.ok ? r.value : r, { status: "done", item: mine, evidenceShort: false });
+  assert.deepEqual(r.ok ? r.value : r, { status: "done", label: "✅ 완료", item: mine });
   assert.equal(o.state("task_000000000010"), "done");
   assert.deepEqual(o.store.events({ type: "owner_action" }).map((e) => [e.source, e.payload.origin]), [["plugin:panel", "button"]]);
   assert.equal(o.store.events({ type: "item_transition" })[0]?.payload.reason, "owner_done");
+
+  // Decision 181: a to-do with a verify answers pending_verify, and the panel shows that, not done.
+  const v = o.item("task_000000000012", { who: "owner", verify: { kind: "pr_merged", pr: "acme/api#40" } });
+  const pv = await core.act({ kind: "done", item: v });
+  assert.deepEqual(pv.ok ? pv.value : pv, { status: "pending_verify", label: "⏳ 검증 대기", item: v });
+  assert.equal(o.state("task_000000000012"), "pending_verify");
+  // The label starts with the marker the brief draws for the same item after the press.
+  const after = await core.brief({ item: v });
+  const marker = after.ok && after.value.model.stage === 3 ? after.value.model.state : null;
+  assert.equal(marker, "⏳");
+});
+
+test("every status a panel act can answer carries its label, and the label table covers exactly those (a status without one fails here)", async () => {
+  const seen = new Map<string, unknown>();
+  const keep = (r: Result<{ status: string }>) => {
+    assert.ok(r.ok, JSON.stringify(r));
+    seen.set(r.value.status, (r.value as { label?: unknown }).label);
+  };
+  keep(await (await world()).core.act({ kind: "answer", decision: "d001", text: "linear x5" }));
+  const late = await world();
+  const moot = await decisionMoot(late.w, { decision: "d001", evidence: { kind: "pr_closed", pr: "acme/api#40" }, callerRun: RUN });
+  assert.ok(moot.ok && moot.value.status === "moot", JSON.stringify(moot));
+  keep(await late.core.act({ kind: "answer", decision: "d001", text: "linear x5" }));
+  const o = ownerWorld();
+  const core = panelCore({ orca: o.orca as unknown as OrcaAdapter, withStore: (fn) => fn(o.store), now: () => o.now, load: async () => ({ ok: true, value: o.input() }) });
+  keep(await core.act({ kind: "done", item: o.item("task_000000000010", { who: "owner" }) }));
+  keep(await core.act({ kind: "done", item: o.item("task_000000000012", { who: "owner", verify: { kind: "pr_merged", pr: "acme/api#40" } }) }));
+
+  assert.deepEqual([...seen.keys()].sort(), ["answered", "done", "late", "pending_verify"]);
+  const table: Readonly<Record<string, string>> = coreNs.ACTED_LABEL ?? {};
+  assert.deepEqual(Object.keys(table).sort(), [...seen.keys()].sort(), "the label table lists every reply status");
+  for (const [status, label] of seen) {
+    assert.ok(typeof label === "string" && label !== "", `${status} has no label`);
+    assert.ok(!label.includes(status), `${status}'s label shows the raw key: ${label}`);
+    assert.equal(label, table[status]);
+  }
 });
 
 test("다른 답 is masked before it is stored or handed to the Run", async () => {
@@ -312,7 +351,7 @@ test("다른 답 is masked before it is stored or handed to the Run", async () =
   assert.match(String(w.store.events({ type: "decision_answered" })[0]?.payload.answer), /^use /);
 });
 
-test("a core that throws becomes a refusal and status falls back to 'SANGSOE  ?'", async () => {
+test("a core that throws becomes a refusal and status falls back to '✨ SANGSOE  ?'", async () => {
   const boom = async () => {
     throw new Error("disk gone");
   };

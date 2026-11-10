@@ -1,12 +1,12 @@
 # sangsoe
 
-Orchestration for Claude Code sessions on Orca. Work in progress: pre-releases (`v0.1.0-rc.N`) only.
+Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.0`; what changed is in `CHANGELOG.md`.
 
 ## Install
 
 macOS with Homebrew, Claude Code, Orca and an authenticated `gh`. Run these in order.
 
-1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.0-rc.4`.
+1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.0`.
 2. `sangsoe install` registers and enables the Claude Code plugin, registers the Orca plugin, then runs `sangsoe doctor`. It is safe to re-run. On a first install it prints:
 
    ```
@@ -25,7 +25,7 @@ macOS with Homebrew, Claude Code, Orca and an authenticated `gh`. Run these in o
    - Orca asks for exactly `local.sangsoe` at this folder.
 
    Run `sangsoe plugin approve --dry-run` first. It prints each check and the `orca plugin enable` command without running it. When the review is not recorded yet, its `FAIL merged_with_clean_review: no review evidence for PR #<n> head <sha>` line names the PR and head to pass to `sangsoe review record`. On success approve prints `recorded plugin_approved (seq N)` and `enabled`.
-4. `sangsoe doctor` now prints `ok` on every row and exits 0. That includes `orca plugin: local.sangsoe <version>, running` and `orca-plugin-content: 내용 … = 빌드 커밋 … = 리뷰된 head …`. The exceptions are the `reaper-config` and `watch-repos` notices, described next.
+4. `sangsoe doctor` now prints `ok` on every row and exits 0. That includes `orca plugin: local.sangsoe <version>, running` and `orca-plugin-content: 내용 … = 빌드 커밋 … = 리뷰된 head …`. The exceptions are `notice` rows, which name a setting or command and do not change the exit code. On a fresh machine expect `reaper-config` and `watch-repos`, described next, `tier-config` (see Land), and often `model-table` (Claude Code settings without an advisor model, alias pins, or a Claude Code newer than the model table).
 
 **REAPER.** REAPER, the Orca plugin's cleanup round, removes nothing until `~/.config/sangsoe/config.json` has a `reaper` section: without it each round only marks and records no candidates. Until then doctor prints `notice   reaper-config: REAPER 는 표시만 하고 정리하지 않는다 …` and still exits 0. With the section, REAPER removes a card that is finished (its pull request merged or closed with the card's HEAD on it, or, with no pull request, every Dispatch run in it settled and the last one succeeded or was cancelled), unreachable from every root for two rounds and past the grace, and only when its work is committed and pushed. It removes the card's worktree and branch, then the Docker containers, volumes, networks and images recorded for that card. To turn it on, add this to the file, listing the cards to keep by instance id, path or branch:
 
@@ -59,9 +59,11 @@ Every `brew upgrade sangsoe` needs a new review record and a new approval. Each 
    and `warn orca-plugin-version` may appear with the same fix. Every other row should be `ok`, `orca-plugin-content` included: the new folder equals its build commit and reviewed head before anything is enabled.
 3. Whoever reviewed the new build's pull request records it on this machine: `sangsoe review record --pr <n> --head <full sha> --act-on 0 --reviewer <name>`. The previous version's record does not carry over: it names another pull request and head.
 4. `sangsoe plugin approve --dry-run`, then `sangsoe plugin approve`. It prints `recorded plugin_approved (seq N)` and `enabled`.
-5. `sangsoe doctor` prints `ok` on every row and exits 0, with `orca plugin: local.sangsoe <new version>, running` (and the `reaper-config` and `watch-repos` notices while those settings are absent).
+5. `sangsoe doctor` exits 0 with every row `ok` or `notice`, including `orca plugin: local.sangsoe <new version>, running`. A `notice` row does not change the exit code; the usual ones are those step 4 of Install names.
 
-The approval covers the core the Orca plugin runs. A release packs a copy of `core/` into `orca-plugin/vendor/`, the plugin loads only that copy, and approve and doctor compare the whole folder, the copy included, with the reviewed source. A changed file anywhere in the installed folder turns `orca-plugin-content` into `FAIL`, with `sangsoe plugin approve` as the fix.
+Upgrading from `0.1.0-rc.4` also adds doctor rows and writes the facts backup on first open; `CHANGELOG.md` lists both.
+
+The approval covers the core the Orca plugin runs. A release packs a copy of `core/` into `orca-plugin/vendor/`, the plugin loads only that copy, and approve and doctor compare the whole folder, the copy included, with the reviewed source. A changed file anywhere in the installed folder turns `orca-plugin-content` into `FAIL`, with `sangsoe plugin approve` as the fix. This holds for a release only: when the plugin folder sits in a git checkout, the worker falls back to the checkout's `../core`, which the approval's dirty check does not cover.
 
 Reinstalling the same version (`brew reinstall sangsoe`, then `sangsoe install`) needs no new approval. `sangsoe install` prints `orca: loaded /opt/homebrew/opt/sangsoe/libexec/orca-plugin`, and doctor is all `ok` apart from those notices.
 
@@ -90,6 +92,17 @@ For a listed repository, land merges at once (`gh pr merge --squash --match-head
 
 A V3 change or one touching `protected_paths` still waits for the owner's approval. Anything land cannot read refuses the merge. `sangsoe land --dry-run` prints the path it would take without merging. Without the key, land behaves as before. See decision 158 in `docs/decisions.md`.
 
+**Verify tier.** Land asks for the evidence of the pull request's tier (V0 to V3), computed from its diff and these lists in `~/.config/sangsoe/config.json`. All five lists must be there; with any one missing, every pull request is V3, `sangsoe verify-tier` prints `tier_source: none (fail-closed V3): …` naming the missing lists, and doctor prints a `tier-config` notice (decision 172):
+
+```json
+{
+  "protected_paths": ["infra/"],
+  "verify_tier": { "docs_globs": ["docs/"], "test_globs": ["test/"], "ui_globs": [], "v3_globs": [".github/", "package-lock.json"] }
+}
+```
+
+**Evidence.** Someone other than the pull request's author records each run at the current head: `sangsoe evidence record --pr <n> --head <head> --kind test|run|ui|dev --exit-code <n> --not-verified <what> --recorder <name>` (agents use the `evidence_record` tool). After the merge, `sangsoe stage record --pr <n> --stage merge|dev|prod --sha <sha> --recorder <name>` (the `stage_record` tool) records each stage a flow's deploy steps wait on. See decision 171.
+
 ## Layout
 
 One repository, four slots (see `docs/architecture.md` for the full map):
@@ -99,6 +112,8 @@ One repository, four slots (see `docs/architecture.md` for the full map):
 | `core/`, `cli/` | Shared TS core, sqlite, shell-only CLI | none |
 | `orca-plugin/` | Orca plugin: monitors, REAPER timer, panel | none |
 | `claude-plugin/` | Claude Code plugin: `hooks/` and `mcp/` (no tokens), `skills/` and `agents/` (token-using) | mixed |
+
+The Orca plugin's manifest (`orca-plugin/orca-plugin.json`) declares two read capabilities, `workspace:read` and `agent:read`. The worker also runs two writes that the declaration does not name: `orca terminal create` for the panel's open command (`orca-plugin/panel/requests.ts:54`), and `orca worktree rm` in REAPER rounds (`core/reaper/round.ts`, decision 86). The manifest is not yet changed to match them.
 
 Orca CLI built-ins are called, not rebuilt. The design spec lives in `docs/` (`design.html` is the entry point).
 

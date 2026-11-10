@@ -16,7 +16,16 @@ export type Planned = NewEvent<Exclude<EventType, StoreOnlyType>>;
  * `runMonitor` runs it after the planned events are appended, never on a dry run or past the cap, and
  * appends the events it returns (the `item_transition` that follows a `task-update`).
  */
-export type Act = { what: string; run(d: MonitorDeps): Promise<{ ok: boolean; detail: string; planned: Planned[] }> };
+export type Act = {
+  what: string;
+  /**
+   * A wake-up the host's current state calls for, sent through notify. The reread after a lost
+   * database runs these and no other act: notify's copied `notified` rows keep a wake sent before
+   * the loss from going out twice (decision 184).
+   */
+  wake?: true;
+  run(d: MonitorDeps): Promise<{ ok: boolean; detail: string; planned: Planned[] }>;
+};
 
 /**
  * A judgment's result. `unseen` names what the round could not see and so acted on nothing for.
@@ -63,6 +72,8 @@ export type MonitorDeps = {
   /** Absent on a dry run: the round reads and judges but writes nothing. */
   append?: (e: Planned) => Appended;
   now(): number;
+  /** When this runner opened (epoch ms); the stall check counts a closed Orca as a pause, not a stall. */
+  openedAt?: number;
   config: MonitorConfig;
   chat: ChatProvider;
   sample: () => LoadSample;

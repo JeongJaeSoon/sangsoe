@@ -134,6 +134,16 @@ export {
 } from "./land/land.ts";
 export { mergeConfirm } from "./land/github.ts";
 export { ghMerge, readLandConfig, realLandDeps } from "./land/ports.ts";
+export {
+  EVIDENCE_KINDS,
+  type EvidenceRecordInput,
+  type RecordPorts,
+  type RecordResult,
+  recordEvidence,
+  recordStage,
+  STAGES,
+  type StageRecordInput,
+} from "./land/record.ts";
 export { type TierOfPr, tierOfPr } from "./land/tier.ts";
 export { type EvidenceGap, evidenceGaps, mergedItemMark } from "./verify/evidence.ts";
 export {
@@ -171,6 +181,7 @@ export {
   type CheckStatus,
   DOCTOR_CHECKS,
   doctorReport,
+  advisorSetting,
   modelTable,
   type PluginBuild,
   REQUIRED_CAPABILITIES,
@@ -184,7 +195,19 @@ export * from "./reaper/index.ts";
 
 export {
   type Alias as ModelAlias,
+  ADVISOR_FROM_SETTING,
+  ADVISOR_NOT_APPLIED,
+  type AdvisorPath,
   CATALOG as MODEL_CATALOG,
+  CLASS_KIND as MODEL_CLASS_KIND,
+  classKind,
+  isUnitClass,
+  launch as launchModel,
+  type Launch as ModelLaunch,
+  pairing as modelPairing,
+  SUBAGENTS as MODEL_SUBAGENTS,
+  UNIT_CLASSES,
+  type UnitClass,
   CHANGELOG as MODEL_CHANGELOG,
   type Choice as ModelChoice,
   catalogAgeDays,

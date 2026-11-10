@@ -39,7 +39,7 @@
 | 실행 | `orca-plugin/panel/` | X | ② Orca plugin | 패널 · 상태 표시줄 B · 버튼 |
 | 실행 | `claude-plugin/mcp/` | X | ③ Claude Code plugin | MCP 서버(에이전트의 입구) |
 | 실행 | `claude-plugin/mcp/tools/` | X | ③ Claude Code plugin | MCP tool 하나 = 파일 하나 |
-| 실행 | `claude-plugin/mcp/resources/` | X | ③ Claude Code plugin | MCP resource 하나 = 파일 하나(읽기, 현황 `brief`) |
+| 실행 | `claude-plugin/mcp/resources/` | X | ③ Claude Code plugin | MCP resource 하나 = 파일 하나(읽기: `brief` · `ready` · `models` · `item_timeline`) |
 | 판단 | `claude-plugin/skills/` | O | ③ Claude Code plugin | 판단 절차 skill |
 | 판단 | `claude-plugin/skills/general/` | O | ③ Claude Code plugin | 일반 작업 skill(결정 95) |
 | 판단 | `claude-plugin/agents/` | O | ③ Claude Code plugin | 오케스트레이터 · 리드 · 워커 정의 |
@@ -52,7 +52,7 @@
 
 - 토큰 O 폴더(`skills/`·`agents/`)에는 코드 파일이 없다. 토큰 X 폴더에는 프롬프트가 없다.
 - 다른 칸은 코어를 `core/index.ts` 로만 import 한다. 두 plugin 사이의 연결점은 코어(sqlite)와 Orca CLI 둘뿐이다(결정 78 다).
-- 에이전트는 MCP 만 쓰고, CLI 는 셸 호출자 여섯 행만 쓴다. plugin worker 는 코어를 직접 import 한다(결정 75 나).
+- 에이전트는 MCP 만 쓰고, CLI 는 셸 호출자 여섯 행만 쓴다. plugin worker 는 자기 폴더 밖을 정적으로 import 하지 않고 `orca-plugin/core-link.ts` 한 곳에서 코어를 불러온다(결정 75 나, 132·136·152).
 - Orca 가 원본인 사실은 sqlite 에 복사하지 않는다(결정 74).
 - OS 상주 작업·자체 상주 프로세스·포트는 두지 않는다. 주기 감지는 ② 의 worker 타이머다(결정 75 라).
 
@@ -148,7 +148,7 @@ readMergeConditions(gh, { repo, base, pr, protectedPaths }): MergeConditions;
 type Check = { id: string; run(ctx: CheckContext): Promise<CheckResult> };
 type CheckResult = { id: string; status: "ok" | "notice" | "warn" | "fail"; summary: string; fix?: string };
 runChecks(START_CHECKS, ctx) → startReport(results) | doctorReport(results)
-DOCTOR_CHECKS = [...START_CHECKS, orcaPluginContent]   // sangsoe doctor·install 이 돌린다
+DOCTOR_CHECKS = [...START_CHECKS, orcaPluginContent, sqliteVersion, reaperConfig, tierConfig, watchRepos, modelTable, storeRestore]   // sangsoe doctor·install 이 돌린다
 ```
 
 - **내용 해시 점검(`orca-plugin-content`).** 설치된 `orca-plugin/` 의 `contentHash` 를 그 폴더의 빌드 커밋 트리와 그 커밋을 머지한 PR 의 리뷰된 head 트리(`sangsoe plugin approve` 가 비교하는 바이트)와 다시 비교한다. 다르면 `fail` + `sangsoe plugin approve`, 잴 수 없으면 `warn`. 빌드 트리는 내려받아야 하므로 `CheckContext.pluginBuild` 포트로 들어오고, 시작 점검은 그 포트를 비워 `DOCTOR_CHECKS` 에만 든다(결정 112).
@@ -171,7 +171,7 @@ U15(monitor)·U18(REAPER)·U19(패널)가 대고 짜는 계약이다. 시험 결
 
 **패널과 상태 표시줄.** 패널은 `html` 패널(`panel/*.ts` 진입, Orca 가 페이지를 감싼다)이고 `orca.plugin.request(name)` 로 worker 처리기를 부른다. 패널에서 코어를 직접 부르지 않는다. 상태 표시줄은 worker 가 `host.call("statusBar.update", {id: "summary", text, tone})` 로만 바꾼다. 클릭은 명령 `sangsoe.open` 을 돌리고, 호스트 API 에 "자기 패널 열기"가 없어 명령이 `orca plugin open <key> --panel <id>` 를 부른다.
 
-**승인 흐름.** `sangsoe plugin approve`(④ `core/approve/`). 신뢰 기준(저장소 `JeongJaeSoon/sangsoe`, 키 `local.sangsoe`)은 코어 상수이고 승인할 폴더에서 읽지 않는다. 커밋은 40자 SHA 만 받는다. 순서: 읽기 전용 검사 먼저 — (1) 빌드 커밋이 main 에 있고 그것을 실은, main 으로 머지된 PR 하나의 머지된 head 에 대한 리뷰 증거가 작성자 아닌 리뷰어의 Act-on 0 (2) 폴더 `contentHash` = main 커밋 트리 = 리뷰된 head 트리(결정 105) → 그다음에야 `orca plugin dev reload <폴더> --json` 으로 Orca 가 원하는 키·지문을 읽고(켜지 않는다) (3) 키가 `local.sangsoe` 이고 `contentIdentity` 가 그 폴더 → 켜기 직전에 내용 해시를 다시 재서 같을 때만 `orca plugin enable <key> --approve <지문>` → `plugin_approved`(결정 104). 이미 승인된 폴더도 같은 검사를 지나야 통과로 보인다. `--dry-run` 은 명령만 보인다. plugin 코드는 폴더 밖을 import 하지 않는다(승인과 내용 해시가 폴더만 덮는다, `test/orca-plugin.test.ts`). 리뷰 증거는 store 의 `review_verdict` 줄로만 읽고(그 head 에 Act-on 이 남은 판정이 하나라도 있으면 실패, store 를 못 열면 증거 없음), `plugin_approved` 는 store 에 쓴다. `review_verdict` 를 쓰는 곳은 `sangsoe review record` 하나다(작성자는 GitHub 에서 읽고 리뷰어와 같으면 거부, 결정 111).
+**승인 흐름.** `sangsoe plugin approve`(④ `core/approve/`). 신뢰 기준(저장소 `JeongJaeSoon/sangsoe`, 키 `local.sangsoe`)은 코어 상수이고 승인할 폴더에서 읽지 않는다. 커밋은 40자 SHA 만 받는다. 순서: 읽기 전용 검사 먼저 — (1) 빌드 커밋이 main 에 있고 그것을 실은, main 으로 머지된 PR 하나의 머지된 head 에 대한 리뷰 증거가 작성자 아닌 리뷰어의 Act-on 0 (2) 폴더 `contentHash` = main 커밋 트리 = 리뷰된 head 트리(결정 105) → 그다음에야 `orca plugin dev reload <폴더> --json` 으로 Orca 가 원하는 키·지문을 읽고(켜지 않는다) (3) 키가 `local.sangsoe` 이고 `contentIdentity` 가 그 폴더 → 켜기 직전에 내용 해시를 다시 재서 같을 때만 `orca plugin enable <key> --approve <지문>` → `plugin_approved`(결정 104). 이미 승인된 폴더도 같은 검사를 지나야 통과로 보인다. `--dry-run` 은 명령만 보인다. plugin 코드는 폴더 밖을 import 하지 않는다(승인과 내용 해시가 폴더만 덮는다, `test/orca-plugin.test.ts`). 리뷰 증거는 store 의 `review_verdict` 줄로만 읽고(그 head 에 Act-on 이 남은 판정이 하나라도 있으면 실패, store 를 못 열면 증거 없음), `plugin_approved` 는 store 에 쓴다. `review_verdict` 를 쓰는 곳은 코어 `recordReviewVerdict` 하나이고, 입구는 `sangsoe review record` 와 MCP tool `review_record` 둘이다(작성자는 GitHub 에서 읽고 리뷰어와 같으면 거부, 결정 111·162).
 
 ## 설치와 릴리스
 

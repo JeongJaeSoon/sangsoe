@@ -1,4 +1,5 @@
 import type { StoredEvent } from "../contract/views.ts";
+import { ownerVerify } from "../owner/pending.ts";
 
 export type EdgeKind = "blocks" | "after" | "stacked_on" | "deploys_after";
 export const EDGE_KINDS: readonly EdgeKind[] = ["blocks", "after", "stacked_on", "deploys_after"];
@@ -60,6 +61,8 @@ export interface Facts {
   /** Skipped steps by `<root task>/<step id>`, with the reason. */
   readonly skipped: ReadonlyMap<string, string>;
   readonly ownerActions: ReadonlySet<number>;
+  /** Owner items with a verify: when a probe saw it true, null while none has (decision 181). */
+  readonly ownerVerify: ReadonlyMap<string, string | null>;
 }
 
 export const edgeId = (pred: string, succ: string, kind: string): string => `${pred}>${succ}:${kind}`;
@@ -172,5 +175,6 @@ export function foldFacts(events: readonly StoredEvent[]): Facts {
     flows,
     skipped,
     ownerActions,
+    ownerVerify: ownerVerify(events),
   };
 }

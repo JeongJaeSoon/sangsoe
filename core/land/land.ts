@@ -45,7 +45,18 @@ export type LandStore = {
  * `tier` null and `protectedPaths` null mean that setting could not be read. `verdictMergeRepos`
  * (decision 158) lists the lowercased repos where a recorded verdict is the approval; absent is none.
  */
-export type LandConfig = { tier: TierConfig | null; protectedPaths: readonly string[] | null; verdictMergeRepos?: readonly string[] };
+export type LandConfig = {
+  tier: TierConfig | null;
+  protectedPaths: readonly string[] | null;
+  verdictMergeRepos?: readonly string[];
+  /** Why `tier` is null: the file or the verify_tier lists it lacks (decision 172). */
+  tierGap?: string;
+};
+
+/** Where the tier lists came from; a partial verify_tier counts as none. */
+export const tierSource = (c: LandConfig) => (c.tier ? "config" : `none (fail-closed V3): ${c.tierGap ?? "config unreadable"}`);
+/** The reason verifyTier gives when `tier` is null. */
+export const tierUnreadable = (c: LandConfig) => `tier source: ${tierSource(c)}`;
 /** Asks GitHub to merge once its requirements hold (`gh pr merge --auto`), pinned to `head`. */
 export type MergePort = (a: { repo: string; pr: number; head: string }) => Promise<{ ok: boolean; message: string }>;
 /** Merges now with `method`, pinned to `head` (decision 158). */
@@ -103,8 +114,10 @@ export async function land(input: LandInput, deps: LandDeps): Promise<LandOutcom
     const why = e instanceof Error ? e.message : String(e);
     return { ok: false, refusal: { code: "store_unavailable", reason: `cannot open the store: ${why}`, fix: "run sangsoe doctor" } };
   }
-  const repo = input.repo.toLowerCase();
-  const pr = `${repo}#${input.pr}`;
+  // GitHub calls keep the caller's case: a fine-grained token answers 404 for a private repo
+  // named in another case. Only the event key is lowercased.
+  const repo = input.repo;
+  const pr = `${repo.toLowerCase()}#${input.pr}`;
   let head: string | undefined;
   try {
     const value = await judge({ ...input, repo }, pr, deps, store.events(), (sha) => {
@@ -145,7 +158,7 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
     throw new Refused("head_moved", "", `${pr}'s head is ${short(head)}, not ${short(input.headSha)}`, `review and verify ${short(head)}, then land with --head ${head}`);
   }
 
-  const main = events.filter((e) => (e.type === "main_red" || e.type === "main_green") && e.payload.repo === repo).at(-1);
+  const main = events.filter((e) => (e.type === "main_red" || e.type === "main_green") && e.payload.repo === repo.toLowerCase()).at(-1);
   if (main?.type === "main_red" && !input.mainFix) {
     throw new Refused("main_red", "", `${repo}'s main is red at ${short(String(main.payload.sha))} (run ${String(main.payload.run_id)})`, "fix main first; only a PR landed with --main-fix passes");
   }
@@ -179,7 +192,7 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   stopIfLimited(diff);
   stopIfLimited(labels);
   const config = deps.config();
-  const tier = verifyTier(diff.kind === "ok" ? diff.data : null, labels.kind === "ok" ? labels.data : null, config.tier);
+  const tier = verifyTier(diff.kind === "ok" ? diff.data : null, labels.kind === "ok" ? labels.data : null, config.tier, tierUnreadable(config));
   const kinds = requiredEvidence(tier);
   const gaps = evidenceGaps(events, { pr, head, author: pull.user.login, kinds });
   const gap = gaps[0];
@@ -188,7 +201,7 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
       "evidence_missing",
       gap.kind,
       `${tier.effective} (${tier.reason}) needs ${kinds.join(", ")} at ${short(head)}; ${gaps.map((g) => `${g.kind}: ${g.why}`).join("; ")}`,
-      `record evidence{kind, head_sha: ${head}, exit_code: 0, not_verified} with subject ${pr} for ${gaps.map((g) => g.kind).join(", ")}; the PR's author cannot write it`,
+      `record ${gaps.map((g) => g.kind).join(", ")} at ${head} with the evidence_record tool (CLI: sangsoe evidence record); the PR's author cannot record it, so its writer sends the run's output to its lead`,
     );
   }
   note.push(`${tier.effective}: ${kinds.length ? kinds.join(", ") : "required CI only"}`);
@@ -201,10 +214,11 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   const approved = must(await approvedAndGreen(gh, repo, input.pr, pull, config.tier?.owners ?? []), "pr_unreadable", "call land again");
   if (approved) return { ...base, action: "merge_approved", note: [...note, "approved and green at the head"].join("; ") };
   const waitApproval = (why: string): LandValue => ({ ...base, action: "merge_on_approval", note: [...note, why].join("; ") });
-  if (!(config.verdictMergeRepos ?? []).includes(repo)) return waitApproval("merge once approved; the lead calls land again");
+  if (!(config.verdictMergeRepos ?? []).includes(repo.toLowerCase())) return waitApproval("merge once approved; the lead calls land again");
 
   // Decision 158: the opted-in repo's approval is the recorded verdict; the owner's cases stay with the owner.
-  if (tier.effective === "V3") return waitApproval("V3 needs the owner's approval; merge once approved");
+  // On a one-account repo every session's label is the owner's, so a lowered V3 stays V3 here (decision 172).
+  if (tier.effective === "V3" || tier.computed === "V3") return waitApproval("V3 needs the owner's approval; merge once approved");
   const paths = conditions.find((c) => c.id === "no_protected_paths");
   if (!paths?.ok) return waitApproval(`${paths?.reason ?? "protected paths unread"}; merge once the owner approves`);
   const by = verdictApproval(events, pr, head, pull);

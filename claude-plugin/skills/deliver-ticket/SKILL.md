@@ -37,7 +37,9 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
 | V3 | 화면·외부 연동·의존성·CI·배포·인증·권한·마이그레이션·보호 경로 | V2 + 화면이면 스크린샷·GIF 와 리드 판정, 배포·연동이면 dev 반영 확인, 사람 승인 |
 
 - 등급을 낮추는 라벨은 설정의 owners 만 유효하다. 올리는 것은 누구나 한다.
-- "확인하지 못한 것" 칸을 비우지 않는다. 비면 `land` 가 `evidence_missing` 으로 거부한다.
+- 증거는 `evidence_record` tool 로 남긴다: 그 head 의 `kind`(`test`·`run`·`ui`·`dev`)마다 종료 코드와 "확인하지 못한 것" 목록. PR 을 쓴 세션은 기록하지 못한다(결정 171). 실행 출력과 확인 못 한 것을 리드에게 보내고, 리드가 기록한다. 판정과 같은 길이다.
+- "확인하지 못한 것" 칸을 비우지 않는다. 비거나 기록이 없으면 `land` 가 `evidence_missing` 으로 거부한다.
+- 머지 뒤 배포 단계(`merge`·`dev`·`prod`)는 `stage_record` tool 로 남긴다. 흐름 틀의 배포 단계는 이 기록을 기다린다.
 - 검증하려고 띄운 compose·프로세스는 확인한 그 턴에 내린다.
 - 초록 체크는 증거가 아니다. CI 로그에서 그 단계가 실제로 돌았는지 읽는다.
 
@@ -56,6 +58,6 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
    - `merge_on_approval`: 승인이 찰 때 pr-monitor 가 리드를 깨우고, 리드가 같은 `land` 로 머지한다.
    - 거부 code(`evidence_missing`, `review_missing`, `review_stale`, `head_moved`, `stack_order`, `main_red` 등): `refusal.fix` 대로 원인을 고치고 다시 부른다. `review_stale`·`head_moved` 는 리뷰한 head 가 지금 head 가 아니라는 뜻이니, 새 head 를 다시 리뷰받는다. `main_red` 동안에는 `main_fix: true` 로 요청한 PR 만 들어간다.
    - 거부(hook·권한): 다른 길로 머지하지 않는다. 일을 맡긴 쪽에 거부 보고로 알린다.
-3. 예약이든 "승인되면 머지"든, `merge_ready` 를 담은 worker_done 을 보낸다: PR, head sha, 리뷰 판정과 리뷰어, 등급과 증거, 확인 못 한 것. 항목은 머지 확인 뒤 pr-monitor 가 닫는다. 네가 닫지 않는다.
+3. 머지했든 예약했든 "승인되면 머지"든, `merge_ready` 를 담은 worker_done 한 번으로 끝낸다: PR, head sha, 리뷰 판정과 리뷰어, 등급과 증거, 확인 못 한 것. `--type merge_ready` 메시지를 따로 보내지 않는다(결정 175, `[gate:self-land]` 가 막는다). Orca 는 worker_done 으로 Task 를 닫지만, 브리프는 PR 이 머지될 때까지 항목을 🚧 막힘(리뷰어)으로 읽는다. 네가 항목을 닫지 않는다.
 
 worker_done 전에 `end-session` skill 을 읽는다.

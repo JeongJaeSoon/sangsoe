@@ -1,16 +1,25 @@
-import { ContractError, createItem, createOrcaAdapter, EVENTS, nodeExec, type OrcaAdapter, parseOwnerExtra, Store } from "../../../core/index.ts";
+import { ContractError, createItem, createOrcaAdapter, EVENTS, isUnitClass, nodeExec, type OrcaAdapter, parseOwnerExtra, Store, UNIT_CLASSES } from "../../../core/index.ts";
 import type { Outcome, ToolDef } from "../contract.ts";
 
 /** Same Outcome as `sangsoe item new`; ports are passed in so tests drive it with a fake Orca. */
 export async function handle(input: Record<string, unknown>, ports: { orca: OrcaAdapter; store: Store }): Promise<Outcome> {
   const s = (k: string) => (typeof input[k] === "string" ? (input[k] as string) : "");
   const deps = Array.isArray(input.deps) ? input.deps.map(String) : undefined;
+  const role = input.role;
+  if (role !== undefined && role !== "lead" && role !== "worker") {
+    return { ok: false, refusal: { code: "invalid_input", reason: `role "${String(role)}" is not lead or worker`, fix: FIX.invalid_role } };
+  }
+  const unitClass = input.class;
+  if (unitClass !== undefined && (typeof unitClass !== "string" || !isUnitClass(unitClass) || role === "lead")) {
+    return { ok: false, refusal: { code: "invalid_input", reason: `class "${String(unitClass)}" is not a worker unit class`, fix: FIX.invalid_class } };
+  }
   const extra = parseOwnerExtra(input.verify, input.cmdHint);
   if (!extra.ok) return { ok: false, refusal: { code: "invalid_verify", reason: extra.error, fix: FIX.invalid_verify } };
   const fields: Record<string, unknown> = {
     ...(extra.value.verify ? { verify: extra.value.verify } : {}),
     ...(extra.value.cmdHint ? { cmd_hint: extra.value.cmdHint } : {}),
     ...Object.fromEntries(TIMING.filter((k) => input[k] !== undefined).map((k) => [k, input[k]])),
+    ...(unitClass ? { unit_class: unitClass } : {}),
   };
   // Checked against the event contract before the Task exists: a row that fails after it would
   // leave an item with no trigger, visible as ready.
@@ -27,6 +36,7 @@ export async function handle(input: Record<string, unknown>, ports: { orca: Orca
     doneWhen: s("doneWhen"),
     ...(s("title") ? { title: s("title") } : {}),
     ...(deps?.length ? { deps } : {}),
+    ...(role ? { role } : {}),
   });
   if (r.ok && Object.keys(fields).length > 0) {
     ports.store.append({ type: "item_extra_set", source: "core:item", payload: { task: r.task, ...fields }, entity: "task", entity_id: r.task });
@@ -41,6 +51,8 @@ const TIMING = ["trigger", "review_trigger", "hold", "exec_by"] as const;
 const FIX = {
   invalid_input: "give run, spec, who and done-when, none empty",
   task_create_failed: "check that the Run id is right and the deps are Tasks of that Run",
+  invalid_role: "role is lead or worker: the session start_unit opens for this item",
+  invalid_class: "class is default, hard, design or mechanical, and only for a worker item",
   invalid_timing: "trigger and review_trigger are non-empty text, hold a boolean, exec_by owner, lead or worker",
   invalid_verify: "verify is one of pr_merged{pr} · orca_field{target,field,value} · plugin_approved{key} · run_ok{repo} · pr_found{repo,search}; cmdHint a non-empty command prefix",
 } as const;
@@ -55,6 +67,17 @@ export default {
       spec: { type: "string", description: "The Task's brief, acceptance criteria included. A /goal line in it does not take effect on a worker." },
       title: { type: "string" },
       deps: { type: "array", items: { type: "string" } },
+      role: {
+        type: "string",
+        enum: ["lead", "worker"],
+        description: "The role of the session start_unit will open for it (its spec's first line); default worker. start_unit refuses another childRole.",
+      },
+      class: {
+        type: "string",
+        enum: [...UNIT_CLASSES],
+        description:
+          "Worker items: the unit class start_unit picks the model and advisor from (resource models). hard for a unit the lead judges hard; design for a root-cause or one-way-door call; mechanical for version bumps, link fixes and collection. Default: default.",
+      },
       who: { type: "string", description: "Who owns the item, e.g. lead:api." },
       doneWhen: { type: "string", description: "One line: when the item is done." },
       verify: {

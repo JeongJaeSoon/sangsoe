@@ -1,7 +1,14 @@
 import { realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { advisorSetting } from "../checks/model-table.ts";
 import { REQUIRED_CAPABILITIES } from "../checks/orca-capabilities.ts";
-import type { OrcaAdapter, OrcaResult, Receipt, WriteOptions } from "../contract/orca.ts";
-import { type Choice, resolve } from "../models/index.ts";
+import type { OrcaAdapter, OrcaResult, Receipt, TaskRow, WriteOptions } from "../contract/orca.ts";
+import type { ViewInput, ViewTask } from "../contract/views.ts";
+import { foldFacts } from "../graph/facts.ts";
+import { itemRef } from "../graph/nodes.ts";
+import { whyFrom } from "../graph/ready.ts";
+import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
+import { type Choice, launch, pairing, resolve } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
 import type { NewTask, RefusalReason, Role, StartOutcome, StartPorts, StartRefusal, StartRequest } from "./types.ts";
@@ -31,6 +38,17 @@ function defaultChoice(childRole: "lead" | "worker"): Choice {
   const r = resolve(childRole);
   if (!r.ok) throw new Error(r.reason);
   return r.value;
+}
+
+/**
+ * Whether this Orca's worker-start takes `--advisor` (decision 187), read from its own command
+ * schema. No Orca does yet; an unreadable schema counts as no.
+ */
+async function orcaTakesAdvisor(orca: OrcaAdapter): Promise<boolean> {
+  const ctx = await orca.agentContext();
+  if (!ctx.ok) return false;
+  const ws = ctx.value.commands.find((c) => c.path.join(" ") === "orchestration worker-start");
+  return ws?.flags.includes("advisor") ?? false;
 }
 
 const LOOP_LIMIT = 3;
@@ -84,6 +102,22 @@ async function liveDispatchIn(orca: OrcaAdapter, worktreeId: string): Promise<st
     if (!cursor) return null;
   }
   return "오케스트레이터 worktree 의 Dispatch 확인이 페이지 상한에서 끝나지 않았다";
+}
+
+/** Why GRAPH holds a Task Orca calls ready, or null when it does not. */
+function graphHold(rows: readonly FullTaskRow[], run: string, events: ViewInput["events"], taskId: string): string | null {
+  let tasks: ViewTask[];
+  try {
+    tasks = snapshotTasks(rows, run);
+  } catch (err) {
+    return `task-list 의 deps 를 읽지 못했다 (${(err as Error).message})`;
+  }
+  // Only decision 178's merge wait: a completed predecessor in this Run. Another Run's predecessor
+  // is not in this snapshot, and holds and triggers stay queue-monitor's call as before.
+  const done = new Set(tasks.filter((t) => t.status === "completed").map((t) => itemRef(t.id)));
+  const report = whyFrom({ orca: { tasks, gates: [] }, events, now: new Date().toISOString() }, foldFacts(events), taskId);
+  const held = report.rows.filter((r) => (r.kind === "blocks" || r.kind === "after") && done.has(r.pred));
+  return held.length === 0 ? null : held.map((r) => `${r.pred} (${r.kind}): ${r.predState}`).join("; ");
 }
 
 function firstPrompt(role: Role, t: NewTask): string {
@@ -205,6 +239,15 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     }
   }
 
+  // A choice built outside resolve still gets the pairing check: Claude Code drops a lower advisor silently.
+  const choice = req.model ?? defaultChoice(req.childRole);
+  const badPair = choice.advisorTier
+    ? pairing(choice.tier, choice.advisorTier)
+    : choice.advisor
+      ? "an advisor without its tier cannot be checked"
+      : null;
+  if (badPair) return refuse("model_invalid", `${choice.kind}: ${badPair}`);
+
   // The Task: an existing one, or a new one with its deps and the child's role line first.
   let taskId: string;
   if ("id" in req.task) {
@@ -238,14 +281,29 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   };
 
   // Ready and capacity: not refusals, the caller waits. An unreadable one is not "no room".
-  const tasks = await orca.taskList({ run: requester.runId });
+  const tasks = await orca.taskList({ run: requester.runId, full: true });
   if (!tasks.ok) return refuse("orca_error", `task-list 실패 (${tasks.error.code})`, taskId);
-  const task = tasks.value.find((t) => t.id === taskId);
+  const task = tasks.value.find((t) => t.id === taskId) as (TaskRow & { spec?: unknown }) | undefined;
   if (task?.status === "dispatched") {
     return { kind: "waiting", taskId, why: "already_dispatched", detail: "이미 Dispatch 된 Task 는 다시 시작하지 않는다(T5)" };
   }
   if (task?.status !== "ready") {
     return { kind: "waiting", taskId, why: "not_ready", detail: task ? `Task 상태 ${task.status}` : "Run 의 Task 목록에 없다" };
+  }
+  // Orca releases deps at the predecessor's worker_done, before its PR merges: GRAPH has the last word (decision 178).
+  const held = graphHold(tasks.value as FullTaskRow[], requester.runId, store.events(), taskId);
+  if (held) return { kind: "waiting", taskId, why: "not_ready", detail: held };
+  // SessionStart takes the role from the spec's first line, and Orca cannot rewrite a spec: an
+  // existing Task written for another role would start this child as that role.
+  // Read as SessionStart's readRoleLine reads it (core/session imports this module, so not shared).
+  const first = typeof task.spec === "string" ? (task.spec.split("\n", 1)[0] ?? "").trim() : "";
+  const role = first.startsWith(ROLE_LINE_PREFIX) ? first.slice(ROLE_LINE_PREFIX.length).trim() : "";
+  if ("id" in req.task && role !== req.childRole) {
+    return refuse(
+      "lineage_invalid",
+      `Task ${taskId} 의 spec 첫 줄이 "${first.slice(0, 60)}" 라 ${req.childRole} 로 시작하지 않는다. ${req.childRole} 항목은 role 을 밝혀 다시 만든다(item_create role)`,
+      taskId,
+    );
   }
   let free: number;
   try {
@@ -256,14 +314,19 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   if (free <= 0) return { kind: "waiting", taskId, why: "no_capacity", detail: `빈 자리 ${free}` };
 
   // ④ orca_error
-  const choice = req.model ?? defaultChoice(req.childRole);
+  const orcaFlag = choice.advisor ? await orcaTakesAdvisor(orca) : false;
+  const plan = launch(choice, {
+    orcaFlag,
+    ownerSetting: choice.advisor && !orcaFlag ? (ports.advisorSetting ?? (() => advisorSetting(process.env, homedir())))() : false,
+  });
   const startArgs = {
     task: taskId,
     agent: req.agent,
     worktree: "new-child" as const,
     run: requester.runId,
-    model: choice.model,
-    effort: choice.effort,
+    model: plan.model,
+    effort: plan.effort,
+    ...(plan.advisor ? { advisor: plan.advisor } : {}),
   };
   const started = await write(orca, orca.workerStart(startArgs), (o) => orca.workerStart(startArgs, o));
   if (!started.ok) {
@@ -284,17 +347,13 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     return failedAttempt("no_dispatch", `worker-start 는 끝났지만 Dispatch 가 없다${left ? ` (남은 것: ${left})` : ""}`);
   }
 
-  if (choice.escalated) {
-    store.append({
-      type: "model_changed",
-      source,
-      payload: { from: choice.escalated.from, to: `${choice.model}/${choice.effort}`, reason: choice.escalated.reason },
-      entity: "task",
-      entity_id: taskId,
-    });
+  for (const moved of [choice.escalated, plan.fallback]) {
+    if (!moved) continue;
+    const to = moved === plan.fallback ? `${plan.model}/${plan.effort}` : `${choice.model}/${choice.effort}`;
+    store.append({ type: "model_changed", source, payload: { from: moved.from, to, reason: moved.reason }, entity: "task", entity_id: taskId });
   }
 
-  const notes: string[] = [];
+  const notes: string[] = plan.note ? [plan.note] : [];
   if (req.references?.length) {
     if (!worktreeId) notes.push("reference add 건너뜀: 새 worktree id 를 영수증에서 찾지 못했다");
     else {
@@ -302,5 +361,6 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       if (!ref.ok) notes.push(`reference add 실패 (${ref.error.code}), 시작은 계속`);
     }
   }
-  return { kind: "started", taskId, dispatchId, ...(worktreeId ? { worktreeId } : {}), notes };
+  const launched = { model: plan.model, effort: plan.effort, ...(plan.advisor ? { advisor: plan.advisor } : {}) };
+  return { kind: "started", taskId, dispatchId, ...(worktreeId ? { worktreeId } : {}), launch: launched, notes };
 }

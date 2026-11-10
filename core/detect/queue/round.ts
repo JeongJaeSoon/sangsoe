@@ -84,7 +84,8 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   }
 
   const budget = d.ghBudget?.();
-  const ports = { orca: d.orca, gh: d.gh ?? NO_GH, ...(budget ? { budget } : {}) };
+  const repos = d.watch?.()?.repos;
+  const ports = { orca: d.orca, gh: d.gh ?? NO_GH, ...(budget ? { budget } : {}), ...(repos ? { repos } : {}) };
   const probes = await probeRound(ports, collect, input, itemFacts(input), OWNER_DEFAULTS, QUEUE_SOURCE);
   calls.push(`probeRound: read ${probes.read}, passed ${probes.passed.length}, skipped ${probes.skipped.length}`);
   if (!d.gh) unseen.push("gh client");
@@ -215,7 +216,7 @@ export type StallReport = { planned: Planned[]; written: { type: string; seq: nu
  * told once under a key bound to it; a re-check after a crash finishes the notice.
  */
 export async function stallCheck(d: MonitorDeps): Promise<StallReport> {
-  const planned = judgeStall(d.events({ type: "reap_round" }), d.now(), d.config.reaperIntervalMinutes * 60_000);
+  const planned = judgeStall(d.events({ type: "reap_round" }), d.now(), d.config.reaperIntervalMinutes * 60_000, d.openedAt);
   const written: StallReport["written"] = [];
   const calls: string[] = [];
   let top: Promise<string | undefined> | undefined;

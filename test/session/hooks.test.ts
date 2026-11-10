@@ -64,8 +64,14 @@ test("a lead whose Run binding is gone is told to run-use the Run its earlier se
   assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use run_lead");
 });
 
+/** The row item_create leaves for a Task sangsoe made (core/start/item.ts). */
+function itemCreated(w: SessionWorld) {
+  w.store.append({ type: "item_created", source: "core:item", entity: "task", entity_id: TASK, payload: { task: TASK, alias: "i001", who: "agent", done_when: "d", owner_action: 0 } });
+}
+
 test("a sangsoe session without a role line is worker_stuck{no_role_line}; a session the owner opened gets nothing", async () => {
   const w = createSessionWorld({ spec: "fix the login page" });
+  itemCreated(w);
   const lines = await hook(w, "session-start", { session_id: "s1", source: "startup" });
   assert.equal(lines.length, 1);
   assert.match(lines[0] ?? "", /no_role_line/);
@@ -80,6 +86,15 @@ test("a sangsoe session without a role line is worker_stuck{no_role_line}; a ses
     assert.deepEqual(await hook(general, e, { session_id: "s9", prompt: "d001 yes", message: "Claude needs your permission to use Bash", trigger: "auto" }), []);
   }
   assert.deepEqual(types(general), [], "no row for a session sangsoe did not start");
+});
+
+test("a Dispatch another tool started, with no item_created row and no role line, gets nothing (decision 46)", async () => {
+  const w = createSessionWorld({ spec: "review the release" });
+  assert.deepEqual(await hook(w, "session-start", { session_id: "f1", source: "startup" }), []);
+  for (const e of ["user-prompt-submit", "stop", "notification", "post-tool-use", "post-compact", "session-end"] as const) {
+    assert.deepEqual(await hook(w, e, { session_id: "f1", prompt: "d001 yes", message: "Claude needs your permission to use Bash", trigger: "auto" }), []);
+  }
+  assert.deepEqual(types(w), [], "no worker_stuck for a Task sangsoe does not own");
 });
 
 test("an orchestrator opened with --agent has no Task and still gets its role and Run", async () => {
@@ -101,15 +116,52 @@ test("the owner's chat line is stored masked; one dNNN links through decision_an
   assert.ok(!(w.store.ownerText(a[0]?.seq ?? 0) ?? "").includes(secret));
   assert.equal(w.store.events({ type: "decision_answered" }).length, 0, "iNNN alone is not an explicit link");
 
-  w.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });
-  await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: "p2", prompt: "d001: Path versioning" });
-  await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: "p2", prompt: "d001: Path versioning" });
-  const ans = w.store.events({ type: "decision_answered" });
-  assert.deepEqual(ans.map((e) => [e.payload.decision, e.payload.linked_by]), [["d001", "hook"]]);
-  assert.equal(w.store.events({ type: "owner_action" }).length, 2, "a repeated hook call writes nothing twice");
-
   await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: "p3", prompt: "Please carry out this task from my Orca coordinator ..." });
-  assert.equal(w.store.events({ type: "owner_action" }).length, 2, "Orca's own prompt is not the owner's");
+  assert.equal(w.store.events({ type: "owner_action" }).length, 1, "Orca's own prompt is not the owner's");
+
+  const o = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  await hook(o, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+  o.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });
+  await hook(o, "user-prompt-submit", { session_id: "o1", prompt_id: "p2", prompt: "d001: Path versioning" });
+  await hook(o, "user-prompt-submit", { session_id: "o1", prompt_id: "p2", prompt: "d001: Path versioning" });
+  const ans = o.store.events({ type: "decision_answered" });
+  assert.deepEqual(ans.map((e) => [e.payload.decision, e.payload.linked_by]), [["d001", "hook"]]);
+  assert.equal(o.store.events({ type: "owner_action" }).length, 1, "a repeated hook call writes nothing twice");
+});
+
+test("only an undispatched session's line that starts with the number answers a decision (M2)", async () => {
+  const open = (w: SessionWorld) => {
+    w.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });
+  };
+  const answers = (w: SessionWorld) => w.store.events({ type: "decision_answered" }).length;
+
+  const worker = createSessionWorld({ spec: "sangsoe-role: worker\nx", heldRun: TASK_RUN });
+  await hook(worker, "session-start", { session_id: "s1", source: "startup" }, VERSION);
+  open(worker);
+  await hook(worker, "user-prompt-submit", { session_id: "s1", prompt_id: "p1", prompt: "d001: Path versioning" });
+  assert.equal(answers(worker), 0, "a prompt in a dispatched session is not the owner's answer");
+
+  // A lead whose Dispatch SessionStart could not find has no Task on its row; it is still not the owner.
+  const lead = createSessionWorld({ dispatched: false, heldRun: "run_lead" });
+  await hook(lead, "session-start", { session_id: "l1", source: "startup", agent_type: "sangsoe:lead" }, VERSION);
+  open(lead);
+  await hook(lead, "user-prompt-submit", { session_id: "l1", prompt_id: "p1", prompt: "d001: Path versioning" });
+  assert.equal(answers(lead), 0, "only the orchestrator's session answers");
+
+  const orch = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  await hook(orch, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+  open(orch);
+  await hook(orch, "user-prompt-submit", { session_id: "o1", prompt_id: "p1", prompt: "status: the lead is still waiting on d001" });
+  await hook(orch, "user-prompt-submit", { session_id: "o1", prompt_id: "p2", prompt: "d001 d002 both yes" });
+  assert.equal(answers(orch), 0, "a line that only mentions the number, or names two, answers nothing");
+  await hook(orch, "user-prompt-submit", { session_id: "o1", prompt_id: "p3", prompt: "  d001 Path versioning" });
+  assert.equal(answers(orch), 1);
+
+  // Decision 181 (Q1): a decision closes on the owner's answer that names it, and only that answer.
+  const closed = (w: SessionWorld) => w.store.events({ type: "decision_closed" }).map((e) => [e.payload.decision, e.payload.reason]);
+  assert.deepEqual(closed(worker), [], "a worker's line leaves the decision open");
+  assert.deepEqual(closed(lead), [], "a lead's line leaves the decision open");
+  assert.deepEqual(closed(orch), [["d001", "answered"]]);
 });
 
 test("waiting_human_released (hook side): the owner's words mark, the session moving releases, an end is moot", async () => {

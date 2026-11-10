@@ -1,9 +1,11 @@
 import {
+  classKind,
   createOrcaAdapter,
   EFFORTS,
   type Effort,
   isEffort,
   isModelKind,
+  isUnitClass,
   MODEL_KINDS,
   MODEL_TIERS,
   type ModelTier,
@@ -14,11 +16,19 @@ import {
   type StartPorts,
   Store,
   startUnit,
+  UNIT_CLASSES,
+  type UnitClass,
 } from "../../../core/index.ts";
 import type { Outcome, Refusal, ToolDef } from "../contract.ts";
 
 const DEFAULT_LIMIT = 4;
 const ROLES: readonly Role[] = ["orchestrator", "lead", "worker"];
+
+function storedClass(store: StartPorts["store"], task: string): UnitClass | undefined {
+  const rows = store.events({ type: "item_extra_set" }).filter((e) => e.payload.task === task && typeof e.payload.unit_class === "string");
+  const last = rows.at(-1)?.payload.unit_class;
+  return typeof last === "string" && isUnitClass(last) ? last : undefined;
+}
 
 const invalid = (reason: string, fix: string): Outcome => ({ ok: false, refusal: { code: "invalid_input", reason, fix } });
 
@@ -43,9 +53,18 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
     return invalid("lateAnswers go only into a new Task's first prompt", "omit task and pass spec with lateAnswers to create and start a new Task");
   }
   const references = list("references");
-  const kind = s("kind") ?? childRole;
+  const given = s("class");
+  if (given !== undefined && (!isUnitClass(given) || childRole === "lead")) {
+    return invalid(`class "${given}" is not a worker unit class`, `class (workers only): ${UNIT_CLASSES.join("|")}`);
+  }
+  // An existing Task's class was set by item_create; an explicit class or kind wins over it.
+  const unitClass = given ?? (task && !s("kind") ? storedClass(ports.store, task) : undefined);
+  if (unitClass && s("kind") && s("kind") !== classKind(unitClass)) {
+    return invalid(`kind "${s("kind")}" and class "${unitClass}" disagree`, "pass one of them");
+  }
+  const kind = s("kind") ?? (unitClass ? classKind(unitClass) : childRole);
   if (!isModelKind(kind) || (childRole === "lead" ? kind !== "lead" : kind === "lead" || kind === "orchestrator")) {
-    return invalid(`kind "${kind}" does not fit childRole ${childRole}`, "a lead is kind lead; a worker is worker, design, review, release-review or sweep");
+    return invalid(`kind "${kind}" does not fit childRole ${childRole}`, "a lead is kind lead; a worker is worker, hard, design, review, release-review or sweep");
   }
   const effort = s("effort");
   const tier = s("tier");
@@ -68,6 +87,11 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
     ...(references ? { references } : {}),
     model: model.value,
   });
+  // A class given here stays with the Task, so a restart by id without one keeps it.
+  const startedTask = "taskId" in out ? out.taskId : undefined;
+  if (given && startedTask && storedClass(ports.store, startedTask) !== given) {
+    ports.store.append({ type: "item_extra_set", source: "mcp:start_unit", payload: { task: startedTask, unit_class: given }, entity: "task", entity_id: startedTask });
+  }
   if (out.kind === "refused") {
     const refusal: Refusal = {
       code: out.reason,
@@ -102,10 +126,16 @@ export default {
       },
       references: { type: "array", items: { type: "string" }, description: "Ticket URLs." },
       agent: { type: "string", description: "Orca agent id, default claude." },
+      class: {
+        type: "string",
+        enum: [...UNIT_CLASSES],
+        description:
+          "Workers: the unit class (default, hard, design, mechanical); picks main model, advisor and effort from resource models. Default: the class item_create recorded, else default.",
+      },
       kind: {
         type: "string",
         enum: MODEL_KINDS.filter((k) => k !== "orchestrator"),
-        description: "The kind of work; picks the model and effort from resource models. Default: the childRole.",
+        description: "The kind of work when it is not a unit class (review, release-review); picks the model from resource models. Default: the class's kind, else the childRole.",
       },
       effort: { type: "string", enum: [...EFFORTS], description: "A higher effort from the kind's ladder; needs reason." },
       tier: { type: "string", enum: [...MODEL_TIERS], description: "The kind's next tier, only from the ladder's last effort; needs reason." },

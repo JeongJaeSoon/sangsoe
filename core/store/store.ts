@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -16,6 +16,7 @@ import {
   type StoredEvent,
   systemClock,
 } from "../contract/index.ts";
+import { appendLines, backupPath, isOwnRow, type Line, lastRowSeq, OWN_ROW_SQL, readBackup } from "./backup.ts";
 import { checkLocalFs, checkSqliteVersion, type FsProbe, type StartCheck } from "./checks.ts";
 import { DDL, EDGE_TRIGGERS, SCHEMA_V } from "./schema.ts";
 
@@ -65,19 +66,76 @@ export class StartRefused extends Error {
   }
 }
 
+/** A write on a connection whose file is no longer the one at its path (decision 191). */
+export class StoreReplaced extends Error {
+  override name = "StoreReplaced";
+}
+
 export interface OpenOptions {
   /** Database file, or ":memory:". Default ~/.local/share/sangsoe/sangsoe.db (decision 14). */
   readonly path?: string;
   readonly home?: string;
   readonly clock?: Clock;
   readonly fsProbe?: FsProbe;
+  /** How long an open waits on another connection's lock. Default 5000 ms. */
+  readonly busyTimeoutMs?: number;
 }
 
 export function defaultDbPath(home: string = homedir()): string {
   return join(home, ".local", "share", "sangsoe", "sangsoe.db");
 }
 
+/** What an open that found the database lost or unreadable did (decisions 182-184). */
+export type Rebuilt = {
+  /** Own rows read back from the backup file. */
+  restored: number;
+  /** What could not be restored, by name; doctor prints this list. */
+  lost: string[];
+  /** Files moved aside instead of deleted. */
+  setAside: string[];
+};
+
+/** The joiner of `signal{kind: store_rebuilt}.reason`, whose parts are the `lost` names. */
+export const LOST_SEPARATOR = " | ";
+
+// Host rows come back through the readers, which see only this much of the past (core/detect/pr/round.ts
+// CLOSED_PAGE, core/detect/orca/round.ts GLOBAL_PAGES).
+export const HOST_WINDOW_LOST =
+  "host rows outside the readers' window: pr rows of PRs past each repository's 30 most recently closed and of every PR closed without a merge, main CI rows of all but each repository's newest merge, and Dispatches past worker-list's first 3 pages";
+
 type Row = Record<string, string | number | null>;
+
+const MAX_SEQ = Number.MAX_SAFE_INTEGER;
+
+// SQLITE_CORRUPT and SQLITE_NOTADB. Any other error (a lock held by another opener) is rethrown,
+// so a live database is never moved aside.
+const DAMAGED = new Set([11, 26]);
+
+/** A damaged file can open and fail only on its first read. */
+function readable(db: DatabaseSync): boolean {
+  try {
+    db.prepare("SELECT count(*) FROM sqlite_master").get();
+    return true;
+  } catch (e) {
+    if (DAMAGED.has(Number((e as { errcode?: number }).errcode) & 0xff)) return false;
+    db.close();
+    throw e;
+  }
+}
+
+/** Renames the files that exist to `<file>.<why>-<stamp>`; nothing is deleted. */
+function moveAside(path: string, suffixes: readonly string[], why: string, clock: Clock): string[] {
+  const stamp = isoUtc(clock(), "clock").replace(/[-:.]/g, "");
+  const moved: string[] = [];
+  for (const s of suffixes) {
+    const from = `${path}${s}`;
+    if (!existsSync(from)) continue;
+    const to = `${from}.${why}-${stamp}`;
+    renameSync(from, to);
+    moved.push(to);
+  }
+  return moved;
+}
 
 // Reads one row: upcasts the payload from the row's schema_v to its type's current version and
 // validates it tolerantly. A type this build does not know (written by a newer one) passes through.
@@ -116,33 +174,134 @@ export function decodeRow(row: Row, lookup: (type: string) => EventDef | undefin
 export class Store {
   readonly #db: DatabaseSync;
   readonly #clock: Clock;
+  /** The own-facts file; null for ":memory:". */
+  readonly #backup: string | null;
+  /** The path and the file identity this connection opened; null for ":memory:". */
+  readonly #file: { path: string; dev: number; ino: number } | null;
+  /** Set when this open found the database lost or unreadable and rebuilt it; null otherwise. */
+  rebuilt: Rebuilt | null = null;
 
-  private constructor(db: DatabaseSync, clock: Clock) {
+  private constructor(db: DatabaseSync, clock: Clock, backup: string | null, path: string) {
     this.#db = db;
     this.#clock = clock;
+    this.#backup = backup;
+    if (path === ":memory:") this.#file = null;
+    else {
+      const { dev, ino } = statSync(path);
+      this.#file = { path, dev, ino };
+    }
+  }
+
+  /**
+   * True once the file at this store's path is not the one it opened: moved aside, removed, or
+   * rebuilt by another opener. Its rows would then reach no reader, so it refuses to write
+   * (StoreReplaced) and a long-lived holder opens again (decision 191).
+   */
+  replaced(): boolean {
+    if (!this.#file) return false;
+    try {
+      const now = statSync(this.#file.path);
+      return now.dev !== this.#file.dev || now.ino !== this.#file.ino;
+    } catch (e) {
+      if ((e as { code?: string }).code === "ENOENT") return true;
+      throw e;
+    }
   }
 
   /** Runs the start checks, then opens (creating if needed) the database. Refuses with StartRefused. */
   static open(opts: OpenOptions = {}): Store {
     const path = opts.path ?? defaultDbPath(opts.home);
+    const clock = opts.clock ?? systemClock;
     const checks: StartCheck[] = [];
+    const setAside: string[] = [];
+    let fresh = false;
     if (path !== ":memory:") {
       const fs = checkLocalFs(path, opts.fsProbe);
       checks.push(fs);
       if (!fs.ok) throw new StartRefused(checks);
       mkdirSync(dirname(path), { recursive: true });
+      fresh = !existsSync(path);
+      // A -wal left by a lost database must not be replayed into the new one.
+      if (fresh) setAside.push(...moveAside(path, ["-wal", "-shm"], "orphan", clock));
     }
-    const db = new DatabaseSync(path);
+    const timeout = opts.busyTimeoutMs ?? 5000;
+    let db = new DatabaseSync(path, { timeout });
+    if (path !== ":memory:" && !fresh && !readable(db)) {
+      db.close();
+      setAside.push(...moveAside(path, ["", "-wal", "-shm"], "unreadable", clock));
+      fresh = true;
+      db = new DatabaseSync(path, { timeout });
+    }
     const version = String((db.prepare("SELECT sqlite_version() AS v").get() as Row).v);
     checks.push(checkSqliteVersion(version));
     if (checks.some((c) => !c.ok)) {
       db.close();
       throw new StartRefused(checks);
     }
-    db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
-    const store = new Store(db, opts.clock ?? systemClock);
+    db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+    const backup = path === ":memory:" ? null : backupPath(path);
+    const store = new Store(db, clock, backup, path);
     store.#migrate();
+    if (backup && fresh && existsSync(backup)) store.rebuilt = store.#restore(backup, setAside);
+    else if (backup) {
+      if (store.#uncopied(backup, MAX_SEQ).length > 0) store.#tx(() => appendLines(backup, store.#uncopied(backup, MAX_SEQ)));
+      // An empty file still marks the database as one whose loss is rebuilt, not started over.
+      writeFileSync(backup, "", { flag: "a" });
+    }
     return store;
+  }
+
+  /**
+   * Reads the own facts back into a database found lost, keeping each row's seq (rows point at each
+   * other by seq), then records what could not come back. Another process that restored first wins.
+   */
+  #restore(backup: string, setAside: string[]): Rebuilt | null {
+    return this.#tx(() => {
+      if (this.#db.prepare("SELECT 1 FROM event LIMIT 1").get()) return null;
+      const read = readBackup(backup);
+      const cols = ["seq", "ts", "type", "source", "target", "subject", "entity", "entity_id", "actor", "needs", "severity", "dedupe_key", "schema_v", "before", "after"];
+      const insert = this.#db.prepare(`INSERT INTO event (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`);
+      const lost = [...read.skipped];
+      let restored = 0;
+      for (const r of read.rows) {
+        if (!isOwnRow(String(r.type), String(r.source))) {
+          lost.push(`backup seq ${r.seq}: ${r.type} is not an own fact`);
+          continue;
+        }
+        try {
+          insert.run(...cols.map((c) => r[c] ?? null));
+          restored++;
+        } catch (e) {
+          lost.push(`backup seq ${r.seq} (${r.type}): ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      for (const [name, last] of read.counters) {
+        this.#db.prepare("INSERT INTO counter (name, last) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET last = max(last, excluded.last)").run(name, last);
+      }
+      const texts = Number((this.#db.prepare("SELECT count(*) AS n FROM event WHERE type = 'owner_action'").get() as Row).n);
+      if (texts > 0) lost.push(`owner_text: the masked text of ${texts} owner_action row(s), never copied (decision 183)`);
+      lost.push(HOST_WINDOW_LOST);
+      this.#insert({
+        type: "signal",
+        source: "store",
+        payload: { kind: "store_rebuilt", reason: lost.join(LOST_SEPARATOR) },
+      });
+      return { restored, lost, setAside };
+    });
+  }
+
+  /**
+   * The lines the facts file lacks below `below`: every own row past its last row line, then the
+   * issued numbers. That is all of them for a database written before decision 182 (no file), and
+   * after that the rows an older build wrote with no copy (decision 192). Exact only under the write
+   * lock, where no other store is appending.
+   */
+  #uncopied(backup: string, below: number): Line[] {
+    const last = lastRowSeq(backup);
+    const rows = this.#db.prepare(`SELECT * FROM event WHERE seq > ? AND seq < ? AND ${OWN_ROW_SQL} ORDER BY seq`).all(last ?? 0, below) as Row[];
+    if (rows.length === 0 && last !== undefined) return [];
+    const counters = this.#db.prepare("SELECT name, last FROM counter").all() as Row[];
+    return [...rows.map((row) => ({ row })), ...counters.map((c) => ({ counter: String(c.name), last: Number(c.last) }))];
   }
 
   #migrate(): void {
@@ -176,6 +335,7 @@ export class Store {
   }
 
   #tx<T>(fn: () => T): T {
+    if (this.replaced()) throw new StoreReplaced(`${this.#file?.path} is no longer the file this connection opened: open the store again`);
     this.#db.exec("BEGIN IMMEDIATE");
     try {
       const out = fn();
@@ -226,7 +386,16 @@ export class Store {
         null,
         JSON.stringify(e.payload),
       ) as Row | undefined;
-    if (row) return { seq: Number(row.seq), inserted: true };
+    if (row) {
+      // Before COMMIT: a fact whose copy cannot be written is rolled back with it.
+      if (this.#backup && isOwnRow(e.type, e.source)) {
+        // Again under the lock: the file may have been rebuilt while BEGIN waited.
+        if (this.replaced()) throw new StoreReplaced(`${this.#file?.path} was replaced during this write: open the store again`);
+        const seq = Number(row.seq);
+        appendLines(this.#backup, [...this.#uncopied(this.#backup, seq), { row: this.#db.prepare("SELECT * FROM event WHERE seq = ?").get(seq) as Row }]);
+      }
+      return { seq: Number(row.seq), inserted: true };
+    }
     const existing = this.#db.prepare("SELECT seq FROM event WHERE dedupe_key = ?").get(e.dedupe_key ?? null) as Row;
     return { seq: Number(existing.seq), inserted: false };
   }
@@ -290,6 +459,7 @@ export class Store {
           "INSERT INTO counter (name, last) VALUES (?, 1) ON CONFLICT (name) DO UPDATE SET last = last + 1 RETURNING last",
         )
         .get(kind) as Row;
+      if (this.#backup) appendLines(this.#backup, [{ counter: kind, last: Number(row.last) }]);
       return `${kind}${String(row.last).padStart(3, "0")}`;
     });
   }

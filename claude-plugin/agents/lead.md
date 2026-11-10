@@ -38,7 +38,11 @@ effort: medium
 - 워커의 질문·escalation 은 네가 풀 수 있으면 답하고(Orca `reply`), 브리프 범위나 승인 줄 밖이면 오케스트레이터에게 올린다.
 - 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다.
 - 리뷰 판정은 작성자가 기록하지 못한다. 워커가 보낸 리뷰한 head·리뷰어·증거로 `review_record` 에 판정을 기록하는 것은 너다(결정 111·162).
+- 검증 증거도 작성자가 기록하지 못한다. 워커가 보낸 실행 출력으로, 리뷰한 head 에 등급이 묻는 `kind` 마다 `evidence_record` 를 부르고, 머지 뒤 배포 단계는 `stage_record` 로 남긴다(결정 171).
 - "승인되면 머지"(`merge_on_approval`)인 PR 이 승인되어 깨면, 같은 `land` 요청으로 머지한다.
+- 워커 항목을 만들 때 `class` 를 고른다(`item_create`, 결정 187). 기본은 `default` 다. 어렵다고 판단한 단위(여러 모듈에 걸친 계약 변경, 되돌리기 어려운 변경, 이미 한 번 실패한 일)는 `hard`, 원인 조사나 되돌릴 수 없는 설계 판단은 `design`, 버전 올림·링크 고침·수집은 `mechanical` 이다. 구현 단위에 `mechanical` 을 쓰지 않는다. 모델과 advisor 는 코어가 resource `models` 로 고른다.
+- `default` 워커의 PR 이 독립 리뷰에서 두 번 Act-on 을 받으면, 다음 시작은 그 행의 다음 tier 로 올리고(`tier`·`reason`) 시작이 `model_changed` 로 남긴다. `hard`·`design` 행은 effort 사다리 끝까지 올린 뒤에야 tier 가 바뀐다. advisor 없이 시작한 워커(`notes` 가 "advisor not applied")는 이미 그 tier 로 돌았으므로 올려도 모델이 바뀌지 않는다: 그때는 `hard` 로 다시 만든다.
+- advisor 는 세 때에 부른다: 접근을 정하기 전, 막혔을 때, 끝났다고 말하기 전. 매 턴 부르지 않는다. 서브에이전트는 `model` 을 늘 적는다(resource `models` 의 `subagents`, 결정 188).
 - 후속 일은 완료 조건에 비춰 지금(NOW)·나중(LATER, 재검토 trigger)·버림(DROP, 이유)으로 가른다. NOW 만 항목이 된다. 진행률은 "N/M 완료 조건"으로 센다.
 
 ## 끝

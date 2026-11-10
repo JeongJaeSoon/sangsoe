@@ -1,10 +1,12 @@
-import { createItem, createOrcaAdapter, nodeExec, type OrcaAdapter, parseOwnerExtra, recordOwnerExtra, Store } from "../../core/index.ts";
+import { createItem, createOrcaAdapter, isUnitClass, nodeExec, type OrcaAdapter, parseOwnerExtra, recordOwnerExtra, Store } from "../../core/index.ts";
 import type { CommandArgs, CommandDef, Outcome } from "../contract.ts";
 
 // Same mapping as the MCP tool item_create, so both entrances give the same Outcome.
 const FIX = {
   invalid_input: "give run, spec, who and done-when, none empty",
   task_create_failed: "check that the Run id is right and the deps are Tasks of that Run",
+  invalid_role: "role is lead or worker: the session start_unit opens for this item",
+  invalid_class: "class is default, hard, design or mechanical, and only for a worker item",
   invalid_verify: "verify is one of pr_merged{pr} · orca_field{target,field,value} · plugin_approved{key} · run_ok{repo} · pr_found{repo,search}; cmdHint a non-empty command prefix",
 } as const;
 
@@ -27,6 +29,16 @@ export async function itemNew(values: CommandArgs["values"], ports: { orca?: Orc
   const json = verifyJson(str("verify"));
   const extra = json.ok ? parseOwnerExtra(json.value, typeof values["cmd-hint"] === "string" ? values["cmd-hint"] : undefined) : json;
   if (!extra.ok) return { ok: false, refusal: { code: "invalid_verify", reason: extra.error, fix: FIX.invalid_verify } };
+  // An empty --role is refused as item_create refuses role "": absent is the only default.
+  const raw = values.role === undefined ? undefined : str("role");
+  const role = raw === "lead" || raw === "worker" ? raw : undefined;
+  if (raw !== undefined && role === undefined) {
+    return { ok: false, refusal: { code: "invalid_input", reason: `role "${raw}" is not lead or worker`, fix: FIX.invalid_role } };
+  }
+  const unitClass = values.class === undefined ? undefined : str("class");
+  if (unitClass !== undefined && (!isUnitClass(unitClass) || role === "lead")) {
+    return { ok: false, refusal: { code: "invalid_input", reason: `class "${unitClass}" is not a worker unit class`, fix: FIX.invalid_class } };
+  }
   const store = ports.store ?? Store.open();
   try {
     const r = await createItem(ports.orca ?? createOrcaAdapter(nodeExec()), store, {
@@ -36,8 +48,12 @@ export async function itemNew(values: CommandArgs["values"], ports: { orca?: Orc
       doneWhen: str("done-when"),
       ...(str("title") ? { title: str("title") } : {}),
       ...(deps.length ? { deps } : {}),
+      ...(role ? { role } : {}),
     });
     if (r.ok) recordOwnerExtra(store, r.task, extra.value);
+    if (r.ok && unitClass) {
+      store.append({ type: "item_extra_set", source: "core:item", payload: { task: r.task, unit_class: unitClass }, entity: "task", entity_id: r.task });
+    }
     return r.ok ? { ok: true, value: { task: r.task, alias: r.alias } } : { ok: false, refusal: { code: r.code, reason: r.error, fix: FIX[r.code] } };
   } finally {
     if (!ports.store) store.close();
@@ -47,12 +63,14 @@ export async function itemNew(values: CommandArgs["values"], ports: { orca?: Orc
 export default {
   name: "item new",
   summary: "create an item's Orca Task (task-create --deps) and its iNNN alias; starting it is start_unit's",
-  usage: "--run <run id> --spec <text> --who <owner> --done-when <text> [--title <t>] [--deps <task,task>] [--verify <json>] [--cmd-hint <text>]",
+  usage: "--run <run id> --spec <text> --who <owner> --done-when <text> [--title <t>] [--deps <task,task>] [--role lead|worker] [--class default|hard|design|mechanical] [--verify <json>] [--cmd-hint <text>]",
   options: {
     run: { type: "string" },
     spec: { type: "string" },
     title: { type: "string" },
     deps: { type: "string" },
+    role: { type: "string" },
+    class: { type: "string" },
     who: { type: "string" },
     "done-when": { type: "string" },
     verify: { type: "string" },
