@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 1026" role="img" aria-labelledby="tfm dfm">
 <title id="tfm">흐름 3. 머지와 정리</title>
-<desc id="dfm">PR 을 만든 워커가 MCP tool 로 land 요청을 하면 공유 코어의 land 판정 함수가 먼저 검증 등급 증거를 확인해 없으면 land_failed(evidence_missing)로 끝내고, 있으면 판정하며 GitHub 에서 저장소 설정을 읽는다. 자동 머지 조건 넷(필수 리뷰와 필수 CI 강제, 최신 main 필수 또는 병합 대기열, 새 push 에 승인 무효, prod·인프라·보안 경로가 아님)이 모두 참이면 gh pr merge --auto 로 머지를 예약하고, 하나라도 거짓이면 예약하지 않고 승인되면 머지를 남긴다. 워커는 어느 쪽이든 worker_done 이 아니라 머지 대기 보고(merge_ready)를 Orca 로 보내 스스로 끝나고, Task 는 막힘(리뷰어)로 열린 채 있으며 터미널은 리드가 해제한다. 예약했으면 사람 승인과 CI 가 찰 때 GitHub 이 머지하고, 승인되면 머지이면 승인이 찰 때 pr-monitor 가 소유 리드를 깨워 리드가 같은 land 요청으로 머지한다. 머지 뒤에는 두 갈래 모두 pr-monitor 가 GitHub 을 읽어 머지 확인(머지 표시와 main 포함)을 하고, 확인되면 pr_merged 를 기록한 뒤 Orca Task 를 completed 로 닫아 ✅ 가 되며, 이어 main CI 결과를 기록하고 빨강이면 🚨 와 동결이다. pr_merged 는 REAPER 라운드를 앞당기는 힌트일 뿐이고, REAPER 가 타이머 라운드에서 루트를 읽어 표시한 뒤 후보 가운데 PR 상태와 HEAD 포함으로 끝났음이 확인되고 두 라운드 연속인 카드가 삭제 전 검사(커밋 안 된 변경, 원격에 없는 커밋)를 마치면 worktree rm 을 --force 없이 부르고 브랜치는 --delete-branch 로 지운다. 패널은 코어의 뷰와 Orca 의 Task 를 읽어 완료 표시와 머지됨을 보인다. 오른쪽 열은 단계마다 무엇이 오가고 어느 쪽이 원본인지 적었다.</desc>
+<desc id="dfm">PR 을 만든 워커가 MCP tool 로 land 요청을 하면 공유 코어의 land 판정 함수가 먼저 검증 등급 증거를 확인해 없으면 land_failed(evidence_missing)로 끝내고, 있으면 판정하며 GitHub 에서 저장소 설정을 읽는다. 자동 머지 조건 넷(필수 리뷰와 필수 CI 강제, 최신 main 필수 또는 병합 대기열, 새 push 에 승인 무효, prod·인프라·보안 경로가 아님)이 모두 참이면 gh pr merge --auto 로 머지를 예약하고, 하나라도 거짓이면 예약하지 않고 승인되면 머지를 남긴다. 워커는 어느 쪽이든 머지 대기 보고(merge_ready)를 담은 worker_done 으로 스스로 끝나고, Orca 는 Task 를 completed 로 닫고 터미널을 자동 해제하지만 브리프는 머지 확인까지 그 항목을 막힘(리뷰어)으로 읽는다(결정 175). 예약했으면 사람 승인과 CI 가 찰 때 GitHub 이 머지하고, 승인되면 머지이면 승인이 찰 때 pr-monitor 가 소유 리드를 깨워 리드가 같은 land 요청으로 머지한다. 머지 뒤에는 두 갈래 모두 pr-monitor 가 GitHub 을 읽어 머지 확인(머지 표시와 main 포함)을 하고, 확인되면 pr_merged 를 기록하고(Task 가 아직 열려 있으면 completed 로 닫는다) ✅ 가 되며, 이어 main CI 결과를 기록하고 빨강이면 🚨 와 동결이다. pr_merged 는 REAPER 라운드를 앞당기는 힌트일 뿐이고, REAPER 가 타이머 라운드에서 루트를 읽어 표시한 뒤 후보 가운데 PR 상태와 HEAD 포함으로 끝났음이 확인되고 두 라운드 연속인 카드가 삭제 전 검사(커밋 안 된 변경, 원격에 없는 커밋)를 마치면 worktree rm 을 --force 없이 부르고 브랜치는 --delete-branch 로 지운다. 패널은 코어의 뷰와 Orca 의 Task 를 읽어 완료 표시와 머지됨을 보인다. 오른쪽 열은 단계마다 무엇이 오가고 어느 쪽이 원본인지 적었다.</desc>
 <style>
 :root{--halo:#f6f8fb;--bg:#fff;--fg:#1d2330;--mut:#586174;--line:#667085;--scr:#047857;--scrbg:#e7f8f0;--llm:#c2410c;--llmbg:#fff1e6;--ext:#475467;--extbg:#f2f4f7;--own:#1d4ed8;--ownbg:#e8f0ff;--orc:#6d28d9;--orcbg:#f1eaff;--warn:#b42318}
 @media (prefers-color-scheme:dark){:root{--halo:#0f131b;--bg:#161b26;--fg:#e6e9ef;--mut:#a3adbf;--line:#98a2b3;--scr:#10b981;--scrbg:#0f2d26;--llm:#f97316;--llmbg:#38200f;--ext:#98a2b3;--extbg:#242b38;--own:#3b82f6;--ownbg:#14233f;--orc:#a78bfa;--orcbg:#2a1f45;--warn:#fca5a5}}
@@ -64,10 +64,10 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 <!-- C -->
 <g class="sec"><rect x="10" y="378" width="1140" height="24" rx="5"/><text x="20" y="395">보고와 정리: 워커는 스스로 끝난다</text></g>
 <g class="num"><circle cx="24" cy="426" r="9"/><text x="24" y="430">6</text></g>
-<path class="a" d="M62,426 L434,426"/><text class="l c" x="248" y="419">merge_ready (orca orchestration send)</text>
+<path class="a" d="M62,426 L434,426"/><text class="l c" x="248" y="419">worker_done (본문: 머지 대기 보고)</text>
 <text class="m" x="882" y="422">원본: Orca 메시지 · Dispatch</text><text class="m" x="882" y="436">5 이면 "승인되면 머지" 를 적는다</text>
 <g class="num"><circle cx="24" cy="474" r="9"/><text x="24" y="478">7</text></g>
-<g class="orc"><rect x="334" y="459" width="200" height="30" rx="6"/><text class="c" x="434" y="479">Task 열림 🚧 막힘(리뷰어)</text></g>
+<g class="orc"><rect x="334" y="459" width="200" height="30" rx="6"/><text class="c" x="434" y="479">Task 닫힘 · 뷰는 🚧 막힘(리뷰어)</text></g>
 <text class="m" x="882" y="470">원본: Orca Task</text><text class="m" x="882" y="484">머지 확인까지 닫지 않는다 (✅ 아직 아님)</text>
 <g class="num"><circle cx="24" cy="522" r="9"/><text x="24" y="526">8</text></g>
 <g class="orc"><rect x="334" y="507" width="200" height="30" rx="6"/><text class="c" x="434" y="527">worker-release (리드)</text></g>
@@ -96,8 +96,8 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 
 <!-- F -->
 <g class="num"><circle cx="24" cy="858" r="9"/><text x="24" y="862">14</text></g>
-<path class="a" d="M558,858 L434,858"/><text class="l c" x="496" y="851">task-update completed</text>
-<text class="m" x="882" y="854">원본: Orca Task. 머지 확인 뒤에만 닫는다</text><text class="m" x="882" y="868">Task completed ✅ · 증거가 없으면 🔍</text>
+<path class="a" d="M558,858 L434,858"/><text class="l c" x="496" y="851">task-update completed (열려 있으면)</text>
+<text class="m" x="882" y="854">원본: Orca Task 와 pr_merged. ✅ 는 머지 확인 뒤</text><text class="m" x="882" y="868">Task completed ✅ · 증거가 없으면 🔍</text>
 <g class="num"><circle cx="24" cy="906" r="9"/><text x="24" y="910">15</text></g>
 <path class="a" d="M558,906 L434,906"/><text class="l c" x="496" y="899">REAPER 라운드: 표시 → 정리</text>
 <text class="m" x="882" y="902">두 라운드 뒤 검사 → rm. 막히면 reap_blocked</text><text class="m" x="882" y="916">--force 없이, 브랜치는 --delete-branch</text>
