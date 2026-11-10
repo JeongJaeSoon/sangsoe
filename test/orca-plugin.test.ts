@@ -340,7 +340,7 @@ test("activate subscribes, registers and redraws status bar B from the core each
   try {
     assert.deepEqual(w.subscribed.sort(), [...EVENTS].sort());
     assert.deepEqual([...w.commands.keys()], ["sangsoe.open"]);
-    assert.deepEqual([...w.handlers.keys()].sort(), ["panel.act", "panel.brief", "probe.exec", "probe.open", "probe.report", "probe.t1"]);
+    assert.deepEqual([...w.handlers.keys()].sort(), ["panel.act", "panel.brief", "panel.open", "probe.exec", "probe.open", "probe.report", "probe.t1"]);
     assert.deepEqual(execs, [], "starting the worker runs no command");
     await advance(60_000);
     const texts = w.hostCalls.map(([, p]) => (p as { text: string }).text);
@@ -371,7 +371,7 @@ test("panel requests reach the core unchanged; a malformed act and a missing cor
     const r = (await w2.handlers.get("panel.brief")?.({})) as { ok: boolean; refusal: { code: string } };
     assert.deepEqual([r.ok, r.refusal.code], [false, "core_unavailable"]);
     await new Promise((r) => setImmediate(r));
-    assert.equal((w2.hostCalls[0]?.[1] as { text?: string } | undefined)?.text, "sangsoe ?", "no number is guessed");
+    assert.equal((w2.hostCalls[0]?.[1] as { text?: string } | undefined)?.text, "SANGSOE  ?", "no number is guessed");
   } finally {
     deactivate();
   }

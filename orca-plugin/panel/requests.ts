@@ -28,7 +28,33 @@ function target(raw: unknown): { group?: string; item?: string } {
 }
 
 /** Status bar text when the core cannot answer: no number is guessed. */
-export const STATUS_UNKNOWN: StatusItem = { text: "sangsoe ?", tone: "neutral", tooltip: "sangsoe: 현황을 읽지 못함" };
+export const STATUS_UNKNOWN: StatusItem = { text: "SANGSOE  ?", tone: "neutral", tooltip: "sangsoe: 현황을 읽지 못함" };
+
+// A group name goes into a shell command line, so only a plain token passes; anything else opens 현황.
+const GROUP = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/** The terminal command a header button may ask for; the panel's text never reaches the shell. */
+export function openCommand(raw: unknown): string | null {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  if (o.view === "doctor") return "sangsoe doctor";
+  if (o.view === "todo") return "sangsoe todo";
+  if (o.view !== "brief") return null;
+  const group = typeof o.group === "string" && GROUP.test(o.group) ? o.group : null;
+  const item = group && typeof o.item === "string" && ITEM.test(o.item) ? o.item : null;
+  return ["sangsoe brief", group, item].filter(Boolean).join(" ");
+}
+
+type Exec = (cmd: string, args: readonly string[]) => Promise<{ ok: boolean; code: string | number | null; out: string; err: string }>;
+
+/** `panel.open`: Orca's own terminal (`orca terminal create`) runs the token-free CLI read. */
+export function openHandler(exec: Exec) {
+  return async (input: unknown): Promise<Reply> => {
+    const command = openCommand(input);
+    if (!command) return refuse("bad_input", "not a panel view", "press a header button on the panel");
+    const r = await exec("orca", ["terminal", "create", "--worktree", "active", "--title", command, "--command", command, "--focus", "--json"]);
+    return r.ok ? { ok: true, value: { status: "opened" } } : refuse("open_failed", (r.err || r.out || String(r.code)).slice(0, 200), `run ${command} in a terminal`);
+  };
+}
 
 const thrown = (e: unknown): Reply => refuse("core_error", e instanceof Error ? e.message : String(e), "reopen the panel; run sangsoe doctor if it repeats");
 
