@@ -8,7 +8,7 @@
 - `checks.ts` — 삭제 전 검사: 추적 안 된 파일까지 미커밋, GitHub 에 없는 HEAD.
 - `docker.ts` — 기록된 id 를 정지한 컨테이너 → 볼륨 → 네트워크 → 이미지 순으로 하나씩. `-f`·`prune`·라벨 선택 없음.
 - `record.ts` — `resource_record`(MCP)·`sangsoe resource record`(CLI)의 몸체: 만든 쪽이 Docker id 를 소유자와 함께 남긴다. compose 프로젝트는 그 이름으로 Compose 에 물어 id 를 모은다.
-- `config.ts` — `~/.config/sangsoe/config.json` 의 `reaper`(`protect` · `grace_minutes` · `min_gap_minutes`). 칸이 없으면 보호 목록 루트를 못 읽은 것이라 표시만 한다.
+- `config.ts` — `~/.config/sangsoe/config.json` 의 `reaper`(`protect` · `grace_minutes` · `min_gap_minutes`). 칸이 없거나 읽을 수 없으면 라운드는 표시만 하고 `mark_only` 로 남는다(루트 실패가 아니다, 결정 174).
 - `open.ts` — 실제 의존(Orca 어댑터 · `gh` · store)을 묶은 실행기.
 
 터미널은 닫지 않는다: 이 폴더에는 `worker-release`·`terminal` 을 부르는 코드가 없다(Orca 의 자동 해제와 리드의 몫).
