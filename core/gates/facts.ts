@@ -40,32 +40,65 @@ export function firstPrompt(transcriptPath: string | undefined): string | undefi
   return undefined;
 }
 
-const PR_URL = /github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/;
+// `https://host/o/r`, `ssh://user@host:port/o/r` or scp-like `user@host:o/r`, each with an optional `.git`.
+const URL_REMOTE = /^(?:https?|ssh|git):\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/;
+const SCP_REMOTE = /^(?:[^@/]+@)?([^/:]+):([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/;
 
-/** Open PRs from the worktree's branch, each with whether `land_requested` names it. undefined when unread. */
-// Decision 198: both reads name the session's worktree; `gh` would otherwise pick the repo from the hook
-// process's own cwd. An empty cwd (`git -C ""` reads the process's) is unknown, and the gate lets it pass.
-const GITHUB_REMOTE = /github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/;
-
-export function openPrs(host: Host, cwd: string, store: () => Pick<Store, "events"> | undefined): OpenPr[] | undefined {
-  if (!cwd) return undefined;
-  const branch = host.run("git", ["-C", cwd, "branch", "--show-current"]);
-  const name = branch.stdout.trim();
-  if (branch.code !== 0 || name === "") return undefined;
-  const remote = host.run("git", ["-C", cwd, "remote", "get-url", "origin"]);
-  const repo = remote.code === 0 ? GITHUB_REMOTE.exec(remote.stdout.trim())?.[1] : undefined;
-  if (!repo) return undefined;
-  const list = host.run("gh", ["pr", "list", "-R", repo, "--head", name, "--state", "open", "--json", "url"]);
-  if (list.code !== 0) return undefined;
-  let prs: string[];
+const parse = <T>(text: string): T | undefined => {
   try {
-    prs = (JSON.parse(list.stdout) as { url: string }[]).flatMap((p) => {
-      const m = PR_URL.exec(p.url);
-      return m ? [`${m[1]?.toLowerCase()}#${m[2]}`] : [];
-    });
+    return JSON.parse(text) as T;
   } catch {
     return undefined;
   }
+};
+
+/**
+ * The repository `gh` names for origin, as `[HOST/]OWNER/REPO`. An SSH host may be an alias from the
+ * ssh config, so `ssh -G` (which reads the config and connects to nothing) names the real host.
+ */
+function ghRepo(host: Host, url: string): string | undefined {
+  const m = URL_REMOTE.exec(url) ?? SCP_REMOTE.exec(url);
+  if (!m) return undefined;
+  let at = m[1]?.toLowerCase() ?? "";
+  if (!/^https?:/.test(url) && at !== "github.com") {
+    const g = host.run("ssh", ["-G", at]);
+    at = g.code === 0 ? (/^hostname (\S+)$/m.exec(g.stdout)?.[1]?.toLowerCase() ?? "") : "";
+    if (!at) return undefined;
+  }
+  return at === "github.com" ? `${m[2]}/${m[3]}` : `${at}/${m[2]}/${m[3]}`;
+}
+
+type RepoView = { nameWithOwner?: string; isFork?: boolean; parent?: { name?: string; owner?: { login?: string } } | null };
+
+/**
+ * Open PRs from the worktree's branch, each with whether `land_requested` names it. `[]` when no PR can
+ * exist (not a checkout, no origin); undefined when unread, which the gate refuses (decision 201).
+ */
+// Decision 198: both reads name the session's worktree; `gh` would otherwise pick the repo from the hook
+// process's own cwd. An empty cwd (`git -C ""` reads the process's) is unknown.
+export function openPrs(host: Host, cwd: string, store: () => Pick<Store, "events"> | undefined): OpenPr[] | undefined {
+  if (!cwd) return undefined;
+  const branch = host.run("git", ["-C", cwd, "branch", "--show-current"]);
+  if (branch.code !== 0) return /not a git repository/i.test(branch.stderr) ? [] : undefined;
+  const name = branch.stdout.trim();
+  if (name === "") return undefined;
+  const remote = host.run("git", ["-C", cwd, "remote", "get-url", "origin"]);
+  if (remote.code !== 0) return /no such remote/i.test(remote.stderr) ? [] : undefined;
+  const repo = ghRepo(host, remote.stdout.trim());
+  if (!repo) return undefined;
+  const view = host.run("gh", ["repo", "view", repo, "--json", "nameWithOwner,isFork,parent"]);
+  const v = view.code === 0 ? parse<RepoView>(view.stdout) : undefined;
+  const own = v?.nameWithOwner?.split("/")[0]?.toLowerCase();
+  if (!v || !own) return undefined;
+  // A fork's PRs are opened on its upstream.
+  const up = v.isFork ? (v.parent?.owner?.login && v.parent.name ? `${v.parent.owner.login}/${v.parent.name}` : undefined) : v.nameWithOwner;
+  if (!up) return undefined;
+  const at = repo.split("/").length === 3 ? `${repo.split("/")[0]}/${up}` : up;
+  const list = host.run("gh", ["pr", "list", "-R", at, "--head", name, "--state", "open", "--json", "number,headRepositoryOwner"]);
+  const rows = list.code === 0 ? parse<{ number?: number; headRepositoryOwner?: { login?: string } }[]>(list.stdout) : undefined;
+  if (!Array.isArray(rows)) return undefined;
+  // `--head` takes a bare branch name, so another fork's branch of the same name is listed too.
+  const prs = rows.filter((p) => p.headRepositoryOwner?.login?.toLowerCase() === own && Number.isInteger(p.number)).map((p) => `${up.toLowerCase()}#${p.number}`);
   if (prs.length === 0) return [];
   try {
     const s = store();

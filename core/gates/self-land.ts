@@ -3,7 +3,7 @@ import type { Facts, Gate, Verdict } from "./types.ts";
 
 // Appendix #gates [gate:self-land] and decision 81: merging is `sangsoe land` alone, and a worker does not
 // finish over its own open PR without a land request. A person's own session (role general) is left alone.
-// What cannot be read (the open PRs) is not judged: the call passes.
+// Decision 201: open PRs that cannot be read are refused too, so the gate never passes on a guess.
 
 const WAIT_LINE = /(?:^|[\s"'])READY-WAIT:[ \t]*[\w-]+/m;
 const LAND = "the MCP tool land (mcp__plugin_sangsoe_sangsoe__land), or `sangsoe land --pr <N>` from a person's terminal";
@@ -12,8 +12,13 @@ function verdict(reason: string): Verdict {
   return { decision: "deny", gate: "self-land", reason: `[gate:self-land] ${reason}` };
 }
 
-function openWithoutLand(facts: Facts): string | undefined {
-  return facts.ownOpenPrs()?.find((p) => !p.landRequested)?.pr;
+const UNREAD =
+  "이 worktree 의 열린 PR 을 읽지 못해(origin 을 GitHub 저장소로 풀지 못했거나 gh 가 답하지 않음) land 없이 끝내는지 확인할 수 없다. land 를 부르거나 본문에 `READY-WAIT: <kind>` 줄을 적는다.";
+
+/** The first open PR with no land request, or `null` when the open PRs could not be read. */
+function openWithoutLand(facts: Facts): string | null | undefined {
+  const prs = facts.ownOpenPrs();
+  return prs === undefined ? null : prs.find((p) => !p.landRequested)?.pr;
 }
 
 /** The lines of the first heredoc that `<<WORD` opens on or after the line holding `--body`. */
@@ -74,6 +79,7 @@ export const selfLandGate: Gate = (call, facts) => {
     const sent = done ? body(argv, text, call.cwd, facts) : undefined;
     if (sent !== undefined && facts.role() === "worker" && !WAIT_LINE.test(sent)) {
       const pr = openWithoutLand(facts);
+      if (pr === null) return verdict(UNREAD);
       if (pr) {
         return verdict(
           `${pr} is still open with no land request. Land it through ${LAND}, ` +
