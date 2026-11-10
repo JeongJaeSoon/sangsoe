@@ -76,7 +76,7 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 <g class="st"><rect x="800" y="543" width="186" height="22" rx="5"/><text class="m" x="810" y="558">land_requested</text></g>
 <g class="num"><circle cx="24" cy="589" r="9"/><text x="24" y="593">11</text></g>
 <g class="llm"><rect x="520" y="574" width="150" height="30" rx="6"/><text class="c" x="595" y="594">머지 대기 보고 · 종료</text></g>
-<g class="st"><rect x="800" y="578" width="186" height="22" rx="5"/><text class="m" x="810" y="593">merge_ready (Task 열림)</text></g>
+<g class="st"><rect x="800" y="578" width="186" height="22" rx="5"/><text class="m" x="810" y="593">worker_done (🚧 리뷰어)</text></g>
 <g class="num"><circle cx="24" cy="627" r="9"/><text x="24" y="631">12</text></g>
 <g class="scr"><rect x="632" y="612" width="140" height="30" rx="6"/><text class="c" x="702" y="632">머지 확인 → ✅ · CI</text></g>
 <g class="st"><rect x="800" y="616" width="186" height="22" rx="5"/><text class="m" x="810" y="631">pr_merged · main_green</text></g>
