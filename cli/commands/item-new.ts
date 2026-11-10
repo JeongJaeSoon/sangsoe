@@ -29,9 +29,10 @@ export async function itemNew(values: CommandArgs["values"], ports: { orca?: Orc
   const extra = json.ok ? parseOwnerExtra(json.value, typeof values["cmd-hint"] === "string" ? values["cmd-hint"] : undefined) : json;
   if (!extra.ok) return { ok: false, refusal: { code: "invalid_verify", reason: extra.error, fix: FIX.invalid_verify } };
   // An empty --role is refused as item_create refuses role "": absent is the only default.
-  const role = str("role");
-  if (values.role !== undefined && role !== "lead" && role !== "worker") {
-    return { ok: false, refusal: { code: "invalid_input", reason: `role "${role}" is not lead or worker`, fix: FIX.invalid_role } };
+  const raw = values.role === undefined ? undefined : str("role");
+  const role = raw === "lead" || raw === "worker" ? raw : undefined;
+  if (raw !== undefined && role === undefined) {
+    return { ok: false, refusal: { code: "invalid_input", reason: `role "${raw}" is not lead or worker`, fix: FIX.invalid_role } };
   }
   const store = ports.store ?? Store.open();
   try {

@@ -39,7 +39,10 @@ test("A blocks B: A's author sent worker_done with the PR open, so B is not read
 });
 
 test("A blocks B: once A's PR merges, B is ready", () => {
-  assert.deepEqual(readyTasks(world((s) => (opened(s), merged(s)))), [B]);
+  assert.deepEqual(readyTasks(world((s) => {
+    opened(s);
+    merged(s);
+  })), [B]);
 });
 
 test("before pr-monitor binds the PR, the one A's report names holds B as unknown", () => {
@@ -50,7 +53,10 @@ test("before pr-monitor binds the PR, the one A's report names holds B as unknow
 });
 
 test("A PR closed unmerged leaves B on a dangling predecessor, and A reads pr_closed for the lead", () => {
-  const input = world((s) => (opened(s), closed(s)));
+  const input = world((s) => {
+    opened(s);
+    closed(s);
+  });
   assert.deepEqual(readyTasks(input), []);
   assert.equal(why(input, B).rows[0]?.dangling, true);
   const f = item(input, A);
