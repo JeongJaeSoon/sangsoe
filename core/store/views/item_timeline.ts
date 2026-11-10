@@ -1,6 +1,7 @@
 import type { ItemTimelineView, StoredEvent } from "../../contract/index.ts";
 
-const NOISE: ReadonlySet<string> = new Set(["turn_ended", "worker_idle", "compacted", "observed_change"]);
+// worker_idle and observed_change are two of decision 186's nine events and show in the chain (decision 198).
+const NOISE: ReadonlySet<string> = new Set(["turn_ended", "compacted"]);
 
 const s = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
@@ -23,6 +24,7 @@ export const item_timeline: ItemTimelineView = (input, task) => {
     if (NOISE.has(e.type)) return false;
     const p = e.payload;
     if (s(p.task) === task || s(p.waiter) === task) return true;
+    if (e.entity === "task" && e.entity_id === task) return true;
     if (e.type === "owner_action" && ownerActions.has(`owner_action:${e.seq}`)) return true;
     if (e.subject !== null && ownerActions.has(e.subject)) return true;
     const pr = s(p.pr);

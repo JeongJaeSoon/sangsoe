@@ -43,11 +43,19 @@ export function firstPrompt(transcriptPath: string | undefined): string | undefi
 const PR_URL = /github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/;
 
 /** Open PRs from the worktree's branch, each with whether `land_requested` names it. undefined when unread. */
+// Decision 198: both reads name the session's worktree; `gh` would otherwise pick the repo from the hook
+// process's own cwd. An empty cwd (`git -C ""` reads the process's) is unknown, and the gate lets it pass.
+const GITHUB_REMOTE = /github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/;
+
 export function openPrs(host: Host, cwd: string, store: () => Pick<Store, "events"> | undefined): OpenPr[] | undefined {
+  if (!cwd) return undefined;
   const branch = host.run("git", ["-C", cwd, "branch", "--show-current"]);
   const name = branch.stdout.trim();
   if (branch.code !== 0 || name === "") return undefined;
-  const list = host.run("gh", ["pr", "list", "--head", name, "--state", "open", "--json", "url"]);
+  const remote = host.run("git", ["-C", cwd, "remote", "get-url", "origin"]);
+  const repo = remote.code === 0 ? GITHUB_REMOTE.exec(remote.stdout.trim())?.[1] : undefined;
+  if (!repo) return undefined;
+  const list = host.run("gh", ["pr", "list", "-R", repo, "--head", name, "--state", "open", "--json", "url"]);
   if (list.code !== 0) return undefined;
   let prs: string[];
   try {

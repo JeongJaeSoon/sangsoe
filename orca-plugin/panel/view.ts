@@ -46,7 +46,12 @@ export type ItemDetail = {
 };
 export type BriefModel = Overview | GroupDetail | ItemDetail;
 export type TodoRow = { kind: "decision" | "owner_item" | "waiting_human" | "undelivered_answer"; ref: string };
-export type PanelView = { model: BriefModel; todo: TodoRow[] };
+export type PanelView = {
+  model: BriefModel;
+  todo: TodoRow[];
+  /** The refresh time the core drew in the local zone (decision 198); absent from an older core. */
+  fresh?: { short: string; full: string };
+};
 
 /** Where the panel is: [] is 현황, then a group, then an item. */
 export type Target = { group?: string; item?: string };
@@ -69,7 +74,35 @@ const ESC: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"
 export const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => ESC[c] ?? c);
 const attr = (v: unknown) => esc(JSON.stringify(v));
 const DASH = '<span class="dash">—</span>';
-const stamp = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(8, 10)} ${iso.slice(11, 16)}`;
+
+/**
+ * One short Korean line per refusal code (decision 198); the code, reason and fix stay in the title.
+ * A code not listed reads as the generic line, never as the raw text.
+ */
+export const ERROR_LINE: Readonly<Record<string, string>> = {
+  request_failed: "패널이 sangsoe 에 닿지 못했다. 새로 고침을 누른다.",
+  core_unavailable: "sangsoe 코어를 열지 못했다. 터미널에서 sangsoe doctor 를 본다.",
+  core_error: "sangsoe 코어가 오류로 끝났다. 되풀이되면 sangsoe doctor 를 본다.",
+  orca_error: "Orca 가 답하지 않았다. 잠시 뒤 새로 고침을 누른다.",
+  not_found: "이 묶음이나 항목은 이제 열려 있지 않다. 뒤로 가서 현황을 본다.",
+  no_worktree: "터미널을 열 worktree 가 없다. 터미널에서 직접 실행한다.",
+  open_failed: "Orca 가 터미널을 열지 못했다. 터미널에서 직접 실행한다.",
+  bad_input: "패널이 알 수 없는 요청을 보냈다. 새로 고침을 누른다.",
+  not_open: "이 결정은 이미 닫혔다. 새로 고침을 누른다.",
+  no_recommendation: "추천 답이 없다. 다른 답으로 답한다.",
+  not_owner_item: "오너의 할 일이 아니다. 맡은 쪽이 닫는다.",
+  not_ready: "지금 완료할 수 있는 할 일이 아니다.",
+};
+const ERROR_OTHER = "sangsoe 가 요청을 처리하지 못했다.";
+
+export type Refusal = { code: string; reason: string; fix: string };
+export const errorLine = (r: Refusal): string => ERROR_LINE[r.code] ?? ERROR_OTHER;
+const errorTitle = (r: Refusal): string => [r.code, r.reason, r.fix].filter(Boolean).join(" · ");
+
+/** The one-line note a refusal leaves (an act or an open): Korean text, the raw refusal as its title. */
+export function errorNote(r: Refusal): string {
+  return `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorLine(r))}</p>`;
+}
 
 function cellHtml(c: Cell): string {
   if (c.text === "—" && !c.link) return DASH;
@@ -115,7 +148,7 @@ function section(id: string, t: Table, rows: string[], acts = false, hint = "", 
 const btn = (label: string, act: Act | null, primary = false) =>
   `<button type="button" class="btn${primary ? " primary" : ""}"${act ? ` data-act="${attr(act)}"` : " disabled"}>${esc(label)}</button>`;
 
-function overview(m: Overview, todo: readonly TodoRow[]): string {
+function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<string>): string {
   const kind = new Map(todo.map((r) => [r.ref, r.kind]));
   const decisions = m.decisions.rows.map((r) => {
     const rec = r.cells[2]?.text ?? "—";
@@ -126,10 +159,12 @@ function overview(m: Overview, todo: readonly TodoRow[]): string {
     return rowHtml(m.decisions, r, { idCol: true, acts }) + form;
   });
   // Only an owner item has a core function behind its button (ownerDone); a waiting session and an
-  // undelivered answer close on observed facts (decision 91①④), so their rows carry none.
-  const todoRows = m.ownerTodo.rows.map((r) =>
-    rowHtml(m.ownerTodo, r, { idCol: true, acts: kind.get(r.id) === "owner_item" ? btn("완료", { kind: "done", item: r.id }) : "" }),
-  );
+  // undelivered answer close on observed facts (decision 91①④), so their rows carry none. A row already
+  // pressed into ⏳ 검증 대기 keeps its button off until the reading drops it (decision 198).
+  const todoRows = m.ownerTodo.rows.map((r) => {
+    const acts = kind.get(r.id) !== "owner_item" ? "" : pending.has(r.id) ? btn("⏳ 검증 대기", null) : btn("완료", { kind: "done", item: r.id });
+    return rowHtml(m.ownerTodo, r, { idCol: true, acts });
+  });
   const progress = m.inProgress.rows.map((r) => {
     if (r.id.startsWith("lead:")) return rowHtml(m.inProgress, r, { cls: "lead", nav: { group: r.cells[1]?.text ?? "" } });
     if (/^i\d{3,}$/.test(r.id)) return rowHtml(m.inProgress, r, { cls: "item", nav: { item: r.id } });
@@ -258,15 +293,16 @@ const iconBtn = (name: string, label: string, data: string) =>
 
 // The header row (decision 169): title with the panel icon, last-updated time, refresh, open the
 // full brief in a terminal, and an overflow menu. A plain <details> menu needs no script state.
-function header(now: string, at: Target): string {
+function header(fresh: { short: string; full: string } | null, at: Target): string {
   const open: Open = { view: "brief", ...at };
+  const stamp = fresh ? `<span class="fresh" title="${esc(fresh.full)}">${esc(fresh.short)}</span>` : "";
   const menu =
     `<details class="menu"><summary class="ibtn" aria-label="더 보기" title="더 보기">${icon("more")}</summary><div class="pop" role="menu">` +
     `<button type="button" role="menuitem" data-open="${attr({ view: "todo" })}">터미널에서 sangsoe todo</button>` +
     `<button type="button" role="menuitem" data-open="${attr({ view: "doctor" })}">터미널에서 sangsoe doctor</button></div></details>`;
   return (
     `<header class="top"><span class="brand">${icon("layers")}상쇠<small>sangsoe</small></span>` +
-    `<span class="fresh" title="갱신 ${esc(now)}">${stamp(now)}</span>` +
+    stamp +
     `<span class="tools">${iconBtn("refresh", "새로 고침", "data-refresh")}${iconBtn("terminal", "터미널에서 전체 현황", `data-open="${attr(open)}"`)}${menu}</span></header>`
   );
 }
@@ -283,16 +319,42 @@ function tabs(m: Overview, active: Tab): string {
   return `<nav class="seg" role="tablist" aria-label="현황 보기">${one("all", "전체", null)}${one("todo", "할 일", m.todo.total)}${one("prog", "진행 중", prog)}</nav>`;
 }
 
+const backLine = (crumbs: readonly string[]) =>
+  `<p class="crumbs"><button type="button" class="link" data-back>‹ 뒤로</button> ${crumbs.map(esc).join(" › ")}</p>`;
+
 /** The body of one stage. `crumbs` is the way back; the entry wires data-nav, data-act, back and tabs. */
-export function renderStage(v: PanelView, crumbs: readonly string[] = [], tab: Tab = "all", at: Target = {}): string {
+export function renderStage(
+  v: PanelView,
+  crumbs: readonly string[] = [],
+  tab: Tab = "all",
+  at: Target = {},
+  pending: ReadonlySet<string> = new Set(),
+): string {
   const m = v.model;
-  const nav =
-    m.stage === 1
-      ? tabs(m, tab)
-      : `<p class="crumbs"><button type="button" class="link" data-back>‹ 뒤로</button> ${crumbs.map(esc).join(" › ")}</p>`;
-  const body = m.stage === 1 ? overview(m, v.todo) : m.stage === 2 ? group(m) : item(m);
-  return `${header(m.now, at)}${nav}<main data-view="${m.stage === 1 ? tab : "all"}">${body}</main>`;
+  const nav = m.stage === 1 ? tabs(m, tab) : backLine(crumbs);
+  const body = m.stage === 1 ? overview(m, v.todo, pending) : m.stage === 2 ? group(m) : item(m);
+  return `${header(v.fresh ?? null, at)}${nav}<main data-view="${m.stage === 1 ? tab : "all"}">${body}</main>`;
 }
+
+/**
+ * A reading that failed (decision 198): the header and, below 현황, the back line stay, then one Korean
+ * line and a 새로 고침 the owner presses; nothing re-reads by itself while the panel shows it.
+ */
+export function renderError(r: Refusal, crumbs: readonly string[] = [], at: Target = {}): string {
+  const nav = crumbs.length > 0 ? backLine(crumbs) : "";
+  const line = `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorLine(r))} <button type="button" class="link" data-refresh>새로 고침</button></p>`;
+  return `${header(null, at)}${nav}<main data-view="all">${line}</main>`;
+}
+
+/** The panel's own re-read interval, the status bar's (main.ts STATUS_INTERVAL_MS). */
+export const REFRESH_MS = 30_000;
+
+/**
+ * Whether the panel re-reads by itself now (decision 198): only while it is shown, after a reading that
+ * worked, with no act in flight and no 다른 답 form open (a redraw would wipe the typed words).
+ */
+export const autoRefresh = (s: { visible: boolean; lastOk: boolean; busy: boolean; formOpen: boolean }): boolean =>
+  s.visible && s.lastOk && !s.busy && !s.formOpen;
 
 /** Row ids in drawing order (PN2: the same list as the model's tables). */
 export const drawnRowIds = (html: string): string[] => [...html.matchAll(/<tr data-id="([^"]*)"/g)].map((m) => m[1] ?? "");

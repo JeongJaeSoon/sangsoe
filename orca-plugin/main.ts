@@ -89,12 +89,17 @@ export default function activate(
   };
   const rounds = startRounds([statusRound], clock);
   // A panel refresh is one of the two things that run the stall check (decision 83).
-  orca.panels.handle("panel.brief", (input) => {
-    stall?.poke();
-    return panel["panel.brief"](input);
+  // Decision 198: a panel reading redraws status bar B from the same reading, so the two never disagree.
+  // The panel's own interval re-read (`auto`) is a timer, so it does not run the stall check (decision 83).
+  orca.panels.handle("panel.brief", async (input) => {
+    if ((input as { auto?: unknown } | null)?.auto !== true) stall?.poke();
+    const r = await panel["panel.brief"](input);
+    const s = r.ok ? (r.value as { status?: { text: string; tone: Tone; tooltip: string } }).status : undefined;
+    if (s) await status(s.text, s.tone, s.tooltip);
+    return r;
   });
   orca.panels.handle("panel.act", panel["panel.act"]);
-  orca.panels.handle("panel.open", openHandler(exec));
+  orca.panels.handle("panel.open", openHandler(exec, panel.worktree));
   stopRounds = () => {
     stopped = true;
     void rounds.stop();
