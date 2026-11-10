@@ -7,7 +7,7 @@ import type { StoredEvent } from "../../contract/index.ts";
 import type { InboxMessage, LocalRows, WorkerRow, WorktreePsRow } from "../../contract/orca.ts";
 import { inboxRow } from "../../orca/adapter.ts";
 import { DEFAULT_MONITOR_CONFIG as C } from "../monitor.ts";
-import { judgeOrca, type Observed, type OrcaReads, observe } from "./judge.ts";
+import { judgeOrca, keepLastRead, type Observed, type OrcaReads, observe } from "./judge.ts";
 import { readRefusalHead, refusalHeader, refusalPath, refusalRoots } from "./mail.ts";
 
 const NOW = Date.parse("2026-11-11T12:00:00Z");
@@ -176,4 +176,10 @@ test("observed_change: only on a workspace with two live terminals, field names 
   );
   const unread = { ...base("review"), shows: { ctx_a: null, ctx_b: null } };
   assert.deepEqual(planned(unread, prev), [], "a worker-show that failed is not a change");
+  const kept = keepLastRead(prev, observe(unread));
+  assert.deepEqual(
+    planned(base("review"), kept).map((e) => e.payload),
+    [{ task: "task_a", field: "stage" }],
+    "the change across an unread round is still seen",
+  );
 });

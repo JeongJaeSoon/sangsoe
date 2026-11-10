@@ -244,6 +244,16 @@ export function observe(r: OrcaReads): Map<string, Observed> {
   return out;
 }
 
+/** The next round's baseline: a field this round could not read keeps the value last read. */
+export function keepLastRead(before: ReadonlyMap<string, Observed>, now: ReadonlyMap<string, Observed>): Map<string, Observed> {
+  const out = new Map<string, Observed>();
+  for (const [id, cur] of now) {
+    const b = before.get(id);
+    out.set(id, { state: cur.state, stage: cur.stage ?? b?.stage, liveness: cur.liveness ?? b?.liveness });
+  }
+  return out;
+}
+
 // P10: with two or more live terminals on one workspace, ps times do not tell which one moved, so a
 // change in Orca's own Dispatch fields is the activity record (decision 196). Field names only.
 function judgeChanges(r: OrcaReads, previous: ReadonlyMap<string, Observed>, now: number, planned: Planned[]) {

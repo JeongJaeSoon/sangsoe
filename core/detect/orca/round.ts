@@ -1,7 +1,7 @@
 import { dedupeKey, EVENTS } from "../../contract/index.ts";
 import type { GateRow, LocalRows, OrcaResult, WorkerRow, WorkerShow } from "../../contract/orca.ts";
 import type { MonitorDeps, Reading } from "../monitor.ts";
-import { isUnfinished, judgeOrca, type Observed, ORCA_EVENT_TYPES, observe } from "./judge.ts";
+import { isUnfinished, judgeOrca, keepLastRead, type Observed, ORCA_EVENT_TYPES, observe } from "./judge.ts";
 import { readRefusalHead, refusalPath } from "./mail.ts";
 
 // The orca-monitor runs inside the long-lived plugin worker: the last round's Dispatch fields stay
@@ -84,6 +84,6 @@ export async function orcaRound(d: MonitorDeps, signal: AbortSignal): Promise<Re
   }
   const reads = { ps: value(ps), workers: workerRows, shows, runs, gates, inbox: mail, events, refusals };
   const reading = judgeOrca(reads, d.now(), d.config, previous);
-  if (!signal.aborted) previous = observe(reads);
+  if (!signal.aborted) previous = keepLastRead(previous, observe(reads));
   return reading;
 }
