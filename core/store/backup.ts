@@ -91,8 +91,13 @@ export const OWN_TYPES = [
   "worker_idle",
 ] as const satisfies readonly EventType[];
 
-const OWN = new Set<string>(OWN_TYPES);
-export const isOwnType = (type: string): boolean => OWN.has(type);
+/** The two readers' sources. Another writer of a host type (a hook, `start`, an owner probe) has no reader to re-emit its row. */
+export const HOST_SOURCES = ["orca-monitor", "pr-monitor"] as const;
+
+const HOST = new Set<string>(HOST_TYPES);
+const HOST_SOURCE = new Set<string>(HOST_SOURCES);
+/** A row is a host row only when a reader wrote a type the readers re-emit; every other row is copied. */
+export const isOwnRow = (type: string, source: string): boolean => !(HOST.has(type) && HOST_SOURCE.has(source));
 
 export type Row = Record<string, string | number | null>;
 
@@ -126,6 +131,7 @@ export function readBackup(path: string): BackupRead {
   const out: BackupRead = { rows: [], counters: new Map(), skipped: [] };
   if (!existsSync(path)) return out;
   const bySeq = new Map<number, Row>();
+  const replaced: number[] = [];
   readFileSync(path, "utf8")
     .split("\n")
     .forEach((text, i) => {
@@ -139,12 +145,15 @@ export function readBackup(path: string): BackupRead {
       }
       if (line.row && Number.isInteger(line.row.seq) && typeof line.row.type === "string") {
         const seq = Number(line.row.seq);
-        if (bySeq.has(seq)) out.skipped.push(`backup seq ${seq}: written twice, the later line kept`);
+        const prev = bySeq.get(seq);
+        // A different row under the same seq is a line whose transaction rolled back after it was written.
+        if (prev && JSON.stringify(prev) !== JSON.stringify(line.row)) replaced.push(seq);
         bySeq.set(seq, line.row);
       } else if (typeof line.counter === "string" && Number.isInteger(line.last)) {
         out.counters.set(line.counter, Math.max(out.counters.get(line.counter) ?? 0, Number(line.last)));
       } else out.skipped.push(`backup line ${i + 1}: neither an event row nor a number`);
     });
+  if (replaced.length > 0) out.skipped.push(`backup: ${replaced.length} seq(s) held two different rows, the later kept (first ${replaced[0]})`);
   out.rows = [...bySeq.values()].sort((a, b) => Number(a.seq) - Number(b.seq));
   return out;
 }

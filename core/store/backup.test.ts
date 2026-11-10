@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -76,6 +76,43 @@ test("own facts and issued numbers survive the loss of the database; host rows d
 
   const again = open(path);
   assert.equal(again.rebuilt, null, "an intact database is not restored twice");
+  again.close();
+});
+
+test("a host type written by anyone but its reader is copied, since no reader writes it again", () => {
+  const path = newPath();
+  const s = open(path);
+  s.append({ type: "worker_dead", source: "start", entity: "dispatch", entity_id: "ctx_1", payload: { reason: "start_failed" } });
+  s.append({ type: "worker_dead", source: "orca-monitor", entity: "dispatch", entity_id: "ctx_2", payload: { reason: "host_restart" } });
+  s.close();
+  lose(path);
+  const r = open(path);
+  assert.deepEqual(
+    r.events({ type: "worker_dead" }).map((e) => e.source),
+    ["start"],
+    "the start's row comes back; the reader's row is the reader's to write again",
+  );
+  r.close();
+});
+
+test("a database another connection has locked is never moved aside", () => {
+  const path = newPath();
+  open(path).close();
+  const holder = new DatabaseSync(path);
+  holder.exec("PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE;");
+  try {
+    assert.throws(() => Store.open({ path, clock: fixedClock(T0, 1000), fsProbe: local, busyTimeoutMs: 50 }), /locked|busy/i);
+    assert.deepEqual(
+      readdirSync(tmp).filter((f) => f.includes(".unreadable-")),
+      [],
+      "a lock is not damage",
+    );
+  } finally {
+    holder.exec("COMMIT");
+    holder.close();
+  }
+  const again = open(path);
+  assert.equal(again.rebuilt, null);
   again.close();
 });
 

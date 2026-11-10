@@ -16,7 +16,7 @@ import {
   type StoredEvent,
   systemClock,
 } from "../contract/index.ts";
-import { appendLines, backupPath, isOwnType, readBackup } from "./backup.ts";
+import { appendLines, backupPath, isOwnRow, readBackup } from "./backup.ts";
 import { checkLocalFs, checkSqliteVersion, type FsProbe, type StartCheck } from "./checks.ts";
 import { DDL, EDGE_TRIGGERS, SCHEMA_V } from "./schema.ts";
 
@@ -72,6 +72,8 @@ export interface OpenOptions {
   readonly home?: string;
   readonly clock?: Clock;
   readonly fsProbe?: FsProbe;
+  /** How long an open waits on another connection's lock. Default 5000 ms. */
+  readonly busyTimeoutMs?: number;
 }
 
 export function defaultDbPath(home: string = homedir()): string {
@@ -94,17 +96,23 @@ export const LOST_SEPARATOR = " | ";
 // Host rows come back through the readers, which see only this much of the past (core/detect/pr/round.ts
 // CLOSED_PAGE, core/detect/orca/round.ts GLOBAL_PAGES).
 export const HOST_WINDOW_LOST =
-  "host rows outside the readers' window: pr rows of PRs past each repository's 30 most recently closed, and Dispatches past worker-list's first 3 pages";
+  "host rows outside the readers' window: pr rows of PRs past each repository's 30 most recently closed and of every PR closed without a merge, main CI rows of all but each repository's newest merge, and Dispatches past worker-list's first 3 pages";
 
 type Row = Record<string, string | number | null>;
+
+// SQLITE_CORRUPT and SQLITE_NOTADB. Any other error (a lock held by another opener) is rethrown,
+// so a live database is never moved aside.
+const DAMAGED = new Set([11, 26]);
 
 /** A damaged file can open and fail only on its first read. */
 function readable(db: DatabaseSync): boolean {
   try {
     db.prepare("SELECT count(*) FROM sqlite_master").get();
     return true;
-  } catch {
-    return false;
+  } catch (e) {
+    if (DAMAGED.has(Number((e as { errcode?: number }).errcode) & 0xff)) return false;
+    db.close();
+    throw e;
   }
 }
 
@@ -186,12 +194,13 @@ export class Store {
       // A -wal left by a lost database must not be replayed into the new one.
       if (fresh) setAside.push(...moveAside(path, ["-wal", "-shm"], "orphan", clock));
     }
-    let db = new DatabaseSync(path);
+    const timeout = opts.busyTimeoutMs ?? 5000;
+    let db = new DatabaseSync(path, { timeout });
     if (path !== ":memory:" && !fresh && !readable(db)) {
       db.close();
       setAside.push(...moveAside(path, ["", "-wal", "-shm"], "unreadable", clock));
       fresh = true;
-      db = new DatabaseSync(path);
+      db = new DatabaseSync(path, { timeout });
     }
     const version = String((db.prepare("SELECT sqlite_version() AS v").get() as Row).v);
     checks.push(checkSqliteVersion(version));
@@ -199,7 +208,7 @@ export class Store {
       db.close();
       throw new StartRefused(checks);
     }
-    db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
+    db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     const backup = path === ":memory:" ? null : backupPath(path);
     const store = new Store(db, clock, backup);
     store.#migrate();
@@ -221,7 +230,7 @@ export class Store {
       const lost = [...read.skipped];
       let restored = 0;
       for (const r of read.rows) {
-        if (!isOwnType(String(r.type))) {
+        if (!isOwnRow(String(r.type), String(r.source))) {
           lost.push(`backup seq ${r.seq}: ${r.type} is not an own fact`);
           continue;
         }
@@ -249,9 +258,15 @@ export class Store {
 
   /** First open of a database that has no backup file yet (one written before decision 182): copy what it holds. */
   #seed(backup: string): void {
-    const rows = (this.#db.prepare("SELECT * FROM event ORDER BY seq").all() as Row[]).filter((r) => isOwnType(String(r.type)));
+    // "wx": of two first opens at once, only the one that creates the file copies the rows.
+    try {
+      writeFileSync(backup, "", { flag: "wx" });
+    } catch (e) {
+      if ((e as { code?: string }).code === "EEXIST") return;
+      throw e;
+    }
+    const rows = (this.#db.prepare("SELECT * FROM event ORDER BY seq").all() as Row[]).filter((r) => isOwnRow(String(r.type), String(r.source)));
     const counters = this.#db.prepare("SELECT name, last FROM counter").all() as Row[];
-    writeFileSync(backup, "", { flag: "a" });
     appendLines(backup, [...rows.map((row) => ({ row })), ...counters.map((c) => ({ counter: String(c.name), last: Number(c.last) }))]);
   }
 
@@ -338,7 +353,7 @@ export class Store {
       ) as Row | undefined;
     if (row) {
       // Before COMMIT: a fact whose copy cannot be written is rolled back with it.
-      if (this.#backup && isOwnType(e.type)) {
+      if (this.#backup && isOwnRow(e.type, e.source)) {
         appendLines(this.#backup, [{ row: this.#db.prepare("SELECT * FROM event WHERE seq = ?").get(Number(row.seq)) as Row }]);
       }
       return { seq: Number(row.seq), inserted: true };
