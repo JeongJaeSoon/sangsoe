@@ -5,14 +5,18 @@ import type { Planned } from "../detect/monitor.ts";
 import type { GhClient } from "../gh/client.ts";
 import { settled } from "../recover/recover.ts";
 import type { Appended, EventFilter } from "../store/store.ts";
-import { preDelete } from "./checks.ts";
+import { type Check, type BlockReason as CheckReason, evidenceInWorktree, openWork, preDelete } from "./checks.ts";
 import type { ReaperConfig } from "./config.ts";
 import { dockerUp, sweepDocker } from "./docker.ts";
 import { branchOf, type Finished, judgeFinished, repoOf, withRemoteCase } from "./finished.ts";
+import { composeRunning, listening, readStacks, type Stacks } from "./live.ts";
 import { blockedKey, dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
 
-/** The only Orca calls REAPER has: three reads and the one removal. No terminal call exists here. */
-export type ReaperOrca = Pick<OrcaAdapter, "worktreeList" | "worktreePs" | "workerList" | "worktreeRm">;
+/** The only Orca calls REAPER has: reads and the one removal. No terminal call exists here. */
+export type ReaperOrca = Pick<
+  OrcaAdapter,
+  "worktreeList" | "worktreePs" | "workerList" | "workerShow" | "taskList" | "ports" | "worktreeRm"
+>;
 
 export type ReaperDeps = {
   orca: ReaperOrca;
@@ -32,13 +36,7 @@ export type ReaperDeps = {
 
 export type ReapOptions = { trigger?: "timer" | "hint"; markOnly?: boolean; signal?: AbortSignal };
 
-export type BlockReason =
-  | "uncommitted"
-  | "unpushed"
-  | "unpushed_other_patch"
-  | "in_use"
-  | "archive_hook_failed"
-  | "remote_host";
+export type BlockReason = CheckReason | "in_use" | "archive_hook_failed" | "remote_host";
 export type Blocked = { kind: string; ref: string; reason: BlockReason };
 
 export type ReapReport = {
@@ -251,6 +249,21 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     for (const c of scope) if (protect.has(c.instanceId) || protect.has(c.path) || protect.has(branchOf(c))) marked.add(c.id);
   }
 
+  // Open-Task root (decision 177): an open Task or a live session keeps its card. Unreadable is unknown.
+  if (typeof workers !== "string") {
+    for (const c of scope) {
+      if (marked.has(c.id) || unknown.has(c.id) || !workers.some((w) => w.workspace === c.id)) continue;
+      if (signal.aborted) break;
+      const open = await openWork(c, workers, d.orca);
+      if (open.ok) continue;
+      if ("blocked" in open) marked.add(c.id);
+      else {
+        unknown.add(c.id);
+        r.unseen.push(`open Task? ${c.instanceId}: ${open.unknown}`);
+      }
+    }
+  }
+
   const repos = new Map<string, WorktreeRow[]>();
   for (const c of scope) {
     if (marked.has(c.id)) continue;
@@ -334,12 +347,33 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     r.reaped.push(`${kind}:${ref}`);
     write({ type: "reap_done", source: SOURCE, payload: { kind, ref }, dedupe_key: key("reap_done", kind, ref) });
   };
+  let up: Promise<boolean> | undefined;
+  const daemon = () => (up ??= dockerUp(d.exec));
+  let stacks: Promise<Stacks> | undefined;
+  const evidence = d.events({ type: "evidence" });
+  // Decision 194: each check reads fresh, and a hit skips the removal; nothing is stopped or killed.
+  const checks: ((card: WorktreeRow & { instanceId: string }, f: Extract<Finished, { state: "finished" }>) => Promise<Check> | Check)[] = [
+    (card) => openWork(card, workerRows, d.orca),
+    (card, f) => evidenceInWorktree(card, f, evidence),
+    (card) => listening(card, d.orca),
+    async (card) => {
+      stacks ??= readStacks(d.exec, daemon);
+      const s = await stacks;
+      if (s.kind === "no_daemon") r.docker_skipped = true;
+      return composeRunning(card, s);
+    },
+    (card, f) => preDelete(card, f, d.exec, d.gh),
+  ];
   for (const { card, finished } of targets) {
     if (signal.aborted) {
       r.unseen.push("round passed its cap before the sweep finished");
       break;
     }
-    const check = await preDelete(card, finished, d.exec, d.gh);
+    let check: Check = { ok: true };
+    for (const run of checks) {
+      check = await run(card, finished);
+      if (!check.ok) break;
+    }
     if (!check.ok) {
       if ("blocked" in check) block("worktree", card.instanceId, check.blocked);
       else r.unknown.push(`worktree:${card.instanceId}: ${check.unknown}`);
@@ -363,7 +397,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   const holds = dockerHolds(holdEvents(d.events));
   const docker = [...holds.values()].filter((h) => h.held && reapedCards.has(taskCard.get(h.owner) ?? h.owner));
   if (docker.length > 0 && !signal.aborted) {
-    if (!(await dockerUp(d.exec))) r.docker_skipped = true;
+    if (!(await daemon())) r.docker_skipped = true;
     else {
       for (const x of await sweepDocker(d.exec, docker)) {
         const h = holds.get(`${x.kind}\n${x.ref}`) as Hold;

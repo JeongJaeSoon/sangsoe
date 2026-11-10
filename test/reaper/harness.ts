@@ -13,13 +13,16 @@ import {
   type LoadSample,
   type LocalRows,
   type OrcaResult,
+  type PortRow,
   type ReaperConfig,
   type ReaperDeps,
   type ReapOptions,
   type ReapReport,
   reapRound,
   Store,
+  type TaskRow,
   type WorkerRow,
+  type WorkerShow,
   type WorktreePsRow,
   type WorktreeRow,
 } from "../../core/index.ts";
@@ -97,6 +100,12 @@ export class FakeOrca {
   workers: WorkerRow[] = [];
   failing = new Set<string>();
   rmError: string | null = null;
+  /** Task id → status; a Task of a listed worker not named here is `completed`. Every Task is in run_1. */
+  taskStatus = new Map<string, string>();
+  /** Dispatch id → liveness `worker-show` reports; unnamed ones report the worker-list row's. */
+  showLiveness = new Map<string, string>();
+  /** Card id → the listeners `ports --worktree id:<card>` reports. */
+  listeners = new Map<string, PortRow[]>();
   calls: string[] = [];
 
   async worktreeList(): Promise<OrcaResult<LocalRows<WorktreeRow>>> {
@@ -113,6 +122,25 @@ export class FakeOrca {
     this.calls.push("workerList");
     if (this.failing.has("workerList")) return fail("runtime_unreachable");
     return { ok: true, value: rows(this.workers) };
+  }
+  async workerShow(a: { dispatch: string }): Promise<OrcaResult<WorkerShow>> {
+    this.calls.push(`workerShow ${a.dispatch}`);
+    if (this.failing.has("workerShow")) return fail("runtime_unreachable");
+    const w = this.workers.find((x) => x.dispatchId === a.dispatch);
+    if (!w) return fail("dispatch_not_found");
+    const liveness = this.showLiveness.get(a.dispatch) ?? w.liveness;
+    return { ok: true, value: { dispatchId: w.dispatchId, taskId: w.taskId, runId: "run_1", state: w.state, ...(liveness ? { liveness } : {}) } };
+  }
+  async taskList(a: { run: string }): Promise<OrcaResult<TaskRow[]>> {
+    this.calls.push(`taskList ${a.run}`);
+    if (this.failing.has("taskList")) return fail("runtime_unreachable");
+    const ids = [...new Set(this.workers.map((w) => w.taskId))];
+    return { ok: true, value: ids.map((id) => ({ id, status: this.taskStatus.get(id) ?? "completed", title: id })) };
+  }
+  async ports(a: { worktree: string }): Promise<OrcaResult<PortRow[]>> {
+    this.calls.push(`ports ${a.worktree}`);
+    if (this.failing.has("ports")) return fail("non_local_host");
+    return { ok: true, value: this.listeners.get(a.worktree.replace(/^id:/, "")) ?? [] };
   }
   async worktreeRm(a: { worktree: string }): Promise<OrcaResult<Record<string, unknown>>> {
     this.calls.push(`worktreeRm ${a.worktree}`);
@@ -179,6 +207,9 @@ export class FakeDocker {
   inspectError = false;
   /** id → running (containers) or present (others). */
   objects = new Map<string, { kind: string; running?: boolean; inUse?: boolean }>();
+  /** What `compose ls --all --format json` lists. */
+  stacks: { Name: string; Status: string; ConfigFiles: string }[] = [];
+  composeError = false;
   calls: string[] = [];
 
   exec: Exec = async (file, args) => {
@@ -190,6 +221,9 @@ export class FakeDocker {
     const [kind, verb, ...rest] = args;
     if (kind === "version") return this.daemon ? r(0, "27.0.0") : r(1);
     if (!this.daemon) return r(1);
+    if (kind === "compose" && line === "compose ls --all --format json") {
+      return this.composeError ? r(1) : r(0, JSON.stringify(this.stacks));
+    }
     const id = rest.at(-1) ?? "";
     const o = this.objects.get(id);
     if (verb === "inspect") {

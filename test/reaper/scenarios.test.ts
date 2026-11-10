@@ -219,7 +219,11 @@ test("reap_archive_hook_failed: a failed archive hook leaves the card and is han
   assert.deepEqual(rms(w), [`worktreeRm id:${c.id}`]);
   assert.deepEqual(w.types("reap_blocked"), [{ kind: "worktree", ref: "inst-hooked", reason: "archive_hook_failed" }]);
   assert.deepEqual(w.types("reap_done"), []);
-  assert.deepEqual(w.docker.calls, [], "no Docker step after a failed removal");
+  assert.deepEqual(
+    w.docker.calls.filter((c) => / (inspect|rm) /.test(c)),
+    [],
+    "no Docker step after a failed removal (the compose read before it is not one)",
+  );
   assertNeverForbidden(w);
 });
 
@@ -273,10 +277,10 @@ test("reap_docker_order: a recorded id already gone closes its record and is not
   finishedCard(w, "gone");
   recordResource(w.store, { kind: "volume", ref: "gone_data", owner: "inst-gone" });
   await rounds(w, 3);
-  assert.deepEqual(w.docker.calls, ["version --format {{.Server.Version}}", "volume inspect gone_data"]);
+  assert.deepEqual(w.docker.calls, ["version --format {{.Server.Version}}", "compose ls --all --format json", "volume inspect gone_data"]);
   assert.deepEqual(w.types("resource").at(-1), { action: "released", kind: "volume", owner: "inst-gone", ref: "gone_data" });
   await rounds(w, 2);
-  assert.equal(w.docker.calls.length, 2, "a closed record is not swept again");
+  assert.equal(w.docker.calls.length, 3, "a closed record is not swept again");
 
   const again = recordResource(w.store, { kind: "volume", ref: "gone_data", owner: "inst-next" });
   assert.ok(again.ok && again.value.inserted, "a released name can be recorded again by a new owner");
