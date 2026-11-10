@@ -328,7 +328,7 @@
 | 첫 빌드 시험 | 구현의 첫 단계가 돌리는 시험 T1~T6. 결과가 설계의 갈래를 정하고, 실패하면 정해 둔 대체가 적용된다: T1 worker 안 `node:sqlite` → 코어 프로세스를 CLI 로 부름 · T2 worker 타이머 → `orca automations --precheck` · T3 패널 그림 → 상태 표시줄과 `sangsoe brief` 출력 · T4 승인 뒤 자율 범위와 재승인 빈도 · T5 Dispatch 재시작 거부와 세 번 실패 차단, 머지 대기 보고로 끝낸 Task 가 열린 채 남는지(아니면 머지 확인 하위 Task). T6(결정 90) 경로 마켓플레이스 설치와 `brew upgrade` 뒤 갱신, hook PATH 의 `sangsoe`, 개발 폴더로 올린 Orca plugin 이 앱 재시작 뒤에도 남는지. 어느 것도 오너 결정을 기다리지 않는다 | `T1`~`T6` | 오너 결정 대기 |
 | Orca·Node 호스트 낱말 | 호스트가 정한 이름이라 sangsoe 가 바꾸지 않는 것: worker 가 돌리는 파일 형식 `.ts`, Orca plugin 매니페스트의 빈 칸 `mcpServers`, Node 의 내장 sqlite `node:sqlite`, command hook 만 갖는 실패 시 막기 `onFailure: "block"`, plugin 로컬 시험 `orca plugin test`, worktree 삭제 `orca worktree rm`, 입력을 받을 때까지 기다리는 `tui-idle`(대체 시작이 없어져 쓰지 않는다, 결정 94), Orca 가 돌려주는 거부·승인 코드 `approval_required`·`approval_stale`·`consumer_fenced`·`task_not_startable`·`task_id` | `approval_required` · `approval_stale` · `consumer_fenced` · `task_not_startable` · `task_id` · `.ts` · `mcpServers` · `node:sqlite` · `onFailure: "block"` · `orca plugin test` · `orca worktree rm` · `tui-idle` | — |
 | 패널 | Orca plugin 이 오른쪽 사이드바에 그리는 화면. 현황 세 단계·오너 할 일·결정 버튼을 낸다. 폭은 사이드바가 정한다. Orca 패널처럼 머리 행(새로 고침·터미널에서 전체 현황·더 보기)과 1단계의 탭(전체 · 할 일 · 진행 중)을 두고 색은 Orca 테마 변수를 따른다(결정 169) | `panels` | 웹 화면, 페이지(패널을 가리킬 때) |
-| 상태 표시줄 항목 | Orca 상태 표시줄에 이름표와 건수 줄의 짧은 꼴(`SANGSOE  🚧 2 · 결정 2 · 🔄 5`: 막힌 것 · 열린 결정 · 진행 중, 결정 170)을 올리는 항목. 숫자는 `BriefModel.summary`·`owner_todo` 에서 오고 따로 세지 않는다. 오너가 할 일이 있으면 `danger` 색이고 누르면 명령이 실행된다(패널 열기는 미확인, 결정 92) | `statusBarItems` · `statusBar.update` | 오너 할 일 수·🚨 항목 |
+| 상태 표시줄 항목 | Orca 상태 표시줄에 이름표와 건수 줄의 짧은 꼴(`✨ SANGSOE  🚧 2 · 결정 2 · 🔄 5`: 막힌 것 · 열린 결정 · 진행 중, 결정 170)을 올리는 항목. 숫자는 `BriefModel.summary`·`owner_todo` 에서 오고 따로 세지 않는다. 오너가 할 일이 있으면 `danger` 색이고 누르면 명령이 실행된다(패널 열기는 미확인, 결정 92) | `statusBarItems` · `statusBar.update` | 오너 할 일 수·🚨 항목 |
 | 호출 경로 규칙 | 코어는 하나이고 에이전트(리드·워커·오케스트레이터)는 MCP 만 쓴다. Bash 로 CLI 를 부르지 않는다. CLI 는 셸에서만 도는 호출자 여섯 행(시작 hook·막는 hook·기록 hook·오너 전용 skill 의 상태 주입 줄·사람 터미널·시험·CI·승인 명령)용으로 얇게 둔다. plugin worker(패널 버튼·monitor 타이머)는 코어를 직접 import 한다 | — | — |
 | 폴백 웹 화면 | 패널로 안 되는 기능만 맡는 최소 웹 화면(같은 코어·같은 읽기 뷰, 새 수집기 없음). 지금은 범위가 비어 있어 두지 않는다 | — | 웹 대시보드 |
 | 외부 plugin | sangsoe 밖에서 만든 Orca plugin. Orca 에는 plugin 사이 공식 데이터 교환 경로가 없어서 sangsoe 는 기대지 않는다 | — | — |
@@ -376,6 +376,8 @@
 | 복구 계획 | 머신·Orca 재시작 뒤 항목 ↔ 마지막 세션(`orca search`)·`/goal` 유무를 한 표로 모으고 Orca 가 내는 `worker-list` 의 `next` 를 그대로 보여 주는 읽기 전용 코어 함수. 죽은 워커 찾기와 되살리기는 Orca 가 하고 이 함수는 실행하지 않는다 | `recover_plan` | — |
 | 의뢰 기록 입구 | 리뷰 의뢰를 `review_ask_sent` 로 남기는 MCP tool. 손으로 보낸 의뢰도 자동 의뢰도 이 입구 하나를 지난다 | `review_ask_record` | — |
 | 판정 기록 입구 | 리드가 독립 리뷰 판정을 `review_verdict` 로 남기는 MCP tool. 부른 세션의 checkout 이 그 PR 의 head 를 쥐었으면(PR 을 쓴 세션) 거부한다(결정 162) | `review_record` | — |
+| 증거 기록 입구 | 검증 실행의 결과를 PR head 의 `evidence` 로 남기는 MCP tool. land 의 `evidence_missing` 이 이 입구를 가리킨다. 작성자와 그 PR 을 쥔 세션은 거부한다(결정 171) | `evidence_record` | — |
+| 단계 기록 입구 | 머지된 PR 이 `merge`·`dev`·`prod` 에 닿았음을 `stage_recorded` 로 남기는 MCP tool. `deploys_after` 가 기다리는 것이 이 줄이다(결정 171) | `stage_record` | — |
 | 리마인드 대상 | 리마인드할 때가 된 의뢰를 `review_ask_sent` 에서 계산하는 뷰 | `ask_due` | — |
 | 릴리스 묶음 틀 | 여러 항목이 dev 배포·확인·prod 승격 한 번을 함께 쓰는 흐름 틀. 구성원 여럿의 `pr_merged` 를 `blocks` 로 기다리고 `stage_recorded` 의 `members` 칸이 전체의 증거다. 단독 긴급 수정은 `ship-change` 다 | `ship-batch` | — |
 | main 수정 land | 그 저장소의 최신 main 이 `main_red` 인 동안 land 판정 함수가 받는 유일한 요청 종류 | `main_fix` | — |
@@ -409,6 +411,8 @@
 | reap run | REAPER 라운드 한 번(표시 → 정리). `--dry-run`·`--mark-only` 는 아무것도 지우지 않는다 | `sangsoe reap run` | — |
 | resource record | 막 만든 Docker id(또는 compose 프로젝트의 id 전부)를 소유자와 함께 `resource` 로 남긴다. MCP `resource_record` 와 같은 함수다 | `sangsoe resource record` | — |
 | review record | 독립 리뷰 판정 하나를 `review_verdict` 로 남긴다(결정 111). 리뷰어가 작성자이면 거부한다 | `sangsoe review record` | — |
+| evidence record | 검증 실행 한 건을 PR 의 현재 head 에 `evidence` 로 남긴다(결정 171). 기록자가 작성자이면 거부한다. MCP `evidence_record` 와 같은 함수다 | `sangsoe evidence record` | — |
+| stage record | 머지된 PR 이 닿은 단계를 `stage_recorded` 로 남긴다(결정 171). 머지 전이거나 기록자가 작성자이면 거부한다. MCP `stage_record` 와 같은 함수다 | `sangsoe stage record` | — |
 | migrate | 옛 저장소의 열린 항목·결정을 한 번 가져온다. 옛 DB 는 읽기만 하고 `--apply` 없이는 쓰지 않는다(결정 140) | `sangsoe migrate` | — |
 | version | 버전을 출력한다(`--version` 과 같다) | `sangsoe version` | — |
 | `--help` | 도움말. 아무것도 바꾸지 않는다 | `--help` | — |
