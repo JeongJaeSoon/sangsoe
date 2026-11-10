@@ -8,7 +8,7 @@ import type { Appended, EventFilter } from "../store/store.ts";
 import { preDelete } from "./checks.ts";
 import type { ReaperConfig } from "./config.ts";
 import { dockerUp, sweepDocker } from "./docker.ts";
-import { branchOf, type Finished, judgeFinished, repoOf } from "./finished.ts";
+import { branchOf, type Finished, judgeFinished, repoOf, withRemoteCase } from "./finished.ts";
 import { blockedKey, dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
 
 /** The only Orca calls REAPER has: three reads and the one removal. No terminal call exists here. */
@@ -198,7 +198,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
       r.unknown.push(`worktree:${c.id}`);
       continue;
     }
-    scope.push(c as WorktreeRow & { instanceId: string });
+    scope.push(await withRemoteCase(c as WorktreeRow & { instanceId: string }, d.exec));
     if (!recorded.has(c.instanceId)) {
       write({
         type: "resource_adopted",

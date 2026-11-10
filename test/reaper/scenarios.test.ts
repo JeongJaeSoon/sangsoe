@@ -1,6 +1,7 @@
 // The seven named REAPER scenarios (split §2 U18; switch conditions R1–R7). Each one also asserts
 // what must not happen: no terminal closed, no forced removal, no Docker prune or label selection.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -57,6 +58,18 @@ test("no reaper section: rounds are mark_only, not failed roots, and three of th
     ["timer_stalled"],
     "a root that really fails still alarms",
   );
+});
+
+test("a private repo Orca lists lowercase is asked under its remote's spelling", async () => {
+  const w = world();
+  w.gh.repo = "Acme/API";
+  const c = finishedCard(w, "cased");
+  assert.equal(c.projectId, "github:acme/api", "Orca lowercases projectId");
+  execFileSync("git", ["-C", c.path, "remote", "add", "origin", "git@github.com:Acme/API.git"]);
+  const last = await rounds(w, 3, 30);
+  assert.equal(last.roots_ok, true, last.unseen.join("; "));
+  assert.deepEqual(rms(w), [`worktreeRm id:${c.id}`]);
+  assert.ok(w.gh.paths.every((p) => p.startsWith("repos/Acme/API/")), w.gh.paths.join("\n"));
 });
 
 test("reap_two_rounds_grace: a mark_only stretch between two sightings restarts the count", async () => {

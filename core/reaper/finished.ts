@@ -1,4 +1,4 @@
-import type { WorkerRow, WorktreeRow } from "../contract/orca.ts";
+import type { Exec, WorkerRow, WorktreeRow } from "../contract/orca.ts";
 import type { GhClient } from "../gh/client.ts";
 import { settled } from "../recover/recover.ts";
 
@@ -8,6 +8,21 @@ export type Pr = { number: number; state: string; merged_at: string | null; head
 export function repoOf(card: Pick<WorktreeRow, "projectId">): string | null {
   const m = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/.exec(card.projectId ?? "");
   return m?.[1] ?? null;
+}
+
+const REMOTE_REPO = /github\.com[/:]([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?\/?$/;
+
+/**
+ * Orca's projectId is lowercase, and a fine-grained token answers 404 for a private repo named in
+ * another case. The card's `origin` remote gives the spelling when it names the same repository;
+ * otherwise the card keeps Orca's.
+ */
+export async function withRemoteCase<C extends Pick<WorktreeRow, "projectId" | "path">>(card: C, exec: Exec): Promise<C> {
+  const repo = repoOf(card);
+  if (!repo) return card;
+  const r = await exec("git", ["-C", card.path, "remote", "get-url", "origin"]);
+  const spelled = r.code === 0 ? REMOTE_REPO.exec(r.stdout.trim())?.[1] : undefined;
+  return spelled && spelled !== repo && spelled.toLowerCase() === repo.toLowerCase() ? { ...card, projectId: `github:${spelled}` } : card;
 }
 
 export const branchOf = (card: Pick<WorktreeRow, "branch">) => card.branch.replace(/^refs\/heads\//, "");

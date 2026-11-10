@@ -134,18 +134,24 @@ export class FakeGh implements GhClient {
   branches = new Map<string, string>();
   down = false;
   paths: string[] = [];
+  /** The repository's spelling; like a fine-grained token on a private repo, any other case is 404. */
+  repo = "acme/api";
 
   async get<T>(path: string): Promise<GhResponse<T>> {
     this.paths.push(path);
     if (this.down) return { kind: "error", status: null, message: "gh: network down" };
     const ok = (data: unknown) => ({ kind: "ok", status: 200, data }) as GhResponse<T>;
-    const url = new URL(path, "https://api.invalid/");
+    const prefix = `/repos/${this.repo}/`;
+    const full = new URL(path, "https://api.invalid/");
+    if (!full.pathname.startsWith(prefix)) return { kind: "error", status: 404, message: `fake gh: ${path}` };
+    const url = new URL(`/repos/acme/api/${full.pathname.slice(prefix.length)}${full.search}`, "https://api.invalid/");
+    const owner = this.repo.split("/")[0];
     let m = /^\/repos\/acme\/api\/pulls$/.exec(url.pathname);
     if (m) {
       const state = url.searchParams.get("state");
       const head = url.searchParams.get("head");
       // Like GitHub, a head filter without a branch is ignored and the newest PRs come back.
-      if (head && !head.endsWith(":")) return ok(this.prs.filter((p) => `acme:${p.head.ref}` === head));
+      if (head && !head.endsWith(":")) return ok(this.prs.filter((p) => `${owner}:${p.head.ref}` === head));
       if (head) return ok([...this.prs].sort((a, b) => b.number - a.number));
       if (url.searchParams.get("page") !== "1") return ok([]);
       return ok(this.prs.filter((p) => state === "all" || p.state === state));
