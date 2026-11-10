@@ -286,7 +286,11 @@ function todoRow(input: BriefInput, r: OwnerTodoRow, byAlias: ReadonlyMap<string
   return { id: r.ref, cells: [t(r.ref), t(f?.title ?? r.ref), t(after.join(", ") || "—"), t(f?.cmdHint ?? "—"), age] };
 }
 
-/** Stage 2: one group's rows by state, its dependency edges, critical path and why-not-ready rows. */
+/**
+ * Stage 2: one group's rows by state, its DAG (edges, nodes, critical path), why-not-ready rows, and the
+ * decision-199 parts: summary figures, stack, release bundles, broken predecessors, edge list, recent
+ * transitions and the folded done list.
+ */
 export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions = {}): GroupDetail | null {
   const graph = opts.graph ?? graphRead;
   const key = lead === "그 외" ? OTHERS : lead;

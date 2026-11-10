@@ -19,7 +19,7 @@ export interface GraphWhyEdge extends GraphEdge {
   readonly todo: string;
 }
 
-const bare =(ref: string) => (ref.startsWith("item:") ? ref.slice(5) : ref);
+const bare = (ref: string) => (ref.startsWith("item:") ? ref.slice(5) : ref);
 
 export const graphRead = {
   /**

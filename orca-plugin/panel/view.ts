@@ -463,7 +463,7 @@ export function dagSvg(m: Pick<GroupDetail, "edges" | "criticalPath"> & Pick<Gro
   const paths = L.routes.map(({ edge: e, points }) => {
     const broken = m.brokenEdges.includes(edgeKey(e));
     const cls = ["ed", e.kind, broken ? "broken" : "", onPath(e) ? "cp" : ""].filter(Boolean).join(" ");
-    return `<path class="${cls}" data-edge="${esc(edgeKey(e))}" d="${curve(points)}"><title>${esc(`${e.pred} → ${e.succ} ${e.kind}${broken ? " 끊긴 선행" : ""}`)}</title></path>`;
+    return `<path class="${esc(cls)}" data-edge="${esc(edgeKey(e))}" d="${curve(points)}"><title>${esc(`${e.pred} → ${e.succ} ${e.kind}${broken ? " 끊긴 선행" : ""}`)}</title></path>`;
   });
   const labels = L.labels.map(
     (l) =>
@@ -554,7 +554,7 @@ function group(m: GroupDetail): string {
   const graph =
     m.edges.length === 0
       ? '<p class="empty">간선 없음</p>'
-      : `${nodes.length > 0 ? dagSvg({ edges: m.edges, criticalPath: m.criticalPath, nodes, brokenEdges: m.brokenEdges ?? [] }, `${m.lead} 의존 그래프. 크리티컬 패스는 ${m.criticalPath.join(", ")} 순서.`) : ""}${refLine}${legend()}`;
+      : `${nodes.length > 0 ? dagSvg({ edges: m.edges, criticalPath: m.criticalPath, nodes, brokenEdges: m.brokenEdges ?? [] }, `${m.lead} 의존 그래프.${m.criticalPath.length > 0 ? ` 크리티컬 패스는 ${m.criticalPath.join(", ")} 순서.` : ""}`) : ""}${refLine}${legend()}`;
   const side = [
     m.critical ? sub(m.critical, gtTable(m.critical, { step: true })) : "",
     m.stack ? sub(m.stack, gtTable(m.stack)) : "",
