@@ -1,6 +1,6 @@
 export { type Check, preDelete } from "./checks.ts";
 export { DEFAULT_GRACE_MS, DEFAULT_MIN_GAP_MS, parseReaperConfig, type ReaperConfig, readReaperConfig } from "./config.ts";
-export { DOCKER_KINDS, type DockerKind, type DockerRef, dockerUp, sweepDocker } from "./docker.ts";
+export { DOCKER_KINDS, type DockerKind, type DockerRef, type DockerState, dockerState, sweepDocker } from "./docker.ts";
 export { branchOf, type Finished, judgeFinished, repoOf } from "./finished.ts";
 export { openReaper, type ReaperRunner } from "./open.ts";
 export {

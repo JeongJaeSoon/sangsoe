@@ -235,7 +235,7 @@ test("compose_running: a restarting or paused stack blocks too", async () => {
   }
 });
 
-test("compose_running: an exited stack or a sibling path does not block, and a daemon that is down skips the check", async () => {
+test("compose_running: an exited stack or a sibling path does not block, and Docker that is not installed skips the check", async () => {
   const w = world();
   const c = finishedCard(w, "stack-free");
   w.docker.stacks = [
@@ -247,7 +247,7 @@ test("compose_running: an exited stack or a sibling path does not block, and a d
 
   const off = world();
   const d = finishedCard(off, "no-daemon");
-  off.docker.daemon = false;
+  off.docker.state = "absent";
   await rounds(off, 3, 30);
   assert.deepEqual(rms(off), [`worktreeRm id:${d.id}`]);
   assert.deepEqual(
@@ -256,6 +256,20 @@ test("compose_running: an exited stack or a sibling path does not block, and a d
     "the removal round skipped the compose read",
   );
   assert.deepEqual(off.docker.calls, ["version --format {{.Server.Version}}"]);
+});
+
+test("decision 201: a Docker that is installed but does not answer blocks the removal with docker_unreachable", async () => {
+  for (const state of ["down", "timeout", "empty", "denied"] as const) {
+    const w = world();
+    const name = `docker-${state}`;
+    finishedCard(w, name);
+    w.docker.state = state;
+    await rounds(w, 3, 30);
+    assert.deepEqual(rms(w), [], state);
+    assert.deepEqual(w.types("reap_blocked"), [{ kind: "worktree", ref: `inst-${name}`, reason: "docker_unreachable" }], state);
+    assert.ok(w.types("reap_round").every((x) => x.docker_skipped === false), `${state}: not a skip`);
+    assert.ok(!w.docker.calls.some((x) => x.startsWith("compose")), `${state}: compose is not asked without a daemon`);
+  }
 });
 
 test("compose_running: a compose list that cannot be read is unknown and removes nothing", async () => {

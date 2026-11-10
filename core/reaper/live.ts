@@ -1,5 +1,6 @@
 import type { Exec, OrcaAdapter, WorktreeRow } from "../contract/orca.ts";
 import { type Check, inside } from "./checks.ts";
+import type { DockerState } from "./docker.ts";
 
 /**
  * Decision 194 ③: a listener Orca ties to the card (by process cwd or command line, so no terminal
@@ -11,11 +12,17 @@ export async function listening(card: Pick<WorktreeRow, "id">, orca: Pick<OrcaAd
   return r.value.length > 0 ? { ok: false, blocked: "listener" } : { ok: true };
 }
 
-export type Stacks = { kind: "no_daemon" } | { kind: "unread"; why: string } | { kind: "read"; running: string[][] };
+export type Stacks =
+  | { kind: "no_docker" }
+  | { kind: "unanswered"; why: string }
+  | { kind: "unread"; why: string }
+  | { kind: "read"; running: string[][] };
 
 /** Compose projects with a live service (running, restarting or paused), each as its absolute config file paths. */
-export async function readStacks(exec: Exec, daemon: () => Promise<boolean>): Promise<Stacks> {
-  if (!(await daemon())) return { kind: "no_daemon" };
+export async function readStacks(exec: Exec, docker: () => Promise<DockerState>): Promise<Stacks> {
+  const s = await docker();
+  if (s.kind === "absent") return { kind: "no_docker" };
+  if (s.kind === "unanswered") return s;
   const r = await exec("docker", ["compose", "ls", "--all", "--format", "json"]);
   if (r.code !== 0) return { kind: "unread", why: "docker compose ls failed" };
   let rows: unknown;
@@ -38,11 +45,13 @@ export async function readStacks(exec: Exec, daemon: () => Promise<boolean>): Pr
 }
 
 /**
- * Decision 194 ④: a running stack whose config file sits in the card. With no daemon there is no
- * stack to lose, as in the Docker step (decision 82 R6). REAPER never calls `down`.
+ * Decision 194 ④: a running stack whose config file sits in the card. Without a `docker` binary there
+ * is no stack to lose (decision 82 R6); a Docker that does not answer blocks (decision 201). REAPER
+ * never calls `down`.
  */
 export function composeRunning(card: Pick<WorktreeRow, "path">, stacks: Stacks): Check {
-  if (stacks.kind === "no_daemon") return { ok: true };
+  if (stacks.kind === "no_docker") return { ok: true };
+  if (stacks.kind === "unanswered") return { ok: false, blocked: "docker_unreachable" };
   if (stacks.kind === "unread") return { ok: false, unknown: stacks.why };
   return stacks.running.some((files) => files.some((f) => inside(card.path, f))) ? { ok: false, blocked: "compose_running" } : { ok: true };
 }
