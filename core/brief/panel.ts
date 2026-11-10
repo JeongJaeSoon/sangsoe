@@ -1,5 +1,6 @@
 import type { OwnerTodoRow } from "../contract/index.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
+import { READING_LABEL } from "../contract/views.ts";
 import { type DecisionAnswered, decisionAnswer } from "../decision/answer.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
@@ -81,8 +82,8 @@ export interface PanelPorts {
  */
 export const PANEL_RUN = "";
 
-// The panel shows `status` after the press: a to-do with a verify is not done yet (decision 181).
-export type PanelActed = DecisionAnswered | { readonly status: "done" | "pending_verify"; readonly item: string };
+// The panel shows `label` after the press: a to-do with a verify is not done yet (decision 181).
+export type PanelActed = DecisionAnswered | { readonly status: "done" | "pending_verify"; readonly label: string; readonly item: string };
 
 export interface PanelCore {
   brief(target: PanelTarget): Promise<Result<PanelView>>;
@@ -120,7 +121,9 @@ export function panelCore(ports: PanelPorts): PanelCore {
   function closeItem(input: BriefInput, item: string): Promise<Result<PanelActed>> {
     return ports.withStore(async (store) => {
       const r = await ownerDone({ store, orca: ports.orca }, input, itemFacts(input), { task: item });
-      return r.ok ? done({ status: r.value.pendingVerify ? "pending_verify" : "done", item: r.value.alias }) : r;
+      if (!r.ok) return r;
+      const status = r.value.pendingVerify ? "pending_verify" : "done";
+      return done({ status, label: READING_LABEL[status], item: r.value.alias });
     });
   }
 

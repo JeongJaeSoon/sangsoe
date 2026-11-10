@@ -2,7 +2,7 @@
 // The sangsoe html panel (decision 92): three stages down and back, decision and 완료 buttons. Every
 // button is a plugin.request to the worker, which calls the core; the panel changes nothing itself.
 import { STYLE } from "./style.ts";
-import { type Act, back, current, down, type Open, type PanelView, renderStage, TABS, type Tab, type Target, trail } from "./view.ts";
+import { type Act, type Acted, actedNote, back, current, down, type Open, type PanelView, renderStage, TABS, type Tab, type Target, trail } from "./view.ts";
 
 type Frame = { plugin: { request(name: string, input?: unknown): Promise<unknown> } };
 declare const orca: Frame;
@@ -62,8 +62,8 @@ function mount(): void {
     busy = true;
     for (const b of root.querySelectorAll<HTMLButtonElement>("button")) b.disabled = true;
     try {
-      const r = (await orca.plugin.request("panel.act", a).catch(failed)) as Reply<{ status: string }>;
-      say(r.ok ? `${"decision" in a ? a.decision : a.item}: ${r.value.status}` : `${r.refusal.reason} — ${r.refusal.fix}`, !r.ok);
+      const r = (await orca.plugin.request("panel.act", a).catch(failed)) as Reply<Acted>;
+      say(r.ok ? actedNote(a, r.value) : `${r.refusal.reason} — ${r.refusal.fix}`, !r.ok);
       await draw();
     } finally {
       busy = false;
