@@ -116,6 +116,9 @@ export function edgeOk(e: InEdge, facts: Facts, tasks: ReadonlyMap<string, ViewT
     case "after": {
       if (!DONE(t)) return wait(state, e.kind === "blocks" ? "선행 항목 ✅ 완료를 기다린다" : "선행 항목이 끝나기를 기다린다");
       // Decision 178: the author's worker_done completes the Task before its PR merges (decision 175).
+      // A flow step is done by its own done_when (ship-change's impl: the PR is open), and its flow
+      // waits on the merge with explicit stage steps and deploys_after.
+      if (facts.items.get(node.task)?.flow !== undefined) return met(state);
       const p = taskPr(t, facts);
       if (p.state === "none" || p.state === "merged") return met(state);
       if (p.state === "open") return wait(`${state} · PR 머지 전`, "선행 PR 머지를 기다린다");

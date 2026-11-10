@@ -59,6 +59,14 @@ test("A PR closed unmerged leaves B on a dangling predecessor, and A reads pr_cl
   assert.equal(buildBrief(input).summary.done, 0);
 });
 
+test("a flow step is done by its own done_when: a completed impl step releases review with its PR open", () => {
+  const input = world((s) => {
+    opened(s);
+    s.append({ type: "item_extra_set", source: "test", payload: { task: A, flow: "task_flow", step: "impl" } });
+  });
+  assert.deepEqual(readyTasks(input), [B]);
+});
+
 test("a completed Task with no PR anywhere still releases B and reads done", () => {
   const input = world(() => {});
   assert.deepEqual(readyTasks(input), [B]);

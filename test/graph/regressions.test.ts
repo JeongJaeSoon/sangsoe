@@ -43,8 +43,9 @@ test("review_timing: the review step cannot be ready before the base PR merges, 
   const w = createGraphWorld();
   w.task("t_impl", "run_a");
   w.task("t_review", "run_a", ["t_impl"]);
-  bindItem(w, "t_impl", "i020");
-  bindItem(w, "t_review", "i021");
+  // Flow steps: impl is done when its PR is open, so review starts on the open PR (decision 178).
+  bindItem(w, "t_impl", "i020", { flow: "t_flow", step: "impl" });
+  bindItem(w, "t_review", "i021", { flow: "t_flow", step: "review" });
   prOpened(w, "acme/api#10");
   prOpened(w, "acme/api#11", "t_impl");
   await add(w, "acme/api#10", "i020", "stacked_on");
