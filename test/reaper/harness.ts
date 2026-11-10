@@ -225,6 +225,8 @@ export type World = {
   clock: { now: number };
   config: ReaperConfig | null;
   load: LoadSample;
+  /** The timer period the round judges a pause by; unset in the scenarios that predate decision 182. */
+  intervalMs?: number;
   round(o?: ReapOptions): Promise<ReapReport>;
   types(type: string): Record<string, unknown>[];
 };
@@ -250,6 +252,7 @@ export function world(): World {
         now: () => clock.now,
         config: w.config,
         sample: () => w.load,
+        ...(w.intervalMs ? { intervalMs: w.intervalMs } : {}),
       };
       return reapRound(deps, o);
     },

@@ -1,4 +1,5 @@
 import { sampleLoad } from "../capacity/capacity.ts";
+import { DEFAULT_MONITOR_CONFIG } from "../detect/monitor.ts";
 import { createGhClient, memoryGhCache } from "../gh/client.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
@@ -23,6 +24,7 @@ export function openReaper(o: { dryRun?: boolean; dbPath?: string; home?: string
         now: () => Date.now(),
         config: readReaperConfig(o.home),
         sample: () => sampleLoad(),
+        intervalMs: DEFAULT_MONITOR_CONFIG.reaperIntervalMinutes * 60_000,
       },
       opts,
     );

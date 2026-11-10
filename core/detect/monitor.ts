@@ -63,6 +63,8 @@ export type MonitorDeps = {
   /** Absent on a dry run: the round reads and judges but writes nothing. */
   append?: (e: Planned) => Appended;
   now(): number;
+  /** When this runner opened (epoch ms); the stall check counts a closed Orca as a pause, not a stall. */
+  openedAt?: number;
   config: MonitorConfig;
   chat: ChatProvider;
   sample: () => LoadSample;
