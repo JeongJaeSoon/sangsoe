@@ -3,7 +3,7 @@
 // a rule can live are read, for both forms of the act: the Bash command and the MCP `land` tool.
 
 const MCP_LAND = "mcp__plugin_sangsoe_sangsoe__land";
-const BASH_RULE = /^Bash\(\s*sangsoe(?:\s+land\b.*|\s*:\*|\s*\*)?\s*\)$/;
+const BASH_RULE = /^Bash\(\s*sangsoe(?:\s+land\b.*|\s*:\*|\s*\*)\s*\)$/;
 const MCP_RULE = new Set([MCP_LAND, "mcp__plugin_sangsoe_sangsoe", "mcp__plugin_sangsoe_sangsoe__*"]);
 
 export type LandAllow = { permissions: string[]; autoMode: string[] };

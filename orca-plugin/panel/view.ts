@@ -346,6 +346,21 @@ export function renderError(r: Refusal, crumbs: readonly string[] = [], at: Targ
   return `${header(null, at)}${nav}<main data-view="all">${line}</main>`;
 }
 
+/**
+ * What the header's terminal button names. The `sangsoe brief` command takes `<group> [<iNNN>]`, so
+ * the item only goes into it under a group; the item alone still names the worktree (decision 198 ②).
+ */
+export function openTarget(stack: readonly Target[]): Target {
+  const group = [...stack].reverse().find((t) => t.group)?.group;
+  const item = current(stack).item;
+  return { ...(group ? { group } : {}), ...(item ? { item } : {}) };
+}
+
+/** Pressed items the reading no longer lists as owner items leave the pending set. */
+export function prunePending(pending: Set<string>, todo: readonly TodoRow[]): void {
+  for (const id of pending) if (!todo.some((t) => t.kind === "owner_item" && t.ref === id)) pending.delete(id);
+}
+
 /** The panel's own re-read interval, the status bar's (main.ts STATUS_INTERVAL_MS). */
 export const REFRESH_MS = 30_000;
 

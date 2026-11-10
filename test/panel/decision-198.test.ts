@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { type BriefInput, type BriefSnapshot, buildBrief, localShort, localStamp, panelView, renderMarkdown, replayJsonl, statusBarItem } from "../../core/index.ts";
-import { autoRefresh, ERROR_LINE, errorLine, type PanelView, renderError, renderStage } from "../../orca-plugin/panel/view.ts";
+import { autoRefresh, ERROR_LINE, errorLine, openTarget, type PanelView, prunePending, renderError, renderStage } from "../../orca-plugin/panel/view.ts";
 
 const FIX = new URL("../fixtures/brief/", import.meta.url);
 const NOW = "2026-11-10T12:00:00.000Z";
@@ -92,4 +92,15 @@ test("an owner item the panel pressed into ⏳ 검증 대기 keeps its 완료 of
   const pressed = renderStage(v, [], "all", {}, new Set([owner.ref]));
   assert.ok(!pressed.includes(done), "no 완료 act on the pressed row");
   assert.match(pressed, /<button type="button" class="btn" disabled>⏳ 검증 대기<\/button>/);
+
+  const pending = new Set([owner.ref, "i999"]);
+  prunePending(pending, v.todo);
+  assert.deepEqual([...pending], [owner.ref], "a pressed item the reading no longer lists leaves the set");
+});
+
+test("an item opened straight from 현황 still names itself to the terminal button", () => {
+  assert.deepEqual(openTarget([]), {});
+  assert.deepEqual(openTarget([{ item: "i026" }]), { item: "i026" });
+  assert.deepEqual(openTarget([{ group: "acme" }, { item: "i026" }]), { group: "acme", item: "i026" });
+  assert.ok(renderStage(view({ item: "i026" }) as unknown as PanelView, ["i026"], "all", openTarget([{ item: "i026" }])).includes("&quot;item&quot;:&quot;i026&quot;"));
 });

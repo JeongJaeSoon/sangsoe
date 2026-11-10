@@ -32,7 +32,8 @@ test("from / and from a folder outside every repo the recorder refuses in Korean
   }
 });
 
-test("the checkout read is the session's cwd, not the server process's", async () => {
+// The callers pass none: the MCP server starts in the session's folder, so its cwd is that folder.
+test("the checkout read names its folder with git -C", async () => {
   const calls: string[][] = [];
   const exec: ApproveExec = async (cmd, args) => {
     calls.push([cmd, ...args]);

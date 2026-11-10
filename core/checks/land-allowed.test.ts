@@ -14,7 +14,7 @@ test("decision 198: the allow rules that let sangsoe land through, in either pla
   for (const r of ["Bash(sangsoe:*)", "Bash(sangsoe *)", "Bash(sangsoe land --pr 1)", "mcp__plugin_sangsoe_sangsoe__*"]) {
     assert.equal(landAllowRules({ permissions: { allow: [r] } }).permissions.length, 1, r);
   }
-  for (const r of ["Bash(sangsoe doctor)", "Bash(orch land:*)", "mcp__plugin_sangsoe_sangsoe__brief"]) {
+  for (const r of ["Bash(sangsoe)", "Bash(sangsoe doctor)", "Bash(orch land:*)", "mcp__plugin_sangsoe_sangsoe__brief"]) {
     assert.equal(landAllowRules({ permissions: { allow: [r] } }).permissions.length, 0, r);
   }
   assert.deepEqual(landAllowRules({}), { permissions: [], autoMode: [] });

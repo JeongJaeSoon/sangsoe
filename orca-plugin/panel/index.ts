@@ -12,7 +12,9 @@ import {
   down,
   errorNote,
   type Open,
+  openTarget,
   type PanelView,
+  prunePending,
   REFRESH_MS,
   type Refusal,
   renderError,
@@ -40,12 +42,7 @@ function mount(): void {
   let tab: Tab = "all";
   let note = "";
   let busy = false;
-  // The terminal's `sangsoe brief` takes `<group> [<iNNN>]`: the item's group is the one above it.
-  const where = (): Target => {
-    const group = [...stack].reverse().find((t) => t.group)?.group;
-    const item = current(stack).item;
-    return { ...(group ? { group } : {}), ...(group && item ? { item } : {}) };
-  };
+  const where = (): Target => openTarget(stack);
 
   const esc = (text: string) => text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const failed = (e: unknown) => ({ ok: false as const, refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" } });
@@ -55,12 +52,13 @@ function mount(): void {
   const sayRefused = (r: Refusal) => {
     note = errorNote(r);
   };
-  // Owner items this panel pressed into ⏳ 검증 대기: their 완료 stays off while a reading still lists them.
+  // Owner items this panel pressed into ⏳ 검증 대기: their 완료 stays off until a reading drops them.
   const pending = new Set<string>();
   let lastOk = false;
   const draw = async (auto = false) => {
     const r = (await orca.plugin.request("panel.brief", { ...current(stack), ...(auto ? { auto: true } : {}) }).catch(failed)) as Reply<PanelView>;
     lastOk = r.ok;
+    if (r.ok) prunePending(pending, r.value.todo);
     // The message sits under the header row, above the tabs or the back line.
     const html = r.ok ? renderStage(r.value, trail(stack), tab, where(), pending) : renderError(r.refusal, trail(stack), where());
     root.innerHTML = html.replace("</header>", () => `</header>${note}`);
