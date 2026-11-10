@@ -4,37 +4,31 @@ import { createFakeOrca } from "../../test/fake-orca/index.ts";
 import { buildArgs, createOrcaAdapter, parseEnvelope, recoverWrite } from "./adapter.ts";
 import { ORCA_COMMANDS } from "./commands.ts";
 
-// design.html §2 "첫째 칸" table, the command column, minus the rows marked 쓰지 않음.
-// The table's consuming mail read is the sessions' own verb; scripts read mail with `inbox` (decision 60).
+// design.html §2 "첫째 칸" table, the commands the core calls. Not here: rows marked 쓰지 않음, and the
+// verbs sessions run themselves from their own text (decision 193: `run-create`, `run-use`, `ask`,
+// `reply`, `worker-release`, `worktree set`, `reference list`, `search`, and the consuming mail read;
+// scripts read mail with `inbox`, decision 60).
 const DESIGN_TABLE = [
   "orchestration task-create",
   "orchestration task-list",
   "orchestration task-update",
-  "orchestration run-create",
-  "orchestration run-use",
   "orchestration run-current",
   "orchestration run-show",
   "orchestration gate-create",
   "orchestration gate-resolve",
   "orchestration gate-list",
   "orchestration send",
-  "orchestration ask",
-  "orchestration reply",
   "orchestration inbox",
   "orchestration worker-start",
   "orchestration worker-show",
   "orchestration worker-list",
   "orchestration dispatch-show",
-  "orchestration worker-release",
-  "worktree set",
   "worktree ps",
   "worktree list",
   "worktree rm",
   "reference add",
-  "reference list",
   "reference find",
-  "search",
-  "terminal wait",
+  "ports",
   "diagnostics memory",
   "plugin inspect",
   // The table's `plugin enable` is `sangsoe plugin approve`'s alone (decision 77, test/approve-only.test.ts).
@@ -231,4 +225,58 @@ test("a result without the expected field is unexpected_shape, not undefined row
   const fake = createFakeOrca({ replies: { "orchestration-task-list": { ok: true, result: {} } } });
   const r = await createOrcaAdapter(fake.exec).taskList({ run: "run_1" });
   assert.equal(!r.ok && r.error.code, "unexpected_shape");
+});
+
+test("ports reads one worktree's listeners, and only from the local host", async () => {
+  const fake = createFakeOrca();
+  const wt = "repo-0001::/home/dev/workspaces/api/feature-a";
+  const r = await createOrcaAdapter(fake.exec).ports({ worktree: `id:${wt}` });
+  assert.deepEqual(fake.calls[0], ["orca", "ports", "--worktree", `id:${wt}`, "--json"]);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(
+    r.value.map((p) => [p.port, p.owner?.worktreeId]),
+    [[5173, wt]],
+  );
+
+  const remote = createFakeOrca({ replies: { ports: { ok: true, result: { executionHostId: "ssh-1", ports: [] } } } });
+  const far = await createOrcaAdapter(remote.exec).ports({ worktree: "id:x" });
+  assert.equal(!far.ok && far.error.code, "non_local_host", "decision 88: a remote host's listeners are not this PC's");
+
+  const unnamed = createFakeOrca({ replies: { ports: { ok: true, result: { ports: [] } } } });
+  const unknown = await createOrcaAdapter(unnamed.exec).ports({ worktree: "id:x" });
+  assert.equal(!unknown.ok && unknown.error.code, "non_local_host", "decision 88: a missing host is not local");
+
+  for (const row of [{ port: 1 }, { id: "a", port: "5173" }]) {
+    const bad = createFakeOrca({ replies: { ports: { ok: true, result: { executionHostId: "local", ports: [row] } } } });
+    const shape = await createOrcaAdapter(bad.exec).ports({ worktree: "id:x" });
+    assert.equal(!shape.ok && shape.error.code, "unexpected_shape", JSON.stringify(row));
+  }
+});
+
+test("worker-start passes --keep-open bare and --repo with its selector", async () => {
+  const fake = createFakeOrca();
+  const orca = createOrcaAdapter(fake.exec);
+  await orca.workerStart({ task: "task_1", agent: "claude", worktree: "new-child", keepOpen: true, repo: "id:repo-2" });
+  assert.deepEqual(fake.calls[0], [
+    "orca",
+    "orchestration",
+    "worker-start",
+    "--task",
+    "task_1",
+    "--agent",
+    "claude",
+    "--worktree",
+    "new-child",
+    "--keep-open",
+    "--repo",
+    "id:repo-2",
+    "--json",
+  ]);
+  await orca.workerStart({ task: "task_1", agent: "claude", worktree: "new-child", keepOpen: false });
+  assert.ok(!(fake.calls[1] ?? []).includes("--keep-open"), "keepOpen false sends nothing");
+});
+
+test("the rows no caller used are gone from the table", () => {
+  const gone = ["runCreate", "runUse", "ask", "reply", "workerRelease", "worktreeSet", "referenceList", "search", "terminalWaitIdle"];
+  for (const name of gone) assert.equal(name in ORCA_COMMANDS, false, name);
 });

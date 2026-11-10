@@ -8,4 +8,4 @@
 - `host-filter.ts` — `hostId == "local"` 인 행만 돌려준다. 비어 있거나 없는 `hostId` 는 비로컬이고, 비로컬 행은 수만 남는다(결정 88 ①). `worker-list` 는 같은 값을 `host` 로 준다.
 - `exec.ts` — 셸 없이 `execFile` 로 부르는 실제 `Exec`. 시험은 `test/fake-orca/` 의 가짜를 넘긴다.
 
-없는 것: 소비하는 메일 읽기(스크립트는 `inbox` 로 읽는다, 결정 60), 대체 시작(오너 d125), `dispatch`·`automations`.
+없는 것: 소비하는 메일 읽기(스크립트는 `inbox` 로 읽는다, 결정 60), 대체 시작(오너 d125), `dispatch`·`automations`. 세션이 자기 글로 직접 부르는 동사(`run-create`·`run-use`·`ask`·`reply`·`worker-release`·`worktree set`·`reference list`·`search`)도 행을 두지 않는다(결정 193).

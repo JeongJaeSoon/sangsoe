@@ -310,9 +310,9 @@ test("job_drift: the installed plugin out of line with the brew tree, once per d
 });
 
 // The owner queue's world: a fake Orca that records every verb it does not answer, so a verb that
-// closes or settles something (task-update, gate-resolve, worker-release) shows up. A send (the ready
-// notice) is a message, not a close.
-const CLOSING = new Set(["taskUpdate", "gateResolve", "workerRelease"]);
+// closes or settles something (task-update, gate-resolve) shows up. A send (the ready notice) is a
+// message, not a close.
+const CLOSING = new Set(["taskUpdate", "gateResolve"]);
 const closing = (verbs: readonly string[]) => verbs.filter((k) => CLOSING.has(k));
 function ownerOrca(w: OwnerWorld) {
   const unexpected: string[] = [];

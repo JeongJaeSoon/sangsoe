@@ -22,7 +22,7 @@
 {"type":"job_drift","source":"queue-monitor","payload":{"plugin":"sangsoe","expected":"sha256:aa","actual":"sha256:bb"}}
 {"type":"land_failed","source":"worker:u1","payload":{"pr":"acme/api#12","head_sha":"a1b2c3d","reason":"evidence_missing"}}
 {"type":"land_requested","source":"worker:u1","payload":{"pr":"acme/api#12","head_sha":"a1b2c3d"}}
-{"type":"loop_detected","source":"Stop","payload":{"reason":"stop block ceiling"}}
+{"type":"loop_detected","source":"core:start","payload":{"reason":"start_failed_3x"}}
 {"type":"main_green","source":"pr-monitor","payload":{"repo":"acme/api","sha":"d4e5f6a","run_id":"9002"}}
 {"type":"main_red","source":"pr-monitor","payload":{"repo":"acme/api","sha":"d4e5f6a","run_id":"9003"}}
 {"type":"mention_new","source":"chat-monitor","payload":{"url":"https://chat.example/acme/1"}}
@@ -70,7 +70,7 @@
 {"type":"waiting_human","source":"Notification","payload":{"session":"sess-1","tool":"Bash"}}
 {"type":"waiting_released","source":"PostToolUse","dedupe_key":"waiting_released:68","payload":{"ref":"68","outcome":"answered","by":"owner","evidence":"PostToolUse Bash"}}
 {"type":"wake_unconfirmed","source":"orca-monitor","payload":{"msg_id":"msg_2"}}
-{"type":"worker_dead","source":"StopFailure","payload":{"reason":"stop_failure"}}
+{"type":"worker_dead","source":"orca-monitor","payload":{"reason":"stop_failure"}}
 {"type":"worker_done","source":"worker:u1","payload":{"dispatch":"ctx_1","task":"task_a1","outcome":"succeeded"}}
 {"type":"worker_idle","source":"Stop","payload":{"session":"sess-1"}}
 {"type":"worker_stuck","source":"orca-monitor","payload":{"reason":"no_role_line"}}
