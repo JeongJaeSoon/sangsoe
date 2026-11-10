@@ -1,13 +1,17 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type RunResult = { code: number; stdout: string; stderr: string };
 
+/** Overrides for one child's environment; `undefined` removes the variable. */
+export type RunEnv = Readonly<Record<string, string | undefined>>;
+
 // Everything install/uninstall/doctor read from or do to the machine, so tests run with no claude or orca.
 export type Host = {
-  run(cmd: string, args: readonly string[]): RunResult;
+  run(cmd: string, args: readonly string[], env?: RunEnv): RunResult;
   exists(path: string): boolean;
   readText(path: string): string;
   env: Readonly<Record<string, string | undefined>>;
@@ -15,8 +19,16 @@ export type Host = {
 };
 
 export const realHost: Host = {
-  run(cmd, args) {
-    const r = spawnSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  run(cmd, args, env) {
+    let childEnv: NodeJS.ProcessEnv | undefined;
+    if (env) {
+      childEnv = { ...process.env };
+      for (const [k, v] of Object.entries(env)) {
+        if (v === undefined) delete childEnv[k];
+        else childEnv[k] = v;
+      }
+    }
+    const r = spawnSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: childEnv });
     if (r.error) return { code: 127, stdout: "", stderr: r.error.message };
     return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
   },
@@ -59,11 +71,47 @@ export const lastLine = (r: RunResult) =>
 export type Marketplace = { name: string; source?: string; path?: string };
 export type ClaudePlugin = { id: string; version?: string; scope?: string; enabled?: boolean };
 
-export const listMarketplaces = (host: Host) =>
-  json<Marketplace[]>(host.run("claude", ["plugin", "marketplace", "list", "--json"]));
-export const listPlugins = (host: Host) => json<ClaudePlugin[]>(host.run("claude", ["plugin", "list", "--json"]));
+export const listMarketplaces = (host: Host, env?: RunEnv) =>
+  json<Marketplace[]>(host.run("claude", ["plugin", "marketplace", "list", "--json"], env));
+export const listPlugins = (host: Host, env?: RunEnv) =>
+  json<ClaudePlugin[]>(host.run("claude", ["plugin", "list", "--json"], env));
 export const userPlugin = (plugins: readonly ClaudePlugin[] | undefined) =>
   plugins?.find((p) => p.id === PLUGIN_ID && p.scope === "user");
+
+// Claude Code's own enable, written as one `claude` argv so the decision 77 guard
+// (test/approve-only.test.ts) can tell it from Orca's.
+export const enableClaudePlugin = (host: Host, env?: RunEnv) =>
+  host.run("claude", ["plugin", "enable", PLUGIN_ID, "--scope", "user"], env);
+
+/** A Claude Code configuration directory and the env that points `claude` at it. */
+export type ClaudeProfile = { dir: string; env?: RunEnv };
+
+/** The directory `claude` run from here uses: `CLAUDE_CONFIG_DIR`, else `~/.claude`. */
+export function currentProfile(host: Host): ClaudeProfile {
+  const set = host.env.CLAUDE_CONFIG_DIR;
+  return { dir: set ? resolve(set) : join(host.env.HOME ?? homedir(), ".claude") };
+}
+
+type OrcaClaudeAccounts = {
+  accounts?: { id?: string; home?: string }[];
+  activeAccountId?: string | null;
+  systemDefaultHome?: string;
+};
+
+/**
+ * The profile Orca starts new Claude sessions with, from Orca's own `account list` (decision 167).
+ * No selected account means Orca's system default home, which `claude` reaches with
+ * `CLAUDE_CONFIG_DIR` unset. Undefined when Orca's answer cannot be read: never taken as "same".
+ */
+export function orcaProfile(host: Host): ClaudeProfile | undefined {
+  const c = json<{ result?: { claude?: OrcaClaudeAccounts } }>(host.run("orca", ["account", "list", "--json"]))?.result?.claude;
+  if (!c) return undefined;
+  if (!c.activeAccountId) {
+    return c.systemDefaultHome ? { dir: resolve(c.systemDefaultHome), env: { CLAUDE_CONFIG_DIR: undefined } } : undefined;
+  }
+  const home = c.accounts?.find((a) => a.id === c.activeAccountId)?.home;
+  return home ? { dir: resolve(home), env: { CLAUDE_CONFIG_DIR: resolve(home) } } : undefined;
+}
 
 export type OrcaPlugin = { pluginKey: string; version?: string; status?: string; isDev?: boolean; needsReconsent?: boolean };
 export const listOrcaPlugins = (host: Host) =>

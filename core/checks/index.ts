@@ -10,6 +10,7 @@ import { orcaReachable } from "./orca-reachable.ts";
 import { reaperConfig } from "./reaper-config.ts";
 import { remoteHosts } from "./remote-hosts.ts";
 import { sqliteVersion } from "./sqlite-version.ts";
+import { watchRepos } from "./watch-repos.ts";
 
 export * from "./check.ts";
 export { modelTable } from "./model-table.ts";
@@ -30,4 +31,4 @@ export const START_CHECKS: readonly Check[] = [
  * `doctor` adds what is too slow for every start (the content check downloads the reviewed build)
  * and what the start already refuses elsewhere (`Store.open` checks the SQLite floor).
  */
-export const DOCTOR_CHECKS: readonly Check[] = [...START_CHECKS, orcaPluginContent, sqliteVersion, reaperConfig, modelTable];
+export const DOCTOR_CHECKS: readonly Check[] = [...START_CHECKS, orcaPluginContent, sqliteVersion, reaperConfig, watchRepos, modelTable];
