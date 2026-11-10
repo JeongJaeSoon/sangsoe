@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { StoredEvent, ViewTaskStatus } from "../contract/index.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
 import { isOpenGate } from "../decision/waiters.ts";
-import { type FullTaskRow, resultFields } from "../graph/snapshot.ts";
+import { depsOf, type FullTaskRow, resultFields } from "../graph/snapshot.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
@@ -21,6 +21,15 @@ export function briefRuns(events: readonly StoredEvent[], current: string | null
   return [...new Set([...(current ? [current] : []), ...named, ...extra])];
 }
 
+/** A deps value Orca gave that is not a string array reads as none, so one bad row does not fail the brief. */
+function readableDeps(t: FullTaskRow): string[] {
+  try {
+    return depsOf(t.deps);
+  } catch {
+    return [];
+  }
+}
+
 /** One Orca snapshot through the adapter: task-list --full and gate-list per Run, nothing cached. */
 export async function readSnapshot(orca: OrcaAdapter, runs: readonly string[]): Promise<Result<BriefSnapshot>> {
   const tasks: BriefTask[] = [];
@@ -36,7 +45,7 @@ export async function readSnapshot(orca: OrcaAdapter, runs: readonly string[]): 
         id: t.id,
         runId: run,
         status,
-        deps: [],
+        deps: readableDeps(t as FullTaskRow),
         title: t.title,
         ...resultFields(t as FullTaskRow),
         ...(t.dispatchId ? { activeDispatchId: t.dispatchId } : {}),

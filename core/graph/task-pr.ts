@@ -32,10 +32,12 @@ function stateOf(pr: string, facts: Facts): TaskPrState {
  * binding exists, the PRs the Task's worker report names stand in, read from pr-monitor's rows for
  * them; a PR with no row yet is unknown. No PR anywhere is `none`: a Task that never had one.
  * One open or unknown PR holds the whole Task; all merged is merged; otherwise one closed unmerged.
+ * `boundOnly` skips the report: readiness waits only on a PR pr-monitor has a row for, since nothing
+ * is sure to write the row a report-only PR lacks (no watch.repos, an unwatched repo, an old PR).
  */
-export function taskPr(task: ViewTask, facts: Facts): TaskPr {
+export function taskPr(task: ViewTask, facts: Facts, opts: { readonly boundOnly?: boolean } = {}): TaskPr {
   const bound = [...facts.prs.values()].filter((p) => p.tasks.has(task.id)).map((p) => p.pr);
-  const prs = bound.length > 0 ? bound : reportPrs(task.report);
+  const prs = bound.length > 0 || opts.boundOnly ? bound : reportPrs(task.report);
   if (prs.length === 0) return { state: "none", prs };
   const states = prs.map((pr) => stateOf(pr, facts));
   const state: TaskPrState = states.includes("unknown")

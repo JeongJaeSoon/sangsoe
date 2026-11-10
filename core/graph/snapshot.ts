@@ -29,7 +29,7 @@ export function resultFields(r: Pick<FullTaskRow, "result" | "completed_at">): P
 
 const STATUSES: readonly ViewTaskStatus[] = ["pending", "ready", "dispatched", "blocked", "completed", "failed"];
 
-function depsOf(raw: FullTaskRow["deps"]): string[] {
+export function depsOf(raw: FullTaskRow["deps"]): string[] {
   if (raw === undefined || raw === null) return [];
   const list: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
   if (!Array.isArray(list) || list.some((d) => typeof d !== "string")) throw new Error(`deps: expected a string array, got ${JSON.stringify(raw)}`);

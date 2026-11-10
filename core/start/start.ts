@@ -3,6 +3,7 @@ import { REQUIRED_CAPABILITIES } from "../checks/orca-capabilities.ts";
 import type { OrcaAdapter, OrcaResult, Receipt, TaskRow, WriteOptions } from "../contract/orca.ts";
 import type { ViewInput, ViewTask } from "../contract/views.ts";
 import { foldFacts } from "../graph/facts.ts";
+import { itemRef } from "../graph/nodes.ts";
 import { whyFrom } from "../graph/ready.ts";
 import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import { type Choice, resolve } from "../models/index.ts";
@@ -98,9 +99,12 @@ function graphHold(rows: readonly FullTaskRow[], run: string, events: ViewInput[
   } catch (err) {
     return `task-list 의 deps 를 읽지 못했다 (${(err as Error).message})`;
   }
+  // Only decision 178's merge wait: a completed predecessor in this Run. Another Run's predecessor
+  // is not in this snapshot, and holds and triggers stay queue-monitor's call as before.
+  const done = new Set(tasks.filter((t) => t.status === "completed").map((t) => itemRef(t.id)));
   const report = whyFrom({ orca: { tasks, gates: [] }, events, now: new Date().toISOString() }, foldFacts(events), taskId);
-  if (report.readiness !== "waiting" && report.readiness !== "unknown") return null;
-  return report.rows.map((r) => `${r.pred} (${r.kind}): ${r.predState}`).join("; ") || "GRAPH 가 준비되지 않았다고 본다";
+  const held = report.rows.filter((r) => (r.kind === "blocks" || r.kind === "after") && done.has(r.pred));
+  return held.length === 0 ? null : held.map((r) => `${r.pred} (${r.kind}): ${r.predState}`).join("; ");
 }
 
 function firstPrompt(role: Role, t: NewTask): string {

@@ -119,7 +119,7 @@ export function edgeOk(e: InEdge, facts: Facts, tasks: ReadonlyMap<string, ViewT
       // A flow step is done by its own done_when (ship-change's impl: the PR is open), and its flow
       // waits on the merge with explicit stage steps and deploys_after.
       if (facts.items.get(node.task)?.flow !== undefined) return met(state);
-      const p = taskPr(t, facts);
+      const p = taskPr(t, facts, { boundOnly: true });
       if (p.state === "none" || p.state === "merged") return met(state);
       if (p.state === "open") return wait(`${state} · PR 머지 전`, "선행 PR 머지를 기다린다");
       if (p.state === "unknown") return unknown(`선행 항목의 PR ${p.prs.join(", ")} 상태를 아직 읽지 못했다(pr-monitor)`);
