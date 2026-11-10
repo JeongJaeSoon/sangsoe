@@ -74,7 +74,9 @@ test("PN2: the panel draws exactly the BriefModel's row ids, in order, at all th
   const two = view({ group: "api-migration" });
   assert.equal(two.model.stage, 2);
   if (two.model.stage === 2) {
-    assert.deepEqual(drawnRowIds(renderStage(two)), [...two.model.sections.flatMap((s) => s.rows.map((r) => r.id)), ...two.model.why.rows.map((r) => r.id)]);
+    const g = two.model;
+    const tables = [...g.sections, g.recent, g.critical, g.stack, ...(g.release ?? []), g.broken, g.why, g.edgeList];
+    assert.deepEqual(drawnRowIds(renderStage(two)), tables.flatMap((t) => t?.rows.map((r) => r.id) ?? []));
   }
 
   const three = view({ item: "i031" });
