@@ -223,7 +223,7 @@
 | 세션 hook 신호 | 권한·입력 대기 | `waiting_human` | — |
 | | `waiting_human` 이 풀렸거나(패널 버튼·같은 도구의 실행·턴 종료·`agentWait` 해제. 오너의 말만으로는 풀지 않는다) 답 없이 사라짐(세션 종료). 값: outcome(`answered`·`moot`), by(`owner`·`button`·`unknown`), evidence. 먼저 보인 신호 하나만 남는다(결정 91) | `waiting_released` | — |
 | 오너 항목 검증 | 오너 항목이 가질 수 있는 기계가 읽는 끝나는 조건 `verify`. 종류 다섯: 머지(`pr_merged`) · Orca 상태 칸(`orca_field`) · plugin 승인(`plugin_approved`) · 워크플로 실행 결과(`run_ok`) · PR 존재(`pr_found`). 없는 항목은 "검증 없음" 으로 보인다. 통과하면 `evidence` 와 닫기 제안이 가고 monitor 가 닫지는 않는다 | `verify` · `cmd_hint` | — |
-| 입력 확인됨 · 검증 중 | 오너의 `!` 명령·프롬프트가 열린 오너 항목의 후보로 읽혔고 probe 를 기다린다는 뷰의 표지. 상태가 아니고 입력만으로는 어떤 상태도 바뀌지 않는다. probe 가 실패하거나 시간이 지나면 "검증 안 됨" 이 된다. 규칙은 결정 181 이다: 결정은 그 결정을 가리키는 오너의 답(`dNNN` 답·패널 버튼)으로 닫히고, 할 일은 검증(probe 의 관측)으로 닫힌다. 오너가 패널에서 완료를 눌러도 `verify` 가 있으면 ⏳ 검증 대기다 | `owner_act:seen` | 실행됨(상태로), 동작확인 중(상태로) |
+| 입력 확인됨 · 검증 중 | 오너의 `!` 명령·프롬프트가 열린 오너 항목의 후보로 읽혔고 probe 를 기다린다는 뷰의 표지. 상태가 아니고 입력만으로는 어떤 상태도 바뀌지 않는다. probe 가 실패하거나 시간이 지나면 "검증 안 됨" 이 된다. 규칙은 결정 181 이다: 결정은 그 결정을 가리키는 오너의 답(hook 이 잇는 `dNNN` 답·패널 버튼·오케스트레이터가 `decision_answer` 로 잇는 오너의 말)으로 닫히고, 할 일은 검증(probe 의 관측)으로 닫힌다. 오너가 패널에서 완료를 눌러도 `verify` 가 있으면 ⏳ 검증 대기다 | `owner_act:seen` | 실행됨(상태로), 동작확인 중(상태로) |
 | 원인이 사라진 결정 | 게이트가 건 Task 가 모두 닫혔거나 가리키는 PR 이 닫혀 더 물을 이유가 없는 결정. 답 없이 닫고 뒤늦은 답은 기록만 한다 | `moot` | — |
 | | 턴 종료 | `turn_ended` | — |
 | | 일 없이 멈춘 워커(계약만: 쓰는 쪽이 아직 없다. 결정 186) | `worker_idle` | — |
@@ -263,7 +263,7 @@
 | | 새 리뷰 답글(계약만. 결정 186) | `review_replied` | — |
 | | GitHub 한도 부족 | `rate_limited` | — |
 | | Orca 메시지를 보낸 기록(`msg_id`·받는 쪽·type). 기록이지 깨움이 아니고 메시지 본문의 사본도 아니다 | `notified` | — |
-| | 대체 경로 전용 기록: 시험 P10 이 `worktree ps` 시각 필드를 못 믿는다고 보일 때만 orca-monitor 가 워커의 상태·단계·생존·세션 활동 중 하나가 바뀐 때 쓰고, 마지막 변화로부터의 경과로 `worker_stuck` 을 판정한다. 평소에는 쓰지 않는다(결정 87, 옛 방식은 결정 61) | `observed_change` | — |
+| | 대체 경로 전용 기록: 시험 P10 이 `worktree ps` 시각 필드를 못 믿는다고 보일 때만 orca-monitor 가 워커의 상태·단계·생존·세션 활동 중 하나가 바뀐 때 쓰고, 마지막 변화로부터의 경과로 `worker_stuck` 을 판정한다. 평소에는 쓰지 않는다(결정 87, 옛 방식은 결정 61). 지금은 쓰는 쪽이 없는 계약만이다(결정 186) | `observed_change` | — |
 | | sangsoe 를 거치지 않고 만들어진 Orca 게이트, 곧 sangsoe 결정 키가 없는 게이트(orca-monitor 가 Run 마다 훑어 쓴다). 그 게이트가 막는 항목은 🚨 로 보인다 | `decision_untracked` | — |
 | | 오너가 직접 한 일(머지·수동 sync 같은 사실)이 열린 어느 결정의 답에도 이어지지 않음(pr-monitor 가 쓰고 오케스트레이터에게 Orca 메시지로 알린다. 감시 목록에 든 `!` 명령이 어느 열린 오너 항목에도 안 맞을 때는 `!` 입력을 읽는 hook `H/owner_input.py` 가 쓴다. 현황 진행 중 절에서 `그 외` 리드 행 아래 PR 행으로 오르고, 오케스트레이터가 잇거나 `unlinked.show_hours`(기본 24)가 지나면 빠진다, 결정 91) | `owner_act_unlinked` | — |
 | | REAPER 결과 | `reap_done` · `reap_blocked` | — |
@@ -276,7 +276,7 @@
 | | 항목의 부가 정보를 붙임·바꿈, 상태를 바꾼 함수가 Orca 호출 뒤에 남기는 이력(원본은 Orca Task 이고 이 줄은 기록이다) | `item_created` · `item_extra_set` · `item_transition` | item_state |
 | | 우선순위 지정 | `priority_set` | — |
 | | 간선 더함·뺌 | `edge_added` · `edge_removed` | — |
-| | 흐름 틀 펼침·단계 건너뜀 | `flow_expanded` · `flow_step_skipped` | — |
+| | 흐름 틀 펼침·단계 건너뜀(건너뜀은 계약만. 결정 186) | `flow_expanded` · `flow_step_skipped` | — |
 | | 결정 열림·닫힘 | `decision_opened` · `decision_closed` | — |
 | | 열린 같은 결정 키에 대기자가 합류함 | `decision_joined` | — |
 | | 결정에 답이 달림. 답을 잇는 쪽을 `linked_by`(hook·button·orchestrator·observed)에 적는다(게이트를 푸는 대상) | `decision_answered` | — |
@@ -284,7 +284,7 @@
 | | 거부 보고(계약만. 결정 186) | `refusal_report` | — |
 | | 증거·배포 확인. `evidence` 줄은 칸 `kind`(증거 종류: 테스트 출력 · 실행 출력 · 화면 · dev 확인 등) · `head_sha`(증거가 가리키는 머지할 head) · `exit_code`(명령의 종료 코드) · `not_verified`(확인하지 못한 것을 적는 칸)을 싣는다. 큰 파일은 증거 폴더에 두고 event 에는 경로와 sha256 만 둔다. head 가 바뀌면 이전 증거는 그 head 에 대해 무효다 | `evidence` · `kind` · `head_sha` · `exit_code` · `not_verified` · `stage_recorded` | — |
 | | 검증 등급이 정해지거나 바뀜(pr-monitor 가 쓰는 하나뿐인 쪽) | `verify_tier_set` | — |
-| | 워커 완료 보고. PR 이 걸린 일은 그 본문이 머지 대기 보고다(결정 175) | `worker_done` | — |
+| | 워커 완료 보고. PR 이 걸린 일은 그 본문이 머지 대기 보고다(결정 175). 실제 보고는 Orca 메시지이고 이 이름의 event 줄은 계약만이다(결정 186) | `worker_done` | — |
 | | 모델 도중 변경({from, to, reason}) | `model_changed` | — |
 | | 신호 한 종류 묶음({kind}) | `signal` | — |
 | | `signal` 의 kind | `loss` · `wait` · `orchestrator_correction` · `main_flake` · `start_refused` | — |
