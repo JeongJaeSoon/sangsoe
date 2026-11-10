@@ -19,3 +19,4 @@ SessionStart 의 시작 점검과 `sangsoe doctor` 가 같은 목록(`START_CHEC
 | `reaper-config`(doctor 만, `DOCTOR_CHECKS`) | `reaper` 칸이 없으면 notice · 그 칸을 더하는 한 줄(REAPER 는 표시만) | 결정 144·153 |
 | `tier-config`(doctor 만, `DOCTOR_CHECKS`) | `verify_tier` 목록이 하나라도 없으면 notice · 빠진 목록 이름과 README 의 Verify tier 절(land 는 모든 PR 을 V3 로 본다) | 결정 172 |
 | `watch-repos`(doctor 만, `DOCTOR_CHECKS`) | `watch.repos` 가 없거나 비면 notice · 그 칸을 더하는 한 줄(pr monitor 가 아무것도 읽지 않는다) | 결정 168 |
+| `store-restore`(doctor 만, `DOCTOR_CHECKS`) | 잃은 데이터베이스를 사본에서 다시 세운다(여는 길이 한다). 다시 세운 적이 있으면 notice · 되살리지 못한 것의 이름 목록, 호스트 행을 아직 다시 읽지 않았으면 Orca 를 열라는 줄 | 결정 183·184 |
