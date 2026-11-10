@@ -239,7 +239,11 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     inbox: (a) => field("inbox", "messages", rowsWith({ id: "string", type: "string" }), { flags: { terminal: a.terminal, limit: a.limit, full: true } }),
 
     workerStart: (a, o) =>
-      run("workerStart", { flags: { task: a.task, agent: a.agent, worktree: placement(a.worktree), run: a.run } }, o),
+      run(
+        "workerStart",
+        { flags: { task: a.task, agent: a.agent, worktree: placement(a.worktree), run: a.run, model: a.model, effort: a.effort } },
+        o,
+      ),
     workerShow: (a) => shaped("workerShow", isObject, { flags: { dispatch: a.dispatch } }),
     workerList: (a) =>
       local("workerList", "workers", "host", "dispatchId", { flags: { run: a.run, limit: a.limit, cursor: a.cursor } }),

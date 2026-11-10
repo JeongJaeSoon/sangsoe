@@ -278,7 +278,7 @@ export interface OrcaAdapter {
 
   // Worker and Dispatch
   workerStart(
-    a: { task: string; agent: string; worktree: WorkerPlacement; run?: string },
+    a: { task: string; agent: string; worktree: WorkerPlacement; run?: string; model?: string; effort?: string },
     o?: WriteOptions,
   ): Promise<OrcaResult<Receipt>>;
   workerShow(a: { dispatch: string }): Promise<OrcaResult<WorkerShow>>;

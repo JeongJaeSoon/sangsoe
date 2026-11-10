@@ -36,6 +36,9 @@ export type CheckContext = {
   home?: string;
   /** Defaults to this Node's `process.versions.sqlite`. */
   sqliteVersion?: string;
+  /** Defaults to the clock and `process.env`; tests pin both. */
+  now?: Date;
+  env?: Record<string, string | undefined>;
 };
 
 /**

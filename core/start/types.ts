@@ -1,4 +1,5 @@
 import type { OrcaAdapter } from "../contract/orca.ts";
+import type { Choice } from "../models/index.ts";
 import type { Store } from "../store/store.ts";
 
 export type Role = "orchestrator" | "lead" | "worker";
@@ -35,6 +36,8 @@ export type StartRequest = {
   maxDepth?: number;
   /** `티켓:` URLs attached to the new worktree with `reference add` (decision 93 (마)); failure does not stop the start. */
   references?: string[];
+  /** From `resolveModel` (decision 164); absent means the child role's own row. */
+  model?: Choice;
 };
 
 export const REFUSAL_REASONS = [
