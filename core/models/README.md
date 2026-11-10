@@ -7,7 +7,7 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 - **정책(`POLICY`)**: 일의 종류(`Kind`) → tier · effort · effort 사다리 · 다음 tier · 승격 조건 · 인용한 가이드 문장. 가이드 문구가 바뀌면 이 행만 바뀐다. 정책 행은 tier 만 적고 모델 이름이나 버전을 적지 않는다.
 - **변경 이력(`CHANGELOG`)**: 날짜 · 무엇이 바뀌었나 · 출처 · 결정 번호. git 없이 읽힌다.
 
-`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort` 로 푼다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다.
+`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort` 로 푼다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다. 옮긴 tier 는 카탈로그의 API 기본 effort 에서 시작한다(frontier 는 `high`, 결정 172).
 
 ## 읽는 곳
 

@@ -122,7 +122,7 @@ test("PN3: status bar B reads the same numbers as sangsoe todo and the brief's t
   assert.ok(r.ok);
   const m = r.value.model as Overview;
   const s = statusBarItem(m);
-  assert.equal(s.text, `SANGSOE  🚧 ${m.summary.blocked} · 결정 ${m.todo.decisions} · 🔄 ${m.summary.doing}`);
+  assert.equal(s.text, `✨ SANGSOE  🚧 ${m.summary.blocked} · 결정 ${m.todo.decisions} · 🔄 ${m.summary.doing}`);
   assert.equal(s.tone, m.todo.total > 0 ? "danger" : "neutral");
   const md = renderMarkdown(m, { maxWidth: 78 });
   assert.ok(md.includes(`🚧 막힌 것 ${m.summary.blocked}건`) && md.includes(`🔄 진행 중 ${m.summary.doing}건`));
@@ -312,7 +312,7 @@ test("다른 답 is masked before it is stored or handed to the Run", async () =
   assert.match(String(w.store.events({ type: "decision_answered" })[0]?.payload.answer), /^use /);
 });
 
-test("a core that throws becomes a refusal and status falls back to 'SANGSOE  ?'", async () => {
+test("a core that throws becomes a refusal and status falls back to '✨ SANGSOE  ?'", async () => {
   const boom = async () => {
     throw new Error("disk gone");
   };
