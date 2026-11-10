@@ -1,3 +1,4 @@
+import { localStamp } from "./time.ts";
 import type { BriefModel, Cell, Column, GroupDetail, ItemDetail, Overview, Table } from "./types.ts";
 import { fit, textWidth } from "./width.ts";
 
@@ -29,7 +30,7 @@ function section(t: Table, emptyText: string | null): string[] {
   return [head, "", ...grid(t), ""];
 }
 
-const stamp = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)}Z`;
+const stamp = localStamp;
 
 function overview(m: Overview): string[] {
   const s = m.summary;

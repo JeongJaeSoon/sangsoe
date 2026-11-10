@@ -187,7 +187,7 @@ test("decision 167: install also registers and enables in the Claude profile Orc
   ]);
   assert.equal(profiles.get(ORCA_DIR)?.plugins[0]?.enabled, true);
   assert.match(r.lines.join("\n"), new RegExp(`claude \\(Orca profile ${ORCA_DIR}\\): enabled sangsoe@sangsoe`));
-  assert.match(r.lines.join("\n"), new RegExp(`ok +orca claude profile: Orca starts sessions with ${ORCA_DIR}: sangsoe@sangsoe ${V}, enabled`));
+  assert.match(r.lines.join("\n"), new RegExp(`ok +orca claude profile: Orca starts sessions with ${ORCA_DIR}: sangsoe@sangsoe ${V}, sangsoe enabled`));
 });
 
 test("an Orca selection of the default home runs claude with CLAUDE_CONFIG_DIR unset", async () => {
@@ -215,17 +215,34 @@ test("doctor names the profile it checked", async () => {
   }
 });
 
-test("doctor warns on a disabled or missing plugin in Orca's selected profile, with sangsoe install as the fix", async () => {
-  for (const [plugins, state] of [
-    [disabledPlugin(), "is disabled"],
-    [[], "is not installed"],
+test("doctor fails a disabled plugin and warns on a missing one in Orca's selected profile, with sangsoe install as the fix", async () => {
+  for (const [plugins, state, level] of [
+    [disabledPlugin(), "is disabled", "FAIL"],
+    [[], "is not installed", "warn"],
   ] as const) {
     const { host, calls } = fakeHost({ orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: [...plugins] } } });
     const r = await doctor(host, ROOT, online());
-    const row = new RegExp(`^warn +orca claude profile: Orca starts sessions with ${ORCA_DIR}, where sangsoe@sangsoe ${state} — fix: sangsoe install$`);
+    const row = new RegExp(`^${level} +orca claude profile: Orca starts sessions with ${ORCA_DIR}, where sangsoe@sangsoe ${state} — fix: sangsoe install$`);
     assert.ok(r.lines.some((l) => row.test(l)), r.lines.join("\n"));
     assert.ok(!calls.some((c) => /\benable\b/.test(c)), "doctor never enables");
   }
+});
+
+test("decision 198: doctor reads Orca's profile for a sangsoe land allow rule, as a notice it never fails on", async () => {
+  const { host, calls } = fakeHost({ orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: [{ id: "sangsoe@sangsoe", version: V, scope: "user", enabled: true }] } } });
+  const r = await doctor(host, ROOT, online());
+  const row = r.lines.find((l) => /^notice +land allow: /.test(l));
+  assert.ok(row?.includes(`${ORCA_DIR}/settings.json`), r.lines.join("\n"));
+  assert.match(row ?? "", /doctor writes no settings/);
+  assert.ok(!calls.some((c) => /\b(config|settings)\b.*\bset\b/.test(c)), "nothing is written");
+});
+
+test("decision 198: Orca on the checked profile still reads whether sangsoe is enabled there, and a disabled one is not green", async () => {
+  const { host, calls } = fakeHost({ env: { CLAUDE_CONFIG_DIR: ORCA_DIR }, orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: [...disabledPlugin()] } } });
+  const r = await doctor(host, ROOT, online());
+  assert.ok(r.lines.some((l) => /^FAIL +orca claude profile: .*\(the checked profile\), where sangsoe@sangsoe is disabled/.test(l)), r.lines.join("\n"));
+  assert.equal(r.code, 1);
+  assert.ok(!calls.some((c) => c.startsWith("CLAUDE_CONFIG_DIR=")), "the same profile is read without a second CLAUDE_CONFIG_DIR");
 });
 
 test("doctor warns on a plugin version in Orca's selected profile that differs from the tree", async () => {

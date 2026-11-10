@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { FULL_SHA, SANGSOE_REPO } from "../approve/approve.ts";
 import { resolveCommit } from "../approve/ports.ts";
 import { type CheckContext, type CheckResult, DOCTOR_CHECKS, type PluginBuild, runChecks } from "../checks/index.ts";
+import { landAllowDetail, landAllowRules } from "../checks/land-allowed.ts";
 import type { Exec } from "../contract/orca.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
@@ -97,15 +98,41 @@ function orcaProfileCheck(host: Host, root: string, current: ClaudeProfile): Che
   const fix = "sangsoe install";
   const orca = orcaProfile(host);
   if (!orca) return { state: "warn", name, detail: `${UNREADABLE("orca account list --json")}: Orca's selected profile is unchecked`, fix: "orca open" };
-  if (orca.dir === current.dir) return { state: "ok", name, detail: "Orca starts new sessions with the checked profile" };
-  const plugins = listPlugins(host, orca.env);
-  if (!plugins) return { state: "warn", name, detail: `${orca.dir}: ${UNREADABLE("claude plugin list --json")}`, fix };
+  // Decision 198: the same profile is read too, so this row always says whether sangsoe is enabled there.
+  const same = orca.dir === current.dir;
+  const where = same ? `${orca.dir} (the checked profile)` : orca.dir;
+  const plugins = listPlugins(host, same ? undefined : orca.env);
+  if (!plugins) return { state: "warn", name, detail: `${where}: ${UNREADABLE("claude plugin list --json")}`, fix };
   const p = userPlugin(plugins);
   const want = readManifest(host, join(root, "package.json"))?.version;
-  if (!p) return { state: "warn", name, detail: `Orca starts sessions with ${orca.dir}, where ${PLUGIN_ID} is not installed`, fix };
-  if (p.enabled === false) return { state: "warn", name, detail: `Orca starts sessions with ${orca.dir}, where ${PLUGIN_ID} is disabled`, fix };
-  if (p.version !== want) return { state: "warn", name, detail: `Orca starts sessions with ${orca.dir}, where ${PLUGIN_ID} is ${p.version}, tree is ${want}`, fix };
-  return { state: "ok", name, detail: `Orca starts sessions with ${orca.dir}: ${PLUGIN_ID} ${p.version}, enabled` };
+  if (!p) return { state: "warn", name, detail: `Orca starts sessions with ${where}, where ${PLUGIN_ID} is not installed`, fix };
+  if (p.enabled === false) {
+    return { state: "fail", name, detail: `Orca starts sessions with ${where}, where ${PLUGIN_ID} is disabled`, fix };
+  }
+  if (p.enabled !== true) return { state: "warn", name, detail: `Orca starts sessions with ${where}: whether ${PLUGIN_ID} is enabled is unknown`, fix: "claude plugin list --json" };
+  if (p.version !== want) return { state: "warn", name, detail: `Orca starts sessions with ${where}, where ${PLUGIN_ID} is ${p.version}, tree is ${want}`, fix };
+  return { state: "ok", name, detail: `Orca starts sessions with ${where}: ${PLUGIN_ID} ${p.version}, sangsoe enabled` };
+}
+
+// Decision 198: read-only, never `fail`. The profile Orca starts workers with is the one that matters.
+function landAllowedCheck(host: Host, current: ClaudeProfile): Check {
+  const name = "land allow";
+  const dir = orcaProfile(host)?.dir ?? current.dir;
+  let settings: unknown;
+  try {
+    settings = JSON.parse(host.readText(join(dir, "settings.json")));
+  } catch {
+    settings = undefined;
+  }
+  const { found, detail } = landAllowDetail(dir, settings === undefined ? undefined : landAllowRules(settings));
+  return found
+    ? { state: "ok", name, detail }
+    : {
+        state: "notice",
+        name,
+        detail: `${detail}: auto mode may refuse a worker's land`,
+        fix: `the owner adds an allow rule (e.g. "Bash(sangsoe land:*)" in permissions.allow); doctor writes no settings`,
+      };
 }
 
 // The plugin row itself is the start check `claude-plugin-version`.
@@ -123,6 +150,7 @@ function claudeChecks(host: Host, root: string): Check[] {
       detail: `checked ${current.dir} (${host.env.CLAUDE_CONFIG_DIR ? "CLAUDE_CONFIG_DIR" : "CLAUDE_CONFIG_DIR unset"})`,
     },
     orcaProfileCheck(host, root, current),
+    landAllowedCheck(host, current),
   ];
 
   const markets = listMarketplaces(host);

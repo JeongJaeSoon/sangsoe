@@ -1,3 +1,6 @@
+// The golden text is drawn in UTC; decision 198's local time is pinned in test/panel/decision-198.test.ts.
+process.env.TZ = "UTC";
+
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { test } from "node:test";
