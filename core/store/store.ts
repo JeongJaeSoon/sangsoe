@@ -389,6 +389,8 @@ export class Store {
     if (row) {
       // Before COMMIT: a fact whose copy cannot be written is rolled back with it.
       if (this.#backup && isOwnRow(e.type, e.source)) {
+        // Again under the lock: the file may have been rebuilt while BEGIN waited.
+        if (this.replaced()) throw new StoreReplaced(`${this.#file?.path} was replaced during this write: open the store again`);
         const seq = Number(row.seq);
         appendLines(this.#backup, [...this.#uncopied(this.#backup, seq), { row: this.#db.prepare("SELECT * FROM event WHERE seq = ?").get(seq) as Row }]);
       }
