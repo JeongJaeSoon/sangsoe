@@ -168,6 +168,7 @@ test("decision 169: header row, stage 1 tabs with model counts, empty sections o
   const m = one.model;
   const html = renderStage(one);
   assert.match(html, /<header class="top">.*data-refresh.*data-open=.*<details class="menu">/s);
+  assert.match(html, /role="menuitem" data-open="[^"]*models[^"]*">터미널에서 sangsoe models</, "decision 200: the catalog view");
   assert.match(html, /<main data-view="all">/, "every section shows by default");
   assert.ok(html.includes(`data-tab-to="todo">할 일 <span class="count">${m.todo.total}</span>`));
   assert.ok(html.includes(`data-tab-to="prog">진행 중 <span class="count">${m.inProgress.count}</span>`), "the tab says the section heading's number");
@@ -221,6 +222,22 @@ test("panel.open builds the terminal command itself; panel text never reaches th
   assert.deepEqual(asked, [{ group: "api-migration", item: "i033" }, {}, { group: "api-migration" }], "doctor and todo ask for no worktree");
   assert.equal(((await h({ view: "x" })) as { ok: boolean }).ok, false);
   assert.equal(calls.length, 1, "a refused view runs nothing");
+  // Decision 200: the more menu opens `sangsoe models` in the same worktree as the overview's brief.
+  assert.equal(openCommand({ view: "models", group: "g; id" }), "sangsoe models");
+  const seen: unknown[] = [];
+  const models = openHandler(
+    async (cmd, args) => {
+      calls.push([cmd, ...args]);
+      return { ok: true, code: 0, out: "{}", err: "" };
+    },
+    async (t) => {
+      seen.push(t);
+      return { ok: true, value: { worktree: WT } };
+    },
+  );
+  assert.deepEqual(await models({ view: "models", group: "api-migration", item: "i033" }), { ok: true, value: { status: "opened" } });
+  assert.deepEqual(seen, [{}], "the catalog belongs to no group: the overview's worktree");
+  assert.deepEqual(calls.at(-1), ["orca", "terminal", "create", "--worktree", `id:${WT}`, "--title", "sangsoe models", "--command", "sangsoe models", "--focus", "--json"]);
   const shell = openHandler(async () => ({ ok: true, code: 0, out: "{}", err: "" }), async () => ({ ok: true, value: { worktree: "x; id" } }));
   assert.equal(((await shell({ view: "brief", group: "g", item: "i001" })) as { ok: boolean }).ok, false, "a worktree that is not Orca's id form is not passed on");
   const failing = openHandler(async () => ({ ok: false, code: 1, out: "", err: "terminal refused" }), async () => ({ ok: true, value: { worktree: WT } }));
