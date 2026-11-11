@@ -627,7 +627,7 @@ function group(m: GroupDetail): string {
   const side = [
     m.critical ? sub(m.critical, gtTable(m.critical, { roles: ["step", "item", "short", "text"], head: [0, 1, 2] })) : "",
     m.stack ? sub(m.stack, gtTable(m.stack, { roles: ["short", "short", "item", "short"], head: [0, 2, 3] })) : "",
-    ...(m.release ?? []).map((t) => sub(t, gtTable(t, { roles: ["kind", "text", "text"], head: [0] }))),
+    ...(m.release ?? []).map((t) => sub(t, gtTable(t, { roles: ["kind", "text", "item"], head: [0] }))),
     m.broken ? sub(m.broken, gtTable(m.broken, { roles: ["item", "item", "text"], head: [0], titles, states })) : "",
   ].join("");
   return [

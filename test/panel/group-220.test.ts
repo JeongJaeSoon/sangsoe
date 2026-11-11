@@ -48,6 +48,14 @@ test("(14) graph cells wrap at words, never inside an id or a Hangul word", () =
   assert.match(rule(WIDE, ".tbl.gt td.tx"), /min-width: \d+em;/);
 });
 
+test("(14) the role widths hold only in a wide panel, so a narrow card's title cells are not squeezed to 1%", () => {
+  const wideOnly = /@container panel \(min-width: 720px\) \{([^@]*?)\n\}/s.exec(STYLE)?.[1] ?? "";
+  for (const sel of [".tbl.gt td.nw", ".tbl.gt td.it", ".tbl.gt td.tx"]) {
+    assert.ok(rule(wideOnly, sel), `${sel} sits in the wide-only block`);
+    assert.equal(rule(WIDE.replace(wideOnly, ""), sel), "", `${sel} is not a rule at every width`);
+  }
+});
+
 test("(14) the four tables give each column one role: short cells nowrap, item cells and the long text take the width", () => {
   const want: Record<string, Record<string, string>> = {
     "크리티컬 패스": { 단계: "nw", 항목: "it", 상태: "nw", "단계 이름": "tx" },

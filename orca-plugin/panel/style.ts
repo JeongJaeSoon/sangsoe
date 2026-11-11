@@ -195,10 +195,12 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 /* Graph tables size columns by role, the same in all of them (decision 220 (14)). anywhere would let
    the table squeeze a column to one glyph; keep-all keeps a Hangul word whole. */
 .tbl.gt td { overflow-wrap: break-word; word-break: keep-all; }
-.tbl.gt td.nw { white-space: nowrap; width: 1%; }
-.tbl.gt td.it { min-width: 8em; }
-.tbl.gt td.tx { min-width: 10em; }
 .tbl.gt .hs { display: none; }
+@container panel (min-width: 720px) {
+  .tbl.gt td.nw { white-space: nowrap; width: 1%; }
+  .tbl.gt td.it { min-width: 8em; }
+  .tbl.gt td.tx { min-width: 10em; }
+}
 @container panel (min-width: 900px) {
   .gwrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
