@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   answerNotifiedKey,
   awaitingResume,
+  classifyPrompt,
   DEFAULT_RESTART_RULES,
   handoffSave,
   mask,
@@ -236,9 +237,12 @@ test("C11: Orca's nudge, its mail turn, another session's message and a task not
   await hook(w, "notification", { session_id: "s1", notification_type: "idle_prompt", message: "Claude is waiting for your input" });
   const prompts = [
     // Orca's nudge goes on to name its read command, which test/orca-boundary.test.ts keeps out of the tree.
-    "You have 1 orchestration message.",
+    "\nYou have 1 orchestration message.\n",
     "You have 3 orchestration messages.",
     "You have new orchestration messages. They arrive next, one at a time; act on each.",
+    // Orca's held-delivery reminder (decision 206): the same nudge with "new" after the count.
+    "\nYou have 1 new orchestration message after delivery dlv_1, which you have not acknowledged.\n",
+    "You have 2 new orchestration messages after delivery dlv_2, which you have not acknowledged.",
     'Another Claude session sent a message:\n<agent-message from="abc">done</agent-message>',
     "<task-notification>\n<task-id>b1</task-id>\n</task-notification>",
   ];
@@ -251,6 +255,16 @@ test("C11: Orca's nudge, its mail turn, another session's message and a task not
     ["unknown"],
     "the turn's end releases the wait, not as the owner",
   );
+  // The shape holds only at the start: the owner quoting a nudge is still the owner speaking.
+  await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: "q1", prompt: "why did it say: You have 2 new orchestration messages" });
+  assert.equal(w.store.events({ type: "owner_action" }).length, 1);
+});
+
+test("decision 206: classifyPrompt labels Orca's injected lines orca_nudge and everything else the owner's", () => {
+  assert.equal(classifyPrompt("\nYou have 2 new orchestration messages after delivery dlv_2, which you have not acknowledged."), "orca_nudge");
+  assert.equal(classifyPrompt("You are working inside Orca, a multi-agent IDE."), "orca_nudge");
+  assert.equal(classifyPrompt("You have new mail"), "owner");
+  assert.equal(classifyPrompt("  "), "empty");
 });
 
 test("worker_idle: a dispatched session's turn ends with its Dispatch still open; after worker_done it is not idle", async () => {
