@@ -37,6 +37,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 | escalation | 네 단위 안에서 풀 수 있나. 아니면 선택지·추천·기다리는 것을 붙여 위로 | `decision_open`, 또는 리드는 Orca `send --type escalation`(Dispatch 가 없는 오케스트레이터는 status·question 형, 결정 197) |
 | 거부 보고 | 거부된 행위를 다른 길로 하지 않는다. 규칙이 바뀌어야 하면 오너 몫으로 올린다 | `decision_open` |
 | `item_ready`·`capacity_free` | 시작할 항목이 생겼다 | `start_unit`(`start` skill) |
+| `🔁 rereview_item`(리드만) | base 가 바뀐 PR 의 재리뷰 항목을 플러그인 타이머가 네 Run 에 만들지 못했다(Orca 는 그 Run 에 묶인 세션만 Task 를 만들게 한다). 메시지가 적은 CLI 명령(`sangsoe graph sync --run <네 Run>`)을 Bash 로 그대로 돌리면 항목과 `blocks` 간선이 생긴다. land 는 그동안에도 `rereview_needed` 로 막는다(결정 217) | — |
 | `close_suggested` | 증거가 그 오너 항목의 완료를 보이나. 보이면 오너에게 완료 버튼을 누를 항목이라고 알린다. 오너 항목은 오너가 닫는다. 오너가 먼저 누른 항목은 ⏳ 검증 대기라 이 제안이 오지 않고 probe 가 통과하면 저절로 ✅ 로 읽힌다(결정 181) | — |
 | `main_red` | 머지한 PR 의 당사자에게 원인 좁히기를 맡긴다. 동결 중에는 `main_fix` 만 land 된다 | `start_unit` 또는 Orca `send` |
 | `worker_dead`·`worker_stuck` | 같은 Task 를 다시 시작할지(`start_unit` 의 `task`), 멈출지 | `start_unit` |

@@ -14,6 +14,11 @@ export interface RereviewResult {
   /** `<pr> → iNNN` for each item made this call. */
   readonly made: readonly string[];
   readonly refused: readonly string[];
+  /**
+   * Items Orca would not let this caller make in their Run (`consumer_fenced`: the caller is not bound
+   * to it). Only the Run's own session can make them; `seq` is the base change the item is for.
+   */
+  readonly fenced: readonly { pr: string; run: string; task: string; seq: number }[];
 }
 
 /** The PR item's extras the re-review item takes, so it sits in the same group and repo. */
@@ -22,6 +27,7 @@ const CARRIED = ["lead", "priority", "repo"] as const;
 export async function rereviewItems(deps: CoreDeps, snapshot: OrcaSnapshot): Promise<RereviewResult> {
   const made: string[] = [];
   const refused: string[] = [];
+  const fenced: { pr: string; run: string; task: string; seq: number }[] = [];
   const events = deps.store.events();
   const facts = foldFacts(events);
   for (const pr of facts.prs.values()) {
@@ -50,7 +56,8 @@ export async function rereviewItems(deps: CoreDeps, snapshot: OrcaSnapshot): Pro
         doneWhen: rereviewDoneWhen(pr.pr, change),
       });
       if (!created.ok) {
-        refused.push(`${pr.pr}: ${created.code} ${created.error}`);
+        if (created.orcaCode === "consumer_fenced") fenced.push({ pr: pr.pr, run: owner.runId, task: owner.id, seq: change.seq });
+        else refused.push(`${pr.pr}: ${created.code} ${created.error}`);
         continue;
       }
       item = created;
@@ -74,5 +81,5 @@ export async function rereviewItems(deps: CoreDeps, snapshot: OrcaSnapshot): Pro
       if (!edge.ok) refused.push(`${pr.pr}: ${edge.refusal.code} ${edge.refusal.reason}`);
     }
   }
-  return { made, refused };
+  return { made, refused, fenced };
 }

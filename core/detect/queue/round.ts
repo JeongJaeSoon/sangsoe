@@ -6,7 +6,7 @@ import { decisionMoot } from "../../decision/moot.ts";
 import { isOpenGate } from "../../decision/waiters.ts";
 import type { GhClient } from "../../gh/client.ts";
 import { notifyReady } from "../../graph/notify-ready.ts";
-import { rereviewItems } from "../../graph/rereview.ts";
+import { type RereviewResult, rereviewItems } from "../../graph/rereview.ts";
 import { readSnapshot } from "../../graph/snapshot.ts";
 import { syncGraph } from "../../graph/sync.ts";
 import { probeRound } from "../../owner/probe.ts";
@@ -63,13 +63,15 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
     },
   };
   const core = d.core;
+  let fenced: RereviewResult["fenced"] = [];
 
   if (core) {
     const s = syncGraph(core, input.orca, [], { infer: true });
     calls.push(`graph sync: added ${s.added.length}, unstacked ${s.unstacked.length}, reland ${s.relandPrs.length}, dangling ${s.dangling.length}, refused ${s.refused.length}`);
     if (!signal.aborted) {
       const rr = await rereviewItems(core, input.orca);
-      calls.push(`rereview items: made ${rr.made.length}${rr.made.length ? ` (${rr.made.join(", ")})` : ""}, refused ${rr.refused.length}`);
+      calls.push(`rereview items: made ${rr.made.length}${rr.made.length ? ` (${rr.made.join(", ")})` : ""}, refused ${rr.refused.length}, fenced ${rr.fenced.length}`);
+      fenced = rr.fenced;
       unseen.push(...rr.refused.map((x) => `re-review item ${x}`));
     }
   } else calls.push("would call graph sync", "would call rereview items");
@@ -180,6 +182,28 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
           subject: n.subject,
           body: n.body,
           msgType: n.msgType,
+          source: QUEUE_SOURCE,
+        })),
+        planned: [],
+      }),
+    });
+  }
+  // Decision 217: Orca lets only the session bound to a Run write to it, so a re-review item fenced
+  // out of the lead's Run becomes one wake per base change, asking that session to make it.
+  for (const f of fenced) {
+    const key = `notify:${dedupeSegment(f.task)}:rereview_fenced:${dedupeSegment(f.pr)}:${f.seq}`;
+    if (have.has(key)) continue;
+    acts.push({
+      what: `wake run:${f.run} to make the re-review item of ${f.pr}`,
+      wake: true,
+      run: async (dd) => ({
+        ...(await sendNotice(dd, {
+          key: { target: f.task, dedupe_key: key },
+          to: "lead",
+          chain: { leadRun: f.run },
+          subject: `🔁 rereview_item: ${f.pr}`,
+          body: `The base of ${f.pr} changed, and its re-review item can only be made from this Run's session. Run: sangsoe graph sync --run ${f.run}`,
+          msgType: "status",
           source: QUEUE_SOURCE,
         })),
         planned: [],

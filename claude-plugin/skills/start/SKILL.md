@@ -35,7 +35,7 @@ description: "Use when a sangsoe lead or the orchestrator starts a session on an
 | 칸 | 값 |
 |---|---|
 | `role` | 네 역할(`orchestrator` 또는 `lead`) |
-| `worktreeId` | 네 Orca worktree id. 새 worktree 는 그 자식이 된다 |
+| `worktreeId` | 네 Orca worktree id. 새 worktree 는 그 자식이 된다. 오케스트레이터는 비운다: `start_unit` 이 작업 폴더의 worktree 를 읽는다(결정 217) |
 | `taskId` | 리드면 네 Task id. 오케스트레이터는 비운다 |
 | `runId` | 네가 쥔 Run |
 | `childRole` | `worker` 또는 `lead` |

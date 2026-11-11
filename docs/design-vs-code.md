@@ -303,7 +303,7 @@
 | MCP tool flow_step_skip | design.html MCP 인터페이스 | changed (결정 195) | `claude-plugin/mcp/tools/flow_step_skip.ts:11`, `core/graph/edit.ts:173` | |
 | MCP tool decision_open | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/decision_open.ts:29` | |
 | MCP tool decision_answer | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/decision_answer.ts:19` | |
-| MCP tool start_unit | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/start_unit.ts:44`, `claude-plugin/mcp/stale.ts:13` | 낡은 서버 거부(결정 211) |
+| MCP tool start_unit | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/start_unit.ts:44`, `claude-plugin/mcp/stale.ts:13`, `core/start/start.ts:258`, `test/lineage/start.test.ts:1066` | 낡은 서버 거부(결정 211). 오케스트레이터가 비운 `worktreeId` 는 작업 폴더의 worktree 로 읽는다(결정 217) |
 | MCP tool land | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/land.ts:6`, `core/land/land.ts:200` | |
 | MCP tool handoff_save | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/handoff_save.ts:21` | sqlite 에 쓰지 않는다 |
 | MCP tool review_ask_record | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/review_ask_record.ts:21` | |
@@ -325,7 +325,7 @@
 | CLI recover·verify-tier·monitor run·migrate | design.html 배치표 | implemented | `cli/commands/recover.ts:15`, `cli/commands/monitor.ts:29` | |
 | CLI decision·item new | design-appendix 결정 루프 | implemented | `cli/commands/decision.ts:26`, `cli/commands/item-new.ts:70` | |
 | CLI graph add·remove·ready·why·expand·critical·impact | design-appendix GRAPH: 모듈과 CLI | implemented | `cli/commands/graph-add.ts:11`, `cli/commands/graph-why.ts:15` | |
-| CLI graph sync | design-appendix GRAPH: 모듈과 CLI | changed (결정 215) | `cli/commands/graph-sync.ts:22`, `core/graph/sync.ts:58`, `core/detect/queue/round.ts:68`, `test/land/retarget-rereview.test.ts:212` | G22 닫힘 — queue-monitor 는 `pr_opened` 의 head·base 로 `stacked_on` 을 스스로 더하고(결정 212 ③), base 가 선행 PR 의 head 를 떠난 PR 에서는 그 간선을 뺀다. land 재요청 event 대신 재리뷰(결정 215 ②)가 문이고, 재리뷰 항목 spec 이 land 를 다시 부르라고 한다 |
+| CLI graph sync | design-appendix GRAPH: 모듈과 CLI | changed (결정 215·217) | `cli/commands/graph-sync.ts:19`, `core/graph/sync.ts:58`, `core/detect/queue/round.ts:191`, `test/land/retarget-rereview.test.ts:212`, `test/detect/lead-run-s6.test.ts:79` | G22 닫힘 — queue-monitor 는 `pr_opened` 의 head·base 로 `stacked_on` 을 스스로 더하고(결정 212 ③), base 가 선행 PR 의 head 를 떠난 PR 에서는 그 간선을 뺀다. land 재요청 event 대신 재리뷰(결정 215 ②)가 문이고, 재리뷰 항목 spec 이 land 를 다시 부르라고 한다. 결정 217: CLI 도 재리뷰 항목을 만든다. 타이머가 `consumer_fenced` 로 막힌 Run 의 세션이 깨움을 받고 이것을 돌린다 |
 | CLI graph skip | design-appendix 신호 흐름 | changed (결정 195) | `cli/commands/graph-skip.ts:11` | |
 | CLI graph(인자 없음)·priority set·owner-text redact | design.html 의존 관리, design-appendix sqlite 스키마 | cut (결정 160) | `core/store/store.ts:420` | LATER — 오너가 우선순위나 원문 지우기를 요청한 첫 경우 |
 | CLI hook·reap run·resource record·models·version | design-appendix 신호 흐름 | implemented | `cli/commands/hook.ts:29`, `cli/commands/reap.ts:27` | 설계 본문에 이름이 없는 셸 입구 |
@@ -408,7 +408,7 @@
 | 흐름 4 패널·상태 표시줄 다시 읽기 | design.html §5 흐름 4 | changed (결정 205) | `orca-plugin/main.ts:91` | |
 | 경계 다섯 | design.html §5 경계마다 무엇이 오가나 | implemented | `cli/commands/hook.ts:51`, `core/orca/adapter.ts:291` | hook·MCP·worker·Orca CLI·두 plugin |
 | 실패 stack_order·review_timing·cross_lead·stack_bottom·overlap_order·unknown_is_not_ready·merge_suggests_close·precheck_blocks_send·repo_level_main | design-appendix 실패 → 방지 장치 → 회귀 시험 | implemented | `core/graph/ready.ts:133`, `test/graph/regressions.test.ts:20` | 장치와 시험이 모두 있다 |
-| 실패 retarget_approval | design-appendix 실패 → 방지 장치 → 회귀 시험 | changed (결정 215) | `core/land/land.ts:445`, `core/graph/rereview.ts:22`, `core/detect/pr/round.ts:397`, `test/land/retarget-rereview.test.ts:116` | G31 닫힘 — base 변경 뒤에 기록된 판정만 센다(patch-id 승계도 그 뒤의 판정만). 재리뷰 항목은 queue round 가 blocks 로 만든다. 결정 216: 머지된 아래 PR 의 head 브랜치를 base 로 둔 PR 은 `base_merged`, retarget 을 pr-monitor 가 아직 기록하지 않았으면 `base_unrecorded` 로 거부한다(`core/land/land.ts:195`, `core/land/land.ts:204`, `test/land/retarget-rereview.test.ts:286`) |
+| 실패 retarget_approval | design-appendix 실패 → 방지 장치 → 회귀 시험 | changed (결정 215) | `core/land/land.ts:445`, `core/graph/rereview.ts:27`, `core/detect/pr/round.ts:397`, `test/land/retarget-rereview.test.ts:116` | G31 닫힘 — base 변경 뒤에 기록된 판정만 센다(patch-id 승계도 그 뒤의 판정만). 재리뷰 항목은 queue round 가 blocks 로 만든다(그 Run 밖이라 거부되면 그 Run 을 깨워 그 세션이 만든다, 결정 217, `core/graph/rereview.ts:59`). 결정 216: 머지된 아래 PR 의 head 브랜치를 base 로 둔 PR 은 `base_merged`, retarget 을 pr-monitor 가 아직 기록하지 않았으면 `base_unrecorded` 로 거부한다(`core/land/land.ts:195`, `core/land/land.ts:204`, `test/land/retarget-rereview.test.ts:286`) |
 | 실패 early_done·prod_gate | design-appendix 실패 → 방지 장치 → 회귀 시험 | implemented | `core/graph/flow.ts:311`, `test/graph/flow.test.ts:124`, `test/graph/done-close-g23.test.ts` | 닫는 세 자리가 done_blockers 로 거부한다(결정 212 ④) |
 | 분류 바로 답·읽기·범위·시각 대기 | design-appendix 지시 분류 표 | changed (결정 162) | `claude-plugin/skills/intake/SKILL.md:18`, `claude-plugin/skills/intake/SKILL.md:32` | owner_class 줄 없이, 범위는 Orca send |
 | 분류 새 일·오너 판단·열린 결정의 답 | design-appendix 지시 분류 표 | implemented | `core/start/item.ts:33`, `core/decision/open.ts:45` | |
