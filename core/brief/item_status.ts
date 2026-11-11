@@ -2,7 +2,7 @@ import type { ItemReading, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput
 import { type Facts, foldFacts } from "../graph/facts.ts";
 import { itemRef, prNode } from "../graph/nodes.ts";
 import { mergedItemMark } from "../verify/evidence.ts";
-import { type Hold, holdOf } from "../graph/ready.ts";
+import { type Hold, holdOf, retiredOf } from "../graph/ready.ts";
 import { waiterReading } from "../decision/held.ts";
 import { countsAsEvidence } from "../owner/marks.ts";
 import { decision } from "../store/views/decision.ts";
@@ -74,7 +74,8 @@ function taskOf(e: StoredEvent, prTask: ReadonlyMap<string, string>, dispatchTas
 }
 
 // Decision 218: the 🚧 readings come from GRAPH's holdOf, the same answer the why rows are written from.
-function stateOf(t: BriefTask, hold: Hold | null, held: ReturnType<typeof waiterReading>, ready: boolean): ItemReading {
+function stateOf(t: BriefTask, hold: Hold | null, held: ReturnType<typeof waiterReading>, ready: boolean, retired: boolean): ItemReading {
+  if (retired) return "cancelled";
   if (t.status === "completed") {
     if (hold?.by !== "pr") return "done";
     return hold.state === "open" ? "blocked" : hold.state === "closed_unmerged" ? "pr_closed" : "unknown";
@@ -163,7 +164,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     const openDecisions = own.filter((d) => d.state === "open").map((d) => d.decision);
     // Decisions 175 and 178: the author's worker_done completes the Task in Orca before its PR merges.
     const hold = holdOf(t, prFacts, input.orca.gates);
-    const prRead = stateOf(t, hold, waiterReading(t, input.orca.gates), ready.has(t.id));
+    const prRead = stateOf(t, hold, waiterReading(t, input.orca.gates), ready.has(t.id), retiredOf(t, prFacts));
     // Decision 181: an owner to-do closes on verification, whoever completed the Task.
     const verifiedAt = prFacts.ownerVerify.get(t.id);
     const state: ItemReading = prRead === "done" && verifiedAt === null ? "pending_verify" : prRead;

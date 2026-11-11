@@ -201,8 +201,8 @@
 | 용어 | 정의 | 영문 식별자 | 쓰지 않는 말 |
 |---|---|---|---|
 | 현황 | 상태를 묶음 → 묶음 상세 → 항목 상세 세 단계로 내려가며 보는 것. CLI 와 패널이 같은 뷰를 쓴다 | `sangsoe brief` | 보고, 진행 상황 목록 |
-| 1단계(현황) | 표 네 절(결정 필요 · 지금 오너가 할 일 · 진행 중 · 보류)이고 리드·카드·PR·워커가 한 행씩이다. 묶음 요약은 리드 행에만 쓴다 | `BriefModel` | 묶음마다 한 줄 요약, 보고 |
-| 진행 중 절 | 현황 1단계의 셋째 표. 리드 행 하나와 그 아래 🚧 🔄 🟢 📅 항목·세션·PR 행. 상태 🔄 진행 중과 다른 뜻이고 상태 칸이 구분한다 | `brief.in_flight` | — |
+| 1단계(현황) | 표 네 절(결정 필요 · 지금 오너가 할 일 · 열린 항목 · 보류)이고 리드·카드·PR·워커가 한 행씩이다. 묶음 요약은 리드 행에만 쓴다 | `BriefModel` | 묶음마다 한 줄 요약, 보고 |
+| 열린 항목 절 | 현황 1단계의 셋째 표. 리드 행 하나와 그 아래 🚧 🔄 🟢 📅 항목·세션·PR 행. 상태 🔄 진행 중과 다른 뜻이고 상태 칸이 구분한다 | `brief.in_flight` | — |
 | 결정 필요 절 · 지금 오너가 할 일 절 | 현황의 첫째·둘째 표. 앞은 열린 결정(추천 열 있음), 뒤는 `owner_todo` 의 나머지 세 종류. 한 건은 한 곳에만 둔다 | `brief.decisions` · `brief.owner_todo` | — |
 | 보류 절 | 현황의 넷째 표. ⏸️ 항목. 없으면 그리지 않는다 | `brief.held` | — |
 | 현황 렌더러 | 코어의 함수 둘: `buildBrief`(뷰 → `BriefModel`)와 `renderMarkdown`(→ 78칸 이하 Markdown 표). 채팅(MCP resource `brief`·skill·CLI)과 패널이 같은 모델을 쓴다 | `buildBrief` · `renderMarkdown` | — |
@@ -265,7 +265,7 @@
 | | Orca 메시지를 보낸 기록(`msg_id`·받는 쪽·type). 기록이지 깨움이 아니고 메시지 본문의 사본도 아니다 | `notified` | — |
 | | 대체 경로 전용 기록: P10 이 `worktree ps` 시각을 못 믿는다고 보인 자리, 곧 살아 있는 터미널이 둘 이상인 workspace 의 Dispatch 에만 orca-monitor 가 Orca 필드 `state`·`stage`·`liveness` 중 지난 라운드와 달라진 필드 이름을 쓴다(값은 쓰지 않는다. 결정 87·196, 옛 방식은 결정 61) | `observed_change` | — |
 | | sangsoe 를 거치지 않고 만들어진 Orca 게이트, 곧 sangsoe 결정 키가 없는 게이트(orca-monitor 가 Run 마다 훑어 쓴다). 그 게이트가 막는 항목은 🚨 로 보인다 | `decision_untracked` | — |
-| | 오너가 직접 한 일(머지·수동 sync 같은 사실)이 열린 어느 결정의 답에도 이어지지 않음(pr-monitor 가 쓰고 오케스트레이터에게 Orca 메시지로 알린다. 감시 목록에 든 `!` 명령이 어느 열린 오너 항목에도 안 맞을 때는 `!` 입력을 읽는 hook `H/owner_input.py` 가 쓴다. 현황 진행 중 절에서 `그 외` 리드 행 아래 PR 행으로 오르고, 오케스트레이터가 잇거나 `unlinked.show_hours`(기본 24)가 지나면 빠진다, 결정 91) | `owner_act_unlinked` | — |
+| | 오너가 직접 한 일(머지·수동 sync 같은 사실)이 열린 어느 결정의 답에도 이어지지 않음(pr-monitor 가 쓰고 오케스트레이터에게 Orca 메시지로 알린다. 감시 목록에 든 `!` 명령이 어느 열린 오너 항목에도 안 맞을 때는 `!` 입력을 읽는 hook `H/owner_input.py` 가 쓴다. 현황 열린 항목 절에서 `그 외` 리드 행 아래 PR 행으로 오르고, 오케스트레이터가 잇거나 `unlinked.show_hours`(기본 24)가 지나면 빠진다, 결정 91) | `owner_act_unlinked` | — |
 | | REAPER 결과 | `reap_done` · `reap_blocked` | — |
 | | REAPER 가 기록 없는 기존 카드나 Docker 자원을 기록에 올림(편입). 어떤 종류(`kind`)와 근거(카드 목록 · Docker 의 작업 폴더)로 올렸는지를 싣는다 | `resource_adopted` | — |
 | | REAPER 라운드 한 번의 기록: 시각 · `trigger`(`timer`·`hint`) · `roots_ok` · `round` · `mark_only`(설정에 `reaper` 칸이 없어 표시만 한 라운드에만 true. 루트 실패가 아니다, 결정 174) · 읽은 카드 수 · 표시/후보/정리/모름 수 · Docker 건너뜀 여부(`docker` 명령 없음 한 줄, 결정 201) | `reap_round` | — |
@@ -333,7 +333,7 @@
 | plugin 승인 | plugin worker 를 켜는 오너 승인. `sangsoe plugin approve` 코어 함수 하나로만 하고, 오너가 `permissions.allow` 에 이 명령 한 줄만 넣는다. 명령이 독립 리뷰 지적 0으로 main 에 머지된 버전인지, 폴더의 내용 해시(`contentHash`)가 main 의 빌드 커밋 트리와 리뷰된 head 트리와 같은지(결정 105, `orca plugin inspect` 는 지문을 주지 않는다), 대상이 sangsoe plugin 자신인지 검사하고 통과할 때만 `orca plugin enable --approve <지문>` 을 부르며 승인 event 를 남긴다. `orca plugin enable` 자체는 허용 목록에 두지 않는다. MCP tool 이 아닌 호출 경로 규칙의 예외다 | `plugin approve` · `orca plugin enable` · `orca plugin inspect` · `permissions.allow` | — |
 | 첫 빌드 시험 | 구현의 첫 단계가 돌리는 시험 T1~T6. 결과가 설계의 갈래를 정하고, 실패하면 정해 둔 대체가 적용된다: T1 worker 안 `node:sqlite` → 코어 프로세스를 CLI 로 부름 · T2 worker 타이머 → `orca automations --precheck` · T3 패널 그림 → 상태 표시줄과 `sangsoe brief` 출력 · T4 승인 뒤 자율 범위와 재승인 빈도 · T5 Dispatch 재시작 거부와 세 번 실패 차단(PR 작성자의 끝은 결정 175 가 `worker_done` 하나로 정했다). T6(결정 90) 경로 마켓플레이스 설치와 `brew upgrade` 뒤 갱신, hook PATH 의 `sangsoe`, 개발 폴더로 올린 Orca plugin 이 앱 재시작 뒤에도 남는지. 어느 것도 오너 결정을 기다리지 않는다 | `T1`~`T6` | 오너 결정 대기 |
 | Orca·Node 호스트 낱말 | 호스트가 정한 이름이라 sangsoe 가 바꾸지 않는 것: worker 가 돌리는 파일 형식 `.ts`, Orca plugin 매니페스트의 빈 칸 `mcpServers`, Node 의 내장 sqlite `node:sqlite`, command hook 만 갖는 실패 시 막기 `onFailure: "block"`, plugin 로컬 시험 `orca plugin test`, worktree 삭제 `orca worktree rm`, 입력을 받을 때까지 기다리는 `tui-idle`(대체 시작이 없어져 쓰지 않는다, 결정 94), Orca 가 돌려주는 거부·승인 코드 `approval_required`·`approval_stale`·`consumer_fenced`·`task_not_startable`·`task_id` | `approval_required` · `approval_stale` · `consumer_fenced` · `task_not_startable` · `task_id` · `.ts` · `mcpServers` · `node:sqlite` · `onFailure: "block"` · `orca plugin test` · `orca worktree rm` · `tui-idle` | — |
-| 패널 | Orca plugin 이 오른쪽 사이드바에 그리는 화면. 현황 세 단계·오너 할 일·결정 버튼을 낸다. 폭은 사이드바가 정한다. Orca 패널처럼 머리 행(새로 고침·터미널에서 전체 현황·더 보기)과 1단계의 탭(전체 · 할 일 · 진행 중)을 두고 색은 Orca 테마 변수를 따른다(결정 169) | `panels` | 웹 화면, 페이지(패널을 가리킬 때) |
+| 패널 | Orca plugin 이 오른쪽 사이드바에 그리는 화면. 현황 세 단계·오너 할 일·결정 버튼을 낸다. 폭은 사이드바가 정한다. Orca 패널처럼 머리 행(새로 고침·터미널에서 전체 현황·더 보기)과 1단계의 탭(전체 · 할 일 · 열린 항목)을 두고 색은 Orca 테마 변수를 따른다(결정 169) | `panels` | 웹 화면, 페이지(패널을 가리킬 때) |
 | 상태 표시줄 항목 | Orca 상태 표시줄에 이름표와 건수 줄의 짧은 꼴(`✨ SANGSOE  🚧 2 · 결정 2 · 🔄 5`: 막힌 것 · 열린 결정 · 진행 중, 결정 170)을 올리는 항목. 숫자는 `BriefModel.summary`·`owner_todo` 에서 오고 따로 세지 않는다. 오너가 할 일이 있으면 `danger` 색이고 누르면 명령이 실행된다(패널 열기는 미확인, 결정 92) | `statusBarItems` · `statusBar.update` | 오너 할 일 수·🚨 항목 |
 | 호출 경로 규칙 | 코어는 하나이고 에이전트(리드·워커·오케스트레이터)는 MCP 만 쓴다. Bash 로 CLI 를 부르지 않는다. CLI 는 셸에서만 도는 호출자 여섯 행(시작 hook·막는 hook·기록 hook·오너 전용 skill 의 상태 주입 줄·사람 터미널·시험·CI·승인 명령)용으로 얇게 둔다. plugin worker(패널 버튼·monitor 타이머)는 코어를 직접 import 한다 | — | — |
 | 폴백 웹 화면 | 패널로 안 되는 기능만 맡는 최소 웹 화면(같은 코어·같은 읽기 뷰, 새 수집기 없음). 지금은 범위가 비어 있어 두지 않는다 | — | 웹 대시보드 |
@@ -431,7 +431,7 @@
 
 | 용어 | 정의 | 영문 식별자 | 쓰지 않는 말 |
 |---|---|---|---|
-| 현황 | 1단계 패널 화면. 표 네 절과 같은 열(결정 필요 · 지금 오너가 할 일 · 진행 중 · 보류)을 행마다 한 블록으로 보인다. 오너가 해야 하는 행은 배경색을 입지 않고 🚧 마커와 절 건수가 신호다. 넓은 화면의 표 행은 모두 한 높이다(결정 92). 시안 파일은 `dashboard/hallmark-final/index.html`(hallmark 하나, 결정 92) | `index.html` | 메인, 대시보드 홈, `/#/fleet/brief` |
+| 현황 | 1단계 패널 화면. 표 네 절과 같은 열(결정 필요 · 지금 오너가 할 일 · 열린 항목 · 보류)을 행마다 한 블록으로 보인다. 오너가 해야 하는 행은 배경색을 입지 않고 🚧 마커와 절 건수가 신호다. 넓은 화면의 표 행은 모두 한 높이다(결정 92). 시안 파일은 `dashboard/hallmark-final/index.html`(hallmark 하나, 결정 92) | `index.html` | 메인, 대시보드 홈, `/#/fleet/brief` |
 | 묶음 상세 | 2단계 패널 화면. 한 묶음의 항목을 상태별로, 의존 그래프·크리티컬 패스와 함께. 넓은 화면은 왼쪽 열(그래프 + 그 아래 간선 종류 범례)이 높이를 정하고 오른쪽 열(표 넷)은 같은 높이에서 스크롤하며, 360px 은 그래프 · 범례 · 표 순으로 쌓는다(결정 92). 시안 파일은 `dashboard/hallmark-final/group.html` | `group.html` | — |
 | 항목 상세 | 3단계 패널 화면. 한 항목의 이력·증거·원문. 시안 파일은 `item.html` | `item.html` | — |
 | 내가 할 일 | `owner_todo` 뷰의 화면 이름. 패널 맨 위 띠이고, 결정에 답하는 버튼이 여기 있다 | `owner_todo` | 소유자 할 일 페이지, `owner.html`(폐기) |

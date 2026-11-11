@@ -9,6 +9,7 @@ import { createItem } from "../start/item.ts";
 import { addEdgeTo, GRAPH_SOURCE } from "./edit.ts";
 import { EDGE_KINDS, type EdgeKind, type Facts, foldFacts, type Stage } from "./facts.ts";
 import { itemRef } from "./nodes.ts";
+import { retiredOf } from "./ready.ts";
 import { readSnapshot } from "./snapshot.ts";
 import { parseToml, type TomlTable, TomlError, type TomlValue } from "./toml.ts";
 
@@ -331,7 +332,13 @@ export function doneBlockers(input: ViewInput, task: string, by: DoneBy = {}): s
     const bound = [...p.tasks].filter((t) => scope.includes(t));
     if (bound.length === 0 || p.merged) continue;
     if (!p.closed) out.push(`open_pr: ${p.pr}`);
-    else for (const t of bound) if (!landed.has(t) && !(tasks.get(t)?.status === "failed" && tasks.get(t)?.result === "cancelled")) out.push(`closed_pr: ${p.pr} (그 항목을 이유와 함께 취소한다)`);
+    else
+      for (const t of bound) {
+        const task = tasks.get(t);
+        const cancelled = task?.status === "failed" && task.result === "cancelled";
+        // Decision 223: a completed item cannot be cancelled in Orca; its retire is that reason.
+        if (!landed.has(t) && !cancelled && !(task && retiredOf(task, facts))) out.push(`closed_pr: ${p.pr} (열린 항목은 취소하고, 완료된 항목은 item_retire 로 이유와 함께 거둔다)`);
+      }
   }
   return out;
 }

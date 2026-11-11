@@ -88,7 +88,7 @@ function next(f: ItemFacts): string {
   let base = "—";
   if (f.openDecisions[0]) base = `${f.openDecisions[0]} 답`;
   else if (f.undelivered[0]) base = `${f.undelivered[0]} 전달`;
-  else if (f.state === "pr_closed") base = "PR 이 머지 없이 닫힘: 다시 열거나 항목을 취소";
+  else if (f.state === "pr_closed") base = "PR 이 머지 없이 닫힘: 다시 열거나 item_retire 로 거둠";
   else if (f.state === "unknown") base = "PR 상태를 아직 읽지 못함(pr-monitor)";
   else if (f.state === "pending_verify") base = "검증 대기: verify probe 통과 전";
   else if (f.state === "blocked") base = f.lastReason ?? "—";

@@ -15,5 +15,6 @@ export {
   releasesFor,
   unreleasedWaits,
 } from "./release.ts";
+export { type RetireInput, type Retired, retireItem } from "./retire.ts";
 export { ownerTodoFrom } from "./todo.ts";
 export { isOpenState, isOwnerItem, OWNER_DEFAULTS, type OwnerConfig, type OwnerItemFacts } from "./types.ts";

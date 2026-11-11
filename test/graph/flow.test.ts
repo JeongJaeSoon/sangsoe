@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { handle as itemRetire } from "../../claude-plugin/mcp/tools/item_retire.ts";
 import { doneBlockers, expandFlow, loadFlow, parseFlow, parseToml, planFlow, ready, why } from "../../core/index.ts";
 import { ownerSays } from "../decision/world.ts";
 import { createGraphWorld, type GraphWorld } from "./world.ts";
@@ -141,6 +142,18 @@ test("early_done: the flow item cannot be ✅ while a PR in scope is open; merge
   assert.ok(doneBlockers(await v.input(), f.root).some((b) => b.startsWith("closed_pr: acme/api#9")));
   v.cancel(t.impl as string);
   assert.deepEqual(doneBlockers(await v.input(), f.root), []);
+
+  // Decision 223: a step whose worker already completed it cannot be cancelled in Orca; retiring it releases the root.
+  const r = createGraphWorld();
+  const g = await expand(r, "ship-change", { repo: "acme/api" }, "req-3");
+  const u = g.steps as Record<string, string>;
+  r.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#10", task: u.impl as string } });
+  r.store.append({ type: "pr_closed", source: "pr-monitor", payload: { pr: "acme/api#10" } });
+  for (const id of Object.values(u)) r.complete(id);
+  assert.ok(doneBlockers(await r.input(), g.root).some((b) => b.startsWith("closed_pr: acme/api#10") && b.includes("item_retire")));
+  const retired = await itemRetire({ item: u.impl as string, reason: "superseded by another change", by: "lead:api" }, { orca: r.orca, store: r.store });
+  assert.ok(retired.ok, JSON.stringify(retired));
+  assert.deepEqual(doneBlockers(await r.input(), g.root), []);
 });
 
 test("flow_gap: an expansion cut short refuses ✅ until resumed, or until the missing steps are skipped with a reason", async () => {

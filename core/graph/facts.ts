@@ -30,6 +30,8 @@ export interface ItemExtra {
   stage?: Stage;
   whyOwner?: string;
   links?: readonly string[];
+  /** An item_retired row exists (decision 223); `retiredOf` says whether it still applies. */
+  retired?: boolean;
 }
 
 export interface PrFact {
@@ -137,6 +139,9 @@ export function foldFacts(events: readonly StoredEvent[]): Facts {
         for (const [k, field] of Object.entries(EXTRA_FIELDS)) if (p[k] !== undefined) x[field] = p[k];
         break;
       }
+      case "item_retired":
+        item(String(p.task)).retired = true;
+        break;
       case "pr_opened": {
         const x = pr(String(p.pr));
         x.opened = true;
