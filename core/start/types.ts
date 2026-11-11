@@ -1,5 +1,5 @@
 import type { OrcaAdapter } from "../contract/orca.ts";
-import type { AdvisorRoute, Choice, WorktreeSettings } from "../models/index.ts";
+import type { AdvisorRoute, Choice } from "../models/index.ts";
 import type { Store } from "../store/store.ts";
 
 export type Role = "orchestrator" | "lead" | "worker";
@@ -102,7 +102,4 @@ export type StartPorts = {
    */
   cwd?: () => string;
   /** Whether the owner's settings name an advisor (key presence only). Default reads the user settings. */
-  advisorSetting?: () => boolean;
-  /** Writes the new worktree's local settings before its session starts (decision 200); throws when it cannot. */
-  writeSettings?: (worktreePath: string, s: WorktreeSettings) => void;
-};
+  advisorSetting?: () => boolean;};

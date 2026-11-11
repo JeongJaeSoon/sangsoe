@@ -10,7 +10,7 @@ export default defineEvent("unit_started", {
   model: str,
   effort: str,
   advisor: opt(str),
-  route: oneOf("orca_flag", "worktree_file", "owner_setting", "none"),
+  route: oneOf("orca_flag", "owner_setting", "none"),
   budget: int,
   budget_per: oneOf("unit", "day"),
   /** Advisor calls already counted against the budget when this start was made. */

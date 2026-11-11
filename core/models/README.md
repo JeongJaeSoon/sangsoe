@@ -11,7 +11,7 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 
 정책 행은 한국어 이름(`label`), 한 줄 이유(`why`), advisor 호출 예산(`budget`, 단위마다 또는 하루)도 적는다(결정 200).
 
-`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort`·advisor 로 풀고, `launch` 가 그 advisor 가 닿는 길(Orca 의 옵션 → 새 worktree 의 `.claude/settings.local.json` → 오너 설정 `advisorModel` → 없음)에 맞춰 시작 인자와 worktree 에 쓸 설정을 정한다. advisor 가 없는 행과 예산을 다 쓴 단위는 그 파일에 advisor 를 끄는 env 를 쓴다(결정 200). `rowLines` 가 SessionStart 에 넣을 예산 줄과 "일 전체를 끝까지 한다" 줄을 만든다. `spend.ts` 가 transcript 의 advisor 호출을 세고(`advisor_used`) 카탈로그 가격으로 비용을 계산하고, `view.ts` 가 `sangsoe models` 보기와 `docs/models.md` 를 만든다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다. 옮긴 tier 는 카탈로그의 API 기본 effort 에서 시작한다(frontier 는 `high`, 결정 172).
+`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort`·advisor 로 풀고, `launch` 가 그 advisor 가 닿는 길(Orca 의 옵션, 오너 설정 `advisorModel`, 없음)에 맞춰 시작 인자를 정한다. `rowLines` 가 SessionStart 에 넣을 예산 줄과 "일 전체를 끝까지 한다" 줄을 만든다. `spend.ts` 가 transcript 의 advisor 호출을 세고(`advisor_used`) 카탈로그 가격으로 비용을 계산하고, `view.ts` 가 `sangsoe models` 보기와 `docs/models.md` 를 만든다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다. 옮긴 tier 는 카탈로그의 API 기본 effort 에서 시작한다(frontier 는 `high`, 결정 172).
 
 ## 읽는 곳
 
@@ -19,7 +19,7 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 |---|---|---|
 | `core/start/start.ts` (`start_unit`) | 정책 + 카탈로그 | `resolve` → `worker-start --model <alias> --effort <level>`, 승격은 `model_changed` 로 기록 |
 | MCP resource `models` | 표 전체 | 판단 층(skill·agent)은 이 resource 로만 읽는다. 표를 본문에 옮겨 적지 않는다 |
-| `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice, 사용자 환경이 advisor 를 끄고 있으면 notice(정하는 것은 오너), 오늘의 advisor 호출 수와 추정 비용 |
+| `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice, `advisorModel` 키가 없거나 advisor 가 꺼져 있으면 notice(정하는 것은 오너), 오늘의 advisor 호출 수와 추정 비용 |
 | `cli/commands/models.ts` (`sangsoe models`) | 표 전체 | 토큰 X 한국어 보기. `--markdown` 의 출력이 `docs/models.md` 다 |
 | `core/brief/build.ts` | 정책 + `unit_started`·`advisor_used` | 항목 상세의 "모델:" 줄, 현황의 오늘 advisor 사용 |
 | `claude-plugin/agents/*.md` frontmatter `model:`·`effort:` | 정책의 역할 행 | `test/model-table.test.ts` 가 표의 alias·effort 와 같은지 본다 |

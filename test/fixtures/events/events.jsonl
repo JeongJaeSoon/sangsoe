@@ -75,4 +75,4 @@
 {"type":"worker_idle","source":"Stop","payload":{"session":"sess-1"}}
 {"type":"worker_stuck","source":"orca-monitor","payload":{"reason":"no_role_line"}}
 {"type":"advisor_used","source":"Stop","payload":{"session":"sess-1","msg":"msg_1:1","model":"m-adv","input_tokens":1000,"output_tokens":100}}
-{"type":"unit_started","source":"mcp:start_unit","payload":{"kind":"worker","picked_by":"class","model":"m-main","effort":"medium","advisor":"m-adv","route":"worktree_file","budget":3,"budget_per":"unit","used":0}}
+{"type":"unit_started","source":"mcp:start_unit","payload":{"kind":"worker","picked_by":"class","model":"m-main","effort":"medium","advisor":"m-adv","route":"owner_setting","budget":3,"budget_per":"unit","used":0}}

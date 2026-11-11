@@ -30,7 +30,7 @@ const advisor = alias(row.advisor);
 const STARTED = line(
   "2026-11-10T10:00:00.000Z",
   "unit_started",
-  { kind: "worker", picked_by: "class", model: alias(row.tier)?.alias, effort: row.effort, advisor: advisor?.alias, route: "worktree_file", budget: 2, budget_per: "unit", used: 0 },
+  { kind: "worker", picked_by: "class", model: alias(row.tier)?.alias, effort: row.effort, advisor: advisor?.alias, route: "owner_setting", budget: 2, budget_per: "unit", used: 0 },
   { entity: "task", entity_id: "task_26" },
 );
 const USED = line(

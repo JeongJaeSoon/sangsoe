@@ -327,11 +327,7 @@ export interface OrcaAdapter {
   worktreePs(a: { limit?: number; agentWait?: boolean }): Promise<OrcaResult<LocalRows<WorktreePsRow>>>;
   /** Always `--run-hooks --delete-branch`, never `--force` (decision 86). */
   worktreeRm(a: { worktree: string }): Promise<OrcaResult<Receipt>>;
-  /**
-   * A worktree with no agent yet (decision 200): start_unit writes its local settings, then starts
-   * the worker in it. `parent` keeps new-child's lineage; without it Orca records none.
-   */
-  worktreeCreate(a: { name: string; parent?: string; repo?: string }): Promise<OrcaResult<{ id: string; path: string }>>;  /** Listeners tied to one worktree; `non_local_host` when Orca scanned another host (decision 88). */
+  /** Listeners tied to one worktree; `non_local_host` when Orca scanned another host (decision 88). */
   ports(a: { worktree: string }): Promise<OrcaResult<PortRow[]>>;
 
   // Reference

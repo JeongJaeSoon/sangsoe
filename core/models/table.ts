@@ -292,7 +292,7 @@ export const CHANGELOG: readonly { date: string; change: string; source: Source;
   {
     date: "2026-11-11",
     change:
-      "Rows per case with a label, a one-line why and an advisor call budget. Implementation drops to medium with its advisor (first Act-on raises effort back, a second failed round moves tier); hard implementation starts at high; mechanical runs at low; a new docs row runs the implementation tier at medium without an advisor. Rows below high carry a finish-the-whole-task line. The advisor reaches a session through the new worktree's .claude/settings.local.json (measured: it overrides the user's advisorModel, and its env turns the advisor off), which also turns it off for rows without one and for a spent budget at the next start.",
+      "Rows per case with a label, a one-line why and an advisor call budget. Implementation drops to medium with its advisor (first Act-on raises effort back, a second failed round moves tier); hard implementation starts at high; mechanical runs at low; a new docs row runs the implementation tier at medium without an advisor. Rows below high carry a finish-the-whole-task line. sangsoe counts advisor calls from the transcript and shows them against the budget; the advisor still reaches a session through decision 187's route.",
     source: "advisorTool",
     decision: 200,
   },

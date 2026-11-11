@@ -89,24 +89,18 @@ export function resolve(kind: Kind, raise: Raise = {}): Resolved {
 }
 
 /**
- * How an advisor can reach a new session: Orca's launch option, the new worktree's own
- * `.claude/settings.local.json` (decision 200), or the owner's user setting (decision 187).
- * `spent`: the row's advisor budget is used up, so this start turns the advisor off.
+ * How an advisor can reach a new session: Orca's launch option, or the owner's own setting
+ * (decision 187). Delivery through the new worktree's local settings is a follow-up (decision 200).
  */
-export type AdvisorPath = { orcaFlag: boolean; ownerSetting: boolean; worktreeFile?: boolean; spent?: boolean };
+export type AdvisorPath = { orcaFlag: boolean; ownerSetting: boolean };
 
-/** What start_unit writes into the new worktree's local settings before its session starts. */
-export type WorktreeSettings = { advisorModel?: string; disableAdvisor?: true };
-
-export type AdvisorRoute = "orca_flag" | "worktree_file" | "owner_setting" | "none";
+export type AdvisorRoute = "orca_flag" | "owner_setting" | "none";
 
 export type Launch = {
   model: string;
   effort: Effort;
   /** Passed as `--advisor` only when Orca's worker-start takes it. */
   advisor?: string;
-  /** Written to the new worktree's local settings; absent when sangsoe cannot write there. */
-  settings?: WorktreeSettings;
   route: AdvisorRoute;
   /** What the start tells its caller about the advisor. */
   note?: string;
@@ -117,36 +111,25 @@ export type Launch = {
 export const ADVISOR_FROM_SETTING =
   "advisor from the owner's advisorModel setting: sangsoe does not know its tier, and Claude Code drops one ranked below the main model";
 export const ADVISOR_NOT_APPLIED = "advisor not applied: Orca worker-start has no advisor flag and no advisorModel setting";
-export const ADVISOR_FROM_WORKTREE = "advisor from the new worktree's .claude/settings.local.json (decision 200)";
-export const ADVISOR_SPENT = "advisor off: this row's advisor budget is spent; it stays off for this start (decision 200)";
-
 /**
- * The launch for one choice (decisions 187, 200). A row with `withoutAdvisor` never runs its main
- * tier without an advisor: with no path, or a spent budget, it runs on that tier at its starting
- * effort instead. With the worktree file, a row that names no advisor (or a spent one) also turns
- * off an advisor the owner's own setting would add.
+ * The launch for one choice (decision 187). A row with `withoutAdvisor` never runs its main tier
+ * without an advisor: with neither path it runs on that tier instead, at its API default effort but
+ * never below an effort the lead already raised to.
  */
 export function launch(choice: Choice, path: AdvisorPath): Launch {
-  const off = path.worktreeFile ? { settings: { disableAdvisor: true as const } } : {};
   const out: Launch = { model: choice.model, effort: choice.effort, route: "none" };
-  if (!choice.advisor) return { ...out, ...off };
-  if (!path.spent) {
-    if (path.orcaFlag) return { ...out, advisor: choice.advisor, route: "orca_flag" };
-    if (path.worktreeFile) return { ...out, settings: { advisorModel: choice.advisor }, route: "worktree_file", note: ADVISOR_FROM_WORKTREE };
-    if (path.ownerSetting) return { ...out, route: "owner_setting", note: ADVISOR_FROM_SETTING };
-  }
-  const why = path.spent ? ADVISOR_SPENT : ADVISOR_NOT_APPLIED;
+  if (!choice.advisor) return out;
+  if (path.orcaFlag) return { ...out, advisor: choice.advisor, route: "orca_flag" };
+  if (path.ownerSetting) return { ...out, route: "owner_setting", note: ADVISOR_FROM_SETTING };
   const floor = POLICY[choice.kind].withoutAdvisor;
-  if (!floor || TIERS.indexOf(choice.tier) <= TIERS.indexOf(floor)) return { ...out, ...off, note: why };
-  // The floor tier starts at its API default, but never below an effort the lead already raised to.
+  if (!floor || TIERS.indexOf(choice.tier) <= TIERS.indexOf(floor)) return { ...out, note: ADVISOR_NOT_APPLIED };
   const base = catalogRow(floor).apiDefaultEffort;
   return {
     model: aliasOf(floor),
     effort: EFFORTS.indexOf(choice.effort) > EFFORTS.indexOf(base) ? choice.effort : base,
     route: "none",
-    ...off,
-    note: why,
-    fallback: { from: `${choice.model}/${choice.effort}`, reason: why },
+    note: ADVISOR_NOT_APPLIED,
+    fallback: { from: `${choice.model}/${choice.effort}`, reason: ADVISOR_NOT_APPLIED },
   };
 }
 
@@ -159,7 +142,7 @@ export function rowLines(started: { effort: Effort; route: AdvisorRoute; budget:
   if (started.budget > 0 && started.route !== "none") {
     const per = started.budget_per === "day" ? "하루" : "이 단위에서";
     lines.push(
-      `advisor 는 ${per} 약 ${started.budget}회: 접근을 정하기 전, 끝났다고 말하기 전, 막혔을 때. sangsoe 가 transcript 에서 세고, 다 쓰면 다음 시작부터 끈다.`,
+      `advisor 는 ${per} 약 ${started.budget}회: 접근을 정하기 전, 끝났다고 말하기 전, 막혔을 때. sangsoe 가 transcript 에서 세어 brief·doctor 에 보인다.`,
     );
   }
   if (EFFORTS.indexOf(started.effort) < EFFORTS.indexOf("high")) {

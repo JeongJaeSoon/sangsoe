@@ -29,7 +29,7 @@ description: "Use when a sangsoe lead or the orchestrator writes the spec a new 
 - 보고 주소는 Run·Dispatch 다. 터미널 핸들(`term_…`)을 주소로 쓰지 않는다. 핸들은 재시작마다 바뀐다.
 - 앞 워커가 끝난 뒤 도착한 답은 브리프에 섞지 않고 `start_unit` 의 `lateAnswers` 로 넘긴다.
 - 모델 이름·effort 를 브리프에 적지 않는다. 단위의 종류는 `item_create`·`start_unit` 의 `class`(`default`·`hard`·`design`·`mechanical`·`docs`)로 표시한다(결정 187, 200). 브리프 본문에는 왜 그 class 인지 한 줄만 적는다. 문서만 바꾸는 단위는 `docs` 다.
-- 워커가 advisor 를 언제 부르는지와 몇 번인지 한 줄 적는다: 접근을 정하기 전, 막혔을 때, 끝났다고 말하기 전, 행의 예산(resource `models` 의 `budget`) 안에서. 매 턴이 아니다. 예산 0 인 행은 advisor 가 꺼진 채 시작한다.
+- 워커가 advisor 를 언제 부르는지와 몇 번인지 한 줄 적는다: 접근을 정하기 전, 막혔을 때, 끝났다고 말하기 전, 행의 예산(resource `models` 의 `budget`) 안에서. 매 턴이 아니다. 예산 0 인 행에서는 advisor 를 부르지 않는다고 적는다.
 - 행의 effort 가 high 아래면(resource `models` 로 본다) 완료 조건 앞에 한 줄을 넣는다: "일 전체를 끝까지 한다. 남은 일 목록이나 계속할지 묻는 말로 턴을 닫지 않고, 평범한 장애는 진단해 넘어간다." SessionStart 도 같은 줄을 주지만, 브리프가 받는 쪽의 유일한 맥락이므로 본문에도 둔다.
 - 서브에이전트를 쓰라고 할 때는 그 `model` 을 resource `models` 의 `subagents` 로 정하라고 적는다(결정 188).
 

@@ -11,7 +11,6 @@ import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import { type Choice, launch, localDay, POLICY, pairing, resolve, spend } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
-import { writeLocalSettings } from "./local-settings.ts";
 import { type NewTask, REPO_SELECTOR, type RefusalReason, type Role, type StartOutcome, type StartPorts, type StartRefusal, type StartRequest } from "./types.ts";
 
 type Json = Record<string, unknown>;
@@ -129,8 +128,8 @@ function firstPrompt(role: Role, t: NewTask): string {
 
 /**
  * The one path that opens a session (decision 94): lineage and depth → task-create --deps →
- * ready and capacity → worktree create (the parent's child) → its local settings → worker-start
- * --task <id> --worktree <it> (decision 200) → Dispatch read back and `unit_started` written.
+ * ready and capacity → `unit_started` (decision 200) → worker-start --task <id> --worktree new-child
+ * → Dispatch read back.
  * A refusal writes one `signal{start_refused}` and escalates to whoever handed the requester its work.
  */
 export async function startUnit(ports: StartPorts, req: StartRequest): Promise<StartOutcome> {
@@ -361,32 +360,17 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
 
   // ④ orca_error
   const orcaFlag = choice.advisor ? await orcaTakesAdvisor(orca) : false;
-  const ownerSetting = () => (ports.advisorSetting ?? (() => advisorSetting(process.env, homedir())))();
   const row = POLICY[choice.kind];
   const used = spend(store.events({ type: "advisor_used" }), {
     task: taskId,
     ...(row.budget.per === "day" ? { day: localDay(new Date()) } : {}),
   }).calls;
-  const spent = row.budget.calls > 0 && used >= row.budget.calls;
-  // Decision 200: the worktree first, with no agent, so its local settings exist before the session
-  // reads them. --parent-worktree keeps new-child's parentWorktreeId; without a worktree the lineage
-  // is the Run alone (decision 197).
-  const tree = await orca.worktreeCreate({
-    name: `${alias ?? taskId}-${Date.now().toString(36)}`,
-    ...(requester.worktreeId ? { parent: `id:${requester.worktreeId}` } : {}),
-    ...(repo ? { repo } : {}),
+  // Decision 200: the budget is counted and shown, not enforced here. Turning the advisor off at the
+  // next start needs the worktree-local route, a follow-up unit.
+  const plan = launch(choice, {
+    orcaFlag,
+    ownerSetting: choice.advisor && !orcaFlag ? (ports.advisorSetting ?? (() => advisorSetting(process.env, homedir())))() : false,
   });
-  if (!tree.ok) return failedAttempt("orca_error", `worktree create 실패 (${tree.error.code}: ${tree.error.message})`);
-  let plan = launch(choice, { orcaFlag, ownerSetting: false, worktreeFile: true, spent });
-  const notes: string[] = [];
-  if (plan.settings) {
-    try {
-      (ports.writeSettings ?? writeLocalSettings)(tree.value.path, plan.settings);
-    } catch (err) {
-      notes.push(`worktree 설정 파일을 쓰지 못했다 (${(err as Error).message}): 오너 설정 경로로 시작한다`);
-      plan = launch(choice, { orcaFlag, ownerSetting: choice.advisor && !orcaFlag ? ownerSetting() : false, spent });
-    }
-  }
   // Before worker-start: the new session's SessionStart reads this row for its budget and finish lines.
   store.append({
     type: "unit_started",
@@ -405,28 +389,24 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       used,
     },
   });
-  // Every start keeps its terminal open, the lifetime Orca gave new-child workers: in an existing
-  // worktree Orca would close it at worker_done, before the starter reads it (decision 200).
+  // new-child keeps parentWorktreeId; without a worktree the lineage is the Run alone (decision 197).
+  // A lead's terminal is the one the owner watches: kept open until the orchestrator releases it.
   const startArgs = {
     task: taskId,
     agent: req.agent,
-    worktree: { existing: `id:${tree.value.id}` },
+    worktree: requester.worktreeId ? ("new-child" as const) : ("new-top-level" as const),
     run: requester.runId,
     model: plan.model,
     effort: plan.effort,
-    keepOpen: true,
+    ...(repo ? { repo } : {}),
+    ...(req.childRole === "lead" ? { keepOpen: true } : {}),
     ...(plan.advisor ? { advisor: plan.advisor } : {}),
   };
   const started = await write(orca, orca.workerStart(startArgs), (o) => orca.workerStart(startArgs, o));
   if (!started.ok) {
     const dead = findKey(started.error.data, DISPATCH_KEYS);
     if (dead) store.append({ type: "worker_dead", source, payload: { reason: "start_failed" }, entity: "dispatch", entity_id: dead, target: taskId });
-    // A failed start can still own a live terminal (Orca's recovery guide: a timeout or a lost answer
-    // never proves exit), so nothing here removes the worktree; the refusal names it for the starter.
-    return failedAttempt(
-      "orca_error",
-      `worker-start 실패 (${started.error.code}: ${started.error.message}), 남은 worktree: ${tree.value.id} (살아 있는 터미널이 없으면 orca worktree rm 으로 치운다)`,
-    );
+    return failedAttempt("orca_error", `worker-start 실패 (${started.error.code}: ${started.error.message})`);
   }
 
   // ⑤ no_dispatch: the receipt first, then dispatch-show (decision 94 (나)⑤).
@@ -435,7 +415,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     const d = await orca.dispatchShow({ task: taskId });
     if (d.ok && typeof d.value.id === "string") dispatchId = d.value.id;
   }
-  const worktreeId = findKey(started.value, WORKTREE_KEYS) ?? tree.value.id;
+  const worktreeId = findKey(started.value, WORKTREE_KEYS);
   if (!dispatchId) {
     const left = [findKey(started.value, ["terminal", "handle"]), worktreeId].filter(Boolean).join(" · ");
     return failedAttempt("no_dispatch", `worker-start 는 끝났지만 Dispatch 가 없다${left ? ` (남은 것: ${left})` : ""}`);
@@ -447,7 +427,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     store.append({ type: "model_changed", source, payload: { from: moved.from, to, reason: moved.reason }, entity: "task", entity_id: taskId });
   }
 
-  if (plan.note) notes.push(plan.note);
+  const notes: string[] = plan.note ? [plan.note] : [];
   if (req.references?.length) {
     if (!worktreeId) notes.push("reference add 건너뜀: 새 worktree id 를 영수증에서 찾지 못했다");
     else {

@@ -9,9 +9,7 @@ import { join, relative } from "node:path";
 import { test } from "node:test";
 import {
   ADVISOR_FROM_SETTING,
-  ADVISOR_FROM_WORKTREE,
   ADVISOR_NOT_APPLIED,
-  ADVISOR_SPENT,
   modelRowLines,
   MODEL_CATALOG as CATALOG,
   catalogAgeDays,
@@ -167,19 +165,18 @@ test("doctor's model-table row: ok when fresh, warn past the floor, notice on a 
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const verified = Math.min(...CATALOG.map((c) => Date.parse(c.verified)));
   const fresh = new Date(verified + 86_400_000);
-  // Decision 200: the advisor reaches sessions through the worktree file, so no advisorModel key is fine.
+  // Decision 187: no advisorModel key is a notice naming the owner's act; the key's value is never read.
   const none = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home }));
-  assert.equal(none.status, "ok", none.summary);
-  assert.match(none.summary, /settings\.local\.json/);
+  assert.equal(none.status, "notice");
+  assert.match(none.summary, /advisor not applied/);
+  assert.match(none.fix ?? "", /owner's act/);
   mkdirSync(join(home, ".claude"));
   writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ advisorModel: "secret-value" }));
   const ok = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home }));
   assert.equal(ok.status, "ok", ok.summary);
   assert.doesNotMatch(ok.summary, /secret-value/);
-  // A user-level off switch beats every worktree file: a notice naming the owner's act.
   const off = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, env: { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1" } }));
-  assert.equal(off.status, "notice", "the advisor's off switch is the owner's");
-  assert.match(off.fix ?? "", /owner's act/);
+  assert.equal(off.status, "notice", "the advisor's off switch counts as no advisor");
   // Two owner-setting findings get both owner fixes, not the table-update fix.
   const both = await modelTable.run(
     ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, env: { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1", ANTHROPIC_DEFAULT_OPUS_MODEL: "x" } }),
@@ -251,26 +248,12 @@ test("decision 187: launch passes --advisor only through Orca, and the worker ro
   assert.deepEqual(launchModel(review.value, { orcaFlag: true, ownerSetting: true }), { model: aliasOf("primary"), effort: "high", route: "none" });
 });
 
-test("decision 200: the worktree file carries the row's advisor, turns it off for rows without one, and a spent budget falls to the floor", () => {
-  const w = resolve("worker");
-  assert.ok(w.ok);
-  assert.deepEqual(launchModel(w.value, { orcaFlag: false, ownerSetting: true, worktreeFile: true }), {
-    model: aliasOf("everyday"),
-    effort: "medium",
-    settings: { advisorModel: aliasOf("primary") },
-    route: "worktree_file",
-    note: ADVISOR_FROM_WORKTREE,
-  });
-  // Orca's own option wins when it exists; the file is then not needed for the advisor.
-  assert.equal(launchModel(w.value, { orcaFlag: true, ownerSetting: false, worktreeFile: true }).route, "orca_flag");
-  const review = resolve("review");
-  assert.ok(review.ok);
-  assert.deepEqual(launchModel(review.value, { orcaFlag: false, ownerSetting: true, worktreeFile: true }).settings, { disableAdvisor: true });
-  const spent = launchModel(w.value, { orcaFlag: true, ownerSetting: true, worktreeFile: true, spent: true });
-  assert.equal(spent.model, aliasOf("primary"), "the worker row never runs its main tier without an advisor");
-  assert.equal(spent.advisor, undefined);
-  assert.deepEqual(spent.settings, { disableAdvisor: true });
-  assert.equal(spent.fallback?.reason, ADVISOR_SPENT);
+test("decision 200: falling to the floor tier keeps an effort the lead already raised", () => {
+  const raised = resolve("worker", { effort: "high", reason: "first Act-on" });
+  assert.ok(raised.ok);
+  const floor = launchModel(raised.value, { orcaFlag: false, ownerSetting: false });
+  assert.equal(floor.model, aliasOf("primary"));
+  assert.equal(floor.effort, "high", "not the floor tier's lower API default");
 });
 
 // The eight cases the owner named (2026-11-11), each one row.
@@ -310,7 +293,7 @@ test("decision 200: every case has a row with tier, effort, advisor or none, a b
 });
 
 test("decision 200: a row below high gets the finish-the-whole-task line, and a row with a budget gets the budget line", () => {
-  const at = (kind: keyof typeof POLICY, route: "worktree_file" | "none" = "worktree_file") => {
+  const at = (kind: keyof typeof POLICY, route: "owner_setting" | "none" = "owner_setting") => {
     const row = POLICY[kind];
     return modelRowLines({ effort: row.effort, route: row.advisor ? route : "none", budget: row.budget.calls, budget_per: row.budget.per });
   };
