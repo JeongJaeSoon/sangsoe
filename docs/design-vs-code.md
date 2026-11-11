@@ -300,7 +300,7 @@
 | 요소 | 설계 자리 | 상태 | 코드 | 비고 |
 |---|---|---|---|---|
 | MCP tool item_create | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/item_create.ts:62`, `core/start/item.ts:29` | trigger·hold·exec_by 입력(결정 162). `lead` 입력과 `item_created.run`(결정 216, `core/start/item.ts:41`, `test/detect/lead-run-s6.test.ts:53`) |
-| MCP tool item_retire · CLI item retire | decisions.md 결정 223 (설계 본문에 없음) | changed (결정 223) | `claude-plugin/mcp/tools/item_retire.ts:11`, `cli/commands/item-retire.ts:13`, `core/owner/retire.ts:29`, `core/graph/ready.ts:81`, `core/brief/item_status.ts:78` | PR 이 머지 없이 닫힌 완료 항목을 `item_retired{task, by, reason}` 한 줄로 거둔다. Orca 에는 쓰지 않는다. `retiredOf` 가 참이면 `holdOf` 는 null, 읽기는 🗑️. 시험 `test/owner/retire-223.test.ts`. 부록 event 표·용어집·design.html #mcp 의 수는 아직 15 |
+| MCP tool item_retire · CLI item retire | decisions.md 결정 223 (설계 본문에 없음) | changed (결정 223) | `claude-plugin/mcp/tools/item_retire.ts:11`, `cli/commands/item-retire.ts:13`, `core/owner/retire.ts:29`, `core/graph/ready.ts:81`, `core/brief/item_status.ts:78` | PR 이 머지 없이 닫힌 완료 항목을 `item_retired{task, by, reason}` 한 줄로 거둔다. Orca 에는 쓰지 않는다. `retiredOf` 가 참이면 `holdOf` 는 null, 읽기는 🗑️. 흐름 틀의 `closed_pr` 막음도 거둔 단계를 넘긴다(`core/graph/flow.ts:311`). 시험 `test/owner/retire-223.test.ts`. 부록 event 표·용어집·design.html #mcp 의 수는 아직 15 |
 | MCP tool edge_add | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/edge_add.ts:12`, `core/graph/edit.ts:104` | |
 | MCP tool edge_remove | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/edge_remove.ts:12`, `core/graph/edit.ts:136` | |
 | MCP tool flow_expand | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/flow_expand.ts:21`, `core/graph/flow.ts:213` | |

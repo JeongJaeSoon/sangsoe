@@ -172,4 +172,6 @@ test("a retired item whose PR reopens reads 🚧 again: the retire stands only w
   w.store.append({ type: "pr_reopened", source: "pr-monitor", payload: { pr: "acme/api#9" } });
   const f = itemFacts(await view(w)).find((x) => x.task === a1.task);
   assert.equal(f?.state, "blocked");
+  const again = await itemRetire({ item: a1.alias, reason: "again", by: "owner" }, ports(w));
+  assert.ok(!again.ok && again.refusal.code === "not_retirable", "a retire that is not in effect is not reported as done");
 });

@@ -331,7 +331,12 @@ export function doneBlockers(input: ViewInput, task: string, by: DoneBy = {}): s
     const bound = [...p.tasks].filter((t) => scope.includes(t));
     if (bound.length === 0 || p.merged) continue;
     if (!p.closed) out.push(`open_pr: ${p.pr}`);
-    else for (const t of bound) if (!landed.has(t) && !(tasks.get(t)?.status === "failed" && tasks.get(t)?.result === "cancelled")) out.push(`closed_pr: ${p.pr} (그 항목을 이유와 함께 취소한다)`);
+    else
+      for (const t of bound) {
+        const cancelled = tasks.get(t)?.status === "failed" && tasks.get(t)?.result === "cancelled";
+        // Decision 223: a completed item cannot be cancelled in Orca; its item_retired row is that reason.
+        if (!landed.has(t) && !cancelled && !facts.items.get(t)?.retired) out.push(`closed_pr: ${p.pr} (열린 항목은 취소하고, 완료된 항목은 item_retire 로 이유와 함께 거둔다)`);
+      }
   }
   return out;
 }

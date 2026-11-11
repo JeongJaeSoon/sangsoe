@@ -33,7 +33,12 @@ export async function retireItem(ports: { readonly orca: OrcaAdapter; readonly s
   const task = facts.aliases.get(a.item) ?? a.item;
   const alias = facts.items.get(task)?.alias;
   if (alias === undefined) return refuse("not_found", `no item ${a.item}`, "name an item by its iNNN or Task id");
-  if (facts.items.get(task)?.retired) return done({ status: "already", task, alias });
+  if (facts.items.get(task)?.retired) {
+    // The row stands only while its PRs stay closed unmerged (retiredOf): a reopened or merged one is read as it is.
+    const live = [...facts.prs.values()].filter((p) => p.tasks.has(task) && (p.merged || !p.closed)).map((p) => p.pr);
+    if (live.length === 0) return done({ status: "already", task, alias });
+    return refuse("not_retirable", `${alias} was retired, but ${live.join(", ")} is no longer closed unmerged`, "the item reads by that PR again; retire it once the PR closes without a merge");
+  }
 
   const created = events.find((e) => e.type === "item_created" && e.payload.task === task);
   const run = typeof created?.payload.run === "string" ? created.payload.run : a.run;
