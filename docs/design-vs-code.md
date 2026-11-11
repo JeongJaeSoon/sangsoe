@@ -17,21 +17,21 @@
 | 절 | 행 | implemented | partial | missing | cut | changed |
 |---|---|---|---|---|---|---|
 | 0. 오너의 고정 규칙 | 5 | 4 | 1 | 0 | 0 | 0 |
-| 1. 칸 배치 · Orca CLI · 설치 | 131 | 90 | 11 | 9 | 1 | 20 |
+| 1. 칸 배치 · Orca CLI · 설치 | 131 | 93 | 8 | 9 | 1 | 20 |
 | 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 79 | 17 | 2 | 6 | 11 |
 | 3. 데이터 · MCP · CLI · GRAPH | 80 | 53 | 9 | 1 | 3 | 14 |
 | 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 32 | 7 | 4 | 6 | 8 |
 | 5. 결정이 자르거나 바꾼 것 | 45 | 0 | 0 | 0 | 13 | 32 |
-| 합계 | 433 | 258 | 45 | 16 | 29 | 85 |
+| 합계 | 433 | 261 | 42 | 16 | 29 | 85 |
 
-`partial`·`missing` 61행은 갭 36개(`G1`–`G36`)로 묶인다. 제안은 NOW 8 · LATER 24 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
+`partial`·`missing` 58행은 갭 35개(`G1`–`G36`, U77 이 고친 `G2` 를 뺀 것)로 묶인다. 제안은 NOW 8 · LATER 24 · DROP 4 이고, NOW 가운데 `G2` 는 U77 이 고쳤다. 집계는 표의 상태 칸을 세어 냈다.
 
 ## 0. 오너의 고정 규칙
 
 | 규칙 | 상태 | 코드 | 근거 |
 |---|---|---|---|
 | 데이터를 두 번 저장하지 않는다(사실마다 원본 하나, Orca·Claude plugin 의 데이터를 복사하지 않음) | implemented | `core/contract/define.ts:44`, `core/contract/define.ts:55`, `core/contract/contract.test.ts:97` | Orca 가 원본인 칸(`title`·`status`·`spec`·`deps`·`question`·`options`·`message_body`)은 페이로드 어디에 있든 `append` 가 거부한다. 캐시 예외는 부록 표의 셋이고 `pr_ref`·`gh_budget`·`gh_seen` 은 예약만 된 빈 표다(결정 186). `owner_text` 는 대화 기록이 지워질 때를 위한 보존 사본으로 설계가 이름을 붙인 예외다(`core/store/schema.ts:60`). |
-| Orca plugin · Orca CLI · Claude plugin 의 기본 기능을 최대한 쓴다 | partial | `core/orca/commands.ts:22`, `orca-plugin/timer.ts:20`, `claude-plugin/mcp/server.ts:198` | G1·G2·G3·G6 — 상주 감지는 Orca plugin worker 타이머, 에이전트 입구는 Claude Code plugin 의 stdio MCP 서버이고, 코어가 Orca 를 부르는 길은 명령 표 하나다. 다만 패널이 그 표 밖에서 Orca CLI 를 부르고(G1), 부록 "Orca 기능 활용 표" 가 쓴다고 적은 기능 몇이 코드에도 세션 글에도 없다(G2·G3·G6). |
+| Orca plugin · Orca CLI · Claude plugin 의 기본 기능을 최대한 쓴다 | partial | `core/orca/commands.ts:22`, `orca-plugin/timer.ts:20`, `claude-plugin/mcp/server.ts:198` | G1·G3·G6 — 상주 감지는 Orca plugin worker 타이머, 에이전트 입구는 Claude Code plugin 의 stdio MCP 서버이고, 코어가 Orca 를 부르는 길은 명령 표 하나다. 다만 패널이 그 표 밖에서 Orca CLI 를 부르고(G1), 부록 "Orca 기능 활용 표" 가 쓴다고 적은 기능 몇이 코드에도 세션 글에도 없다(G3·G6). |
 | 설계한 층 구성을 지킨다 | implemented | `test/layout.test.ts:76`, `test/layout.test.ts:84`, `test/layout.test.ts:126` | `docs/architecture.md` 의 층→디렉터리 표가 유일한 목록이고, 폴더 README 의 표지가 표와 다르거나 다른 칸이 `core/index.ts` 밖을 import 하면 시험이 실패한다. |
 | 토큰을 쓰는 것과 쓰지 않는 것이 나뉜다 | implemented | `test/layout.test.ts:84`, `test/layout.test.ts:111`, `test/layout.test.ts:118` | 판단 층(`claude-plugin/skills/`·`agents/`)만 토큰을 쓰고, 토큰 O 폴더에 코드가 있거나 토큰 X 폴더에 프롬프트가 있으면 실패한다. |
 | launch agent 금지(LaunchAgent·launchd 없음) | implemented | `test/layout.test.ts:135`, `core/gates/start.ts:134` | 트리에 property-list 작업 정의가 있으면 시험이 실패하고, 시작 가드가 `launchctl` 로 에이전트를 띄우는 명령을 막는다(`test/fixtures/hook-commands.jsonl` 의 deny 사례). 주기 일은 Orca plugin worker 타이머뿐이다. |
@@ -52,7 +52,7 @@
 | 배치표 ① Task·Run | design.html §2 배치표 | implemented | `core/orca/commands.ts:29`, `core/start/item.ts:33` | task-create 에 deps·parent·run |
 | 배치표 ① 게이트·메시지 | design.html §2 배치표 | implemented | `core/decision/open.ts:127`, `core/decision/release.ts:80` | 받은 편지함 사본 없음 |
 | 배치표 ① 워커·Dispatch·Auto-close | design.html §2 배치표 | changed (결정 197) | `core/start/start.ts:436`, `claude-plugin/agents/lead.md:39` | 모든 시작이 keep-open, 시작한 쪽이 worker-release |
-| 배치표 ① 카드 표시·참조·검색 | design.html §2 배치표 | partial | `core/orca/commands.ts:84` | G2 — 결정 193 이 `worktree set`·`reference list`·`search` 를 세션의 자기 글로 옮겼으나 agent·sangsoe skill 본문에 그 동사가 없다 |
+| 배치표 ① 카드 표시·참조·검색 | design.html §2 배치표 | implemented | `core/orca/commands.ts:84`, `claude-plugin/skills/deliver-ticket/SKILL.md:49`, `claude-plugin/skills/orchestrate/SKILL.md:32`, `claude-plugin/skills/intake/SKILL.md:33` | 결정 193 이 세션의 자기 글로 옮긴 `worktree set`·`reference list`·`search` 를 agent·sangsoe skill 본문이 부른다(U77 에서 고침, 줄은 U77 머지 기준). `test/session-verbs.test.ts` 가 지킨다 |
 | 배치표 ① plugin 켜기 | design.html §2 배치표 | implemented | `core/approve/approve.ts:191` | approve 만 enable 을 부른다 |
 | 배치표 ② 패널 | design.html §2 배치표 | implemented | `orca-plugin/orca-plugin.json:13`, `orca-plugin/main.ts:114` | 화면 내용은 2절 |
 | 배치표 ② 상태 표시줄 | design.html §2 배치표 | implemented | `orca-plugin/orca-plugin.json:20`, `orca-plugin/main.ts:83` | 클릭은 `sangsoe.open` |
@@ -79,10 +79,10 @@
 | 첫째 칸 메시지 | design.html 첫째 칸 | changed (결정 203) | `core/orca/commands.ts:57`, `core/orca/commands.ts:62` | 코어는 send·inbox, ask·reply 는 세션 글 |
 | 첫째 칸 워커·Dispatch 두 단계 | design.html 첫째 칸 | changed (결정 202) | `core/start/start.ts:381`, `core/start/start.ts:439` | create → 설정 파일 → worker-start keep-open |
 | 첫째 칸 Auto-close | design.html 첫째 칸 | changed (결정 197) | `claude-plugin/agents/orchestrator.md:45`, `core/reaper/round.ts:148` | REAPER 는 setup 셸 handle 하나만 닫는다 |
-| 첫째 칸 카드 표시·조회 | design.html 첫째 칸 | partial | `core/orca/commands.ts:75`, `core/reaper/round.ts:449` | G2 — ps·list·rm 은 있고 `worktree set` 은 세션 글에도 없다 |
+| 첫째 칸 카드 표시·조회 | design.html 첫째 칸 | implemented | `core/orca/commands.ts:75`, `core/reaper/round.ts:449`, `claude-plugin/skills/deliver-ticket/SKILL.md:49` | ps·list·rm 은 어댑터에 있고, `worktree set` 은 워커가 PR 을 열 때 자기 카드에 쓴다(U77 에서 고침) |
 | 첫째 칸 포트 | design.html 첫째 칸 | implemented | `core/reaper/live.ts:10`, `core/orca/adapter.ts:343` | 비로컬 호스트 답은 거부 |
 | 첫째 칸 참조 | design.html 첫째 칸 | partial | `core/detect/pr/round.ts:102`, `core/detect/pr/round.ts:340` | G4 — add·find 는 있고(시작 때 `references` 를 붙이는 길은 `core/start/start.ts:475`) `reference remove` 행이 없다 |
-| 첫째 칸 검색 | design.html 첫째 칸 | partial | `claude-plugin/skills/general/recall/SKILL.md:22` | G2 — 결정 193 으로 세션 글이 됐고 ③ 의 일반 스킬 `recall` 은 부르지만 역할 agent·sangsoe skill 본문에는 없다 |
+| 첫째 칸 검색 | design.html 첫째 칸 | implemented | `claude-plugin/skills/general/recall/SKILL.md:22`, `claude-plugin/skills/intake/SKILL.md:33`, `claude-plugin/skills/orchestrate/SKILL.md:68` | 결정 193 으로 세션 글이 됐다. 일반 스킬 `recall` 과, 오너 원문 찾기(`intake`)·재시작 뒤 앞 세션 찾기(`orchestrate`)가 `--index-status` 가 켜졌을 때만 부른다(U77 에서 고침) |
 | 첫째 칸 진단 | design.html 첫째 칸 | implemented | `core/detect/resource/round.ts:21` | resource-monitor |
 | 첫째 칸 plugin 켜기 | design.html 첫째 칸 | implemented | `core/approve/approve.ts:67`, `core/approve/approve.ts:165` | 종료 코드 3 의 두 사유를 가른다 |
 | 첫째 칸 자동화 안 씀 | design.html 첫째 칸 | implemented | `core/orca/commands.ts:22` | automations 행 없음 |
@@ -502,7 +502,7 @@
 | G | 갭 | 제안 | 이유 · 다시 볼 조건 |
 |---|---|---|---|
 | G1 | 패널이 `terminal create`·`plugin open` 을 어댑터 밖에서 부른다 | LATER | 명령 표 대조(`orca-commands`)가 이 두 줄을 보지 못한다. Orca 가 그 인자를 바꾼 첫 버전에서 패널 호출을 `ORCA_COMMANDS` 표에 올린다 |
-| G2 | 결정 193 이 세션 글로 옮긴 `worktree set`·`reference list`·`search` 가 agent·skill 본문에 없다 | NOW | 결정 193 ④ 가 "세션이 자기 글로 부른다" 고 적었고 오너의 고정 규칙(Orca 내장 기능 최대 사용)이 있다. 카드 상태 표시(`worktree set`)는 오너가 Orca 에서 보는 화면이다. 고칠 것은 lead·worker 글 몇 줄이다 |
+| G2 | 결정 193 이 세션 글로 옮긴 `worktree set`·`reference list`·`search` 가 agent·skill 본문에 없다 | NOW | 결정 193 ④ 가 "세션이 자기 글로 부른다" 고 적었고 오너의 고정 규칙(Orca 내장 기능 최대 사용)이 있다. 카드 상태 표시(`worktree set`)는 오너가 Orca 에서 보는 화면이다. 고칠 것은 lead·worker 글 몇 줄이다. U77 에서 고쳤다: agent 셋과 `deliver-ticket`·`orchestrate`·`intake` 가 세 동사를 부르고 `test/session-verbs.test.ts` 가 지킨다 |
 | G3 | Orca plugin storage 를 쓰지 않는다 | LATER | 지금 패널은 매번 store 와 Orca 에서 읽어 잃는 상태가 없다. 패널이 다시 열 때 잃으면 안 되는 화면 상태가 생기면 |
 | G4 | `reference remove` 행이 없다 | LATER | 붙인 참조를 떼야 하는 첫 경우(잘못 붙인 티켓) |
 | G5 | 매니페스트는 읽기 능력만 선언하고 패널은 쓰기 CLI 를 부른다 | LATER | Orca 가 trusted-worker 의 CLI 호출에도 능력 선언을 요구하게 되면 |

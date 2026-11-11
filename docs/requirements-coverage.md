@@ -4,7 +4,7 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 
 상태: 🟢 그 시험이 요구 전체를 main 에서 지킨다 · 🟡 일부만 지킨다(빠진 것을 적었다) · 🔴 지키는 시험이 없다 · `PR #N`/`U<번호>` 그 단위가 가져온다.
 
-집계: R 23행 · 🟢 8 · 🟡 11 · 🔴 3 · 단위 1
+집계: R 23행 · 🟢 9 · 🟡 11 · 🔴 3 · 단위 0
 
 ## R-01–R-23
 
@@ -21,7 +21,7 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 | R-09 | hook 은 이벤트당 프로세스 하나, 합치기 표 시험, 실제 명령 모음으로 오탐·미탐 | `test/hooks-registered.test.ts`, `core/gates/merge.test.ts`, `core/gates/gates.test.ts`, `cli/commands/hook.test.ts` | 🟢 |
 | R-10 | 권한 결정은 한 곳, 거부는 event, 거부된 행동을 다른 경로로 재시도하지 않음 | `cli/commands/hook.test.ts`, `core/gates/gates.test.ts` | 🟡 한 곳 결정과 거부 event(`gate_denied`)는 시험한다. 거부된 행동을 다른 경로로 재시도하지 않는 것은 규칙 문장뿐이고 지키는 시험이 없다 |
 | R-11 | 호스트 상태·시계 주입, CI 시간 상한·병렬, 제외 시험과 재실행 flake 를 숨기지 않음 | `core/install/install.test.ts`, `core/contract/contract.test.ts` | 🟡 주입은 있다. CI job 에 시간 상한이 없고 건너뛴 시험 수를 따로 보이지 않는다 |
-| R-12 | 만든 자원은 기록하고 그 기록으로만 치움, 목록이 비면 지우지 않음 | — | U18 |
+| R-12 | 만든 자원은 기록하고 그 기록으로만 치움, 목록이 비면 지우지 않음 | `test/reaper/entrances.test.ts`, `test/reaper/scenarios.test.ts` | 🟢 `resource_record` 가 자원을 기록하고, REAPER 는 기록한 id 만 치우며(`reap_docker_order`), 루트 목록 하나라도 못 읽으면 후보도 치움도 없다(`reap_roots_fail_no_sweep`) |
 | R-13 | 부하 판정은 한 기준, 무거운 작업 슬롯은 CPU 에 맞춤 | `core/capacity/capacity.test.ts`, `core/gates/gates.test.ts` | 🟡 부하 판정은 한 함수이고 CPU 수에 비춰 본다. 슬롯 상한(`limit`)은 설정값이라 CPU 수에 맞추지 않는다 |
 | R-14 | 항목은 담당·원문·끝나는 조건을 함께 가짐, 닫는 길 없는 파생 항목 없음 | `core/start/item.test.ts`, `cli/commands/item-new.test.ts`, `test/migrate/migrate.test.ts` | 🟢 |
 | R-15 | 오너 항목은 에이전트가 못 하는 행동에만, 이유 한 줄 | `test/owner/scenarios.test.ts`, `test/owner/owner-todo.test.ts` | 🟡 오너 항목이 관찰한 사실·기록된 답으로만 닫히는 것은 시험한다. "에이전트가 못 하는 행동에만"과 이유 한 줄(`why_owner`)을 올리기 전에 거르는 시험은 없다 |
@@ -44,9 +44,9 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 | D-4 | 공유·프리뷰 도구 | — | sangsoe 밖 |
 | D-5 | 역할·위임 게이트·`dispatch-card`·`end-session`·`reboot` | `claude-plugin/agents/`, `core/start/`, `core/gates/delegate.ts`, `claude-plugin/skills/start/SKILL.md`, `claude-plugin/skills/end-session/SKILL.md`, `core/recover/`, `core/session/` | 🟢 |
 | D-6 | 머지·배포 절차와 머지 판정 | `core/land/`, `core/verify/`, `cli/commands/land.ts`, `claude-plugin/skills/deliver-ticket/SKILL.md` | 🟢 |
-| D-7 | 워커·PR·멘션 감시 자동화 | `orca-plugin/monitors/orca.ts`, `orca-plugin/monitors/chat.ts`, `core/detect/` | 🟡 orca·chat monitor 는 있고 pr-monitor 는 U16 |
-| D-8 | 순회 자동화 | `orca-plugin/monitors/` | U17 |
-| D-9 | 정리·압박 자동화, `reap-resources`, 압박 게이트 | `orca-plugin/reaper/`, `core/capacity/`, `core/gates/pressure.ts`, `claude-plugin/skills/reap-resources/SKILL.md` | 🟡 판정·게이트·skill 은 있고 REAPER 라운드는 U18 |
+| D-7 | 워커·PR·멘션 감시 자동화 | `orca-plugin/monitors/orca.ts`, `orca-plugin/monitors/pr.ts`, `orca-plugin/monitors/chat.ts`, `core/detect/` | 🟢 orca·pr·chat monitor 가 plugin worker 의 타이머 라운드로 돈다 |
+| D-8 | 순회 자동화 | `orca-plugin/monitors/queue.ts`, `orca-plugin/timer.ts`, `core/detect/queue/` | 🟢 queue-monitor 가 같은 타이머 라운드로 돌며 순회가 하던 점검을 `item_ready`·`escalation_stale`·`todo_due` 판정으로 한다 |
+| D-9 | 정리·압박 자동화, `reap-resources`, 압박 게이트 | `orca-plugin/reaper/`, `core/reaper/`, `core/capacity/`, `core/gates/pressure.ts`, `claude-plugin/skills/reap-resources/SKILL.md` | 🟢 판정·게이트·skill 과 REAPER 라운드(`orca-plugin/reaper/round.ts`)가 있다 |
 | D-10 | 대시보드 서버와 12페이지 | `orca-plugin/panel/`, `core/brief/panel.ts` | 🟢 서버·포트·12페이지 없이 패널 하나의 세 단계(결정 11·75, 구현 결정 136) |
 | D-11 | 브리프 패널·밴드 UI mod | `orca-plugin/panel/`, `core/brief/panel.ts` | 🟢 패널과 상태 표시줄 B(구현 결정 136) |
 | D-12 | `brief` 스킬 | `core/brief/`, `cli/commands/brief.ts`, `claude-plugin/skills/brief/SKILL.md` | 🟢 |
