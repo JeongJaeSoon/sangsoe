@@ -48,7 +48,9 @@ description: "Use when a sangsoe lead or the orchestrator starts a session on an
 
 역할 줄(`sangsoe-role: …`)은 코어가 spec 첫 줄에 붙인다. 네가 쓰지 않는다. 있는 Task 로 시작하면 그 줄이 `childRole` 과 같아야 한다: 리드 항목은 `item_create` 의 `role: "lead"` 로 만든다(빼면 worker). 다르면 Orca 가 spec 을 고치지 못하므로 `start_unit` 이 `lineage_invalid` 로 거부하고, 항목을 맞는 `role` 로 다시 만든다. Orca 가 `ready` 로 보여도 같은 Run 의 선행 항목에 묶인 PR 이 아직 머지되지 않았으면 `waiting`(`not_ready`)이 온다(결정 178): 머지를 기다린다. `ready` resource 도 그 항목을 준비됨으로 보이지 않는다. 모델 이름·버전·effort 를 브리프에 적지 않는다. 고르는 것은 `class`·`kind` 와 승격 칸뿐이다.
 
-advisor 는 행이 정한 tier 로 붙는다. 지금 Orca 의 `worker-start` 에는 advisor 옵션이 없어서, `started` 의 `notes` 가 어떻게 붙었는지 말한다: 오너 설정 `advisorModel` 이 있으면 그 advisor 가 붙고(sangsoe 는 그 tier 를 모른다. 본 모델보다 낮으면 Claude Code 가 말없이 뗀다), 없으면 advisor 없이 시작하며 advisor 가 꼭 있어야 하는 행(구현 워커)은 `withoutAdvisor` tier 로 시작하고 `model_changed` 를 남긴다. 짝이 맞지 않는 선택(advisor 가 본 모델보다 낮은 tier)은 `model_invalid` 로 거부된다. `advisorModel` 을 정하는 것은 오너의 일이다. sangsoe 는 그 설정을 쓰지 않는다.
+advisor 는 행이 정한 tier 로 붙는다(결정 202). Orca 의 `worker-start` 에 advisor 옵션이 있으면 그것을 쓰고, 지금처럼 없으면 `start_unit` 이 새 worktree 를 먼저 만들고, 그 worktree 의 `.claude/settings.local.json` 에 행의 advisor 를 적은 뒤 세션을 띄운다. advisor 가 없는 행과 advisor 예산을 다 쓴 단위는 같은 파일로 advisor 를 끈다. 오너 설정은 쓰지 않는다. 그 파일을 쓰지 못하면(다른 호스트의 worktree, 저장소가 그 파일을 커밋해 둔 경우) 결정 187 의 길로 시작하고 `notes` 가 말한다: 오너 설정 `advisorModel` 이 있으면 그 advisor 가 붙고(sangsoe 는 그 tier 를 모른다. 끄지도 못한다), 없으면 advisor 가 꼭 있어야 하는 행(구현 워커)은 `withoutAdvisor` tier 로 시작하고 `model_changed` 를 남긴다. 짝이 맞지 않는 선택(advisor 가 본 모델보다 낮은 tier)은 `model_invalid` 로 거부된다.
+
+`worktree create` 가 여는 셸은 release 뒤에도 남는다. `start_unit` 이 그 handle 을 기록하고, setup 스크립트가 없는 저장소면 REAPER 가 release 뒤에 닫는다. setup 스크립트가 있거나 있는지 모르면 닫지 않는다: `notes` 가 그 handle 을 남은 것으로 말하니, 오너에게 보이는 보고에 옮긴다. 너는 `terminal close` 를 부르지 않는다. 시작이 실패해 `refused` 의 `detail` 에 `남은 worktree` 가 있으면 그 worktree(와 셸)는 Orca 가 아직 쓰고 있을 수 있는 것이다: 지우지 말고 그대로 위로 올린다.
 
 alias 는 바깥 설정(`ANTHROPIC_DEFAULT_*_MODEL`)에 고정될 수 있다. 시작한 워커의 첫 보고나 상태 줄에서 실제로 풀린 모델이 그 tier 의 현재 ID 와 다르면 워커를 다시 띄우지 말고 그 사실을 위로 올린다. `doctor` 의 `model-table` 행이 지금 걸린 고정을 보인다.
 

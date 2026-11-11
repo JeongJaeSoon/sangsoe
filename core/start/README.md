@@ -7,7 +7,7 @@ sangsoe 가 여는 모든 세션은 `startUnit` 하나를 지난다(결정 94 (�
 |---|---|---|
 | `started` | Dispatch 가 있는 워커가 떴다 | 없음(Orca 가 원본) |
 | `waiting` | Task 가 `ready` 가 아니거나 `capacity` 가 모자람 | 없음(거부가 아니다) |
-| `refused` | 여섯 사유 중 하나(아래 순서로 판정) | `signal`{`start_refused`, reason} 한 줄 + 부모에게 escalation 한 통. `worker-start` 가 분명히 실패하고 만든 worktree 의 터미널이 기록한 셸뿐이면 그 셸을 닫고 `worktree rm` 한다. 응답을 잃었거나 Dispatch 가 있거나 다른 터미널이 있으면 아무것도 닫지 않고 detail 에 적는다(결정 202) |
+| `refused` | 여섯 사유 중 하나(아래 순서로 판정) | `signal`{`start_refused`, reason} 한 줄 + 부모에게 escalation 한 통. `worker-start` 를 Orca 가 분명히 거절했고(JSON `ok:false`, request id·Dispatch 없음) setup 스크립트가 없고 만든 worktree 의 터미널이 기록한 셸뿐이면 그 셸을 닫고 `worktree rm` 한다. 결과를 모르거나 setup 이 있거나 다른 터미널이 있으면 아무것도 닫지 않고 worktree 와 셸을 detail 에 적는다(결정 202) |
 
 setup 셸(결정 202): `worktree create` 는 agent 없이도 셸 하나를 연다. create 직후 그 worktree 의 터미널이 `agentIdentity` 없는 하나일 때만 그 handle 을 `unit_started.shell` 로 남긴다. `setup` 은 `repo show` 의 setup 스크립트가 비고 `orca.yaml` 이 없으면 `none`, 아니면 `script`, 읽지 못하면 `unknown` 이다. Orca 는 setup 이 끝났는지 알리지 않으므로 `none` 일 때만 REAPER 가 풀린 뒤 그 handle 을 닫고(`core/reaper/README.md`), 나머지는 남겨 시작 결과의 notes 에 handle 을 적는다.
 

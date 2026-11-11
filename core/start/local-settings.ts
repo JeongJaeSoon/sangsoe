@@ -32,6 +32,14 @@ export function writeLocalSettings(worktree: string, s: WorktreeSettings): void 
   if (!statSync(worktree).isDirectory()) throw new Error(`not a directory: ${worktree}`);
   const git = (...args: string[]) => execFileSync("git", ["-C", worktree, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
   const rel = git("rev-parse", "--git-path", "info/exclude").trim();
+  // A committed file would turn into a diff the worker might push, and an exclude line cannot hide it.
+  let tracked = true;
+  try {
+    git("ls-files", "--error-unmatch", LOCAL_SETTINGS);
+  } catch {
+    tracked = false;
+  }
+  if (tracked) throw new Error(`${LOCAL_SETTINGS} is tracked in this repository`);
   let ignored = true;
   try {
     git("check-ignore", "-q", LOCAL_SETTINGS);

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import type { WorktreeRow } from "../../core/index.ts";
-import { assertNeverForbidden, dropScratch, finishedCard, rounds, worker, world } from "./harness.ts";
+import { assertNeverForbidden, CONFIG, dropScratch, finishedCard, rounds, worker, world } from "./harness.ts";
 
 after(dropScratch);
 
@@ -74,6 +74,12 @@ test("decision 202: nothing is closed before release, with a setup script, besid
   unit(dry, "dry");
   await dry.round();
   assert.deepEqual(closes(dry), [], "a dry run acts on nothing");
+  // A card on the protect list is the owner's, shell included.
+  const kept = world();
+  const k = unit(kept, "kept");
+  kept.config = { ...CONFIG, protect: [k.path] };
+  await kept.round();
+  assert.deepEqual(closes(kept), []);
 });
 
 test("decision 202: a mark-only round, and one with no reaper config, still closes the shell but removes no card", async () => {

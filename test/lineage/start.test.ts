@@ -550,6 +550,14 @@ test("decision 202: a unit whose row budget is spent starts with the advisor off
   spendAll(sr);
   await start(sr, request({ task: { id: NEW_TASK }, model: raised.value }));
   assert.equal(flag(sr.called("worker-start")[0] ?? [], "effort"), "high");
+  // Without the file, an owner advisorModel still attaches: the start says so instead of claiming it off.
+  const so = harness();
+  spendAll(so);
+  const owned = await startUnit(
+    { ...ports(so), advisorSetting: () => true, writeSettings: () => { throw new Error("remote worktree"); } },
+    request({ task: { id: NEW_TASK } }),
+  );
+  assert.ok(owned.kind === "started" && owned.notes.some((n) => n.includes("오너 설정의 advisorModel")), JSON.stringify(owned));
 });
 
 test("decision 202: the setup shell is recorded only when it is the worktree's one non-agent terminal, and kept with a setup script", async () => {
@@ -591,9 +599,13 @@ test("decision 202: a definite failed start closes only the recorded shell and r
   const left = await start(busy);
   assert.deepEqual(acts(busy), []);
   assert.ok(left.kind === "refused" && left.detail.includes(CHILD_TREE) && left.detail.includes("term_agent"), JSON.stringify(left));
-  // A lost answer or a reported Dispatch may own a live agent: left and named.
+  // A lost answer, a request Orca cannot account for, a non-zero exit with a result, or a reported
+  // Dispatch may own a live agent: left and named.
   for (const workerStart of [
     () => ({ code: 1, stdout: "", stderr: "socket closed" }),
+    () => ({ code: 1, stdout: "", stderr: "lost; retry with --retry-request req_lost" }),
+    () => ({ code: 1, stdout: JSON.stringify({ ok: false, error: { code: "agent_failed", message: "x" }, requestId: "req_seen" }), stderr: "" }),
+    () => ({ code: 2, stdout: JSON.stringify({ ok: true, result: {} }), stderr: "" }),
     () => ({ code: 1, stdout: JSON.stringify({ ok: false, error: { code: "start_failed", message: "x", data: { dispatchId: "ctx_dead" } } }), stderr: "" }),
   ]) {
     const d = harness({ workerStart, replies: { "orchestration-request-show": ok({ state: "absent" }) } });
@@ -601,6 +613,25 @@ test("decision 202: a definite failed start closes only the recorded shell and r
     assert.deepEqual(acts(d), []);
     assert.ok(failed.kind === "refused" && failed.detail.includes(CHILD_TREE), JSON.stringify(failed));
   }
+  // A setup that may still be running is not cut short: the shell and the worktree stay, both named.
+  for (const [replies, hookFile] of [
+    [{ "repo-show": ok({ repo: { hookSettings: { scripts: { setup: "npm ci" } } } }) }, false],
+    [{ "repo-show": fail("repo_not_found") }, false],
+    [{}, true],
+  ] as const) {
+    const s = harness({ workerStart: () => fail("agent_failed"), replies });
+    const failed = await startUnit({ ...ports(s), hookFile: () => hookFile }, request());
+    assert.deepEqual(acts(s), []);
+    assert.ok(failed.kind === "refused" && failed.detail.includes(CHILD_TREE) && failed.detail.includes(SHELL), JSON.stringify(failed));
+  }
+});
+
+test("decision 202: a failed worktree create names the requested worktree, since a lost answer may still have made it", async () => {
+  const h = harness({ replies: { "worktree-create": fail("runtime_unreachable") } });
+  const out = await start(h);
+  const name = flag(h.named("worktree create")[0] ?? [], "name");
+  assert.ok(name && out.kind === "refused" && out.detail.includes(name), JSON.stringify(out));
+  assert.equal(h.called("worker-start").length, 0);
 });
 
 test("decision 178: a Task Orca released at its predecessor's worker_done waits while that PR is open, starts once it merges", async () => {

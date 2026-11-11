@@ -124,7 +124,9 @@ async function openPrHeads(gh: GhClient, repo: string): Promise<Set<string> | nu
  * still lists it with no agent in it. Unreadable means not now.
  */
 async function closeReleasedShells(d: ReaperDeps, scope: readonly WorktreeRow[], workers: readonly WorkerRow[]): Promise<string[]> {
-  const inScope = new Set(scope.map((c) => c.id));
+  // A protected card is the owner's to touch, its shell included.
+  const protect = new Set<string | undefined>(d.config?.protect ?? []);
+  const inScope = new Set(scope.filter((c) => !protect.has(c.instanceId) && !protect.has(c.path) && !protect.has(branchOf(c))).map((c) => c.id));
   const closed: string[] = [];
   for (const e of d.events({ type: "unit_started" })) {
     const p = e.payload as { worktree?: string; shell?: string; setup?: string };

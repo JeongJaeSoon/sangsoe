@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -57,4 +57,19 @@ test("the file is written in the worktree and kept out of git status, in a linke
   assert.equal(git(linked, "status", "--porcelain=v1", "--untracked-files=all"), "", "the reaper sees a clean tree");
   const exclude = readFileSync(join(main, ".git", "info", "exclude"), "utf8");
   assert.equal(exclude.split("\n").filter((l) => l === `/${LOCAL_SETTINGS}`).length, 1, "added once, not per write");
+});
+
+test("a repository that commits the file is refused untouched, so start_unit falls back instead of making a diff", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sangsoe-local-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const repo = join(dir, "repo");
+  const git = (...args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+  execFileSync("git", ["init", "-q", "-b", "main", repo]);
+  mkdirSync(join(repo, ".claude"));
+  writeFileSync(join(repo, LOCAL_SETTINGS), "{}\n");
+  git("add", "-f", LOCAL_SETTINGS);
+  git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "init");
+  assert.throws(() => writeLocalSettings(repo, { advisorModel: "a" }), /tracked/);
+  assert.equal(readFileSync(join(repo, LOCAL_SETTINGS), "utf8"), "{}\n");
+  assert.equal(git("status", "--porcelain=v1"), "");
 });
