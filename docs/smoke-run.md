@@ -66,8 +66,9 @@ transcript 경로는 프로필의 `projects/<작업 폴더 slug>/<세션 id>.jso
 P2: 오케스트레이터가 `run-create`(run_ba31feb8f9bc) → `item_create`(task_fa401bcde518, i002) → `start_unit`(childRole lead) 를 불렀고, 리드는 자기 Run(run_7d1b870451e3)에서 `start_unit`(childRole worker)으로 워커를 열었다(task_1f7ca673d92e). 리드의 역할 줄과 브랜치 이름(`sangsoe-lead-role`)이 이제 lead 다(리허설의 finding 고쳐짐). `item_create` 의 역할 기본값은 worker 라서 오케스트레이터가 `role: "lead"` 를 직접 넣어야 했다.
 
 ```
-start_unit(orchestrator → lead) → {"kind":"started","taskId":"task_fa401bcde518","dispatchId":"ctx_08db458f8b2d","worktreeId":"…::~/orca/workspaces/smoke-repo/emperor","launch":{"model":"opus","effort":"medium"}}
-start_unit(lead → worker) → {"kind":"started","taskId":"task_1f7ca673d92e","dispatchId":"ctx_50d97ec8bc47"}(worktree basketstar, sonnet · high)
+start_unit(orchestrator → lead) → {"kind":"started","taskId":"task_fa401bcde518","dispatchId":"ctx_08db458f8b2d","worktreeId":"…::~/orca/workspaces/smoke-repo/emperor","launch":{…}}
+start_unit(lead → worker) → {"kind":"started","taskId":"task_1f7ca673d92e","dispatchId":"ctx_50d97ec8bc47"}(worktree basketstar)
+(launch 의 모델 · effort 는 각 역할의 행 그대로: core/models/table.ts)
 SANGSOE_REAL_RUN=run_ba31feb8f9bc SANGSOE_REAL_PARENT=<p2-orch> … → units 1 · complete 1 · removed after completion 0 · broken 0 ✔
 SANGSOE_REAL_RUN=run_7d1b870451e3 SANGSOE_REAL_PARENT=<emperor> … → units 1 · complete 1 · removed after completion 0 · broken 0 ✔
 ```
