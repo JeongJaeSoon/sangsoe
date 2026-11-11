@@ -63,6 +63,8 @@ export function advisorSetting(env: Record<string, string | undefined>, home: st
 const ADVISOR_FIX =
   "stop committing .claude/settings.local.json in that repository, or set advisorModel in your own settings (the owner's act; sangsoe never writes it)";
 const ADVISOR_ROUTE = `route worktree_file: ${ADVISOR_FROM_WORKTREE}`;
+const TRACKED_FIX =
+  "stop committing .claude/settings.local.json in that repository so start_unit can write each worktree's advisor (decision 202)";
 const ENV_OFF_FIX = "unset CLAUDE_CODE_DISABLE_ADVISOR_TOOL where Orca starts its sessions if rows should get their advisor";
 
 /**
@@ -147,7 +149,7 @@ export const modelTable: Check = {
           ? {
               status: "notice",
               text: `${LOCAL_SETTINGS} 를 커밋한 저장소(${names}): worktree 파일을 쓰지 못해 advisor 는 오너 설정에서 온다(route owner_setting). ${ADVISOR_FROM_SETTING}; advisor 를 꺼야 하는 시작도 끄지 못한다`,
-              fix: ADVISOR_FIX,
+              fix: TRACKED_FIX,
             }
           : {
               status: "warn",

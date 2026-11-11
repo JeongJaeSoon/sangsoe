@@ -206,6 +206,8 @@ test("doctor's model-table row: ok when fresh, warn past the floor, notice on a 
   const fallback = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, tracked: ["/w/web"] }));
   assert.equal(fallback.status, "notice", fallback.summary);
   assert.match(fallback.summary, /route owner_setting/);
+  assert.match(fallback.fix ?? "", /stop committing/);
+  assert.doesNotMatch(fallback.fix ?? "", /set advisorModel/, "the key is already set");
   assert.doesNotMatch(fallback.summary, /secret-value/);
   const off = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, env: { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1" } }));
   assert.equal(off.status, "notice", "the advisor's off switch in this environment is named");
