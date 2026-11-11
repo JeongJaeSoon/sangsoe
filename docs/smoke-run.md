@@ -146,7 +146,7 @@ sangsoe monitor run pr --home <scratch> → written pr_merged (seq 61149), acts:
 
 land 는 branch protection 을 읽지 못한 세 점검을 막지 않고 verdict 로 머지했다(smoke 저장소에는 보호 규칙이 없다). `task-update completed` 는 워커의 `worker_done` 이 먼저 Task 를 닫아 "already completed" 로 끝났다. T5(끝난 Task 를 리드가 다시 `start_unit`)는 리드 Task id 를 넘기지 않아 `lineage_invalid`("lead 의 Task id 가 없어 Dispatch 를 읽을 수 없다")로 먼저 거부됐고, `dispatched` 거르기까지 가지 않았다.
 
-판정: PASS (머지 · `pr_merged` · `task-update` 길과 pr-monitor 의 private 저장소 실제 라운드. T5 는 NOT VERIFIED: 리드 Task id 누락으로 앞 단계에서 거부)
+판정: PASS (머지 · `pr_merged` · `task-update` 길과 pr-monitor 의 private 저장소 실제 라운드. T5 는 NOT VERIFIED: 리드 Task id 누락으로 앞 단계에서 거부. 읽지 못한 branch protection 을 막지 않고 머지한 것은 finding: 보호 규칙이 있는 저장소에서는 열린 채 실패한다)
 
 ### 리허설(rc.4)
 
@@ -187,7 +187,7 @@ Orca rejected this escalation: No active Dispatch belongs to this message sender
 payload: _orcaLifecycleRejection.code=sender_not_assignee
 ```
 
-판정: PASS (알림 한 번 실제 전송, Dispatch 없는 escalation 은 거부로 인용)
+판정: PASS (알림이 실제로 전송됨: P2 에 seq 41931 · 41948 · 41954 세 통, Dispatch 없는 escalation 은 거부로 인용)
 
 ## 5. 실제 transcript 의 hook (U27 · U13)
 
@@ -212,7 +212,7 @@ sangsoe monitor run queue
 
 `item_ready` · `todo_due` 를 만들 항목이 없었다. 0.1.0 의 REAPER 타이머 라운드는 `roots_ok: true`, `mark_only: true` 로 10분마다 돌고(round 82–84), `timer_stalled{reaper, roots_ok=false}` 는 08:48Z 의 한 줄 뒤로 한동안 나오지 않다가 11-11 02:34:29Z(seq 58377, "roots_ok=false 3 rounds running")에 다시 나왔다. 원인은 토큰이 읽지 못하는 다른 소유자의 저장소다(아래 "P2 추가 확인").
 
-판정: NOT VERIFIED (non-dry 라운드는 돌았으나 item_ready · todo_due 를 만들 상황이 없었고, 살아 있는 worker 안의 timer_stalled 도 일어나지 않음)
+판정: NOT VERIFIED (non-dry 라운드는 돌았으나 item_ready · todo_due 를 만들 상황이 없었다. 02:34:29Z 의 timer_stalled 는 REAPER 의 것(kind reaper, roots_ok=false)이고, queue 가 돌리는 일의 멈춤은 일어나지 않음)
 
 ## 7. 패널 · 상태 표시줄 · `sangsoe todo` 숫자, 추천대로 답 (U28)
 
@@ -380,9 +380,9 @@ terminal.send: 0줄
 | agent-skills | sangsoe 대응물 | P2 에서 씀 |
 |---|---|---|
 | `skills/orchestrate` | `claude-plugin/skills/orchestrate` | 예: 오케스트레이터 · 리드(항목 1) |
-| `skills/dispatch-card` | `claude-plugin/skills/start`, `core/start` | 예: `start_unit` 3회(항목 1) |
-| `skills/end-session` | `claude-plugin/skills/end-session` | 아직: 닫기 대기(항목 10). 리허설에서 리드가 씀 |
-| `skills/deliver-ticket` | `claude-plugin/skills/deliver-ticket`, `core/land`, `core/verify` | 일부: PR · review_ask · 증거 · verdict 까지, land 는 auto mode 가 막음(항목 3) |
+| `skills/dispatch-card` | `claude-plugin/skills/start`, `core/start` | 예: `start_unit` 3회(항목 1 의 2회, 교차 저장소 탐침 1회) |
+| `skills/end-session` | `claude-plugin/skills/end-session` | 아니오: P2 의 닫기는 손 release(항목 10). 리허설에서 리드가 씀 |
+| `skills/deliver-ticket` | `claude-plugin/skills/deliver-ticket`, `core/land`, `core/verify` | 일부: PR · review_ask · 증거 · verdict 까지, 워커의 land 는 auto mode 가 막고 오너의 `!` 줄로 머지(항목 3) |
 | `skills/reflect` | `claude-plugin/skills/reflect`, 시간선 뷰 | 아니오 |
 | `skills/reap-resources` | `claude-plugin/skills/reap-resources`, REAPER | 예: 타이머 라운드 82–84(항목 6) |
 | `skills/skills-config` | `claude-plugin/skills/setup`, `core/install` | 아니오(설정은 오너가 손으로) |
@@ -390,7 +390,7 @@ terminal.send: 0줄
 | `skills/brief` | `claude-plugin/skills/brief` · `todo`, `core/brief` | 예: `sangsoe brief` · `todo`(항목 7) |
 | `skills/watch-prs` | pr-monitor(`core/detect/pr`) | 예: 실제 라운드 seq 41951–41952(항목 3) |
 | `skills/watch-mentions` | `orca-plugin/monitors/chat.ts`, `core/detect/chat` | 아니오 |
-| `skills/reboot` | `core/recover`, SessionStart | 예: SessionStart 의 역할 기록 seq 41634 · 41638 · 41641. recover 는 아니오(재시작은 오너 대기) |
+| `skills/reboot` | `core/recover`, SessionStart | 예: SessionStart 의 역할 기록 seq 41634 · 41638 · 41641. recover 는 아니오(Orca 재시작 뒤 세션 · 터미널이 그대로 남아 복구할 것이 없었다, "P2 추가 확인") |
 | 일반 skill 14(architect … write-skill) | `claude-plugin/skills/general` | 아니오(smoke 일이 작아 부르지 않음. 세 세션의 skill 목록에는 있음) |
 | `skills/use-notes` | DROP: 개인 노트 저장소(D-2, 결정 79) | — |
 | `skills/use-tracker` | DROP: 외부 티켓은 Orca 참조만(결정 93) | — |
@@ -422,7 +422,7 @@ terminal.send: 0줄
 | `hooks/refusals.py`, `request_log.py` | DROP: `gate_denied` event 가 대신 | — |
 | `hooks/brief_pane.tsx`, `clear_band.tsx`, `mods.tsx` | `orca-plugin/panel`, `core/brief/panel.ts` | 예: 패널 · 상태 표시줄 캡처(항목 7, 패널은 FAIL) |
 | `scripts/card.py` | `core/start`, `test/lineage/start.test.ts` | 예: lineage 시험 두 Run 녹색 |
-| `scripts/end_check.py` | `claude-plugin/skills/end-session` | 아직(항목 10) |
+| `scripts/end_check.py` | `claude-plugin/skills/end-session` | 아니오(항목 10, 손으로 닫음) |
 | `scripts/sync.py` | `sangsoe install`, `core/install` | 아니오(brew 설치는 오케스트레이터 쪽) |
 | `scripts/setup.py` · `bootstrap.py` · `recommended-settings.json` | `core/install`, `install` · `doctor` | 예: doctor |
 | `scripts/catalog` | DROP: 번역 카탈로그 없음(R-22) | — |
