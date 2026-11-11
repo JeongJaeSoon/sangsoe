@@ -30,6 +30,7 @@ description: "Use when the sangsoe orchestrator receives an owner's message and 
    - 새 일: `item_create`(네 `runId`, `spec` 은 `write-brief` skill 로, `who`, `doneWhen` 한 줄, 알려진 `deps`). 준비되면 `start` skill.
    - 시각·조건 대기: 시작 시점은 `item_create` 그 호출에 함께 넣는다. 따로 달면 그 사이에 준비 상태로 보인다. PR 조건은 같은 Run 의 Task 면 `deps`, 아니면 `trigger` 에 `owner/repo#N`. 날짜 조건은 📅 예정으로 `trigger` 에 날짜(`2026-11-17`)와 시작하는 쪽 `exec_by`. 글로만 된 조건은 ⏸️ 보류로 `hold: true` 와 `review_trigger` 에 그 조건. 만든 뒤에 생긴 순서는 `edge_add`(`blocks`·`after`).
    - 진행 중인 일의 범위: 그 일을 쥔 세션에 Orca `send` 로 그 항목과 오너의 말 요지를 보낸다. 워커면 `--to dispatch:<dispatch_id>`, 리드면 `--to run:<run_id>`. 범위가 브리프의 승인 줄 밖으로 커지면 결정을 연다.
+   - 말이 오너가 전에 한 말을 가리키고("그때 말한 거") 네 맥락에 없으면: `orca search "<구절>" --scope conversation --sort newest --json` 으로 그 원문 위치를 찾는다. `orca search --index-status` 가 켜짐(`enabled: true`)이 아니면 찾지 않고 오너에게 묻는다(결정 193).
 2. 오너에게 한두 문장으로 답한다: 무엇으로 갈랐고 어디로 갔는지.
 
 ## 하지 않는 것
