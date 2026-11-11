@@ -15,7 +15,7 @@ Everything since `v0.1.0`: decisions 193–207.
   - `orca claude profile` reads the plugin even when Orca uses the checked profile, says `sangsoe enabled`, and is `FAIL` when the plugin is disabled there (198).
   - `orca-commands` counts 33 adapter commands, down from 36 (193, 202, 207).
   - `reaper-config` is a `warn` when `~/.config/sangsoe/config.json` cannot be read, because REAPER then stops every round (201); a missing file or section stays a `notice`.
-  - `model-table` no longer prints a `notice` when Claude Code settings have no advisor model: each new worktree gets its advisor from its own `.claude/settings.local.json` (202). It appends today's advisor calls and estimated cost (200), prints a `notice` for `CLAUDE_CODE_DISABLE_ADVISOR_TOOL` in the environment, and for a repository that commits `.claude/settings.local.json` prints a `notice` when your settings have an advisor model and a `warn` when they do not (202).
+  - `model-table` no longer prints a `notice` when Claude Code settings have no advisor model: each new worktree gets its advisor from its own `.claude/settings.local.json` (202). It appends today's advisor calls and estimated cost (200), prints a `notice` for `CLAUDE_CODE_DISABLE_ADVISOR_TOOL` in the environment, and for a repository that commits `.claude/settings.local.json` prints a `notice` when your settings give an advisor model (and the advisor tool is not disabled) and a `warn` otherwise (202).
 
 ### Cut by the owner
 
