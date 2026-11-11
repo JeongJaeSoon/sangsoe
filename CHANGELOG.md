@@ -5,6 +5,7 @@ Decision numbers refer to `docs/decisions.md`.
 ## Unreleased
 
 - **`start_unit` refuses on a stale MCP server.** A session's MCP server keeps the code it loaded at start, and `/reload-plugins` does not restart it. When the installed sangsoe's version differs from the server's own, or the install it started from is gone, `start_unit` returns `server_stale` with both versions before it opens the store or calls Orca. The fix it names is restarting the session. A server started under `0.1.3` or older has no such check: restart those sessions after upgrading (211).
+- **Sessions name the Orca verbs decision 193 left to them.** A worker marks its own card with `orca worktree set` when it opens a PR (`deliver-ticket`), a lead checks that PR's link with `orca reference list` on `merge_ready` (`orchestrate`), and the orchestrator and a restarted lead find earlier words with `orca search --scope conversation`, only when the search index is enabled (`intake`, `orchestrate`). Run `/reload-skills` in running sessions; the agent definitions apply to sessions started after the upgrade (193).
 
 ## 0.1.3
 
