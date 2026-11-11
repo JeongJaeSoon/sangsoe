@@ -39,6 +39,33 @@ test("reap_roots_fail_no_sweep: one unreadable root skips candidates and sweep",
   }
 });
 
+test("decision 207: another owner's unreadable repo keeps its cards, is told once, and never fails the roots", async () => {
+  // The token reads only acme/api; other/tools answers 404, like a repo under another owner.
+  const w = world();
+  const foreign = finishedCard(w, "foreign-repo", { foreign: true, projectId: "github:other/tools" });
+  const mine = finishedCard(w, "managed-done");
+  const last = await rounds(w, 4, 30);
+  assert.equal(last.roots_ok, true, last.unseen.join("; "));
+  assert.ok(w.types("reap_round").every((r) => r.roots_ok === true));
+  assert.ok(!w.types("reap_candidate").some((r) => r.ref === foreign.instanceId), "an unread card is never a candidate");
+  assert.ok(last.unknown.includes(`worktree:${foreign.instanceId}`));
+  assert.deepEqual(rms(w), [`worktreeRm id:${mine.id}`], "the readable repo's finished card is still reaped");
+  assert.deepEqual(w.types("reap_blocked"), [{ kind: "repo", ref: "other/tools", reason: "repo_unreadable" }], "one notice for four rounds");
+  assert.deepEqual(judgeStall(w.store.events(), w.clock.now, 30 * MIN), []);
+  assertNeverForbidden(w);
+});
+
+test("decision 207: a repo sangsoe started a card in still fails the round closed when unreadable", async () => {
+  const w = world();
+  finishedCard(w, "managed-one", { projectId: "github:other/tools" });
+  const last = await rounds(w, 3, 30);
+  assert.equal(last.roots_ok, false);
+  assert.deepEqual(last.unseen, ["open PRs of other/tools"]);
+  assert.deepEqual(rms(w), []);
+  assert.deepEqual(w.types("reap_candidate"), []);
+  assert.deepEqual(w.types("reap_blocked"), []);
+});
+
 test("no reaper section: rounds are mark_only, not failed roots, and three of them raise no timer_stalled (M3)", async () => {
   const w = world();
   w.config = null;

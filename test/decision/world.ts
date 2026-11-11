@@ -60,8 +60,13 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
       // Like Orca, `result` (where a cancel shows) comes only with --full.
       const full = args.includes("--full");
       const rows = [...taskMap.values()].filter((t) => t.run === run);
+      // `--full` returns Orca's stored row: `task_title`, `dispatch_id`, `run_id`, no camelCase.
       return ok({
-        tasks: rows.map(({ run: _r, result, ...t }) => ({ ...t, title: t.title ?? t.id, ...(full && result ? { result } : {}) })),
+        tasks: rows.map(({ run: r, result, dispatchId, title, ...t }) =>
+          full
+            ? { ...t, run_id: r, task_title: title ?? t.id, result: result ?? null, ...(dispatchId ? { dispatch_id: dispatchId } : {}) }
+            : { ...t, title: title ?? t.id, ...(dispatchId ? { dispatchId } : {}) },
+        ),
         runId: run,
       });
     },

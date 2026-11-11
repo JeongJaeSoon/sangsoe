@@ -119,6 +119,14 @@ test("a decision with no waiter gates a carrier Task in the orchestrator Run, on
   assert.equal(w.gates.size, 1);
 });
 
+test("a carrier Task Orca already holds (a crash before its record) is found by title in task-list --full, not made twice", async () => {
+  const w = createWorld([{ id: "task_900000000001", run: ORCH_RUN, status: "pending", title: "d001" }]);
+  const r = await decisionOpen(w, ask([], { carrierRun: ORCH_RUN, callerRun: ORCH_RUN }));
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.equal(w.calls("orchestration task-create").length, 0);
+  assert.equal([...w.gates.values()][0]?.taskId, "task_900000000001");
+});
+
 test("decision_reask_blocked: the same question after the answer returns the answer and opens nothing", async () => {
   const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }]);
   const { decision: d } = await open(w);

@@ -328,6 +328,19 @@ test("orca_error: a failed worker-start is refused with Orca's code; the Task st
   assert.equal(h.called("send").length, 1);
 });
 
+test("decision 207: a lead whose Dispatch has settled tells its parent by status, not escalation (Orca: sender_not_assignee)", async () => {
+  const settledLead = {
+    dispatch: { ...dispatchRow("ctx_lead", "task_lead", 1, ORCH_RUN).dispatch, status: "completed", completed_at: "2026-11-11 03:00:00" },
+  };
+  const h = harness({ workerStart: () => fail("task_not_startable", "deps not done"), replies: { "orchestration-dispatch-show": (args: readonly string[]) => (flag(args, "task") === "task_lead" ? ok(settledLead) : fail("dispatch_not_found")) } });
+  const out = await start(h);
+  assert.equal(out.kind === "refused" && out.reason, "orca_error");
+  const sent = h.called("send");
+  assert.equal(sent.length, 1);
+  assert.equal(flag(sent[0] ?? [], "type"), "status");
+  assert.ok(!(sent[0] ?? []).includes("--dispatch-id"), "a settled Dispatch is named by no message");
+});
+
 test("orca_error: unreadable capacity is reported, not taken for a full machine", async () => {
   const h = harness();
   const out = await start(h, request(), () => {

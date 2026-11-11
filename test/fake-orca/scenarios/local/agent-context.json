@@ -17,6 +17,7 @@
     {"command":"orchestration run-create","path":["orchestration","run-create"],"flags":["help","json","pairing-code","environment","objective","from","retry-request","full"]},
     {"command":"orchestration run-current","path":["orchestration","run-current"],"flags":["help","json","pairing-code","environment","from","full"]},
     {"command":"orchestration run-show","path":["orchestration","run-show"],"flags":["help","json","pairing-code","environment","id","removed","cursor","full"]},
+    {"command":"orchestration run-list","path":["orchestration","run-list"],"flags":["help","json","pairing-code","environment","limit","cursor","full"]},
     {"command":"orchestration run-use","path":["orchestration","run-use"],"flags":["help","json","pairing-code","environment","id","from","takeover-legacy","retry-request","full"]},
     {"command":"orchestration send","path":["orchestration","send"],"flags":["help","json","pairing-code","environment","to","run","from","subject","body","type","priority","thread-id","payload","task-id","dispatch-id","dispatch-capability","retry-request","outcome","files-modified","report-path","phase","full"]},
     {"command":"orchestration task-create","path":["orchestration","task-create"],"flags":["help","json","pairing-code","environment","spec","spec-file","task-title","display-name","deps","parent","run","from","retry-request","full"]},

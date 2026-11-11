@@ -69,8 +69,13 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
           { id: WORKTREE, hostId: "local", path: dir, isMainWorktree: false },
         ],
       }),
-    "orchestration-worker-list": () =>
-      ok({ workers: w.dispatched ? [{ dispatchId: DISPATCH, taskId: TASK, state: "running", workspace: WORKTREE, host: "local" }] : [] }),
+    // Like Orca: without --run the list is scoped to the Run bound to the caller, or every Run when unbound.
+    "orchestration-worker-list": (args: readonly string[]) => {
+      const scope = flag(args, "run") ?? w.heldRun;
+      const mine = w.dispatched && (scope === null || scope === TASK_RUN);
+      return ok({ workers: mine ? [{ dispatchId: DISPATCH, taskId: TASK, state: "running", workspace: WORKTREE, host: "local" }] : [], scope: { source: flag(args, "run") ? "flag" : w.heldRun ? "bound" : "all" } });
+    },
+    "orchestration-run-list": () => ok({ runs: [{ id: "run_lead", objective: "x" }, { id: TASK_RUN, objective: "y" }] }),
     "orchestration-worker-show": () => ok({ dispatchId: DISPATCH, taskId: TASK, runId: TASK_RUN, state: "running" }),
     "orchestration-task-list": (args: readonly string[]) => {
       if (w.failTaskList) return { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "runtime_unavailable", message: "down" } }), stderr: "" };
