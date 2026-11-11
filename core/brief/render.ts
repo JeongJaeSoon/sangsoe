@@ -9,7 +9,7 @@ export interface RenderOptions {
 }
 
 // The panel's line (orca-plugin/panel/view.ts) starts with this and adds its own note; test/brief/brief-text-199 holds the prefix.
-export const NO_GROUP = "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 진행 중 절에 그 행이 나온다.";
+export const NO_GROUP = "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 열린 항목 절에 그 행이 나온다.";
 
 // Cuts and escapes only: every number below is read from the model, none is counted here.
 

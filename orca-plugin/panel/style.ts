@@ -96,10 +96,11 @@ button.link { border: 0; background: none; padding: 0; color: var(--link); font:
 h1 { font-size: var(--text-md); line-height: 22px; margin-bottom: var(--s2); }
 h1 .dim { color: var(--ink-2); font-weight: 400; }
 h3 { font-size: var(--text-xs); line-height: 16px; color: var(--muted); font-weight: 600; padding: var(--s1) 0; }
-.sumline { margin: 0 0 var(--s3); padding: var(--s1) var(--s2); background: var(--accent-soft); border-radius: var(--r2); font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+/* Orca's tone (decision 222): white throughout, emphasis by a 1px light border and rounded corners only. */
+.sumline { margin: 0 0 var(--s3); padding: var(--s2) var(--s3); border: 1px solid var(--rule); border-radius: var(--r3); font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
 section { margin: 0 0 var(--s5); }
-.sec-h { display: flex; align-items: baseline; gap: var(--s2); padding: var(--s1) 0; border-bottom: 1px solid var(--rule); }
-.sec-h h2 { font-size: var(--text-base); line-height: 20px; }
+.sec-h { display: flex; align-items: baseline; gap: var(--s2); padding: var(--s1) 0; }
+.sec-h h2 { font-size: var(--text-sm); line-height: 20px; letter-spacing: 0.04em; color: var(--ink-2); }
 .sec-h .count { color: var(--muted); font-weight: 400; }
 .sec-h .hint, .sec-h .none { margin-left: auto; color: var(--muted); font-size: var(--text-xs); }
 section.nil { margin: 0; }
@@ -115,13 +116,11 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .tbl tr[data-nav] { cursor: pointer; }
 .tbl .id { white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); margin-right: var(--s1); }
 .tbl td.title { font-weight: 500; }
-.tbl tr.lead td { background: var(--paper-2); font-weight: 600; border-top: 1px solid var(--rule-2); }
-.tbl tr.lead:hover td { background: var(--paper-3); }
-.tbl tr.item td.title::before { content: "└"; color: var(--rule-2); margin-right: var(--s1); }
+.tbl tr.lead td { font-weight: 600; border-top: 1px solid var(--rule-2); }
 .tbl .go { float: right; margin-left: var(--s2); color: var(--link); font-size: var(--text-xs); font-weight: 500; white-space: nowrap; }
 .tbl tr.lead:hover .go, .tbl tr.lead:focus-visible .go { text-decoration: underline; text-underline-offset: 2px; }
 .hint0 { margin: 0 0 var(--s3); padding: var(--s2) var(--s3); border: 1px dashed var(--rule-2); border-radius: var(--r2); color: var(--ink-2); font-size: var(--text-sm); }
-.figs { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin: 0 0 var(--s4); padding: var(--s2) 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.figs { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin: 0 0 var(--s4); padding: var(--s2) var(--s3); border: 1px solid var(--rule); border-radius: var(--r3); }
 .figs div { min-width: 0; }
 .figs .aside { padding-left: var(--s5); border-left: 1px solid var(--rule); }
 .figs dt { color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
@@ -206,19 +205,30 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 }
 /* Orca's sidebar is about 665px wide; without the old side padding it still folds rows (decision 169). */
 @container panel (max-width: 719px) {
-  .tbl, .tbl tbody { display: block; }
+  /* Every table row is one card (decision 222 (18)): a one-line head (state, id, title cut with an
+     ellipsis, a number at its right end) over an aligned meta line. Groups are told apart by a wider
+     gap and a stronger edge, never by indentation. */
+  .tbl { display: block; }
+  .tbl tbody { display: flex; flex-direction: column; gap: var(--s2); }
   .tbl thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .tbl tr { display: flex; flex-wrap: wrap; align-items: baseline; padding: var(--s2) var(--s1); border-bottom: 1px solid var(--rule); }
+  .tbl tr { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--s2); padding: var(--s2) var(--s3); border: 1px solid var(--rule); border-radius: var(--r3); }
+  .tbl tr.broken { border-color: var(--bad); }
   .tbl td { display: block; height: auto; padding: 0; border: 0; font-size: var(--text-sm); line-height: 16px; color: var(--ink-2); min-width: 0; width: auto; }
-  .tbl td:first-child { flex: none; margin-right: var(--s2); width: auto; }
-  .tbl td.title { flex: 1 1 0; font-size: var(--text-base); line-height: 20px; color: var(--ink); font-weight: 500; }
-  .tbl td.brk { display: block; flex: 0 0 100%; height: var(--s1); }
-  .tbl td[data-l] { margin-right: var(--s3); }
-  .tbl td[data-l]::before { content: attr(data-l); color: var(--muted); margin-right: var(--s1); }
-  .tbl tr.item { padding-left: var(--s4); }
-  .tbl tr.item td.title::before { content: none; }
-  .tbl tr.lead { background: var(--paper-2); border-top: 1px solid var(--rule-2); }
-  .tbl tr.lead td { background: none; border: 0; }
+  .tbl:not(.gt) td:first-child, .tbl:not(.gt) td.title, .tbl td.num, .tbl td.hd { order: -2; }
+  .tbl:not(.gt) td:first-child { flex: none; width: auto; }
+  .tbl td.title { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-base); line-height: 20px; color: var(--ink); font-weight: 600; }
+  .tbl td.brk { order: -1; display: block; flex: 0 0 100%; height: 0; margin-top: var(--s1); }
+  .tbl:not(.gt) td[data-l] { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tbl td[data-l]::before { content: attr(data-l); color: var(--muted); margin-right: var(--s1); font-size: var(--text-xs); }
+  .tbl:not(.gt) td.num { flex: none; color: var(--muted); }
+  .tbl td.num::before { content: none; }
+  .tbl td.nil { visibility: hidden; }
+  .tbl.gt td.nil { display: none; }
+  .tbl tr.bare td[data-l]:not(.num), .tbl tr.bare td.brk { display: none; }
+  .tbl tr.lead { margin-top: var(--s2); border-color: var(--rule-2); }
+  .tbl tr.lead:first-child { margin-top: 0; }
+  .tbl tr.lead td { border: 0; }
+  .tbl tr.lead td.nil { display: none; }
   .tbl td.acts { flex: 1 0 100%; display: flex; gap: var(--s2); margin: var(--s2) 0 0; }
   .tbl td.acts:empty { display: none; }
   .tbl td.acts .btn { flex: 1 1 0; min-width: 0; height: 32px; margin: 0; }
@@ -227,12 +237,9 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   /* Seven figure cells wrap as 4 + 3, never one cell alone on a line (decision 219 (13)). */
   .figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2) var(--s3); }
   .figs .aside { padding-left: 0; border-left: 0; }
-  /* Graph tables: one bordered card per row (decision 220 (15)). The head cells (item id and state)
-     make its title line over a rule; every other cell is a label | value line on one 72px label column. */
+  /* Graph cards (decision 220 (15)): the head cells (item id and state) make the title line over a
+     rule; every other cell is a label | value line on one 72px label column. */
   .tbl.gt { margin-top: var(--s2); }
-  .tbl.gt tbody { display: flex; flex-direction: column; gap: var(--s2); }
-  .tbl.gt tr { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--s2); padding: var(--s2) var(--s3); border: 1px solid var(--rule-2); border-radius: var(--r2); }
-  .tbl.gt tr.broken { border-color: var(--bad); }
   .tbl.gt td, .tbl.gt td:first-child { flex: 0 0 100%; display: block; position: relative; width: auto; min-width: 0; min-height: 20px; margin: 0; padding: 2px 0 2px 72px; font-size: var(--text-sm); line-height: 16px; color: var(--ink); white-space: normal; }
   .tbl.gt tr.broken td { color: var(--bad); }
   .tbl.gt td[data-l]::before { position: absolute; left: 0; top: 2px; margin: 0; }

@@ -33,7 +33,7 @@ test("(19) one name for one rule: the tab, the section and the brief text say �
   assert.match(html, /<h2 id="h-prog">열린 항목 <span class="count">/);
   const s = m().summary;
   assert.equal(m().inProgress.count, s.doing + s.blocked + s.left, "this world has no owner item or hold apart from the groups");
-  assert.match(renderMarkdown(m(), { maxWidth: 78 }), /### 열린 항목 \d+/);
+  assert.match(renderMarkdown(m() as unknown as Parameters<typeof renderMarkdown>[0], { maxWidth: 78 }), /### 열린 항목 \d+/);
 });
 
 test("(20) an empty value is marked, hidden in a card, and a card with no meta value drops the line", () => {
@@ -41,9 +41,13 @@ test("(20) an empty value is marked, hidden in a card, and a card with no meta v
   const lead = rowOf(html, "lead:api-migration");
   assert.match(lead, /<td data-l="PR" class="nil">/);
   assert.match(rule(NARROW, ".tbl td.nil"), /visibility: hidden;/);
-  const bare = rowOf(html, "i037");
+  const t = m().inProgress;
+  const empty = t.rows.map((r) => (r.id === "i037" ? { ...r, cells: r.cells.map((c, i) => (i < 2 ? c : { text: "—" })) } : r));
+  const bare = rowOf(renderStage({ ...one, model: { ...m(), inProgress: { ...t, rows: empty } } }), "i037");
   assert.match(bare, /^<tr data-id="i037" class="[^"]*\bbare\b/);
-  assert.match(rule(NARROW, ".tbl tr.bare td[data-l]"), /display: none;/);
+  assert.match(rule(NARROW, ".tbl tr.bare td[data-l]:not(.num), .tbl tr.bare td.brk"), /display: none;/);
+  // The wide 64px id column must not reach into a card (its selector outranks a plain .tbl td).
+  assert.match(rule(NARROW, ".tbl:not(.gt) td:first-child"), /width: auto;/);
 });
 
 test("(17)(18) a narrow list row is one card: a one-line head (state, id, title, number) and an aligned meta line", () => {
@@ -57,8 +61,10 @@ test("(17)(18) a narrow list row is one card: a one-line head (state, id, title,
   const meta = rule(NARROW, ".tbl:not(.gt) td[data-l]");
   for (const d of ["flex: 1 1 0;", "white-space: nowrap;", "overflow: hidden;", "text-overflow: ellipsis;"]) assert.ok(meta.includes(d), d);
   assert.match(rowOf(html, "i033"), /<td class="title" title="i033 스테이징 키 발급">/, "the cut title keeps its full text");
-  // The group's count rides the head line, before the line break.
-  assert.match(rowOf(html, "lead:api-migration"), /<td data-l="다음" class="num">[^<]*<\/td><td class="brk"/);
+  // The group's count rides the head line: its cell keeps its wide column and moves up in a card.
+  assert.match(rowOf(html, "lead:api-migration"), /<td data-l="다음" class="num">10건·막힘 2<\/td>/);
+  assert.match(rule(NARROW, ".tbl:not(.gt) td:first-child, .tbl:not(.gt) td.title, .tbl td.num, .tbl td.hd"), /order: -2;/);
+  assert.match(rule(NARROW, ".tbl td.brk"), /order: -1;/);
   assert.equal(rule(NARROW, ".tbl tr.item"), "", "no indent for an item under its group");
   assert.doesNotMatch(STYLE, /tr\.item td\.title::before \{ content: "└"/);
 });
