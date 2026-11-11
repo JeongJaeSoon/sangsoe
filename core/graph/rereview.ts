@@ -43,8 +43,7 @@ export async function rereviewItems(deps: CoreDeps, snapshot: OrcaSnapshot): Pro
         title: `re-review ${pr.pr}`,
         spec: [
           `Re-review ${pr.pr}: its base moved from ${change.from} to ${change.to}, so the review recorded before that no longer counts.`,
-          "First run `sangsoe graph why` on the PR's item: if it shows no re-review row, a review is already recorded and this item is done.",
-          "Otherwise review the PR at its current head and record the verdict with review_record (CLI: sangsoe review record). Land and the merge-ready report hold until then.",
+          "Review the PR at its current head and record the verdict with review_record (CLI: sangsoe review record). Land and the merge-ready report hold until then.",
         ].join("\n"),
         who: typeof who === "string" ? who : "lead",
         doneWhen: rereviewDoneWhen(pr.pr, change),

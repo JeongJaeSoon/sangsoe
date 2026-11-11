@@ -32,8 +32,11 @@ const ITEM = "task_000000000001";
 const NOW = Date.parse("2026-11-10T12:00:00Z");
 const ok = (data: unknown): GhResponse<unknown> => ({ kind: "ok", status: 200, data });
 
-function retargetWorld() {
-  const w = createWorld([{ id: ITEM, run: RUN, status: "completed", title: "api retry" }], { currentRun: RUN });
+function retargetWorld(also: string[] = []) {
+  const w = createWorld(
+    [ITEM, ...also].map((id) => ({ id, run: RUN, status: "completed" as const, title: "api retry" })),
+    { currentRun: RUN },
+  );
   const { store, orca } = w;
   const pull = (base: string) => ({ number: 12, merged_at: null, state: "open", mergeable_state: "clean", user: { login: "alice" }, head: { sha: HEAD, ref: "feature-b", repo: { full_name: REPO } }, base: { ref: base }, labels: [] });
   const approval = (state: string) => [{ id: 501, user: { login: "bob" }, state, commit_id: HEAD, author_association: "MEMBER", submitted_at: "2026-11-10T09:00:00Z" }];
@@ -83,7 +86,9 @@ function retargetWorld() {
   // The PR as it stood stacked on feature-a: opened, reviewed clean at HEAD, evidence in, waiting on approval.
   store.append({ type: "item_created", source: "core:item", payload: { task: ITEM, alias: "i001", who: "lead:api", done_when: "PR merged", owner_action: 0 }, entity: "task", entity_id: ITEM });
   store.append({ type: "item_extra_set", source: "core:item", payload: { task: ITEM, lead: "api" }, entity: "task", entity_id: ITEM });
-  store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR, task: ITEM, base: "feature-a", head_sha: HEAD } });
+  for (const task of [ITEM, ...also]) {
+    store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR, task, base: "feature-a", head_sha: HEAD } });
+  }
   store.append({ type: "verify_tier_set", source: "pr-monitor", payload: { pr: PR, head_sha: HEAD, computed: "V2", effective: "V2", actor: "pr-monitor", accepted: true, reason: "x" } });
   store.append({ type: "review_verdict", source: "review record", actor: "codex", dedupe_key: dedupeKey(EVENTS.review_verdict, PR, HEAD, "codex", "0"), payload: { pr: PR, head_sha: HEAD, act_on: 0, reviewer: "codex", author: "alice" } });
   for (const kind of ["test", "run"]) {
@@ -177,4 +182,21 @@ test("G31: a review recorded after the retarget but before pr-monitor saw it is 
   assert.equal(late.ok ? "ok" : late.refusal.code, "rereview_needed", "the change row came later, so that review cannot be told apart");
   assert.equal((await x.record()).inserted, true, "recording again is a new row, not a repeat");
   assert.ok((await landPr(x.landDeps)).ok);
+});
+
+test("G31: a PR bound to two items gets one re-review item with a blocks edge into each", async () => {
+  const ITEM2 = "task_000000000002";
+  const x = retargetWorld([ITEM2]);
+  x.github("main", "DISMISSED");
+  await runMonitor("pr", x.monitor);
+  await runMonitor("queue", x.monitor);
+  assert.equal(x.w.calls("orchestration task-create").length, 1);
+  const rereview = String(x.store.events({ type: "item_created" }).find((e) => e.payload.task !== ITEM)?.payload.task);
+  assert.deepEqual(
+    x.store.events({ type: "edge_added" }).map((e) => e.payload.succ).sort(),
+    [`item:${ITEM}`, `item:${ITEM2}`],
+  );
+  for (const task of [ITEM, ITEM2]) {
+    assert.deepEqual(graphRead.why(await x.view(), task).map((e) => e.pred), [rereview], task);
+  }
 });
