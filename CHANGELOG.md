@@ -8,7 +8,7 @@ Everything since `v0.1.1`: decisions 208–209.
 
 ### Upgrading from 0.1.1
 
-- **Re-approve.** `brew upgrade sangsoe` installs to a new Cellar folder and the plugin's hook files changed, so the Orca plugin waits for approval again. Record the review of the 0.1.2 build with `sangsoe review record`, then run `sangsoe plugin approve`, as the README's Update section says.
+- **Re-approve.** `brew upgrade sangsoe` installs to a new Cellar folder and the Orca plugin's content changed (the vendored core: `start_unit`, the model catalog, install), so the Orca plugin waits for approval again. Record the review of the 0.1.2 build with `sangsoe review record`, then run `sangsoe plugin approve`, as the README's Update section says.
 - **Open new Claude Code sessions.** A session keeps the hooks it loaded at start: one that was running during the upgrade still runs the 0.1.1 `PreToolUse` hook with `onFailure: "block"` until it is restarted.
 - No doctor row changes.
 
