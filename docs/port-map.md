@@ -19,7 +19,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 | `skills/reflect` | `claude-plugin/skills/reflect/SKILL.md`, `core/store/views/item_timeline.ts` | 남김: 세 리뷰어 교훈과 `item_timeline` 측정. 버림: 교훈 원장 파일(재료는 event 와 리뷰 원문) |
 | `skills/reap-resources` | `claude-plugin/skills/reap-resources/SKILL.md`, U18 | 남김: 당사자 몫과 REAPER 보고 처리. 버림: 목록·판정·정리 절차(토큰 X 인 REAPER 라운드, U18 이 짓는다) |
 | `skills/skills-config` | `claude-plugin/skills/setup/SKILL.md`, `core/install/` | 남김: `sangsoe install`·`doctor`·`plugin approve`·`uninstall` 을 가리키기. 버림: 설정 파일 쓰기 |
-| `skills/setup-pc` | `claude-plugin/skills/setup/SKILL.md`, `cli/commands/install.ts`, `cli/commands/doctor.ts` | 남김: 설치·점검. 버림: dry-run 스크립트와 `agent-skills.json` 키(결정 90) |
+| `skills/setup-pc` | `claude-plugin/skills/setup/SKILL.md`, `cli/commands/install.ts`, `cli/commands/doctor.ts` | 남김: 설치·점검. 버림: dry-run 스크립트와 `agent-skills.json` 키(결정 90), 이 PC 에서 다른 PC 를 다루는 일(cross-PC, 결정 203) |
 | `skills/brief` | `claude-plugin/skills/brief/SKILL.md`, `claude-plugin/skills/todo/SKILL.md`, `core/brief/`, `cli/commands/brief.ts`, `cli/commands/todo.ts` | 남김: 렌더러 출력을 그대로 보내기, 78칸 표. 바꿈: 세 단계와 `todo`(결정 89, 128) |
 | `skills/watch-prs` | U16 | pr-monitor(머지 확인·main 감시). 아직 PR 없음 |
 | `skills/watch-mentions` | `orca-plugin/monitors/chat.ts`, `core/detect/chat/` | chat-monitor(U15). 받는 쪽 공급자는 아직 비어 있다(null provider) |
