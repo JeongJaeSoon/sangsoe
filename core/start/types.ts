@@ -102,4 +102,5 @@ export type StartPorts = {
    */
   cwd?: () => string;
   /** Whether the owner's settings name an advisor (key presence only). Default reads the user settings. */
-  advisorSetting?: () => boolean;};
+  advisorSetting?: () => boolean;
+};

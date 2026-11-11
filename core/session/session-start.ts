@@ -76,8 +76,8 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
 
 /**
  * Decision 200: the row start_unit recorded for this start (before worker-start), as the budget and
- * finish lines it asks for. The recorded route and budget, not the table: a spent or unattached
- * advisor gets no budget line.
+ * finish lines it asks for. The recorded route and budget, not the table: an advisor that did not
+ * attach (route none) gets no budget line.
  */
 function unitRowLines(store: CoreDeps["store"], task: string): string[] {
   const p = store.events({ type: "unit_started" }).filter((e) => e.entity_id === task).at(-1)?.payload;

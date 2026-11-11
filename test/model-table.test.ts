@@ -302,6 +302,6 @@ test("decision 200: a row below high gets the finish-the-whole-task line, and a 
   assert.ok(at("worker").some((l) => l.includes(`${POLICY.worker.budget.calls}회`)));
   assert.deepEqual(at("review"), [], "no advisor, high effort: nothing to add");
   assert.match(at("lead")[0] ?? "", /하루/);
-  // A spent budget or an advisor that did not attach: no budget line to follow.
+  // An advisor that did not attach: no budget line to follow.
   assert.ok(!at("worker", "none").some((l) => l.startsWith("advisor")));
 });

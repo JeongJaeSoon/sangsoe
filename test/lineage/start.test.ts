@@ -450,18 +450,26 @@ test("decision 200: unit_started records the picked row before worker-start, for
       used: 0,
     },
   );
-  // The calls already counted against the budget ride on the row; nothing is turned off here.
+  // The calls already counted ride on the row, and a spent budget is shown, not enforced: the
+  // restart keeps the advisor's route and the row's model.
   const s = harness();
-  s.store.append({
-    type: "advisor_used",
-    source: "Stop",
-    entity: "task",
-    entity_id: NEW_TASK,
-    dedupe_key: dedupeKey(EVENTS.advisor_used, "m0"),
-    payload: { session: "sess-0", msg: "m0", model: "x", input_tokens: 1, output_tokens: 1 },
-  });
+  const spent = MODEL_POLICY.worker.budget.calls;
+  for (let i = 0; i < spent; i++) {
+    s.store.append({
+      type: "advisor_used",
+      source: "Stop",
+      entity: "task",
+      entity_id: NEW_TASK,
+      dedupe_key: dedupeKey(EVENTS.advisor_used, `m${i}`),
+      payload: { session: "sess-0", msg: `m${i}`, model: "x", input_tokens: 1, output_tokens: 1 },
+    });
+  }
   await start(s, request({ task: { id: NEW_TASK } }));
-  assert.equal(s.store.events({ type: "unit_started" })[0]?.payload.used, 1);
+  const again = s.store.events({ type: "unit_started" })[0]?.payload;
+  assert.ok(spent > 0);
+  assert.equal(again?.used, spent);
+  assert.equal(again?.route, "owner_setting");
+  assert.equal(again?.model, started[0]?.payload.model);
   // A row with no advisor records none, and picked_by comes from the caller.
   const review = resolveModel("review");
   assert.ok(review.ok);

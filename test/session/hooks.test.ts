@@ -78,7 +78,7 @@ test("decision 200: SessionStart adds the started row's advisor budget and, belo
   const lines = await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
   assert.deepEqual(lines.slice(1), modelRowLines({ effort: "medium", route: "owner_setting", budget: 3, budget_per: "unit" }));
   assert.equal(lines.length, 3, "the budget line and the finish line");
-  // A restart with the budget spent: the newest row, and no budget line for an advisor that is off.
+  // A restart whose advisor did not attach: the newest row wins, and route none has no budget line.
   w.store.append({
     type: "unit_started",
     source: "mcp:start_unit",
