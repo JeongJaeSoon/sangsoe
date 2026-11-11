@@ -394,6 +394,36 @@ test("decision 205: a reading that leaves status bar B as it was does not push i
   }
 });
 
+test("U86 audit: the status round reads the core only when no panel reading came in its interval", async () => {
+  const w = fakeWorker();
+  const { clock, advance } = fakeClock();
+  const status = { text: "✨ SANGSOE | 🚧 0 | 결정 1 | 🔄 0", tone: "danger" as const, tooltip: "t" };
+  let reads = 0;
+  const core: PanelCore = {
+    brief: async () => ({ ok: true, value: { status } }),
+    statusBar: async () => {
+      reads += 1;
+      return { ok: true, value: status };
+    },
+    act: async () => ({ ok: true, value: {} }),
+  };
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: async () => core });
+  try {
+    await settle();
+    const first = reads;
+    await advance(20_000);
+    await w.handlers.get("panel.brief")?.({ auto: true });
+    const pushes = w.hostCalls.filter(([m]) => m === "statusBar.update").length;
+    await advance(10_000);
+    assert.equal(reads, first, "a panel reading 10s old stands in for the round's own");
+    assert.equal(w.hostCalls.filter(([m]) => m === "statusBar.update").length, pushes + 1, "the round still repushes the item");
+    await advance(30_000);
+    assert.equal(reads, first + 1, "no panel reading in the last interval: the round reads");
+  } finally {
+    deactivate();
+  }
+});
+
 test("decision 205: the worker watches the store and posts store.changed to the open panels, and stops on deactivate", async () => {
   const w = fakeWorker();
   const posts: [string, unknown][] = [];

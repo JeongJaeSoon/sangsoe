@@ -109,10 +109,15 @@ test("decision 219: the timer round makes no re-review item and sends no doomed 
   assert.deepEqual(x.w.calls("orchestration send"), [], "no send the timer cannot make");
   assert.ok(round.calls.some((c) => c.includes(`left to run:${LEAD_RUN}`)), round.calls.join("\n"));
 
-  // Nothing pending for another Run's session: no Orca call at all.
-  asLead(x);
-  const before = x.w.calls().length;
-  x.w.store.append({ type: "session_started", source: "SessionStart", payload: { session: "cc-other", role: "worker", model: "m" } });
+  // A worker is bound to no Run it could make items in: its hooks make no Orca call at all.
+  let before = x.w.calls().length;
+  x.w.store.append({ type: "session_started", source: "SessionStart", payload: { session: "cc-worker", role: "worker", model: "m" } });
+  await recordHook("stop", { store: x.w.store, orca: x.w.orca }, { session_id: "cc-worker" });
+  assert.deepEqual(x.w.calls().slice(before), [], "a worker's Stop asks Orca nothing");
+
+  // A lead bound to another Run asks which Run it holds once, then stops.
+  before = x.w.calls().length;
+  x.w.store.append({ type: "session_started", source: "SessionStart", payload: { session: "cc-other", role: "lead", model: "m" } });
   x.w.as({ run: ORCH_RUN, terminal: true });
   await recordHook("stop", { store: x.w.store, orca: x.w.orca }, { session_id: "cc-other" });
   assert.equal(others().length, 0, "a session bound to another Run does not make it");
@@ -128,7 +133,7 @@ test("decision 219: the timer round makes no re-review item and sends no doomed 
   const after = x.w.calls().length;
   await recordHook("user-prompt-submit", { store: x.w.store, orca: x.w.orca }, { session_id: LEAD_SESSION, prompt: "You have 1 orchestration message." });
   assert.equal(others().length, 1);
-  assert.deepEqual(x.w.calls().slice(after), [], "nothing pending: one store read, no Orca call");
+  assert.deepEqual(x.w.calls().slice(after), [], "nothing pending: store reads only, no Orca call");
 
   // The next base change of the same PR needs its own item; the lead's next wake makes it.
   baseMoved(x, "main", "release");
