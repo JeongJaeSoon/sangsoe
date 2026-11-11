@@ -6,7 +6,9 @@ export type MergeConditionId =
   | "stale_approvals_dismissed"
   | "no_protected_paths";
 
-export type MergeCondition = { id: MergeConditionId; ok: boolean; reason: string };
+/** `protection`: GitHub's branch protection or rulesets say so; `own`: sangsoe checked it (decision 204). */
+export type MergeConditionSource = "protection" | "own";
+export type MergeCondition = { id: MergeConditionId; ok: boolean; reason: string; source: MergeConditionSource };
 
 export type MergeConditions =
   | { kind: "read"; autoMerge: boolean; conditions: MergeCondition[] }
@@ -74,8 +76,8 @@ export async function readMergeConditions(
   const upToDate = queue || checks?.strict_required_status_checks_policy === true || status?.strict === true;
   const dismissStale = pr?.dismiss_stale_reviews_on_push === true || reviews?.dismiss_stale_reviews === true;
 
-  const settings = (ok: boolean, yes: string, no: string): { ok: boolean; reason: string } =>
-    ok ? { ok, reason: yes } : { ok, reason: unreadable ? `${no} (unreadable: ${unreadable})` : no };
+  const settings = (ok: boolean, yes: string, no: string): { ok: boolean; reason: string; source: "protection" } =>
+    ok ? { ok, reason: yes, source: "protection" } : { ok, reason: unreadable ? `${no} (unreadable: ${unreadable})` : no, source: "protection" };
 
   const conditions: MergeCondition[] = [
     {
@@ -102,19 +104,20 @@ async function protectedPathsCondition(
   a: { repo: string; pr: number; protectedPaths: readonly string[] | null },
 ): Promise<MergeCondition | { kind: "rate_limited"; resetAt: number }> {
   const id = "no_protected_paths";
+  const source = "own";
   const protectedPaths = a.protectedPaths;
-  if (protectedPaths === null) return { id, ok: false, reason: "protected_paths unreadable" };
-  if (protectedPaths.length === 0) return { id, ok: true, reason: "protected_paths is empty" };
+  if (protectedPaths === null) return { id, ok: false, reason: "protected_paths unreadable", source };
+  if (protectedPaths.length === 0) return { id, ok: true, reason: "protected_paths is empty", source };
   const files: string[] = [];
   let complete = false;
   for (let page = 1; page <= MAX_FILE_PAGES && !complete; page++) {
     const res = await gh.get<PrFile[]>(`repos/${a.repo}/pulls/${a.pr}/files?per_page=100&page=${page}`);
     if (res.kind === "rate_limited") return { kind: "rate_limited", resetAt: res.resetAt };
-    if (res.kind !== "ok" || !Array.isArray(res.data)) return { id, ok: false, reason: "PR files unreadable" };
+    if (res.kind !== "ok" || !Array.isArray(res.data)) return { id, ok: false, reason: "PR files unreadable", source };
     for (const f of res.data) files.push(f.filename, ...(f.previous_filename ? [f.previous_filename] : []));
     complete = res.data.length < 100;
   }
-  if (!complete) return { id, ok: false, reason: "PR lists more files than GitHub returns" };
+  if (!complete) return { id, ok: false, reason: "PR lists more files than GitHub returns", source };
   const hit = files.find((f) => protectedPaths.some((p) => matchesPath(p, f)));
-  return hit ? { id, ok: false, reason: `touches protected path ${hit}` } : { id, ok: true, reason: "no protected path touched" };
+  return hit ? { id, ok: false, reason: `touches protected path ${hit}`, source } : { id, ok: true, reason: "no protected path touched", source };
 }

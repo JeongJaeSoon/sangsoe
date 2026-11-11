@@ -37,6 +37,7 @@ function routes(o: { files?: unknown[]; rules?: unknown[]; pull?: Record<string,
     [`repos/${REPO}/pulls/12`]: ok(pull(12, o.pull)),
     [`repos/${REPO}/pulls/12/files?per_page=100&page=1`]: ok(files),
     [`repos/${REPO}/rules/branches/main`]: ok(o.rules ?? STRICT),
+    [`repos/${REPO}/compare/main...${HEAD}`]: ok({ status: "ahead" }),
   };
 }
 
@@ -69,6 +70,7 @@ function harness(r: Record<string, GhResponse<unknown>>, mergeOk = true): Harnes
         return mergeOk ? { ok: true, message: "auto-merge enabled" } : { ok: false, message: "Pull request is in clean status" };
       },
       config: () => ({ tier: TIER, protectedPaths: TIER.protected_paths }),
+      prGate: async () => ({ kind: "ok", data: { headSha: HEAD, unresolvedThreads: 0, checks: [{ name: "unit", required: false, state: "pass" }], methods: ["squash"] } }),
     },
   };
 }

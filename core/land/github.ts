@@ -205,6 +205,16 @@ export function readPrGate(exec: Exec): (a: { repo: string; pr: number }) => Pro
 
 type Compare = { status?: string; files?: PrFile[] };
 
+/** Decision 204: whether `head` contains `base`'s tip (compare base...head is ahead or identical). */
+export async function containsBase(gh: GhClient, repo: string, base: string, head: string): Promise<Read<boolean>> {
+  const r = lift<Compare>(await gh.get(`repos/${repo}/compare/${encodeURIComponent(base)}...${head}`), `compare ${base}...${head}`);
+  if (r.kind !== "ok") return r;
+  const status = r.data.status;
+  if (status === "ahead" || status === "identical") return { kind: "ok", data: true };
+  if (status === "behind" || status === "diverged") return { kind: "ok", data: false };
+  return { kind: "unreadable", why: `compare ${base}...${head}: status ${String(status)}` };
+}
+
 /**
  * A head's patch-id: sha256 over its files' changed lines with whitespace removed and hunk line
  * numbers dropped, from GitHub's three-dot compare against `base`. null when any patch is missing.
