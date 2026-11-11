@@ -267,14 +267,24 @@ function waitersOf(input: BriefInput, d: string): string[] {
     .map((e) => String(e.payload.task ?? e.payload.waiter));
 }
 
+/**
+ * A decision whose question no read gate carries is a broken row (decision 219): no gate was ever
+ * recorded (an Orca refusal after decision_opened, as before decision 197's gate-less join), or its
+ * gate's Run was not read. Either way there is nothing to answer, so the panel draws it without buttons.
+ */
+export const BROKEN_DECISION = { unrecorded: "기록 깨짐: Orca 게이트 없이 열림", unread: "게이트를 읽지 못함" } as const;
+
 function decisionRow(input: BriefInput, r: OwnerTodoRow, facts: readonly ItemFacts[]): Row {
   const gate = gateFor(input, r.ref);
-  const question = gate?.question?.replace(/^d\d+:\s*/, "") ?? "—";
   const first = facts.find((f) => f.task === waitersOf(input, r.ref)[0]);
-  return {
-    id: r.ref,
-    cells: [t(r.ref), t(question), t(gate?.options?.[0] ?? "—"), t(first ? leadName(first.lead) : "—"), t(since(r.since, input.now))],
-  };
+  const age = t(since(r.since, input.now));
+  if (!gate?.question) {
+    const recorded = input.events.some((e) => (e.type === "decision_opened" || e.type === "decision_joined") && e.payload.decision === r.ref && typeof e.payload.gate === "string");
+    const why = recorded ? BROKEN_DECISION.unread : BROKEN_DECISION.unrecorded;
+    return { id: r.ref, broken: true, cells: [t(r.ref), t(why), t("—"), t(first ? leadName(first.lead) : "—"), age] };
+  }
+  const question = gate.question.replace(/^d\d+:\s*/, "");
+  return { id: r.ref, cells: [t(r.ref), t(question), t(gate.options?.[0] ?? "—"), t(first ? leadName(first.lead) : "—"), age] };
 }
 
 function todoRow(input: BriefInput, r: OwnerTodoRow, byAlias: ReadonlyMap<string, ItemFacts>, facts: readonly ItemFacts[]): Row {
@@ -355,7 +365,9 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
   const titled = (f: ItemFacts) => `${f.alias} ${f.title}`;
   const stateText = (f: ItemFacts | undefined) => (f ? READING_LABEL[f.state] : "—");
 
-  const nodes: GraphNodeRow[] = [...new Set(raw.flatMap((e) => [e.pred, e.succ]))]
+  // Decision 219 (12): every item the critical path or a why row names is drawn, an edgeless one too.
+  const named = [...raw.flatMap((e) => [e.pred, e.succ]), ...critical, ...whyOf.flatMap(([f, rows]) => (rows.length > 0 ? [f.task, ...rows.map((e) => e.pred)] : []))];
+  const nodes: GraphNodeRow[] = [...new Set(named)]
     .map((task) => alias.get(task))
     .filter((f): f is ItemFacts => f !== undefined)
     .map((f) => ({ id: f.alias, title: f.title, state: EMOJI[f.state], stateLabel: READING_LABEL[f.state], flags: flagsOf(f), outside: f.lead === key ? null : leadName(f.lead) }));
@@ -623,6 +635,7 @@ export function buildItem(input: BriefInput, alias: string, opts: BuildOptions =
     flags,
     who: f.who,
     priority: f.priority,
+    lead: leadName(f.lead),
     ...(model ? { model } : {}),
     chain: table("시간순", COLS.chain, rows),
   };

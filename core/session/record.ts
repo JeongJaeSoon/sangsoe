@@ -1,5 +1,6 @@
 import { dedupeKey, EVENTS } from "../contract/index.ts";
 import { decisionAnswer } from "../decision/answer.ts";
+import { syncOwnRun } from "../graph/own-run.ts";
 import { advisorCalls } from "../models/spend.ts";
 import { readDecision } from "../decision/waiters.ts";
 import type { CoreDeps } from "../notify/result.ts";
@@ -36,6 +37,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
     case "user-prompt-submit":
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
       await ownerSaid(deps, row, input);
+      await syncOwnRun(deps, row.role, new Date().toISOString());
       break;
     case "stop":
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
@@ -43,6 +45,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
       turnEnded(deps.store, row, input);
       released(deps.store, { kind: "turn_ended", session: input.session_id }, "Stop");
       await workerIdle(deps, row, input);
+      await syncOwnRun(deps, row.role, new Date().toISOString());
       break;
     case "notification":
       await waitingHuman(deps, row, input);

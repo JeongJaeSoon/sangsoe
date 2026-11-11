@@ -1,7 +1,7 @@
 <!-- layout: slot=④ layer=감지 tokens=free -->
 # core/detect/queue — queue-monitor · 타이머 멈춤 감지
 
-queue-monitor 라운드 하나는 읽기 → 판정 → 규칙을 가진 코어 함수 호출이다. 규칙은 이 폴더에 다시 쓰지 않는다: 준비됨은 GRAPH 의 `readiness`, 깨움은 `notifyReady`, probe 는 `probeRound`, 풀리지 않은 대기는 `unreleasedWaits`·`recordUnreleased`, moot 는 `decisionMoot`, 답 재전달은 `decisionAnswer`, 간선 맞추기는 `syncGraph`, base 가 바뀐 PR 의 재리뷰 항목은 `rereviewItems`(결정 215; Orca 가 그 Run 밖이라 거부한 항목은 base 변경마다 한 번 그 Run 을 `🔁 rereview_item` status 로 깨운다, 결정 217), 플러그인 어긋남은 `orcaPluginDrift`(시작 점검과 같은 함수)다. 항목(Task)을 닫거나 바꾸는 호출은 없다(결정 76 의 6번, 시험 "closes nothing").
+queue-monitor 라운드 하나는 읽기 → 판정 → 규칙을 가진 코어 함수 호출이다. 규칙은 이 폴더에 다시 쓰지 않는다: 준비됨은 GRAPH 의 `readiness`, 깨움은 `notifyReady`, probe 는 `probeRound`, 풀리지 않은 대기는 `unreleasedWaits`·`recordUnreleased`, moot 는 `decisionMoot`, 답 재전달은 `decisionAnswer`, 간선 맞추기는 `syncGraph`, base 가 바뀐 PR 의 재리뷰 항목은 `rereviewItems`(결정 215; Orca 가 그 Run 밖이라 거부한 항목은 깨움 없이 round 기록에만 남고, 그 Run 에 묶인 세션의 hook 이 만든다, 결정 219), 플러그인 어긋남은 `orcaPluginDrift`(시작 점검과 같은 함수)다. 항목(Task)을 닫거나 바꾸는 호출은 없다(결정 76 의 6번, 시험 "closes nothing").
 
 - `judge.ts` — 순수 판정: `item_ready`·`todo_due`·`trigger_unclear` 와 moot·재전달·멈춘 전달 목록.
 - `drift.ts` — `job_drift`(결정 90).

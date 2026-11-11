@@ -20,7 +20,7 @@
       { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" user-prompt-submit", "timeout": 30 }] }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" stop", "timeout": 15 }] }
+      { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" stop", "timeout": 30 }] }
     ],
     "Notification": [
       { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" notification", "timeout": 15 }] }

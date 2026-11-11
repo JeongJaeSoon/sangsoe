@@ -16,7 +16,7 @@ const gm = () => group.model as GroupDetail;
 const cells = (html: string) => [...html.matchAll(/<div(?: class="[^"]*")?><dt>([^<]*)<\/dt><dd>(\d+)/g)].map((m) => [m[1], Number(m[2])] as const);
 
 test("the title counts open items, the cells before ✅ add up to it, and ✅ comes after them", () => {
-  const html = renderStage(group, ["현황", "api-migration"]);
+  const html = renderStage(group);
   const f = gm().figures;
   assert.ok(f);
   const h1 = /<h1>.*?<\/h1>/s.exec(html)?.[0] ?? "";
@@ -33,15 +33,15 @@ test("a second click on the same row does not push the screen twice", () => {
   assert.deepEqual(trail(down(once, { group: "api-migration" })), ["현황", "api-migration"]);
 });
 
-test("the breadcrumb names the current screen once, not as a link, apart from the back button", () => {
-  const html = renderStage(group, ["현황", "api-migration"]);
+test("the breadcrumb names the current screen once, not as a link, then the back button at the row's end", () => {
+  const html = renderStage(group);
   const nav = /<nav class="crumbs"[^>]*>.*?<\/nav>/s.exec(html)?.[0] ?? "";
-  assert.match(nav, /<button type="button" class="link back" data-back>‹ 뒤로<\/button><ol class="trail"><li>현황<\/li><li aria-current="page">api-migration<\/li><\/ol>/);
+  assert.match(nav, /<ol class="trail"><li>현황<\/li><li aria-current="page">api-migration<\/li><\/ol><button type="button" class="link back" data-back>‹ 뒤로<\/button><\/nav>$/);
   assert.equal(nav.split("api-migration").length - 1, 1);
 });
 
 test("the edge legend starts folded and opens on a click", () => {
-  const html = renderStage(group, ["현황", "api-migration"]);
+  const html = renderStage(group);
   const legend = /<details class="legend">.*?<\/details>/s.exec(html)?.[0] ?? "";
   assert.match(legend, /^<details class="legend"><summary>간선 종류<\/summary>/);
   assert.match(legend, /stacked_on/);

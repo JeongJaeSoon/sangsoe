@@ -37,7 +37,6 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 | escalation | 네 단위 안에서 풀 수 있나. 아니면 선택지·추천·기다리는 것을 붙여 위로 | `decision_open`, 또는 리드는 Orca `send --type escalation`(Dispatch 가 없는 오케스트레이터는 status·question 형, 결정 197) |
 | 거부 보고 | 거부된 행위를 다른 길로 하지 않는다. 규칙이 바뀌어야 하면 오너 몫으로 올린다 | `decision_open` |
 | `item_ready`·`capacity_free` | 시작할 항목이 생겼다 | `start_unit`(`start` skill) |
-| `🔁 rereview_item`(리드만) | base 가 바뀐 PR 의 재리뷰 항목을 플러그인 타이머가 네 Run 에 만들지 못했다(Orca 는 그 Run 에 묶인 세션만 Task 를 만들게 한다). 메시지가 적은 CLI 명령(`sangsoe graph sync --run <네 Run>`)을 Bash 로 그대로 돌리면 항목과 `blocks` 간선이 생긴다. land 는 그동안에도 `rereview_needed` 로 막는다(결정 217) | — |
 | `close_suggested` | 증거가 그 오너 항목의 완료를 보이나. 보이면 오너에게 완료 버튼을 누를 항목이라고 알린다. 오너 항목은 오너가 닫는다. 오너가 먼저 누른 항목은 ⏳ 검증 대기라 이 제안이 오지 않고 probe 가 통과하면 저절로 ✅ 로 읽힌다(결정 181) | — |
 | `main_red` | 머지한 PR 의 당사자에게 원인 좁히기를 맡긴다. 동결 중에는 `main_fix` 만 land 된다 | `start_unit` 또는 Orca `send` |
 | `worker_dead`·`worker_stuck` | 같은 Task 를 다시 시작할지(`start_unit` 의 `task`), 멈출지 | `start_unit` |
@@ -47,7 +46,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 1. **완료 조건 먼저.** 시작 전에 "끝"과 미루는 것을 적는다. 진행률은 "N/M 완료 조건"이다.
 2. **나누기.** 항목 하나가 리뷰 가능한 PR 하나다. 만들 때 알려진 선행은 `item_create` 의 `deps`, 그 밖의 순서는 `edge_add`. 같은 파일을 건드리는 두 항목은 `after` 로 순서를 적는다.
 3. **고르기.** resource `ready` 에서 크리티컬 패스 위 항목부터 시작한다. 자리가 없으면 기다린다.
-4. **기다리기.** 워커를 띄운 뒤 결과를 폴링하지 않는다. Orca 메시지가 깨운다.
+4. **기다리기.** 워커를 띄운 뒤 결과를 폴링하지 않는다. Orca 메시지가 깨운다. base 가 바뀐 PR 의 재리뷰 항목은 네 세션의 hook 이 깨어날 때마다 만든다. 손수 만들지 않는다(결정 219).
 5. **후속 일.** 완료 조건에 비춰 NOW(조건 항목이거나 이 프로그램이 머지한 것의 재현된 결함) · LATER(재검토 trigger) · DROP(이유)로 가른다. NOW 만 항목이 된다.
 6. **끝.** 조건마다 증거를 확인하고 자기 Dispatch 로 worker_done 을 보낸다.
 

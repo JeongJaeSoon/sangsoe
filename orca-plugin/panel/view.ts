@@ -70,6 +70,8 @@ export type ItemDetail = {
   flags: string;
   who: string;
   priority: string;
+  /** The item's group; absent from a core older than decision 219. */
+  lead?: string;
   chain: Table;
 };
 export type BriefModel = Overview | GroupDetail | ItemDetail;
@@ -90,8 +92,40 @@ export const down = (stack: readonly Target[], t: Target): Target[] => {
 };
 export const back = (stack: readonly Target[]): Target[] => stack.slice(0, -1);
 export const current = (stack: readonly Target[]): Target => stack[stack.length - 1] ?? {};
+/**
+ * The last reading of each screen on the stack (decision 219 (10)): back and a step down to a screen
+ * already read paint from it at once, and the fresh reading that follows repaints only what changed.
+ * Screens off the stack are dropped, so it holds at most the stack's depth plus 현황.
+ */
+export function screenMemo() {
+  const views = new Map<string, PanelView>();
+  const key = (t: Target) => JSON.stringify([t.group ?? null, t.item ?? null]);
+  return {
+    get: (t: Target): PanelView | undefined => views.get(key(t)),
+    put(t: Target, v: PanelView, stack: readonly Target[]): void {
+      views.set(key(t), v);
+      const keep = new Set([key({}), ...stack.map(key)]);
+      for (const k of views.keys()) if (!keep.has(k)) views.delete(k);
+    },
+    get size() {
+      return views.size;
+    },
+  };
+}
+
+/** The click stack's trail: only for a failed reading, which has no model to say where it is. */
 export const trail = (stack: readonly Target[]): string[] =>
   stack.length === 0 ? [] : ["현황", ...stack.map((t) => t.item ?? t.group ?? "")];
+
+/**
+ * Where the shown screen sits, not how the owner got there (decision 219 (11)): 현황 › group › item.
+ * Back still walks the click stack.
+ */
+export function placeTrail(m: BriefModel): string[] {
+  if (m.stage === 1) return [];
+  if (m.stage === 2) return ["현황", m.lead];
+  return ["현황", ...(m.lead ? [m.lead] : []), m.id];
+}
 
 /** What a button asks the worker for; the worker hands it to the core unchanged. */
 export type Act = { kind: "answer"; decision: string; choice: "recommended" } | { kind: "answer"; decision: string; text: string } | { kind: "done"; item: string };
@@ -184,6 +218,8 @@ const btn = (label: string, act: Act | null, primary = false) =>
 function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<string>): string {
   const kind = new Map(todo.map((r) => [r.ref, r.kind]));
   const decisions = m.decisions.rows.map((r) => {
+    // No question, nothing to answer: a broken record row with its id and no buttons (decision 219).
+    if (r.broken || !r.cells[1] || r.cells[1].text === "—") return rowHtml(m.decisions, r, { idCol: true, cls: "broken", acts: "" });
     const rec = r.cells[2]?.text ?? "—";
     const acts =
       `<button type="button" class="btn" data-other="${esc(r.id)}">다른 답</button>` +
@@ -641,19 +677,19 @@ function tabs(m: Overview, active: Tab): string {
 // The last crumb is the screen shown, once and not a link; the back button sits apart (decision 218).
 const backLine = (crumbs: readonly string[]) => {
   const items = crumbs.map((c, i) => (i === crumbs.length - 1 ? `<li aria-current="page">${esc(c)}</li>` : `<li>${esc(c)}</li>`));
-  return `<nav class="crumbs" aria-label="위치"><button type="button" class="link back" data-back>‹ 뒤로</button><ol class="trail">${items.join("")}</ol></nav>`;
+  // The trail reads from the left; back sits at the row's right end (decision 219 (9)).
+  return `<nav class="crumbs" aria-label="위치"><ol class="trail">${items.join("")}</ol><button type="button" class="link back" data-back>‹ 뒤로</button></nav>`;
 };
 
-/** The body of one stage. `crumbs` is the way back; the entry wires data-nav, data-act, back and tabs. */
+/** The body of one stage; its trail is the model's place. The entry wires data-nav, data-act, back and tabs. */
 export function renderStage(
   v: PanelView,
-  crumbs: readonly string[] = [],
   tab: Tab = "all",
   at: Target = {},
   pending: ReadonlySet<string> = new Set(),
 ): string {
   const m = v.model;
-  const nav = m.stage === 1 ? tabs(m, tab) : backLine(crumbs);
+  const nav = m.stage === 1 ? tabs(m, tab) : backLine(placeTrail(m));
   const body = m.stage === 1 ? overview(m, v.todo, pending) : m.stage === 2 ? group(m) : item(m);
   return `${header(v.fresh ?? null, at)}${nav}<main data-view="${m.stage === 1 ? tab : "all"}">${body}</main>`;
 }

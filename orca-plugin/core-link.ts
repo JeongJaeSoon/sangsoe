@@ -7,12 +7,15 @@ import { fileURLToPath } from "node:url";
 
 type Reply<T> = { ok: true; value: T } | { ok: false; refusal: { code: string; reason: string; fix: string } };
 
+/** One Orca write of a round; `ok` null when it was not run. Absent from a core older than decision 219. */
+export type RoundAct = { what: string; ok: boolean | null; detail: string };
+
 /** The slice of the core's MonitorRunner the worker calls; declared by hand to keep the folder closed. */
 export type MonitorRunner = {
   run(
     name: string,
     signal?: AbortSignal,
-  ): Promise<{ planned: unknown[]; written: unknown[]; unseen: string[]; aborted: boolean }>;
+  ): Promise<{ planned: unknown[]; written: unknown[]; unseen: string[]; aborted: boolean; acts?: RoundAct[] }>;
   /** The timer-stall check; absent in a core older than the queue-monitor. */
   stall?(): Promise<unknown>;
   close(): void;

@@ -394,6 +394,66 @@ test("decision 205: a reading that leaves status bar B as it was does not push i
   }
 });
 
+test("U86 audit: the status round reads the core only when no panel reading came in its interval", async () => {
+  const w = fakeWorker();
+  const { clock, advance } = fakeClock();
+  const status = { text: "✨ SANGSOE | 🚧 0 | 결정 1 | 🔄 0", tone: "danger" as const, tooltip: "t" };
+  let reads = 0;
+  const core: PanelCore = {
+    brief: async () => ({ ok: true, value: { status } }),
+    statusBar: async () => {
+      reads += 1;
+      return { ok: true, value: status };
+    },
+    act: async () => ({ ok: true, value: {} }),
+  };
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: async () => core });
+  try {
+    await settle();
+    const first = reads;
+    await advance(20_000);
+    await w.handlers.get("panel.brief")?.({ auto: true });
+    const pushes = w.hostCalls.filter(([m]) => m === "statusBar.update").length;
+    await advance(10_000);
+    assert.equal(reads, first, "a panel reading 10s old stands in for the round's own");
+    assert.equal(w.hostCalls.filter(([m]) => m === "statusBar.update").length, pushes + 1, "the round still repushes the item");
+    await advance(30_000);
+    assert.equal(reads, first + 1, "no panel reading in the last interval: the round reads");
+  } finally {
+    deactivate();
+  }
+});
+
+test("U86 audit: a failed panel reading does not let the status round re-push the last good item", async () => {
+  const w = fakeWorker();
+  const { clock, advance } = fakeClock();
+  const status = { text: "✨ SANGSOE | 🚧 0 | 결정 0 | 🔄 0", tone: "neutral" as const, tooltip: "t" };
+  let good = true;
+  let reads = 0;
+  const core: PanelCore = {
+    brief: async () => (good ? { ok: true, value: { status } } : { ok: false, refusal: { code: "orca_error", reason: "down", fix: "" } }),
+    statusBar: async () => {
+      reads += 1;
+      return { ok: false, refusal: { code: "orca_error", reason: "down", fix: "" } };
+    },
+    act: async () => ({ ok: true, value: {} }),
+  };
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: async () => core });
+  try {
+    await settle();
+    await advance(20_000);
+    await w.handlers.get("panel.brief")?.({ auto: true });
+    good = false;
+    await w.handlers.get("panel.brief")?.({ auto: true });
+    const before = reads;
+    await advance(10_000);
+    assert.equal(reads, before + 1, "the round reads for itself once a panel reading failed");
+    assert.match(String((w.hostCalls.at(-1)?.[1] as { text?: string } | undefined)?.text), /\?/, "and shows it does not know");
+  } finally {
+    deactivate();
+  }
+});
+
 test("decision 205: the worker watches the store and posts store.changed to the open panels, and stops on deactivate", async () => {
   const w = fakeWorker();
   const posts: [string, unknown][] = [];
@@ -466,7 +526,7 @@ test("panel requests reach the core unchanged; a malformed act and a missing cor
     const r = (await w2.handlers.get("panel.brief")?.({})) as { ok: boolean; refusal: { code: string } };
     assert.deepEqual([r.ok, r.refusal.code], [false, "core_unavailable"]);
     await new Promise((r) => setImmediate(r));
-    assert.equal((w2.hostCalls[0]?.[1] as { text?: string } | undefined)?.text, "✨ SANGSOE  ?", "no number is guessed");
+    assert.equal((w2.hostCalls[0]?.[1] as { text?: string } | undefined)?.text, "✨ SANGSOE | ?", "no number is guessed");
   } finally {
     deactivate();
   }

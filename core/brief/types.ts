@@ -177,6 +177,8 @@ export interface ItemDetail {
   readonly flags: string;
   readonly who: string;
   readonly priority: string;
+  /** The group the item belongs to, as the group screen names it: the panel's trail (decision 219 (11)). */
+  readonly lead: string;
   /** The row start_unit picked and the unit's advisor spend (decision 200); absent before a start. */
   readonly model?: string;
   readonly chain: Table;

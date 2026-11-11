@@ -276,7 +276,7 @@ test("a todo_due row whose notice failed is offered again until it goes, then ne
   w.store.append({ type: "item_extra_set", source: "test", payload: { task: T2, exec_by: "owner", trigger: "2026-01-01" } });
   w.failSendTo(`run:${RUN}`);
   const first = await queue(deps(w.store, w.orca));
-  assert.deepEqual(first.acts.map((a) => [a.ok, a.detail]), [[false, "send_failed"]]);
+  assert.deepEqual(first.acts.map((a) => [a.ok, a.detail]), [[false, `send_failed: orca send to run:${RUN}: recipient_not_found recipient_not_found`]]);
   w.failSendTo(null);
   const second = await queue(deps(w.store, w.orca));
   assert.deepEqual(second.acts.map((a) => [a.ok, a.detail]), [[true, "sent"]]);

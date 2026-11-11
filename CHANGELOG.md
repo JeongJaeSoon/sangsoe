@@ -2,6 +2,13 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+- **A lead's own session makes its re-review item, with no command run by anyone.** Real Orca fences the plugin timer out of a lead's Run and refuses its sends (no terminal), so the timer's `🔁 rereview_item` wake of 217 never arrived. The Claude Code plugin's `UserPromptSubmit` and `Stop` hooks now make the item and its `blocks` edge from the session bound to that Run: store reads only when nothing is pending, no Orca call from a worker or unless the store names a pending item in a Run. The timer no longer sends that wake (219).
+- **The panel reads about five times faster.** A reading's Orca calls (one CLI process each) now run side by side instead of one after another: about 1.2s to 0.24s on a store with four Runs. The status bar round reuses a panel reading from its own interval instead of reading again (219).
+- **A failed wake says why.** A monitor act that Orca refused keeps Orca's code and message, and `probe.report` shows each monitor's last-round acts (219).
+- **Panel fixes from the rc.3 screen.** A decision no gate carries is a red broken row with its id and no answer buttons; header, tabs, breadcrumb and content share one side gutter; the breadcrumb names where the screen sits (현황 › group › item), left-aligned, with `‹ 뒤로` at the row's right end; back and a step to a screen already read paint at once from memory, then refresh; every item the critical path or a why row names is drawn in the graph; the seven figure cells wrap 4 + 3 in a narrow panel. The status bar reads `✨ SANGSOE | 🚧 N | 결정 N | 🔄 N` and is `danger` while anything is 🚧 or the owner has something to do. The Orca plugin's content changed, so it needs re-approval (219).
+
 ## 0.1.4-rc.3 (pre-release)
 
 Everything since `v0.1.4-rc.2`: decisions 217 and 218. A pre-release for the S6 re-run of what failed on rc.2; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.3.
