@@ -620,3 +620,34 @@ orca plugin shot local.sangsoe --panel brief --width 360 --json
 닫기: 워커 넷 worker_done → worker-release 넷 `released`, 리드 Run 의 Task 다섯(재리뷰 항목 포함) completed, 리드 worker_done → 오케스트레이터 세션이 release(`released`). 원격 `s6/*` 넷을 지웠다(`ls-remote` 빈 출력). 오케스트레이터 · 리드 세션의 worktree · 터미널과 설정 되돌리기, 설치본 되돌리기는 리드 몫이다.
 
 고침(위 기록은 본 그대로 둔다): 2 · 10 의 리드 Run 이 안 보이던 것, 9 · 10 의 다시 열린 #4 가 닫힘으로 읽히던 것, 8 뒤 위 PR 의 base 가 머지된 `s6/a` 로 남아 land 가 그 브랜치에 머지할 수 있던 것은 결정 216 이 고쳤다(`item_created.run`, `pr_reopened`, land 의 `base_merged` · `base_unrecorded`). 다음 S6 실행에서 9 의 retarget 을 하지 않으면 land 가 `base_merged` 와 `gh pr edit … --base main` fix 를 낸다.
+
+### S6 재실행 기록 (2026-11-12 JST, 설치본 0.1.4-rc.2)
+
+결정 216 의 세 고침을 설치본에서 잰다: 다시 연 PR(NOW-1), 머지된 아래 PR 의 브랜치를 base 로 둔 PR 의 land(NOW-2), 리드 Run 을 손 라운드 없이 읽는 monitor · brief · 패널(NOW-3).
+
+설치: 버전 PR #96(머지 b1b901c1) 에 서명 태그 `v0.1.4-rc.2`, release run 의 smoke 가 `ok tree: … (sangsoe 0.1.4-rc.2)`, `gh release view` 가 pre-release. tap PR 38 이 `Formula/sangsoe-rc.rb` 를 rc.2 로 올렸다(`sangsoe land`, `merge_verdict`). `brew upgrade sangsoe-rc` → `sangsoe 0.1.4-rc.2`, `sangsoe install` → `approval waits — fingerprint ap1-2bf1278a…`, `plugin approve --dry-run` 세 점검 ok, 오너가 approve, `sangsoe doctor` 종료 코드 0 과 `orca plugin: local.sangsoe 0.1.4-rc.2, running`. `brew test` 는 Homebrew Ruby 의 TLS 로 NOT VERIFIED.
+
+고정물(새로): A #7 `s6r/a` → `main`, B #8 `s6r/b` → `s6r/a`, C #9 `s6r/c` → `s6r/b`, D #10 `s6r/d` → `main`. 오케스트레이터 Run `run_aaa854d8efbb`(리드 항목 i014), 리드 Run `run_3f6a325de2b7`(i015–i018, `lead: lead:s6r`). MCP 도구는 승인 뒤 새로 띄운 두 세션이, CLI 단계는 U82 워커 세션이 0.1.4-rc.2 CLI 로 했다. 리드 세션은 queue 라운드를 두 번 중 한 번만 돌렸다(아래 10).
+
+store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (14)` 이다. `sangsoe.db` 와 `-wal` 을 scratch 로 복사해 읽었다.
+
+| # | 본 것 | 판정 |
+|---|---|---|
+| O3 | 오케스트레이터 세션의 `orca worktree current` 를 `[gate:delegate]` 가 막아 `worktreeId` 를 몰랐다. U82 워커가 `orca terminal list` 로 찾아 리드 경유로 넘긴 뒤 `start_unit` 이 `started` | FAIL (사람 도움 필요) |
+| 2 | `item_created` 다섯 행에 `run`. `graph why i018`: 한 행(B, after, 📅 예정). `graph critical`: `i016 → i018`. `--run` 없는 `sangsoe brief` 와 패널 shot 에 `lead:s6r` 묶음(4건), `sangsoe brief lead:s6r` 에 의존 한 줄 · 왜 표 i018 한 행 · 크리티컬 패스 | PASS (NOW-3 의 brief · 패널) |
+| 3 | 워커 넷 `started`. U82 의 pr 라운드가 `task` 를 실은 `pr_opened` 넷(Task id 서로 다름, `head` 있음). D 도 열렸다(`after` 는 끝난 선행만 잡는다) | PASS |
+| 4 | U82 의 queue 라운드 `graph sync: added 2`, `stacked_on` #7 → i016 · #8 → i017 | PASS |
+| 5 | `review_verdict` 넷(리드 세션), head 가 `headRefOid` 와 같음 | PASS |
+| 6 | #8 · #9 dry run 둘 다 `stack_order`, fix `land jeongjaesoon/sangsoe-smoke#7 first` | PASS |
+| 7 | #10 dry run `merge_verdict`(land 는 `after` 를 읽지 않는다) | 관찰 |
+| 8 | #7 `merge_verdict` squash, `land_requested` · `pr_merged`, A Task "already completed" | PASS |
+| 9 | retarget 하지 않은 #8 dry run: `base_merged`, fix `gh pr edit 8 --repo JeongJaeSoon/sangsoe-smoke --base main, then land again after pr-monitor records the base change …`. `gh pr edit` 뒤: `base_unrecorded`. pr 라운드: `pr_base_changed{from: s6r/a, to: main}`. 그 뒤: `rereview_needed`. queue 라운드가 #7 → i016 `stacked_on` 을 뺐다 | PASS (NOW-2) |
+| 10 | U82 의 queue 라운드 `rereview items: made 0, refused 1`, 이유 `task_create_failed (consumer_fenced: This caller is not bound to Run run_3f6a325de2b7 …)`. plugin 타이머(2분 주기)도 5분 동안 `item_created` 0. 리드 세션의 queue 라운드가 `made 1 (jeongjaesoon/sangsoe-smoke#8 → i019), refused 0`. 그 뒤 land `rereview_needed … (re-review item i019)`, 크리티컬 패스 `i019 → i016 → i018`. B 의 왜 행은 B 의 Task 가 `dispatched` 라 없음(B 워커의 worker_done 은 PR 이 열려 있어 gate 가 막았다) | FAIL (NOW-3: 리드 Run 은 읽지만 그 Run 에 Task 를 만드는 것은 Run 에 묶인 리드 세션뿐) |
+| 11 | `s6r/b` 에 main 을 합친 새 head `ccd92c4` 에서 다시 `rereview_needed` | PASS |
+| 12 | 새 head 에 기록 → `merge_verdict`(ad5b97e5), `pr_merged`. pr 라운드의 B `task-update completed` 는 `consumer_fenced`, 리드가 i019 를 닫고 B 워커가 worker_done | PASS |
+| NOW-1 | #9 를 `gh pr close` → pr 라운드 `pr_closed` → `gh pr reopen` → pr 라운드 `pr_reopened`. 그 뒤 store 가 #9 를 열린 PR 로 읽는다(brief 의 i017 행에 PR 링크, land 가 `stack_order`). B 머지 뒤 #9 dry run `base_merged`, retarget 뒤 `base_unrecorded`, pr 라운드 `pr_base_changed{from: s6r/b, to: main}`. U82 의 queue 라운드는 10 과 같이 `refused 1` | PASS (다시 열림). 재리뷰 항목 · 왜 행은 NOT VERIFIED(10 과 같은 원인) |
+| 13–14 | 하지 않음: 10 의 FAIL 로 멈췄다. #9 · #10 은 닫았다 | NOT VERIFIED |
+
+닫기: 워커 넷 worker_done → worker-release 넷 `released`, 리드 Run 의 Task 다섯(재리뷰 항목 포함) completed, 리드 worker_done. #9 · #10 을 닫고 원격 `s6r/*` 넷을 지웠다(`ls-remote` 빈 출력, 열린 PR 0). rc.2 설치본과 smoke 저장소 설정은 rc.3 재실행까지 그대로 둔다.
+
+고침: 10 의 재리뷰 항목과 O3 의 `worktreeId` 는 결정 217 이 고쳤다. 막힌 재리뷰 항목은 리드 Run 을 깨워 리드가 만들고, 오케스트레이터는 `worktreeId` 를 비워도 된다. 다음 재실행은 rc.3 에서 10 · NOW-1 의 재리뷰 항목과 왜 행, O3 만 다시 잰다.
