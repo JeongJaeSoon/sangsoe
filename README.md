@@ -1,12 +1,12 @@
 # sangsoe
 
-Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.1`; what changed is in `CHANGELOG.md`.
+Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.2`; what changed is in `CHANGELOG.md`.
 
 ## Install
 
 macOS with Homebrew, Claude Code, Orca and an authenticated `gh`. Run these in order.
 
-1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.1`.
+1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.2`.
 2. `sangsoe install` registers and enables the Claude Code plugin, registers the Orca plugin, then runs `sangsoe doctor`. It is safe to re-run. On a first install it prints:
 
    ```
@@ -61,7 +61,7 @@ Every `brew upgrade sangsoe` needs a new review record and a new approval. Each 
 4. `sangsoe plugin approve --dry-run`, then `sangsoe plugin approve`. It prints `recorded plugin_approved (seq N)` and `enabled`.
 5. `sangsoe doctor` exits 0 with every row `ok` or `notice`, including `orca plugin: local.sangsoe <new version>, running`. A `notice` row does not change the exit code; the usual ones are those step 4 of Install names.
 
-A Claude Code session that was running during `brew upgrade sangsoe` keeps working: a tool call made while the plugin folder is missing goes ahead with a `PreToolUse` hook error instead of being held. Open a new session to pick up the new plugin.
+A Claude Code session that was running during `brew upgrade sangsoe` keeps working: a tool call made while the plugin folder is missing goes ahead with a `PreToolUse` hook error instead of being held. Open a new session to pick up the new plugin. A session started under `0.1.1` or older still has the hook that holds such a call; restart it.
 
 Upgrading from `0.1.0` adds the `land allow` row and changes others; `CHANGELOG.md` lists them, and what upgrading from an older release adds.
 
