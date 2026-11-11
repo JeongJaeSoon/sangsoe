@@ -306,10 +306,11 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
   const mine = facts.filter((f) => f.lead === key);
   const tasks = new Set(mine.map((f) => f.task));
   const g = foldFacts(input.events);
-  // Decision 218: a PR predecessor bound to an item of this group is that item, unless it is the successor's own PR.
+  // Decision 218: an open PR predecessor bound to an item of this group is that item, unless it is the
+  // successor's own PR; a merged or closed one stays the PR, so its edge reads met from the PR (as itemGraph).
   const resolve = (pred: string, succ: string): string => {
     const pr = pred.startsWith("pr:") ? g.prs.get(pred.slice(3)) : undefined;
-    return (pr && [...pr.tasks].find((t) => tasks.has(t) && t !== succ)) ?? pred;
+    return (pr && !pr.merged && !pr.closed && [...pr.tasks].find((t) => tasks.has(t) && t !== succ)) || pred;
   };
   const alias = new Map(facts.map((f) => [f.task, f]));
   const label = (task: string) => alias.get(task)?.alias ?? task;
@@ -335,7 +336,10 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
   const edges = raw.map((e) => ({ pred: label(e.pred), succ: label(e.succ), kind: e.kind, met: alias.has(e.pred) ? alias.get(e.pred)?.state === "done" : null }));
   const open = mine.filter((f) => f.state !== "done" && f.state !== "cancelled").sort(inGroupOrder);
   // Every open item; a 🚧 one always has a row (decision 218).
-  const whyOf = open.map((f) => [f, graph.why(input, f.task).map((e) => ({ ...e, pred: resolve(e.pred, e.succ) }))] as const);
+  const whyOf = open.map((f) => {
+    const rows = graph.why(input, f.task).map((e) => ({ ...e, pred: resolve(e.pred, e.succ) }));
+    return [f, rows.filter((e, i) => rows.findIndex((o) => o.pred === e.pred && o.kind === e.kind) === i)] as const;
+  });
   const whyRows: Row[] = whyOf.flatMap(([f, rows]) =>
     rows.map((e) => {
       const p = alias.get(e.pred);

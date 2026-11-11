@@ -125,6 +125,33 @@ test("an Orca-blocked Task and an open owner gate each have a row", () => {
   assert.deepEqual([...whyIds(input)].sort(), ["i015", "i016"]);
 });
 
+test("hold without a review trigger is 🚧, not ⏸️, and still has its row; with one it is ⏸️", () => {
+  const held = (extra: Record<string, unknown>) =>
+    world({ tasks: [task(A, "blocked")], rows: (s) => s.append({ type: "item_extra_set", source: "test", payload: { task: A, ...extra } }) });
+  const bare = held({ hold: true });
+  assert.deepEqual(blockedAliases(bare), ["i015"]);
+  assert.deepEqual([...whyIds(bare)], ["i015"]);
+  const full = held({ hold: true, review_trigger: "2026-12-01" });
+  assert.equal(itemFacts(full).find((f) => f.alias === "i015")?.state, "on_hold");
+  assert.equal(why(full, A).readiness, "not_waiting");
+});
+
+test("a merged PR predecessor stays the PR in the drawing, so its edge reads met from the PR", () => {
+  const input = world({
+    tasks: [task(B, "dispatched"), task(C, "pending")],
+    rows: (s) => {
+      pr(s, PR_B, B);
+      s.append({ type: "pr_merged", source: "test", payload: { pr: PR_B, merge_sha: "a".repeat(40) } });
+      edge(s, `pr:${PR_B}`, `item:${C}`, "stacked_on");
+    },
+  });
+  const g = buildGroup(input, LEAD);
+  assert.deepEqual(
+    g?.edges.map((e) => e.pred),
+    [`pr:${PR_B}`],
+  );
+});
+
 test("a PR node bound to an item outside the group stays a reference with its own row", () => {
   const input = world({
     tasks: [task(A, "dispatched"), task(C, "completed")],

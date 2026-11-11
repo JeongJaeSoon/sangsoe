@@ -74,7 +74,7 @@ function taskOf(e: StoredEvent, prTask: ReadonlyMap<string, string>, dispatchTas
 }
 
 // Decision 218: the 🚧 readings come from GRAPH's holdOf, the same answer the why rows are written from.
-function stateOf(t: BriefTask, hold: Hold | null, onHold: boolean, held: ReturnType<typeof waiterReading>, ready: boolean): ItemReading {
+function stateOf(t: BriefTask, hold: Hold | null, held: ReturnType<typeof waiterReading>, ready: boolean): ItemReading {
   if (t.status === "completed") {
     if (hold?.by !== "pr") return "done";
     return hold.state === "open" ? "blocked" : hold.state === "closed_unmerged" ? "pr_closed" : "unknown";
@@ -83,7 +83,7 @@ function stateOf(t: BriefTask, hold: Hold | null, onHold: boolean, held: ReturnT
   if (hold?.by === "gate") return "blocked";
   if (held) return held;
   if (t.status === "dispatched") return "in_progress";
-  if (hold?.by === "orca") return onHold ? "on_hold" : "blocked";
+  if (hold?.by === "orca") return hold.onHold ? "on_hold" : "blocked";
   // Orca's own `ready` is not enough: GRAPH's extra edges, trigger and hold decide (decision 147).
   return ready ? "ready" : "planned";
 }
@@ -163,7 +163,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     const openDecisions = own.filter((d) => d.state === "open").map((d) => d.decision);
     // Decisions 175 and 178: the author's worker_done completes the Task in Orca before its PR merges.
     const hold = holdOf(t, prFacts, input.orca.gates);
-    const prRead = stateOf(t, hold, x.hold === true && str(x.review_trigger) !== null, waiterReading(t, input.orca.gates), ready.has(t.id));
+    const prRead = stateOf(t, hold, waiterReading(t, input.orca.gates), ready.has(t.id));
     // Decision 181: an owner to-do closes on verification, whoever completed the Task.
     const verifiedAt = prFacts.ownerVerify.get(t.id);
     const state: ItemReading = prRead === "done" && verifiedAt === null ? "pending_verify" : prRead;

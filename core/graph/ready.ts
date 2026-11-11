@@ -71,7 +71,8 @@ const tasksById = (input: ViewInput) => new Map(input.orca.tasks.map((t) => [t.i
 export type Hold =
   | { readonly by: "pr"; readonly state: "open" | "closed_unmerged" | "unknown"; readonly prs: readonly string[] }
   | { readonly by: "gate"; readonly gates: readonly string[] }
-  | { readonly by: "orca" };
+  /** onHold: ⏸️ 보류 rather than 🚧, which needs both hold and a review trigger. */
+  | { readonly by: "orca"; readonly onHold: boolean };
 
 export function holdOf(t: ViewTask, facts: Facts, gates: readonly ViewGate[]): Hold | null {
   if (DONE(t)) {
@@ -81,7 +82,9 @@ export function holdOf(t: ViewTask, facts: Facts, gates: readonly ViewGate[]): H
   if (CANCELLED(t)) return null;
   const open = gates.filter((g) => g.taskId === t.id && g.open).map((g) => g.id);
   if (open.length > 0) return { by: "gate", gates: open };
-  return t.status === "blocked" || t.status === "failed" ? { by: "orca" } : null;
+  if (t.status !== "blocked" && t.status !== "failed") return null;
+  const x = facts.items.get(t.id);
+  return { by: "orca", onHold: x?.hold === true && typeof x.reviewTrigger === "string" };
 }
 
 function holdRows(input: ViewInput, facts: Facts, t: ViewTask, item: string, hold: Hold): WhyRow[] {
@@ -268,7 +271,7 @@ export function whyFrom(input: ViewInput, facts: Facts, task: string): WhyReport
     return { task, item, readiness: "unknown", rows: [{ item, pred: itemRef(task), kind: "orca", predState: taskState(undefined), dangling: false, todo: "이 Task 의 Run 을 읽는다" }] };
   }
   const hold = holdOf(t, facts, input.orca.gates);
-  if (hold?.by === "orca" && x?.hold) {
+  if (hold?.by === "orca" && hold.onHold) {
     return { task, item, readiness: "not_waiting", rows: [{ item, pred: "hold", kind: "hold", predState: "⏸️ 보류", dangling: false, todo: "재검토 trigger 가 차거나 리드·오너가 다시 연다" }] };
   }
   if (hold) return { task, item, readiness: "blocked", rows: holdRows(input, facts, t, item, hold) };
