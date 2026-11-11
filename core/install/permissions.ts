@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { diff } from "node:util";
 import { currentProfile, type Host, orcaProfile, UNREADABLE } from "./host.ts";
 import { addRules, allowList, type Created, parseSettings, removeRules } from "./settings-json.ts";
@@ -48,7 +48,11 @@ export const realFiles: Files = {
     }
   },
   write(path, text, opts) {
-    const target = existsSync(path) && lstatSync(path).isSymbolicLink() ? realpathSync(path) : path;
+    let target = path;
+    // A link whose target does not exist yet (a dotfile manager's) is followed too, not replaced.
+    for (let hops = 0; hops < 8 && lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink(); hops++) {
+      target = resolve(dirname(target), readlinkSync(target));
+    }
     mkdirSync(dirname(target), { recursive: true });
     let backup: string | undefined;
     let mode = 0o644;
@@ -70,17 +74,26 @@ export const realFiles: Files = {
 export type Scope = "user" | "project" | "local";
 export const SCOPES: readonly Scope[] = ["user", "project", "local"];
 
-type Owned = { rules: string[]; created: (Created | "file")[] };
+/** `inner`: what sat between the brackets sangsoe filled, put back when the last rule goes. */
+type Owned = { rules: string[]; created: (Created | "file")[]; inner?: string };
 type State = { targets: Record<string, Owned> };
 
 // Which rules sangsoe added lives in sangsoe's own data directory; the rules themselves only in settings.json.
 const statePath = (home: string) => join(home, ".local", "share", "sangsoe", "permissions.json");
 
+const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
+
+/** Throws when the record is not JSON or not in its shape, so no rule is removed on a guess. */
 function readState(files: Files, home: string): State {
   const text = files.read(statePath(home));
   if (text === undefined) return { targets: {} };
-  const s = JSON.parse(text) as Partial<State>;
-  return { targets: s.targets ?? {} };
+  const s = JSON.parse(text) as { targets?: unknown };
+  const targets = s.targets ?? {};
+  if (typeof targets !== "object" || targets === null) throw new Error("targets is not an object");
+  for (const [path, o] of Object.entries(targets as Record<string, Partial<Owned> | null>)) {
+    if (!strings(o?.rules) || !strings(o?.created) || (o.inner !== undefined && typeof o.inner !== "string")) throw new Error(`the entry for ${path} is not in its shape`);
+  }
+  return { targets: targets as Record<string, Owned> };
 }
 
 function writeState(files: Files, home: string, state: State): void {
@@ -160,7 +173,7 @@ export async function installPermissions(host: Host, opts: PermissionOptions): P
   const home = host.env.HOME;
   if (!home) return { code: 1, lines: ["permissions: HOME is unset, so sangsoe cannot record which rules it adds; nothing written"] };
   const lines: string[] = [];
-  const changes: { path: string; before: string | undefined; after: string; add: string[]; created: Created[] }[] = [];
+  const changes: { path: string; before: string | undefined; after: string; add: string[]; created: Created[]; inner?: string }[] = [];
   for (const path of targets(host, opts.scope, opts.cwd, lines)) {
     let before: string | undefined;
     try {
@@ -179,7 +192,7 @@ export async function installPermissions(host: Host, opts: PermissionOptions): P
     }
     const spliced = addRules(text, add);
     if (!spliced) return { code: 1, lines: [...lines, `permissions: ${path} has a permissions or permissions.allow that is not an object or a list; nothing written`] };
-    changes.push({ path, before, after: spliced.text, add, created: spliced.created });
+    changes.push({ path, before, after: spliced.text, add, created: spliced.created, ...(spliced.inner !== undefined ? { inner: spliced.inner } : {}) });
   }
   if (changes.length === 0) return { code: 0, lines };
 
@@ -196,18 +209,48 @@ export async function installPermissions(host: Host, opts: PermissionOptions): P
   } catch (e) {
     return { code: 1, lines: [...lines, `permissions: cannot read ${statePath(home)} (${(e as Error).message}); nothing written`] };
   }
+  let code = 0;
   for (const c of changes) {
-    const owned = state.targets[c.path] ?? { rules: [], created: [] };
+    const fail = (why: string) => {
+      code = 1;
+      lines.push(`permissions: ${c.path} ${why}; nothing written to it`);
+    };
+    // Whatever wrote the file while the question was open (a running session saving a setting) is not overwritten.
+    let now: string | undefined;
+    try {
+      now = files.read(c.path);
+    } catch (e) {
+      fail(`cannot be read again (${(e as Error).message})`);
+      continue;
+    }
+    if (now !== c.before) {
+      fail(`changed while sangsoe was asking. Run ${PERMISSIONS_FIX} again`);
+      continue;
+    }
+    const prev = state.targets[c.path];
+    const owned: Owned = prev ? structuredClone(prev) : { rules: [], created: [] };
     owned.rules = [...owned.rules, ...c.add.filter((r) => !owned.rules.includes(r))];
     const created: (Created | "file")[] = c.before === undefined ? ["file", ...c.created] : c.created;
     owned.created = [...owned.created, ...created.filter((k) => !owned.created.includes(k))];
+    if (c.inner !== undefined) owned.inner ??= c.inner;
     state.targets[c.path] = owned;
-    // The record goes first: a rule the record names but the file lacks is skipped on uninstall.
-    writeState(files, home, state);
-    const backup = files.write(c.path, c.after);
-    lines.push(`permissions: added ${c.add.length} rules to ${c.path}${backup ? ` (backup ${backup})` : " (new file)"}`);
+    // The record goes first, and is rolled back when the file cannot be written.
+    try {
+      writeState(files, home, state);
+      const backup = files.write(c.path, c.after);
+      lines.push(`permissions: added ${c.add.length} rules to ${c.path}${backup ? ` (backup ${backup})` : " (new file)"}`);
+    } catch (e) {
+      if (prev) state.targets[c.path] = prev;
+      else delete state.targets[c.path];
+      try {
+        writeState(files, home, state);
+      } catch {
+        lines.push(`permissions: ${statePath(home)} could not be rolled back and may name rules ${c.path} does not hold`);
+      }
+      fail(`cannot be written (${(e as Error).message})`);
+    }
   }
-  return { code: 0, lines };
+  return { code, lines };
 }
 
 /** For `sangsoe uninstall`: removes only the rules sangsoe recorded adding, where they are still present. */
@@ -241,22 +284,34 @@ export function removePermissions(host: Host, files: Files = realFiles): Report 
       continue;
     }
     const created = owned.created.filter((k): k is Created => k !== "file");
-    const r = removeRules(text, new Set(owned.rules), created);
+    const r = removeRules(text, new Set(owned.rules), created, owned.inner);
     if (!r) {
       code = 1;
       lines.push(`permissions: ${path} is not valid JSON or not in the expected shape; its sangsoe rules stay`);
       continue;
     }
-    delete state.targets[path];
     if (r.removed.length === 0) {
+      delete state.targets[path];
       lines.push(`permissions: none of the rules sangsoe added is left in ${path}`);
       continue;
     }
-    if (owned.created.includes("file") && r.text.trim() === "{}") files.remove(path);
-    else files.write(path, r.text);
+    try {
+      if (owned.created.includes("file") && r.text.trim() === "{}") files.remove(path);
+      else files.write(path, r.text);
+    } catch (e) {
+      code = 1;
+      lines.push(`permissions: cannot write ${path} (${(e as Error).message}); its sangsoe rules stay`);
+      continue;
+    }
+    delete state.targets[path];
     lines.push(`permissions: removed ${r.removed.length} rules sangsoe added from ${path}`);
   }
-  writeState(files, home, state);
+  try {
+    writeState(files, home, state);
+  } catch (e) {
+    code = 1;
+    lines.push(`permissions: cannot write ${statePath(home)} (${(e as Error).message})`);
+  }
   return { code, lines };
 }
 

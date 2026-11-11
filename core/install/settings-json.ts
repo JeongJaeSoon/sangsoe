@@ -89,9 +89,9 @@ function appendTo(text: string, n: Node, entries: ((indent: string) => string)[]
   return text.slice(0, last) + add + text.slice(last);
 }
 
-/** Removes child k, taking the comma and line break that joined it to its neighbour. */
-function removeAt(text: string, n: Node, k: number): string {
-  if (count(n) === 1) return text.slice(0, n.start + 1) + text.slice(n.end - 1);
+/** Removes child k, taking the comma and line break that joined it to its neighbour; a last child leaves `inner` between the brackets. */
+function removeAt(text: string, n: Node, k: number, inner = ""): string {
+  if (count(n) === 1) return text.slice(0, n.start + 1) + inner + text.slice(n.end - 1);
   if (k > 0) return text.slice(0, childEnd(n, k - 1)) + text.slice(childEnd(n, k));
   return text.slice(0, childStart(n, 0)) + text.slice(childStart(n, 1));
 }
@@ -101,9 +101,10 @@ export type Created = "permissions" | "allow";
 /**
  * `text` with `rules` appended to permissions.allow, creating either key when missing. Refuses
  * (undefined) when a key in the way is not of the expected type, or the result would not parse to
- * exactly the expected object.
+ * exactly the expected object. `inner` is what sat between the brackets of the container the rules
+ * went into when it was empty, so removal can put it back.
  */
-export function addRules(text: string, rules: readonly string[]): { text: string; created: Created[] } | undefined {
+export function addRules(text: string, rules: readonly string[]): { text: string; created: Created[]; inner?: string } | undefined {
   const parsed = parseSettings(text);
   if (!parsed.ok || rules.length === 0) return undefined;
   const root = scan(text);
@@ -113,17 +114,21 @@ export function addRules(text: string, rules: readonly string[]): { text: string
   const items = rules.map((r) => () => JSON.stringify(r));
   let out: string;
   let created: Created[];
+  let into: Node;
   if (allow) {
     if (allow.kind !== "array") return undefined;
+    into = allow;
     out = appendTo(text, allow, items);
     created = [];
   } else {
     const allowEntry = (ind: string) => `"allow": [\n${rules.map((r) => `${ind}${unit}${JSON.stringify(r)}`).join(",\n")}\n${ind}]`;
     if (perms) {
       if (perms.kind !== "object") return undefined;
+      into = perms;
       out = appendTo(text, perms, [allowEntry]);
       created = ["allow"];
     } else {
+      into = root;
       out = appendTo(text, root, [(ind) => `"permissions": {\n${ind}${unit}${allowEntry(ind + unit)}\n${ind}}`]);
       created = ["permissions", "allow"];
     }
@@ -132,33 +137,42 @@ export function addRules(text: string, rules: readonly string[]): { text: string
   want.permissions ??= {};
   want.permissions.allow = [...(want.permissions.allow ?? []), ...rules];
   const got = parseSettings(out);
-  return got.ok && isDeepStrictEqual(got.value, want) ? { text: out, created } : undefined;
+  if (!got.ok || !isDeepStrictEqual(got.value, want)) return undefined;
+  return count(into) === 0 ? { text: out, created, inner: text.slice(into.start + 1, into.end - 1) } : { text: out, created };
 }
 
 /**
- * `text` without the permissions.allow entries equal to one of `rules`, then without the keys in
- * `created` that are left empty. Returns which rules it found. Undefined when the text does not
- * parse or the result would not be the expected object.
+ * `text` without the last permissions.allow entry equal to each of `rules` (one copy each: an
+ * earlier copy is the owner's), then without the keys in `created` that are left empty, putting
+ * `inner` (from addRules) back between the brackets that were empty. Returns which rules it found.
+ * Undefined when the text does not parse or the result would not be the expected object.
  */
-export function removeRules(text: string, rules: ReadonlySet<string>, created: readonly Created[]): { text: string; removed: string[] } | undefined {
+export function removeRules(
+  text: string,
+  rules: ReadonlySet<string>,
+  created: readonly Created[],
+  inner = "",
+): { text: string; removed: string[] } | undefined {
   const parsed = parseSettings(text);
   if (!parsed.ok) return undefined;
   let out = text;
   const removed: string[] = [];
+  const left = new Set(rules);
   const allowOf = () => member(member(scan(out), "permissions"), "allow");
   for (let a = allowOf(); a?.kind === "array"; a = allowOf()) {
-    const k = a.items.findLastIndex((n) => n.kind === "string" && rules.has(n.value));
+    const k = a.items.findLastIndex((n) => n.kind === "string" && left.has(n.value));
     const hit = a.items[k];
     if (hit?.kind !== "string") break;
     removed.unshift(hit.value);
-    out = removeAt(out, a, k);
+    left.delete(hit.value);
+    out = removeAt(out, a, k, inner);
   }
   const dropEmpty = (parentOf: (root: Node) => Node | undefined, key: Created) => {
     const parent = parentOf(scan(out));
     if (parent?.kind !== "object") return;
     const k = parent.members.findIndex((m) => m.key === key);
     const v = parent.members[k]?.value;
-    if (v && count(v) === 0 && (v.kind === "array" || v.kind === "object")) out = removeAt(out, parent, k);
+    if (v && count(v) === 0 && (v.kind === "array" || v.kind === "object")) out = removeAt(out, parent, k, inner);
   };
   if (created.includes("allow")) dropEmpty((root) => member(root, "permissions"), "allow");
   if (created.includes("permissions")) dropEmpty((root) => root, "permissions");
@@ -166,11 +180,11 @@ export function removeRules(text: string, rules: ReadonlySet<string>, created: r
   const want = structuredClone(parsed.value) as Record<string, unknown> & { permissions?: Record<string, unknown> & { allow?: unknown } };
   const p = want.permissions;
   if (p && Array.isArray(p.allow)) {
-    const left = [...removed];
+    const pending = [...removed];
     p.allow = p.allow.filter((r) => {
-      const at = left.indexOf(r as string);
+      const at = pending.indexOf(r as string);
       if (at < 0) return true;
-      left.splice(at, 1);
+      pending.splice(at, 1);
       return false;
     });
     if (created.includes("allow") && (p.allow as unknown[]).length === 0) delete p.allow;

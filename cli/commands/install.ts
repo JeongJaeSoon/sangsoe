@@ -6,6 +6,8 @@ async function askOnTerminal(text: string): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     return /^y(es)?$/i.test((await rl.question(text)).trim());
+  } catch {
+    return false;
   } finally {
     rl.close();
   }

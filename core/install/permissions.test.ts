@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, test } from "node:test";
 import type { Host } from "./host.ts";
-import { installPermissions, type PermissionOptions, permissionsRow, removePermissions, SANGSOE_RULES, unifiedDiff } from "./permissions.ts";
+import {
+  type Files,
+  installPermissions,
+  type PermissionOptions,
+  permissionsRow,
+  realFiles,
+  removePermissions,
+  SANGSOE_RULES,
+  unifiedDiff,
+} from "./permissions.ts";
 import { addRules, removeRules } from "./settings-json.ts";
 
 const homes: string[] = [];
@@ -226,10 +235,80 @@ for (const [name, text] of [
     const before = JSON.parse(text);
     const after = JSON.parse(added.text);
     assert.deepEqual(after.permissions.allow, [...(before.permissions?.allow ?? []), ...SANGSOE_RULES]);
-    const back = removeRules(added.text, new Set(SANGSOE_RULES), added.created);
+    const back = removeRules(added.text, new Set(SANGSOE_RULES), added.created, added.inner);
     assert.equal(back?.text, text);
   });
 }
+
+test("decision 221: a change made while the question is open is kept and nothing is written over it", async () => {
+  const t = tempHome();
+  writeFileSync(t.settings, '{\n  "model": "opus"\n}\n');
+  const edited = '{\n  "model": "opus",\n  "theme": "dark"\n}\n';
+  const r = await installPermissions(
+    t.host,
+    opts({
+      ask: async () => {
+        writeFileSync(t.settings, edited);
+        return true;
+      },
+    }),
+  );
+  assert.equal(r.code, 1);
+  assert.match(r.lines.at(-1) ?? "", /changed while sangsoe was asking\. Run sangsoe install --permissions again; nothing written to it$/);
+  assert.equal(readFileSync(t.settings, "utf8"), edited);
+  assert.ok(!existsSync(t.state));
+});
+
+test("decision 221: whitespace inside an empty container comes back on uninstall", async () => {
+  for (const text of ["{ }\n", '{\n  "permissions": {\n    "allow": [ ]\n  }\n}\n', '{\n  "permissions": { }\n}\n', "{\n}\n"]) {
+    const t = tempHome();
+    writeFileSync(t.settings, text);
+    await installPermissions(t.host, opts({ yes: true }));
+    removePermissions(t.host);
+    assert.equal(readFileSync(t.settings, "utf8"), text);
+  }
+});
+
+test("decision 221: uninstall takes one copy of a rule; a copy the owner added later stays", async () => {
+  const t = tempHome();
+  writeFileSync(t.settings, ORIGINAL);
+  await installPermissions(t.host, opts({ yes: true }));
+  const settings = JSON.parse(readFileSync(t.settings, "utf8"));
+  settings.permissions.allow.push("Bash(orca search:*)");
+  writeFileSync(t.settings, `${JSON.stringify(settings, null, 2)}\n`);
+  removePermissions(t.host);
+  assert.deepEqual(JSON.parse(readFileSync(t.settings, "utf8")).permissions.allow, ["Bash(git status:*)", "Read(~/notes/**)", "Bash(orca search:*)"]);
+});
+
+test("decision 221: a dangling symlink is followed, not replaced", async () => {
+  const t = tempHome();
+  const real = join(t.home, "dotfiles", "settings.json");
+  symlinkSync(real, t.settings);
+  const r = await installPermissions(t.host, opts({ yes: true }));
+  assert.equal(r.code, 0, r.lines.join("\n"));
+  assert.ok(lstatSync(t.settings).isSymbolicLink());
+  assert.deepEqual(JSON.parse(readFileSync(real, "utf8")).permissions.allow, SANGSOE_RULES);
+});
+
+test("decision 221: a write that fails rolls the record back; a record out of shape removes nothing and throws nothing", async () => {
+  const t = tempHome();
+  writeFileSync(t.settings, ORIGINAL);
+  const files: Files = {
+    ...realFiles,
+    write: (p, text, o) => (p === t.settings ? assert.fail("EACCES: read-only") : realFiles.write(p, text, o)),
+  };
+  const r = await installPermissions(t.host, opts({ yes: true, files }));
+  assert.equal(r.code, 1);
+  assert.match(r.lines.at(-1) ?? "", /cannot be written \(.*EACCES.*\); nothing written to it$/);
+  assert.ok(!existsSync(t.state), "no rule is recorded as added");
+  assert.equal(readFileSync(t.settings, "utf8"), ORIGINAL);
+
+  mkdirSync(dirname(t.state), { recursive: true });
+  writeFileSync(t.state, JSON.stringify({ targets: { [t.settings]: { rules: "x", created: [] } } }));
+  const u = removePermissions(t.host);
+  assert.equal(u.code, 1);
+  assert.match(u.lines[0] ?? "", /is not in its shape\); no rule removed$/);
+});
 
 test("decision 221: a permissions value of the wrong type is refused", () => {
   assert.equal(addRules('{ "permissions": [] }', ["X"]), undefined);
