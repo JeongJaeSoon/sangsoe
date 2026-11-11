@@ -28,6 +28,7 @@ export {
 export { type RenderOptions, renderMarkdown, renderTodo } from "./render.ts";
 export { replayJsonl } from "./replay.ts";
 export { localShort, localStamp, localZone } from "./time.ts";
+export { storeSeq, watchStore } from "./watch.ts";
 export type * from "./types.ts";
 export { fit, prLabel, tableWidths, textWidth } from "./width.ts";
 

@@ -23,7 +23,8 @@ export type OrcaWorker = {
   host: { call(method: string, params?: unknown): Promise<unknown> };
   events: { on(event: string, handler: (payload: unknown) => void): void };
   commands: { register(id: string, handler: () => unknown): void };
-  panels: { handle(name: string, handler: (input: unknown) => unknown): void };
+  /** `post` reaches every open panel as `orca.plugin.on(event)`; absent on an Orca without it. */
+  panels: { handle(name: string, handler: (input: unknown) => unknown): void; post?(event: string, payload: unknown): void };
 };
 
 /** `runners` is absent in tests that do not exercise them, so those never open the real store. */
@@ -72,12 +73,30 @@ export default function activate(
     });
   }
 
-  const status = (text: string, tone: Tone, tooltip?: string) =>
-    orca.host
-      .call("statusBar.update", { id: STATUS_ID, text, tone, ...(tooltip ? { tooltip } : {}) })
-      .catch((e: unknown) => orca.log(`statusBar.update: ${e}`));
+  // Panel readings now come every few seconds (decision 205): an unchanged item is not pushed again.
+  let shown: string | null = null;
+  const status = async (text: string, tone: Tone, tooltip?: string) => {
+    const key = JSON.stringify([text, tone, tooltip ?? ""]);
+    if (key === shown) return;
+    try {
+      await orca.host.call("statusBar.update", { id: STATUS_ID, text, tone, ...(tooltip ? { tooltip } : {}) });
+      shown = key;
+    } catch (e) {
+      orca.log(`statusBar.update: ${e}`);
+    }
+  };
 
   const panel = panelHandlers(deps.panel);
+  // Decision 205: Orca's one lane from this worker to its panels is `panels.post`; a new store seq goes
+  // there, and each open panel re-reads within a few seconds.
+  let closeWatch: (() => void) | null = null;
+  const post = orca.panels.post?.bind(orca.panels);
+  if (post) {
+    void panel.watch((seq) => post("store.changed", { seq })).then((close) => {
+      if (stopped) close?.();
+      else closeWatch = close;
+    });
+  }
   // Status bar item B (decision 92⑤): the core's summary line, redrawn each round.
   const statusRound: Round = {
     id: "status",
@@ -102,6 +121,8 @@ export default function activate(
   orca.panels.handle("panel.open", openHandler(exec, panel.worktree));
   stopRounds = () => {
     stopped = true;
+    closeWatch?.();
+    closeWatch = null;
     void rounds.stop();
     const m = monitorRounds;
     const open = runner;

@@ -67,8 +67,21 @@ export function openHandler(exec: Exec, worktreeOf: (target: { group?: string; i
     const id = (w.value as { worktree?: unknown }).worktree;
     if (typeof id !== "string" || !WORKTREE.test(id)) return refuse("no_worktree", "the core named no worktree", fix);
     const r = await exec("orca", ["terminal", "create", "--worktree", `id:${id}`, "--title", command, "--command", command, "--focus", "--json"]);
-    return r.ok ? { ok: true, value: { status: "opened" } } : refuse("open_failed", (r.err || r.out || String(r.code)).slice(0, 200), `run ${command} in a terminal`);
+    if (r.ok) return { ok: true, value: { status: "opened" } };
+    // Orca answers a failure with a JSON envelope on stdout; only its code goes on (decision 205).
+    const code = orcaErrorCode(r.out);
+    if (code === "selector_not_found") return refuse("no_worktree", "the worktree this item ran in is gone", fix);
+    return refuse("open_failed", code ? `orca terminal create: ${code}` : (r.err || r.out || String(r.code)).slice(0, 200), fix);
   };
+}
+
+function orcaErrorCode(out: string): string | null {
+  try {
+    const code = (JSON.parse(out) as { error?: { code?: unknown } } | null)?.error?.code;
+    return typeof code === "string" && /^[a-z_]{1,64}$/.test(code) ? code : null;
+  } catch {
+    return null;
+  }
 }
 
 const thrown = (e: unknown): Reply => refuse("core_error", e instanceof Error ? e.message : String(e), "reopen the panel; run sangsoe doctor if it repeats");
@@ -110,6 +123,16 @@ export function panelHandlers(load: () => Promise<PanelCore | string>) {
         return c.worktree ? await c.worktree(t) : refuse("no_worktree", "this core names no worktree", "");
       } catch (e) {
         return thrown(e);
+      }
+    },
+    /** Starts the core's store watch; resolves with its closer, or null when this core or store has none. */
+    watch: async (onChange: (seq: number) => void): Promise<(() => void) | null> => {
+      try {
+        const c = await core();
+        const w = isCore(c) ? c.watch?.(onChange) : undefined;
+        return w?.ok ? () => w.value.close() : null;
+      } catch {
+        return null;
       }
     },
     /** One status bar reading; the caller pushes it to statusBar.update. */
