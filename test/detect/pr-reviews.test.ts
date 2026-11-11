@@ -91,9 +91,9 @@ test("pr-monitor writes the review facts by GitHub id with no text, once: the ne
     [
       ["pr_review_requested", "pr_review_requested:acme%2Fapi%237:1002", { pr: "acme/api#7", reviewer: "team:code-reviewers" }],
       ["pr_review_requested", "pr_review_requested:acme%2Fapi%237:1003", { pr: "acme/api#7", reviewer: "bob" }],
-      ["pr_changes_requested", "pr_changes_requested:acme%2Fapi%237:2001", { pr: "acme/api#7", reviewer: "bob" }],
-      ["review_replied", "review_replied:acme%2Fapi%237:3002", { pr: "acme/api#7", by: "alice" }],
-      ["review_commented", "review_commented:acme%2Fapi%237:3001", { pr: "acme/api#7", reviewer: "review-bot" }],
+      ["pr_changes_requested", "pr_changes_requested:acme%2Fapi%237:2001", { pr: "acme/api#7", reviewer: "bob", at: "2026-11-10T09:00:00Z" }],
+      ["review_replied", "review_replied:acme%2Fapi%237:3002", { pr: "acme/api#7", by: "alice", at: "2026-11-10T11:00:00Z" }],
+      ["review_commented", "review_commented:acme%2Fapi%237:3001", { pr: "acme/api#7", reviewer: "review-bot", at: "2026-11-10T10:00:00Z" }],
     ],
   );
   assert.ok(!first.unseen.some((u) => REVIEW_PATHS.some((p) => u.includes(p))), first.unseen.join("; "));

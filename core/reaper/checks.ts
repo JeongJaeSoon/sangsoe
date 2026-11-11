@@ -14,7 +14,8 @@ export type BlockReason =
   | "session_alive"
   | "evidence_in_worktree"
   | "listener"
-  | "compose_running";
+  | "compose_running"
+  | "docker_unreachable";
 export type Check = { ok: true } | { ok: false; blocked: BlockReason } | { ok: false; unknown: string };
 
 const OK: Check = { ok: true };
