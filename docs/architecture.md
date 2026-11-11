@@ -15,7 +15,7 @@
 | 실행 | `core/store/` | X | ④ 공유 코어 | sqlite event 표와 뷰 |
 | 실행 | `core/contract/` | X | ④ 공유 코어 | 계약: event type 파일 · 뷰 시그니처 · `dedupe_key` 규칙 · 전이표 · 시계 |
 | 실행 | `core/orca/` | X | ④ 공유 코어 | Orca CLI 어댑터(① 을 부르는 유일한 자리) |
-| 실행 | `core/gh/` | X | ④ 공유 코어 | GitHub 클라이언트(한도·ETag 캐시 인터페이스, 결정 81 의 조건 넷 읽기) |
+| 실행 | `core/gh/` | X | ④ 공유 코어 | GitHub 클라이언트(한도·ETag 캐시 인터페이스, 결정 81 의 조건 넷 읽기. 조건마다 `source: protection\|own`, 설정에서 거짓인 ①–③ 은 `core/land` 가 스스로 확인한다, 결정 204) |
 | 실행 | `core/checks/` | X | ④ 공유 코어 | 시작 점검과 `doctor` 의 점검 함수(점검 하나 = 파일 하나) |
 | 실행 | `core/install/` | X | ④ 공유 코어 | install · uninstall · doctor |
 | 실행 | `core/approve/` | X | ④ 공유 코어 | `sangsoe plugin approve` 의 세 조건 검사와 `orca plugin enable` 을 부르는 유일한 자리 |
