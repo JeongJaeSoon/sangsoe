@@ -225,7 +225,7 @@ async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, 
     plan(r, {
       type: "pr_opened",
       dedupe_key: task ? key("pr_opened", ref, task) : key("pr_opened", ref),
-      payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha },
+      payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha, ...(p.head.repo?.full_name?.toLowerCase() === repo.toLowerCase() ? { head: p.head.ref } : {}) },
     });
   }
   if (link && !link.linked) await addReference(r, repo, p);

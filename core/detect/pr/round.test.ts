@@ -208,6 +208,16 @@ test("retarget_approval (pr_base_changed side): a new base is one row against th
   assert.deepEqual((await w.round()).written, []);
 });
 
+test("pr_opened records the head branch only when the head lives in the PR's own repository (decision 212 ③)", async () => {
+  const w = world();
+  w.link(11, "task_a", "dispatched");
+  w.link(12, "task_b", "dispatched");
+  w.routes[OPEN] = ok([listed(11), listed(12, { head: { sha: HEAD, ref: "feature-12", repo: { full_name: "someone/api" } } })]);
+  await w.round({ tier: () => null });
+  const heads = w.rows("pr_opened").map((e) => [e.payload.pr, e.payload.head ?? null]);
+  assert.deepEqual(heads, [["acme/api#11", "feature-11"], ["acme/api#12", null]]);
+});
+
 function mainRuns(w: ReturnType<typeof world>, sha: string, runs: Record<string, unknown>[], jobs = 3) {
   w.routes[`repos/${REPO}/actions/runs?head_sha=${sha}&event=push&per_page=100`] = ok({ workflow_runs: runs });
   for (const r of runs) w.routes[`repos/${REPO}/actions/runs/${r.id}/jobs?per_page=1`] = ok({ total_count: jobs });
