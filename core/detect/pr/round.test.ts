@@ -370,20 +370,25 @@ test("decision 201: a review that asks for action wakes the PR's live Dispatch o
     ],
     "GitHub's time rides on the row",
   );
-  assert.deepEqual(
-    w.messages.map((m) => [m.to, m.subject]),
-    [
-      ["dispatch:ctx_task_r", "🔁 변경 요청: acme/api#30"],
-      ["dispatch:ctx_task_r", "🔁 리뷰 코멘트: acme/api#30"],
-    ],
-  );
-  assert.match(w.messages[0]?.body ?? "", /GitHub review id 2001/);
-  assert.match(w.messages[1]?.body ?? "", /GitHub review comment id 3001/);
-  assert.ok(!w.messages.some((m) => /secret|reply text/.test(m.body)), "no review text is sent");
+  assert.deepEqual(w.messages, [
+    {
+      to: "dispatch:ctx_task_r",
+      subject: "🔁 리뷰: acme/api#30",
+      body: "acme/api#30 에 대응할 리뷰가 왔다: 변경 요청(review id) 2001 · 리뷰 코멘트(review comment id) 3001. GitHub 에서 읽고 대응한다.",
+    },
+  ]);
   assert.ok(r.acts.every((a) => a.ok), JSON.stringify(r.acts));
 
   await w.round();
-  assert.equal(w.messages.length, 2, "the next round sends nothing again");
+  assert.equal(w.messages.length, 1, "the next round sends nothing again");
+
+  // A new comment wakes once more, naming only the new id.
+  w.routes[`repos/${REPO}/pulls/30/comments?sort=created&direction=desc&per_page=100`] = ok([
+    { id: 3005, user: { login: "carol" }, in_reply_to_id: null, created_at: "2026-11-10T11:30:00Z" },
+  ]);
+  await w.round();
+  await w.round();
+  assert.deepEqual(w.messages.slice(1).map((m) => m.body), ["acme/api#30 에 대응할 리뷰가 왔다: 리뷰 코멘트(review comment id) 3005. GitHub 에서 읽고 대응한다."]);
 });
 
 test("decision 201: with no live Dispatch the review wake goes to the lead's Run", async () => {
@@ -391,7 +396,7 @@ test("decision 201: with no live Dispatch the review wake goes to the lead's Run
   w.link(30, "task_r", "dispatched", "run_lead_r", true, "exited");
   reviewed(w);
   await w.round();
-  assert.deepEqual(w.messages.map((m) => m.to), ["run:run_lead_r", "run:run_lead_r"]);
+  assert.deepEqual(w.messages.map((m) => m.to), ["run:run_lead_r"]);
 });
 
 test("decision 201: a review wake that could not go out (link unread) goes out on the next round, once", async () => {
@@ -402,9 +407,9 @@ test("decision 201: a review wake that could not go out (link unread) goes out o
   assert.deepEqual(w.messages, []);
   assert.ok(blind.unseen.includes("review wake of acme/api#30: no linked Task"), blind.unseen.join("; "));
   await w.round();
-  assert.equal(w.messages.length, 2);
+  assert.equal(w.messages.length, 1);
   await w.round();
-  assert.equal(w.messages.length, 2);
+  assert.equal(w.messages.length, 1);
 });
 
 test("scope: watch.authors and linked_only; a branch workspace Orca has not linked gets reference add", async () => {

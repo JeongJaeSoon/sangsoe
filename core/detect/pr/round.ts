@@ -246,15 +246,17 @@ async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, 
   reviewWake(r, ref, link);
 }
 
-const WAKE_TYPES: Readonly<Record<string, { label: string; kind: string }>> = {
-  pr_changes_requested: { label: "변경 요청", kind: "review" },
-  review_commented: { label: "리뷰 코멘트", kind: "review comment" },
+/** The review events that wake, with the one-letter mark that keeps review and comment ids apart in a key. */
+const WAKE_TYPES: Readonly<Record<string, { mark: string; label: string }>> = {
+  pr_changes_requested: { mark: "r", label: "변경 요청(review id)" },
+  review_commented: { mark: "c", label: "리뷰 코멘트(review comment id)" },
 };
 
 /**
- * Decision 201: a review that asks for action wakes the PR's worker, once per GitHub id: the Task's
- * live Dispatch, else its lead's Run. Read from the rows, not from this round's writes, so a wake
- * that could not be sent (link unread, send failed) goes out on a later round. Ids only, no text.
+ * Decision 201: reviews that ask for action wake the PR's worker with one message per round naming
+ * the GitHub ids not sent before: the Task's live Dispatch, else its lead's Run. The notify key lists
+ * the ids, so each id goes out once. Read from the rows, not from this round's writes, so a wake that
+ * could not be sent (link unread, send failed) goes out on a later round. Ids only, no text.
  */
 function reviewWake(r: Reads, ref: string, link: Link | null): void {
   const rows = Object.keys(WAKE_TYPES).flatMap((type) => [
@@ -265,33 +267,40 @@ function reviewWake(r: Reads, ref: string, link: Link | null): void {
   const task = itemTask(r, ref, link);
   const linked = link?.tasks.find((t) => t.task === task);
   if (!task || !linked) return void r.unseen.push(`review wake of ${ref}: no linked Task`);
-  // notify's own once-per-key rows; an escalated one carries a `:<tier>` suffix.
-  const told = (r.notified ??= r.d.events({ type: "notified" }).map((e) => e.dedupe_key ?? ""));
-  const seen = new Set<string>();
+  const prefix = `${key("notify", task, "review")}:`;
+  const told = new Set(
+    (r.notified ??= r.d.events({ type: "notified" }).map((e) => e.dedupe_key ?? ""))
+      .filter((k) => k.startsWith(prefix))
+      .flatMap((k) => k.slice(prefix.length).split(":")),
+  );
+  const fresh = new Map<string, string[]>();
   for (const e of rows) {
-    const id = (e.dedupe_key ?? "").split(":").at(-1) ?? "";
     const w = WAKE_TYPES[e.type];
-    const base = key("notify", task, e.type, id);
-    if (!w || !id || seen.has(base) || told.some((k) => k === base || k.startsWith(`${base}:`))) continue;
-    seen.add(base);
-    const to = linked.live ? "worker" : "lead";
-    r.acts.push({
-      what: `notify ${linked.live ? `dispatch:${linked.dispatch}` : `run:${linked.run}`} ${ref} ${e.type} ${id}`,
-      wake: true,
-      run: async (d) => ({
-        ...(await sendNotice(d, {
-          key: { target: task, dedupe_key: base },
-          to,
-          chain: linked.live ? { dispatch: linked.dispatch, leadRun: linked.run } : { leadRun: linked.run },
-          subject: `🔁 ${w.label}: ${ref}`,
-          body: `${ref} 에 새 ${w.label}이 왔다(${e.type}, GitHub ${w.kind} id ${id}). GitHub 에서 읽고 대응한다.`,
-          msgType: "status",
-          source: SOURCE,
-        })),
-        planned: [],
-      }),
-    });
+    const id = (e.dedupe_key ?? "").split(":").at(-1) ?? "";
+    if (!w || !/^\d+$/.test(id) || told.has(`${w.mark}${id}`)) continue;
+    told.add(`${w.mark}${id}`);
+    fresh.set(w.label, [...(fresh.get(w.label) ?? []), id]);
   }
+  if (fresh.size === 0) return;
+  const marks = Object.values(WAKE_TYPES).flatMap((w) => (fresh.get(w.label) ?? []).map((id) => `${w.mark}${id}`));
+  const ids = [...fresh].map(([label, list]) => `${label} ${list.join(", ")}`).join(" · ");
+  const address = linked.live ? `dispatch:${linked.dispatch}` : `run:${linked.run}`;
+  r.acts.push({
+    what: `notify ${address} ${ref} reviews ${marks.join(" ")}`,
+    wake: true,
+    run: async (d) => ({
+      ...(await sendNotice(d, {
+        key: { target: task, dedupe_key: key("notify", task, "review", ...marks) },
+        to: linked.live ? "worker" : "lead",
+        chain: linked.live ? { dispatch: linked.dispatch, leadRun: linked.run } : { leadRun: linked.run },
+        subject: `🔁 리뷰: ${ref}`,
+        body: `${ref} 에 대응할 리뷰가 왔다: ${ids}. GitHub 에서 읽고 대응한다.`,
+        msgType: "status",
+        source: SOURCE,
+      })),
+      planned: [],
+    }),
+  });
 }
 
 /** Decision 195: review requests, changes requested, comments and the author's replies, by GitHub id. */
