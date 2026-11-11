@@ -3,7 +3,7 @@
 // The model's shape is declared by hand: the plugin folder imports nothing from the core.
 
 export type Cell = { text: string; link?: string; tail?: string; strong?: boolean };
-export type Row = { id: string; cells: Cell[] };
+export type Row = { id: string; cells: Cell[]; broken?: boolean };
 export type Column = { name: string; max: number };
 export type Table = { title: string; count: number; columns: Column[]; rows: Row[] };
 export type Overview = {
@@ -18,8 +18,36 @@ export type Overview = {
   onHold: Table | null;
   doneDays: number;
   evidenceShort: number;
+  /** Absent from a core older than decision 199. */
+  done?: Table;
 };
 export type GraphEdgeRow = { pred: string; succ: string; kind: string; met: boolean | null };
+export type GraphNodeRow = { id: string; title: string; state: string; stateLabel?: string; flags: string; outside: string | null };
+export type GroupFigures = {
+  done: number;
+  doneDays: number;
+  doing: number;
+  blocked: number;
+  left: number;
+  planned: number;
+  ready: number;
+  onHold: number;
+  owner: number;
+  flags: number;
+};
+/** Decision 199's parts; a core older than it sends none of them. */
+export type GroupParts = {
+  figures: GroupFigures;
+  nodes: GraphNodeRow[];
+  brokenEdges: string[];
+  critical: Table;
+  stack: Table;
+  release: Table[];
+  broken: Table;
+  edgeList: Table;
+  recent: Table;
+  done: Table;
+};
 export type GroupDetail = {
   stage: 2;
   now: string;
@@ -32,7 +60,7 @@ export type GroupDetail = {
   edges: GraphEdgeRow[];
   criticalPath: string[];
   why: Table;
-};
+} & Partial<GroupParts>;
 export type ItemDetail = {
   stage: 3;
   now: string;
@@ -110,16 +138,17 @@ function cellHtml(c: Cell): string {
   return c.link ? `<a href="${esc(c.link)}" target="_blank" rel="noreferrer">${body}</a>` : body;
 }
 
-type RowOpts = { cls?: string; nav?: Target; acts?: string; idCol?: boolean };
+type RowOpts = { cls?: string; nav?: Target; acts?: string; idCol?: boolean; go?: string };
 
 // Column 0 is the ID or state marker, column 1 the title; the rest carry their column name as the
 // 360px label (decision 89: a narrow panel folds each row into one block, no column is dropped).
 function rowHtml(t: Table, r: Row, o: RowOpts = {}): string {
   const [first, title, ...rest] = r.cells;
   const lead = o.idCol ? `<span class="id">${esc(first?.text ?? "")}</span>` : cellHtml(first ?? { text: "—" });
-  const titleText = title ? (o.idCol ? cellHtml(title) : titleWithId(title)) : DASH;
+  const go = o.go ? `<span class="go" aria-hidden="true">${esc(o.go)} ›</span>` : "";
+  const titleText = (title ? (o.idCol ? cellHtml(title) : titleWithId(title)) : DASH) + go;
   const tds = rest.map((c, i) => `<td data-l="${esc(t.columns[i + 2]?.name ?? "")}">${cellHtml(c)}</td>`).join("");
-  const nav = o.nav ? ` data-nav="${attr(o.nav)}" tabindex="0"` : "";
+  const nav = o.nav ? ` data-nav="${attr(o.nav)}" tabindex="0"${o.go ? ` aria-label="${esc(`${title?.text ?? ""} ${o.go}`)}"` : ""}` : "";
   const acts = o.acts === undefined ? "" : `<td class="acts">${o.acts}</td>`;
   return `<tr data-id="${esc(r.id)}"${o.cls ? ` class="${o.cls}"` : ""}${nav}><td>${lead}</td><td class="title">${titleText}</td><td class="brk" aria-hidden="true"></td>${tds}${acts}</tr>`;
 }
@@ -166,7 +195,7 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
     return rowHtml(m.ownerTodo, r, { idCol: true, acts });
   });
   const progress = m.inProgress.rows.map((r) => {
-    if (r.id.startsWith("lead:")) return rowHtml(m.inProgress, r, { cls: "lead", nav: { group: r.cells[1]?.text ?? "" } });
+    if (r.id.startsWith("lead:")) return rowHtml(m.inProgress, r, { cls: "lead", nav: { group: r.cells[1]?.text ?? "" }, go: "묶음 상세" });
     if (/^i\d{3,}$/.test(r.id)) return rowHtml(m.inProgress, r, { cls: "item", nav: { item: r.id } });
     return rowHtml(m.inProgress, r, { cls: "item" });
   });
@@ -177,28 +206,81 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
     section("dec", m.decisions, decisions, true, "", "todo"),
     section("me", m.ownerTodo, todoRows, true, "", "todo"),
     section("prog", m.inProgress, progress, false, "우선순위, 오래된 🚧 순", "prog"),
+    m.groups === 0 ? `<p class="hint0" data-tab="prog">${esc(NO_GROUP)}</p>` : "",
     m.onHold ? section("hold", m.onHold, m.onHold.rows.map((r) => rowHtml(m.onHold as Table, r, { nav: { item: r.id } })), false, "", "prog") : "",
+    m.done ? doneFold(m.done) : "",
     `<p class="foot">완료는 최근 ${m.doneDays}일 · 🔍 근거 부족 ${m.evidenceShort} · 상세: <code>sangsoe brief &lt;묶음&gt;</code></p>`,
   ].join("");
 }
 
-// Edge kinds differ by dash pattern and by name (the name is canonical, decision 92②).
-export const EDGE_KINDS: Record<string, string> = {
-  blocks: "끝나야 시작",
-  after: "순서만",
-  stacked_on: "스택 PR 아래층",
-  deploys_after: "배포 순서",
-};
-const NW = 92;
-const NH = 40;
-const GX = 120;
-const GY = 80;
+const NO_GROUP =
+  "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 진행 중 절에 그 행이 나온다. 패널은 리드를 띄우지 않는다.";
 
-/** Inline SVG DAG (decision 92②): layers by longest path from the edges, critical path numbered. */
-export function dagSvg(edges: readonly GraphEdgeRow[], critical: readonly string[], label = "의존 그래프"): string {
-  const nodes = [...new Set(edges.flatMap((e) => [e.pred, e.succ]))];
-  const layer = new Map(nodes.map((n) => [n, 0]));
-  for (let pass = 0; pass < nodes.length; pass++) {
+/** 완료 최근 N일 as one folded list (decision 199): the same rows as the ✅ count. */
+function doneFold(t: Table): string {
+  const items = t.rows.map((r) => {
+    const [what, pr, when] = r.cells;
+    const link = pr && pr.text !== "—" ? ` ${cellHtml(pr)}` : "";
+    return `<li><span>${what ? titleWithId(what) : ""}${link}</span><span class="when">${esc(when?.text ?? "")}</span></li>`;
+  });
+  const body = items.length === 0 ? '<p class="empty">없음</p>' : `<ul class="done">${items.join("")}</ul>`;
+  return `<details class="fold"><summary>${esc(t.title)} <span class="count">${t.count}</span></summary>${body}</details>`;
+}
+
+// Edge kinds differ by dash pattern and by name (the name is canonical, decision 92②); the last two
+// rows are the drawing's own marks, so a reader never has to guess what thick or red means.
+export const EDGE_KINDS: Record<string, string> = {
+  blocks: "선행이 ✅ 완료여야 시작",
+  after: "순서만. 취소도 충족",
+  stacked_on: "선행 PR 이 머지된 뒤",
+  deploys_after: "선행 머지와 앞 단계의 stage_recorded 뒤",
+};
+const MARKS: readonly [string, string, string][] = [
+  ["cpl", "굵은 선", "크리티컬 패스"],
+  ["brl", "붉은 점선", "끊긴 선행: 충족으로 보지 않고 리드가 푼다"],
+];
+
+const NW = 120;
+const NH = 40;
+const GAP = 20;
+const DW = 10;
+const ROW = NH + 48;
+const PAD = 12;
+
+// The panel imports nothing from the core, so text width is estimated here: wide (Hangul, emoji) and
+// narrow glyphs at the node's 11px.
+const glyphW = (ch: string) => (/[ᄀ-ᇿ　-鿿가-힯豈-﫿]|\p{Extended_Pictographic}/u.test(ch) ? 11 : 6.2);
+export const textPx = (s: string): number => [...s].reduce((n, ch) => n + glyphW(ch), 0);
+export function fitText(s: string, px: number): string {
+  if (textPx(s) <= px) return s;
+  let out = "";
+  for (const ch of s) {
+    if (textPx(`${out}${ch}…`) > px) break;
+    out += ch;
+  }
+  return `${out}…`;
+}
+export const NODE_TEXT_PX = NW - 12;
+
+export type Pt = { x: number; y: number };
+export type DagBox = { id: string; x: number; y: number; layer: number };
+export type DagRoute = { edge: GraphEdgeRow; points: Pt[] };
+export type DagLabel = { edge: string; text: string; x: number; y: number; w: number };
+export type DagLayout = { w: number; h: number; boxes: DagBox[]; routes: DagRoute[]; labels: DagLabel[]; crossings: number };
+
+const edgeKey = (e: GraphEdgeRow) => `${e.pred}>${e.succ}:${e.kind}`;
+
+/**
+ * Layered layout (decision 199): longest-path layers with sources pulled down next to what they feed,
+ * a placeholder per layer an edge passes so a long edge runs between boxes, barycenter sweeps for
+ * the order, then x set toward the neighbours. Only item nodes are placed; other preds are references.
+ */
+export function dagLayout(nodes: readonly GraphNodeRow[], allEdges: readonly GraphEdgeRow[], brokenKeys: readonly string[] = []): DagLayout {
+  const ids = nodes.map((n) => n.id);
+  const known = new Set(ids);
+  const edges = allEdges.filter((e) => known.has(e.pred) && known.has(e.succ));
+  const layer = new Map(ids.map((n) => [n, 0]));
+  for (let pass = 0; pass < ids.length; pass++) {
     let moved = false;
     for (const e of edges) {
       const want = (layer.get(e.pred) ?? 0) + 1;
@@ -209,58 +291,287 @@ export function dagSvg(edges: readonly GraphEdgeRow[], critical: readonly string
     }
     if (!moved) break;
   }
-  const col = new Map<number, number>();
-  const at = new Map<string, { x: number; y: number }>();
-  for (const n of nodes) {
-    const l = layer.get(n) ?? 0;
-    const c = col.get(l) ?? 0;
-    col.set(l, c + 1);
-    at.set(n, { x: 4 + c * GX, y: 8 + l * GY });
+  for (const n of ids) {
+    if (edges.some((e) => e.succ === n)) continue;
+    const below = edges.filter((e) => e.pred === n).map((e) => layer.get(e.succ) ?? 0);
+    if (below.length > 0) layer.set(n, Math.min(...below) - 1);
   }
-  const cols = Math.max(1, ...col.values());
-  const rows = Math.max(0, ...layer.values()) + 1;
-  const crit = new Map(critical.map((n, i) => [n, i + 1]));
+  const depth = Math.max(0, ...layer.values()) + 1;
+  const rows: string[][] = Array.from({ length: depth }, () => []);
+  for (const n of ids) rows[layer.get(n) ?? 0]?.push(n);
+  const chains = edges.map((e, i) => {
+    const a = layer.get(e.pred) ?? 0;
+    const b = layer.get(e.succ) ?? 0;
+    const mid = Array.from({ length: Math.max(0, b - a - 1) }, (_, k) => {
+      const key = `~${i}:${k}`;
+      rows[a + k + 1]?.push(key);
+      return key;
+    });
+    return [e.pred, ...mid, e.succ];
+  });
+  const segs = chains.flatMap((c) => c.slice(1).map((b, k) => [c[k] as string, b] as const));
+  const up = new Map<string, string[]>();
+  const down = new Map<string, string[]>();
+  for (const [a, b] of segs) {
+    up.set(b, [...(up.get(b) ?? []), a]);
+    down.set(a, [...(down.get(a) ?? []), b]);
+  }
+  const pos = () => new Map(rows.flatMap((r) => r.map((k, i) => [k, i] as const)));
+  const cross = (): number => {
+    const p = pos();
+    let n = 0;
+    for (const [a, b] of segs) {
+      for (const [c, d] of segs) {
+        if ((p.get(a) ?? 0) < (p.get(c) ?? 0) && (p.get(b) ?? 0) > (p.get(d) ?? 0) && layerOf(a) === layerOf(c)) n++;
+      }
+    }
+    return n;
+  };
+  const layerOf = (k: string) => rows.findIndex((r) => r.includes(k));
+  const sweep = (l: number, nbr: Map<string, string[]>) => {
+    const p = pos();
+    const row = rows[l] as string[];
+    const bc = new Map(row.map((k, i) => {
+      const ns = nbr.get(k) ?? [];
+      return [k, ns.length === 0 ? i : ns.reduce((s, x) => s + (p.get(x) ?? 0), 0) / ns.length] as const;
+    }));
+    row.sort((a, b) => (bc.get(a) ?? 0) - (bc.get(b) ?? 0));
+  };
+  let best = rows.map((r) => [...r]);
+  let bestN = cross();
+  for (let it = 0; it < 8 && bestN > 0; it++) {
+    for (let l = 1; l < depth; l++) sweep(l, up);
+    for (let l = depth - 2; l >= 0; l--) sweep(l, down);
+    const n = cross();
+    if (n < bestN) {
+      bestN = n;
+      best = rows.map((r) => [...r]);
+    }
+  }
+  for (let l = 0; l < depth; l++) rows[l] = best[l] as string[];
+
+  const width = (k: string) => (k.startsWith("~") ? DW : NW);
+  const x = new Map<string, number>();
+  for (const r of rows) {
+    let at = PAD;
+    for (const k of r) {
+      x.set(k, at);
+      at += width(k) + GAP;
+    }
+  }
+  const centre = (k: string) => (x.get(k) ?? 0) + width(k) / 2;
+  for (let it = 0; it < 6; it++) {
+    for (const [l, r] of rows.entries()) {
+      const nbr = it % 2 === 0 ? up : down;
+      let floor = PAD;
+      for (const k of r) {
+        const ns = (nbr.get(k) ?? []).filter((n) => layerOf(n) !== l);
+        const want = ns.length === 0 ? (x.get(k) ?? 0) : ns.reduce((s, n) => s + centre(n), 0) / ns.length - width(k) / 2;
+        const placed = Math.max(floor, want);
+        x.set(k, placed);
+        floor = placed + width(k) + GAP;
+      }
+    }
+  }
+  const minX = Math.min(...x.values());
+  for (const [k, v] of x) x.set(k, v - minX + PAD);
+  const top = (l: number) => PAD + l * ROW;
+  const boxes = ids.map((id) => ({ id, x: x.get(id) ?? 0, y: top(layer.get(id) ?? 0), layer: layer.get(id) ?? 0 }));
+  const at = new Map(boxes.map((b) => [b.id, b]));
+  // Several edges on one side of a box leave or enter it at spread ports, not one point.
+  const port = (id: string, list: readonly GraphEdgeRow[], e: GraphEdgeRow) => {
+    const i = list.indexOf(e);
+    return (at.get(id)?.x ?? 0) + NW / 2 + (i - (list.length - 1) / 2) * Math.min(16, (NW - 24) / Math.max(1, list.length - 1));
+  };
+  const outOf = (id: string) => edges.filter((e) => e.pred === id).sort((a, b) => centreOf(chains, edges, a, x) - centreOf(chains, edges, b, x));
+  const into = (id: string) => edges.filter((e) => e.succ === id).sort((a, b) => sourceOf(chains, edges, a, x) - sourceOf(chains, edges, b, x));
+  const routes: DagRoute[] = edges.map((e, i) => {
+    const c = chains[i] as string[];
+    const a = at.get(e.pred) as DagBox;
+    const b = at.get(e.succ) as DagBox;
+    const mids = c.slice(1, -1).flatMap((k, j) => {
+      const cx = (x.get(k) ?? 0) + DW / 2;
+      return [{ x: cx, y: top(a.layer + j + 1) }, { x: cx, y: top(a.layer + j + 1) + NH }];
+    });
+    return { edge: e, points: [{ x: port(e.pred, outOf(e.pred), e), y: a.y + NH }, ...mids, { x: port(e.succ, into(e.succ), e), y: b.y }] };
+  });
+  const labels: DagLabel[] = [];
+  const hit = (l: DagLabel) => labels.some((o) => Math.abs(o.x - l.x) * 2 < o.w + l.w + 4 && Math.abs(o.y - l.y) < 16);
+  for (const r of routes) {
+    const text = brokenKeys.includes(edgeKey(r.edge)) ? "끊긴 선행" : r.edge.kind;
+    const w = textPx(text) * 0.82 + 10;
+    const gaps = r.points.flatMap((p, i) => (i % 2 === 0 && r.points[i + 1] ? [[p, r.points[i + 1] as Pt] as const] : []));
+    let chosen: DagLabel | null = null;
+    for (const [p, q] of [...gaps, ...gaps.slice().reverse()]) {
+      for (const t of [0.5, 0.3, 0.7, 0.15, 0.85]) {
+        const cand = { edge: edgeKey(r.edge), text, ...onCurve(p, q, t), w };
+        if (!hit(cand)) {
+          chosen = cand;
+          break;
+        }
+      }
+      if (chosen) break;
+    }
+    const [p, q] = gaps[0] as readonly [Pt, Pt];
+    labels.push(chosen ?? { edge: edgeKey(r.edge), text, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, w });
+  }
+  const right = Math.max(PAD, ...[...x.entries()].map(([k, v]) => v + width(k)), ...labels.map((l) => l.x + l.w / 2));
+  return { w: Math.ceil(right + PAD + 10), h: top(depth - 1) + NH + PAD, boxes, routes, labels, crossings: bestN };
+}
+
+// A point on curve()'s cubic between p and q: both control points sit at the middle height.
+function onCurve(p: Pt, q: Pt, t: number): Pt {
+  const my = (p.y + q.y) / 2;
+  return { x: p.x + (q.x - p.x) * (3 * t * t - 2 * t * t * t), y: (1 - t) ** 3 * p.y + 3 * (1 - t) * t * my + t ** 3 * q.y };
+}
+function centreOf(chains: readonly string[][], edges: readonly GraphEdgeRow[], e: GraphEdgeRow, x: ReadonlyMap<string, number>): number {
+  const c = chains[edges.indexOf(e)] as string[];
+  return x.get(c[1] as string) ?? 0;
+}
+function sourceOf(chains: readonly string[][], edges: readonly GraphEdgeRow[], e: GraphEdgeRow, x: ReadonlyMap<string, number>): number {
+  const c = chains[edges.indexOf(e)] as string[];
+  return x.get(c[c.length - 2] as string) ?? 0;
+}
+
+function curve(points: readonly Pt[]): string {
+  const [first, ...rest] = points as [Pt, ...Pt[]];
+  let d = `M${first.x.toFixed(1)} ${first.y}`;
+  let prev = first;
+  for (const p of rest) {
+    if (p.x === prev.x) d += `L${p.x.toFixed(1)} ${p.y}`;
+    else {
+      const my = (prev.y + p.y) / 2;
+      d += `C${prev.x.toFixed(1)} ${my} ${p.x.toFixed(1)} ${my} ${p.x.toFixed(1)} ${p.y}`;
+    }
+    prev = p;
+  }
+  return d;
+}
+
+const STATE_CLASS: Record<string, string> = { "🚧": "s-blocked", "🔄": "s-progress", "⏳": "s-progress", "🗑️": "gone", "✅": "s-done" };
+
+/** Inline SVG DAG (decision 92②, 199): item boxes with state and title, a label per edge, critical path numbered. */
+export function dagSvg(m: Pick<GroupDetail, "edges" | "criticalPath"> & Pick<GroupParts, "nodes" | "brokenEdges">, label = "의존 그래프"): string {
+  const L = dagLayout(m.nodes, m.edges, m.brokenEdges);
+  const node = new Map(m.nodes.map((n) => [n.id, n]));
+  const crit = new Map(m.criticalPath.map((n, i) => [n, i + 1]));
   const onPath = (e: GraphEdgeRow) => {
     const a = crit.get(e.pred);
     const b = crit.get(e.succ);
-    return a !== undefined && b !== undefined && Math.abs(a - b) === 1;
+    return a !== undefined && b !== undefined && b === a + 1;
   };
-  const paths = edges.map((e) => {
-    const a = at.get(e.pred) ?? { x: 0, y: 0 };
-    const b = at.get(e.succ) ?? { x: 0, y: 0 };
-    const cls = ["ed", e.met === null ? "broken" : e.kind, onPath(e) ? "cp" : ""].filter(Boolean).join(" ");
-    return `<path class="${cls}" data-edge="${esc(`${e.pred}>${e.succ}`)}" d="M${a.x + NW / 2} ${a.y + NH}L${b.x + NW / 2} ${b.y}"><title>${esc(`${e.pred} → ${e.succ} ${e.kind}`)}</title></path>`;
+  const paths = L.routes.map(({ edge: e, points }) => {
+    const broken = m.brokenEdges.includes(edgeKey(e));
+    const cls = ["ed", e.kind, broken ? "broken" : "", onPath(e) ? "cp" : ""].filter(Boolean).join(" ");
+    return `<path class="${esc(cls)}" data-edge="${esc(edgeKey(e))}" d="${curve(points)}"><title>${esc(`${e.pred} → ${e.succ} ${e.kind}${broken ? " 끊긴 선행" : ""}`)}</title></path>`;
   });
-  const boxes = nodes.map((n) => {
-    const p = at.get(n) ?? { x: 0, y: 0 };
-    const k = crit.get(n);
-    const badge = k ? `<g class="badge" transform="translate(${p.x + NW} ${p.y})"><circle r="9"/><text y="3.5">${k}</text></g>` : "";
-    return `<g class="nd${k ? " cp" : ""}" data-node="${esc(n)}" transform="translate(${p.x} ${p.y})"><rect width="${NW}" height="${NH}" rx="6"/><text class="n1" x="6" y="24">${esc(n)}</text></g>${badge}`;
+  const labels = L.labels.map(
+    (l) =>
+      `<g class="lb${l.text === "끊긴 선행" ? " broken" : ""}" transform="translate(${l.x.toFixed(1)} ${l.y.toFixed(1)})"><rect x="${(-l.w / 2).toFixed(1)}" y="-7" width="${l.w.toFixed(1)}" height="14" rx="3"/><text y="3">${esc(l.text)}</text></g>`,
+  );
+  const boxes = L.boxes.map((b) => {
+    const n = node.get(b.id) as GraphNodeRow;
+    const k = crit.get(b.id);
+    const cls = ["nd", STATE_CLASS[n.state] ?? "s-planned", n.outside ? "ext" : "", k ? "cp" : ""].filter(Boolean).join(" ");
+    const head = [n.id, n.state, n.flags].filter(Boolean).join(" ");
+    const tip = [`${n.id} ${n.title} ${n.state}${n.flags}`, n.outside ? `외부 선행 (${n.outside})` : "", k ? `크리티컬 패스 ${k}번` : ""].filter(Boolean).join(", ");
+    const badge = k ? `<g class="badge" transform="translate(${b.x + NW} ${b.y})"><circle r="9"/><text y="3.5">${k}</text></g>` : "";
+    return (
+      `<g class="${cls}" data-node="${esc(b.id)}" transform="translate(${b.x} ${b.y})"><title>${esc(tip)}</title><rect width="${NW}" height="${NH}" rx="6"/>` +
+      `<text class="n1" x="6" y="16">${esc(fitText(head, NODE_TEXT_PX))}</text><text class="n2" x="6" y="32">${esc(fitText(n.outside ? `${n.outside} · ${n.title}` : n.title, NODE_TEXT_PX))}</text></g>${badge}`
+    );
   });
-  const w = 8 + (cols - 1) * GX + NW + 12;
-  const h = 16 + (rows - 1) * GY + NH;
   const defs =
-    '<defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path class="ah" d="M0 0L8 4L0 8z"/></marker>' +
-    '<marker id="ahb" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path class="ahb" d="M0 0L8 4L0 8z"/></marker></defs>';
-  return `<svg class="dag" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" style="max-width:${w}px" role="img" aria-label="${esc(label)}">${defs}${paths.join("")}${boxes.join("")}</svg>`;
+    '<defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path class="ah" d="M0 0L8 4L0 8z"/></marker>' +
+    '<marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path class="ahb" d="M1 1L9 5L1 9M5 1V9"/></marker></defs>';
+  return `<svg class="dag" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.w} ${L.h}" style="max-width:${L.w}px" role="img" aria-label="${esc(label)}">${defs}${paths.join("")}${boxes.join("")}${labels.join("")}</svg>`;
+}
+
+// Graph tables label every cell (hallmark's .gt), so a folded row never runs a name into its meaning.
+type GtOpts = {
+  kinds?: readonly number[];
+  step?: boolean;
+  titles?: ReadonlyMap<string, string>;
+  idCols?: readonly number[];
+  /** [state column, the column naming whose state it is]: a bare marker there gets its word. */
+  stateOf?: readonly [number, number];
+  labels?: ReadonlyMap<string, string>;
+};
+
+function gtTable(t: Table, o: GtOpts = {}): string {
+  const head = t.columns.map((c) => `<th>${esc(c.name)}</th>`).join("");
+  const rows = t.rows.map((r) => {
+    const tds = r.cells.map((cell, i) => {
+      const name = esc(t.columns[i]?.name ?? "");
+      const word = o.stateOf?.[0] === i ? o.labels?.get(r.cells[o.stateOf[1]]?.text ?? "") : undefined;
+      const c = word?.startsWith(cell.text) ? { ...cell, text: word } : cell;
+      if (o.step && i === 0) return `<td data-l="${name}"><span class="step">${esc(c.text)}</span></td>`;
+      if (o.kinds?.includes(i)) return `<td data-l="${name}" class="kind">${esc(c.text)}</td>`;
+      const titled = o.idCols?.includes(i) && o.titles?.has(c.text) ? { ...c, text: `${c.text} ${o.titles.get(c.text)}` } : c;
+      return `<td data-l="${name}">${/^i\d{3,} /.test(titled.text) ? titleWithId(titled) : cellHtml(titled)}</td>`;
+    });
+    return `<tr data-id="${esc(r.id)}"${r.broken ? ' class="broken"' : ""}>${tds.join("")}</tr>`;
+  });
+  return `<table class="tbl gt"><thead><tr>${head}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+
+function gtSection(id: string, t: Table, body: string, hint = ""): string {
+  const empty = t.rows.length === 0;
+  const h = empty ? '<span class="none">없음</span>' : hint ? `<span class="hint">${hint}</span>` : "";
+  return `<section aria-labelledby="h-${id}"${empty ? ' class="nil"' : ""}><div class="sec-h"><h2 id="h-${id}">${esc(t.title)} <span class="count">${t.count}</span></h2>${h}</div>${empty ? "" : body}</section>`;
+}
+
+const sub = (t: Table, body: string, note = "") =>
+  t.rows.length === 0 ? "" : `<div><h3>${esc(t.title)}${note ? ` <span class="note">${esc(note)}</span>` : ""}</h3>${body}</div>`;
+
+function figures(m: GroupDetail, f: GroupFigures): string {
+  const fig = (dt: string, dd: string) => `<div><dt>${esc(dt)}</dt><dd>${dd}</dd></div>`;
+  return (
+    `<dl class="figs" aria-label="묶음 요약">${fig("우선순위", esc(m.priority))}${fig(`✅ ${f.doneDays}일`, String(f.done))}${fig("🔄 진행 중", String(f.doing))}${fig("🚧 막힘", String(f.blocked))}` +
+    `${fig("남은 것", `${f.left} <small>📅 ${f.planned}, 🟢 ${f.ready}, ⏸️ ${f.onHold}</small>`)}${fig("🙋 오너", String(f.owner))}${fig("🚨 플래그", String(f.flags))}</dl>`
+  );
+}
+
+function legend(): string {
+  const line = (cls: string) => `<svg viewBox="0 0 40 8" aria-hidden="true"><line class="${cls}" x1="0" y1="4" x2="40" y2="4"/></svg>`;
+  const rows = [
+    ...Object.entries(EDGE_KINDS).map(([k, v]) => `<tr><td data-l="선 모양">${line(k)}</td><td data-l="간선" class="kind">${k}</td><td data-l="뜻">${esc(v)}</td></tr>`),
+    ...MARKS.map(([cls, name, v]) => `<tr><td data-l="선 모양">${line(cls)}</td><td data-l="간선">${name}</td><td data-l="뜻">${esc(v)}</td></tr>`),
+  ];
+  return `<div class="legend"><h3>간선 종류</h3><table class="tbl gt"><thead><tr><th>선 모양</th><th>간선</th><th>뜻</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
 }
 
 function group(m: GroupDetail): string {
   const items = (t: Table) => t.rows.map((r) => rowHtml(t, r, { nav: { item: r.id } }));
-  const critRows = m.criticalPath.map((n, i) => `<tr><td><span class="step">${i + 1}</span></td><td><span class="id">${esc(n)}</span></td></tr>`).join("");
-  const legend = Object.entries(EDGE_KINDS)
-    .map(([k, v]) => `<tr><td><svg viewBox="0 0 40 8"><line class="${k}" x1="0" y1="4" x2="40" y2="4"/></svg></td><td class="kind"><code>${k}</code></td><td>${esc(v)}</td></tr>`)
-    .join("");
+  const nodes = m.nodes ?? [];
+  const titles = new Map(nodes.map((n) => [n.id, n.title]));
+  const labels = new Map(nodes.flatMap((n) => (n.stateLabel ? [[n.id, n.stateLabel] as const] : [])));
+  const refs = m.edges.filter((e) => !titles.has(e.pred));
+  const refLine =
+    refs.length === 0
+      ? ""
+      : `<p class="note refs">그림 밖 선행: ${refs.map((e) => `<code>${esc(e.pred)}</code> → ${esc(e.succ)} (${esc(e.kind)})`).join(", ")}</p>`;
   const graph =
     m.edges.length === 0
       ? '<p class="empty">간선 없음</p>'
-      : `${dagSvg(m.edges, m.criticalPath, `${m.lead} 의존 그래프`)}<div class="legend"><table class="tbl gt"><thead><tr><th>선 모양</th><th>간선</th><th>뜻</th></tr></thead><tbody>${legend}</tbody></table></div>`;
+      : `${nodes.length > 0 ? dagSvg({ edges: m.edges, criticalPath: m.criticalPath, nodes, brokenEdges: m.brokenEdges ?? [] }, `${m.lead} 의존 그래프.${m.criticalPath.length > 0 ? ` 크리티컬 패스는 ${m.criticalPath.join(", ")} 순서.` : ""}`) : ""}${refLine}${legend()}`;
+  const side = [
+    m.critical ? sub(m.critical, gtTable(m.critical, { step: true })) : "",
+    m.stack ? sub(m.stack, gtTable(m.stack)) : "",
+    ...(m.release ?? []).map((t) => sub(t, gtTable(t, { kinds: [0] }))),
+    m.broken ? sub(m.broken, gtTable(m.broken, { idCols: [0], titles })) : "",
+  ].join("");
   return [
     `<h1>${esc(m.lead)} <span class="pri">${esc(m.priority)}</span> <span class="dim">· ${m.items}건 · 막힘 ${m.blockedCount}</span></h1>`,
+    m.figures ? figures(m, m.figures) : "",
     ...m.sections.map((t, i) => section(`s${i}`, t, items(t))),
-    `<div class="gwrap"><div class="gl">${graph}</div><div class="side"><h3>크리티컬 패스</h3>${m.criticalPath.length === 0 ? '<p class="empty">없음</p>' : `<table class="tbl gt"><thead><tr><th>단계</th><th>항목</th></tr></thead><tbody>${critRows}</tbody></table>`}</div></div>`,
-    section("why", m.why, m.why.rows.map((r) => rowHtml(m.why, r, { idCol: true }))),
-    `<p class="foot">✅ 완료 ${m.doneFolded}건 접힘 · 터미널: <code>sangsoe brief ${esc(m.lead)}</code></p>`,
+    m.recent ? gtSection("recent", m.recent, gtTable(m.recent)) : "",
+    `<section aria-labelledby="h-graph"><div class="sec-h"><h2 id="h-graph">의존 그래프</h2><span class="hint">위에서 아래로. 굵은 선과 번호가 크리티컬 패스</span></div>`,
+    `<div class="gwrap"><div class="gl">${graph}</div><div class="side">${side}</div></div></section>`,
+    gtSection("why", m.why, gtTable(m.why, { kinds: [2], idCols: [0, 1], titles, stateOf: [3, 1], labels }), "<code>sangsoe graph why</code>"),
+    m.edgeList ? gtSection("edges", m.edgeList, gtTable(m.edgeList, { kinds: [0] })) : "",
+    m.done ? doneFold(m.done) : "",
+    `<p class="foot">터미널: <code>sangsoe brief ${esc(m.lead)}</code></p>`,
   ].join("");
 }
 
@@ -372,4 +683,5 @@ export const autoRefresh = (s: { visible: boolean; lastOk: boolean; busy: boolea
   s.visible && s.lastOk && !s.busy && !s.formOpen;
 
 /** Row ids in drawing order (PN2: the same list as the model's tables). */
-export const drawnRowIds = (html: string): string[] => [...html.matchAll(/<tr data-id="([^"]*)"/g)].map((m) => m[1] ?? "");
+const UNESC = Object.fromEntries(Object.entries(ESC).map(([c, e]) => [e, c]));
+export const drawnRowIds = (html: string): string[] => [...html.matchAll(/<tr data-id="([^"]*)"/g)].map((m) => (m[1] ?? "").replace(/&[a-z0-9#]+;/g, (e) => UNESC[e] ?? e));

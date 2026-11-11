@@ -104,7 +104,7 @@ test("graphRead (brief's port): edges from both homes in task ids, a critical pa
   ]);
   assert.deepEqual(graphRead.criticalPath(input, ["t_a", "t_b", "t_c"]), ["t_a", "t_b", "t_c"]);
   assert.deepEqual(graphRead.criticalPath(input, []), []);
-  assert.deepEqual(graphRead.why(input, "t_c"), [{ pred: "t_b", succ: "t_c", kind: "after" }]);
+  assert.deepEqual(graphRead.why(input, "t_c"), [{ pred: "t_b", succ: "t_c", kind: "after", predState: "📅 예정", dangling: false, todo: "선행 항목이 끝나기를 기다린다" }]);
   assert.deepEqual(asBriefPort.ready(input).map((r) => r.task), ["t_a"]);
 });
 
