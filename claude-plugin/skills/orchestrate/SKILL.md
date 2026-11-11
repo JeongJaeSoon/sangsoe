@@ -48,7 +48,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 3. **고르기.** resource `ready` 에서 크리티컬 패스 위 항목부터 시작한다. 자리가 없으면 기다린다.
 4. **기다리기.** 워커를 띄운 뒤 결과를 폴링하지 않는다. Orca 메시지가 깨운다. base 가 바뀐 PR 의 재리뷰 항목은 네 세션의 hook 이 깨어날 때마다 만든다. 손수 만들지 않는다(결정 219).
 5. **후속 일.** 완료 조건에 비춰 NOW(조건 항목이거나 이 프로그램이 머지한 것의 재현된 결함) · LATER(재검토 trigger) · DROP(이유)로 가른다. NOW 만 항목이 된다.
-6. **끝.** 조건마다 증거를 확인하고 자기 Dispatch 로 worker_done 을 보낸다.
+6. **끝.** 조건마다 증거를 확인하고 자기 Dispatch 로 worker_done 을 보낸다. 그 전에 PR 이 머지 없이 닫혀 🚧 로 남은 항목(smoke·시험 프로그램이 일부러 닫은 PR 포함)은 다시 열 PR 이 아니면 `item_retire` 로 이유와 함께 거둔다(`by` 는 `lead:<묶음>`). 거둔 항목은 🗑️ 로 읽혀 묶음이 닫힌다(결정 223).
 
 ## 오케스트레이터: 프로그램 사이
 

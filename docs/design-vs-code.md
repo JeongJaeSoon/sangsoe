@@ -19,10 +19,10 @@
 | 0. 오너의 고정 규칙 | 5 | 4 | 1 | 0 | 0 | 0 |
 | 1. 칸 배치 · Orca CLI · 설치 | 131 | 93 | 8 | 9 | 1 | 20 |
 | 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 84 | 11 | 2 | 6 | 12 |
-| 3. 데이터 · MCP · CLI · GRAPH | 80 | 55 | 6 | 1 | 3 | 15 |
+| 3. 데이터 · MCP · CLI · GRAPH | 81 | 55 | 6 | 1 | 3 | 16 |
 | 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 34 | 4 | 4 | 6 | 9 |
 | 5. 결정이 자르거나 바꾼 것 | 45 | 0 | 0 | 0 | 13 | 32 |
-| 합계 | 433 | 270 | 30 | 16 | 29 | 88 |
+| 합계 | 434 | 270 | 30 | 16 | 29 | 89 |
 
 `partial`·`missing` 46행은 갭 27개(`G1`–`G36` 에서 U77 이 고친 `G2`, U76 이 고친 `G13` `G16`, 결정 212 가 닫은 `G10`·`G11`·`G23`·`G29`, 결정 215 가 닫은 `G22`·`G31` 을 뺀 것)로 묶인다. 제안은 NOW 0 · LATER 23 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
 
@@ -65,7 +65,7 @@
 | 배치표 ③ 막는 hook | design.html §2 배치표 | changed (결정 208) | `claude-plugin/hooks/hooks.json:10`, `core/gates/start.ts:151` | 시작하지 못하면 통과, 검사가 실패하면 막음 |
 | 배치표 ③ 기록 hook | design.html §2 배치표 | implemented | `claude-plugin/hooks/hooks.json:19` | UserPromptSubmit·Stop·Notification·PostToolUse·PostCompact·SessionEnd |
 | 배치표 ③ skill | design.html §2 배치표 | changed (결정 120) | `claude-plugin/.claude-plugin/plugin.json:7` | sangsoe skill 열하나 + general |
-| 배치표 ③ MCP 서버 | design.html §2 배치표 | implemented | `claude-plugin/.mcp.json:3` | tool 15·resource 4 |
+| 배치표 ③ MCP 서버 | design.html §2 배치표 | implemented | `claude-plugin/.mcp.json:3` | tool 16(결정 223 의 `item_retire`)·resource 4 |
 | 배치표 ③ agent 정의 | design.html §2 배치표 | implemented | `claude-plugin/agents/lead.md:4` | 오케스트레이터·리드·워커 |
 | 배치표 ④ 코어 라이브러리 | design.html §2 배치표 | implemented | `core/index.ts:59` | 입구는 `core/index.ts` 하나 |
 | 배치표 ④ sqlite 파일 | design.html §2 배치표 | implemented | `core/store/store.ts:85`, `core/store/backup.ts:113` | jsonl 사본 포함(결정 183) |
@@ -222,7 +222,7 @@
 | 표 보류 | design.html §3 현황 보고는 표 네 절이다 | implemented | `core/brief/build.ts:53`, `core/brief/build.ts:239` | |
 | 완료 최근 7일 접힌 목록 | design.html §3 현황 보고는 표 네 절이다 | implemented | `orca-plugin/panel/view.ts:221`, `core/brief/render.ts:41`, `cli/commands/brief.ts:37` | G16 고침(U76, 결정 213, 줄 번호는 U76 기준): 글은 건수 줄로 접고 `sangsoe brief [<묶음>] --done` 이 같은 행을 표로 편다 |
 | 묶음 0개 안내 줄 | design.html §3 현황 보고는 표 네 절이다 | implemented | `orca-plugin/panel/view.ts:209`, `core/brief/render.ts:53` | G16 고침(U76, 결정 213, 줄 번호는 U76 기준): 글도 진행 중 절 아래에 패널 문장의 앞 두 문장을 둔다 |
-| 상태 일곱과 읽기 상태 | design.html §3 상태와 용어 | implemented | `core/contract/transitions.ts:10`, `core/brief/item_status.ts:75` | 예정·준비됨·진행 중·막힘·보류·완료·취소, 검증 대기(결정 181), PR 모름·닫힘(결정 178) |
+| 상태 일곱과 읽기 상태 | design.html §3 상태와 용어 | implemented | `core/contract/transitions.ts:10`, `core/brief/item_status.ts:75` | 예정·준비됨·진행 중·막힘·보류·완료·취소, 검증 대기(결정 181), PR 모름·닫힘(결정 178). 머지 없이 닫힌 PR 의 완료 항목을 거두면 취소로 읽는다(결정 223) |
 | 플래그 넷 | design.html §3 상태와 용어 | implemented | `core/brief/build.ts:555`, `core/brief/item_status.ts:202` | 결정 필요·오류·확인 필요·근거 부족 |
 | 역할 표 GRAPH | design-appendix 역할과 완료 판정 표 | implemented | `core/graph/edit.ts:113`, `core/detect/queue/round.ts:66` | |
 | 역할 표 판정 함수 | design-appendix 역할과 완료 판정 표 | implemented | `core/notify/notify.ts:55`, `core/capacity/capacity.ts:107` | ready·decision 함수도 같은 층 |
@@ -297,6 +297,7 @@
 | 요소 | 설계 자리 | 상태 | 코드 | 비고 |
 |---|---|---|---|---|
 | MCP tool item_create | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/item_create.ts:62`, `core/start/item.ts:29` | trigger·hold·exec_by 입력(결정 162). `lead` 입력과 `item_created.run`(결정 216, `core/start/item.ts:41`, `test/detect/lead-run-s6.test.ts:53`) |
+| MCP tool item_retire · CLI item retire | decisions.md 결정 223 (설계 본문에 없음) | changed (결정 223) | `claude-plugin/mcp/tools/item_retire.ts:11`, `cli/commands/item-retire.ts:13`, `core/owner/retire.ts:29`, `core/graph/ready.ts:81`, `core/brief/item_status.ts:78` | PR 이 머지 없이 닫힌 완료 항목을 `item_retired{task, by, reason}` 한 줄로 거둔다. Orca 에는 쓰지 않는다. `retiredOf` 가 참이면 `holdOf` 는 null, 읽기는 🗑️. 시험 `test/owner/retire-223.test.ts`. 부록 event 표·용어집·design.html #mcp 의 수는 아직 15 |
 | MCP tool edge_add | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/edge_add.ts:12`, `core/graph/edit.ts:104` | |
 | MCP tool edge_remove | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/edge_remove.ts:12`, `core/graph/edit.ts:136` | |
 | MCP tool flow_expand | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/flow_expand.ts:21`, `core/graph/flow.ts:213` | |
@@ -315,7 +316,7 @@
 | MCP resource brief | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/resources/brief.ts:6` | |
 | MCP resource ready·item_timeline | design.html MCP 인터페이스 | changed (결정 162) | `claude-plugin/mcp/resources/ready.ts:15`, `claude-plugin/mcp/resources/item_timeline.ts:14` | |
 | MCP resource models | design.html MCP 인터페이스 | changed (결정 164) | `claude-plugin/mcp/resources/models.ts:15` | |
-| 설계에 없는 tool·resource 파일 | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/collect.ts:23` | tool 15·resource 4 가 설계 이름과 같다 |
+| 설계에 없는 tool·resource 파일 | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/collect.ts:23` | tool 16·resource 4. 결정 223 의 `item_retire` 하나만 설계 본문에 아직 없다 |
 | plugin 이 싣는 서버 | design-appendix MCP 인터페이스 | implemented | `claude-plugin/.mcp.json:1`, `claude-plugin/mcp/server.ts:184` | stdio |
 | 서버 메서드 | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/server.ts:57`, `claude-plugin/mcp/server.ts:75` | prompts·구독 없음 |
 | CLI brief·todo | design-appendix MCP 인터페이스 | implemented | `cli/commands/brief.ts:34`, `cli/commands/todo.ts:11` | |

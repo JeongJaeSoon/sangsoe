@@ -586,6 +586,7 @@ orca plugin shot local.sangsoe --panel brief --width 360 --json
 | worktree | `orca worktree rm --worktree id:<id> --delete-branch` 넷 + 리드 + 오케스트레이터 | 지우기 전 미커밋 0, main 밖 커밋 0 |
 | 원격 브랜치 | 넷 다 머지된 뒤 `git push origin --delete s6/a s6/b s6/c s6/d` | `git ls-remote origin 's6/*'` 가 빈 출력 |
 | PR | 넷 다 머지됨. 실행이 중간에 멈추면 남은 PR 은 열린 채 두고 보고에 적는다 | `gh pr list -R JeongJaeSoon/sangsoe-smoke --state open` 에 S6 PR 없음 |
+| 머지 없이 닫힌 PR 의 항목 | 실행이 일부러 닫은 PR 의 항목마다 `sangsoe item retire <iNNN> --reason "<왜 닫았나>" --by <owner 또는 lead:<묶음>>`(리드 세션은 MCP `item_retire`, 결정 223) | `sangsoe brief` 의 🚧 에 그 항목이 없고, 항목이 모두 끝난 묶음이 목록에 없음 |
 | 설정 | `verdict_merge_repos` · `watch.repos` 에 더한 smoke 저장소를 뺀다 | `sangsoe doctor` 의 `tier-config` · `watch-repos` 행이 S6 전과 같음 |
 | Orca 저장소 등록 | Orca CLI 에 내리는 명령이 없어 남는다(준비 순서 1) | 보고에 적음 |
 | scratch clone | 휴지통으로 | 없음 |
