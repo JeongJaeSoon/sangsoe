@@ -98,7 +98,12 @@ test("decision 215 ⑦: a base that left a PR's head drops that stack edge; an o
   assert.ok(addEdgeTo(w, snap as never, { pred: "pr:acme/api#3", succ: `item:${T2}`, kind: "stacked_on" }).ok);
   assert.deepEqual(stacked(w), [`pr:acme/api#1 → item:${T2}`, `pr:acme/api#3 → item:${T2}`]);
 
+  opened(w, "acme/api#4", T2, "feat-a", "feat-d");
   w.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: "acme/api#2", from: "feat-a", to: "main" } });
+  await runMonitor("queue", deps(w.store, w));
+  assert.deepEqual(stacked(w), [`pr:acme/api#1 → item:${T2}`, `pr:acme/api#3 → item:${T2}`], "#4 of the same item still sits on feat-a");
+
+  w.store.append({ type: "pr_closed", source: "pr-monitor", payload: { pr: "acme/api#4" } });
   await runMonitor("queue", deps(w.store, w));
   assert.deepEqual(stacked(w), [`pr:acme/api#3 → item:${T2}`]);
 });

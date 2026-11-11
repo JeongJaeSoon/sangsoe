@@ -69,6 +69,9 @@ function unstack(deps: Pick<CoreDeps, "store">, snapshot: OrcaSnapshot, facts: F
     for (const p of facts.prs.values()) {
       if (!isOpen(p) || repoOf(p.pr) !== repoOf(below.pr) || !p.tasks.has(e.succ.replace(/^item:/, ""))) continue;
       if (!left.get(p.pr)?.has(below.head) || p.base === below.head) continue;
+      // The edge is the item's: another open PR of it still on that head keeps it.
+      const task = e.succ.replace(/^item:/, "");
+      if ([...facts.prs.values()].some((q) => isOpen(q) && q.tasks.has(task) && repoOf(q.pr) === repoOf(below.pr) && q.base === below.head)) break;
       const r = removeEdgeFrom(deps, snapshot, { pred: e.pred, succ: e.succ, kind: "stacked_on", reason: `${p.pr}'s base is ${p.base}, not ${below.pr}'s head ${below.head}` });
       if (r.ok) out.push(`${e.pred} → ${e.succ}`);
       else refused.push(`${p.pr}: ${r.refusal.code} ${r.refusal.reason}`);
