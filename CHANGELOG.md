@@ -2,7 +2,15 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
-## Unreleased
+## 0.1.3
+
+Everything since `v0.1.2`: decision 210.
+
+### Upgrading from 0.1.2
+
+- **Re-approve.** `brew upgrade sangsoe` installs to a new Cellar folder and the Orca plugin's content changed (the vendored core: the load thresholds in `core/capacity`), so the Orca plugin waits for approval again. Record the review of the 0.1.3 build with `sangsoe review record`, then run `sangsoe plugin approve`, as the README's Update section says.
+- **If you set the `capacity` key, restart sessions that call `start_unit`.** The pressure gate runs the installed CLI on each call, so it holds a start by the new thresholds and your `capacity` entries at once. `start_unit` counts free slots inside the session's MCP server, which keeps the 0.1.2 core it loaded at start and never reads that key. On the defaults nothing differs, because the gate already holds a start at 20 GB of free disk. With a looser entry the gate lets the start through, and a session that was running during the upgrade still reports no free slot at 20 GB or less until it is restarted.
+- No doctor row changes.
 
 ### Changes
 

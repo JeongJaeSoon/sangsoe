@@ -1,6 +1,6 @@
 {
   "name": "sangsoe",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Orchestration for Claude Code sessions on Orca",
   "homepage": "https://github.com/JeongJaeSoon/sangsoe",
   "repository": "https://github.com/JeongJaeSoon/sangsoe",
