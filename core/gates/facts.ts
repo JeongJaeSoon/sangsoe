@@ -56,17 +56,25 @@ const parse = <T>(text: string): T | undefined => {
  * The repository `gh` names for origin, as `[HOST/]OWNER/REPO`. An SSH host may be an alias from the
  * ssh config, so `ssh -G` (which reads the config and connects to nothing) names the real host.
  */
-function ghRepo(host: Host, url: string): string | undefined {
+function ghRepo(run: Run, url: string): string | undefined {
   const m = URL_REMOTE.exec(url) ?? SCP_REMOTE.exec(url);
   if (!m) return undefined;
   let at = m[1]?.toLowerCase() ?? "";
-  if (!/^https?:/.test(url) && at !== "github.com") {
-    const g = host.run("ssh", ["-G", at]);
+  if (!/^https?:/.test(url) && !GITHUB_SSH.has(at)) {
+    const g = run("ssh", ["-G", "--", at]);
     at = g.code === 0 ? (/^hostname (\S+)$/m.exec(g.stdout)?.[1]?.toLowerCase() ?? "") : "";
     if (!at) return undefined;
   }
-  return at === "github.com" ? `${m[2]}/${m[3]}` : `${at}/${m[2]}/${m[3]}`;
+  return GITHUB_SSH.has(at) ? `${m[2]}/${m[3]}` : `${at}/${m[2]}/${m[3]}`;
 }
+
+/** github.com and its SSH-over-443 host. */
+const GITHUB_SSH = new Set(["github.com", "ssh.github.com"]);
+
+type Run = (cmd: string, args: readonly string[]) => { code: number; stdout: string; stderr: string };
+
+/** All reads share this budget, inside the PreToolUse hook's 15 seconds: a read cut off is unknown. */
+const READ_BUDGET_MS = 12_000;
 
 type RepoView = { nameWithOwner?: string; isFork?: boolean; parent?: { name?: string; owner?: { login?: string } } | null };
 
@@ -78,27 +86,33 @@ type RepoView = { nameWithOwner?: string; isFork?: boolean; parent?: { name?: st
 // process's own cwd. An empty cwd (`git -C ""` reads the process's) is unknown.
 export function openPrs(host: Host, cwd: string, store: () => Pick<Store, "events"> | undefined): OpenPr[] | undefined {
   if (!cwd) return undefined;
-  const branch = host.run("git", ["-C", cwd, "branch", "--show-current"]);
+  const deadline = Date.now() + READ_BUDGET_MS;
+  // C locale: the two git answers below are matched on git's English text.
+  const run: Run = (cmd, args) => {
+    const left = deadline - Date.now();
+    return left > 0 ? host.run(cmd, args, { LC_ALL: "C" }, left) : { code: 127, stdout: "", stderr: "read budget spent" };
+  };
+  const branch = run("git", ["-C", cwd, "branch", "--show-current"]);
   if (branch.code !== 0) return /not a git repository/i.test(branch.stderr) ? [] : undefined;
   const name = branch.stdout.trim();
   if (name === "") return undefined;
-  const remote = host.run("git", ["-C", cwd, "remote", "get-url", "origin"]);
+  const remote = run("git", ["-C", cwd, "remote", "get-url", "origin"]);
   if (remote.code !== 0) return /no such remote/i.test(remote.stderr) ? [] : undefined;
-  const repo = ghRepo(host, remote.stdout.trim());
+  const repo = ghRepo(run, remote.stdout.trim());
   if (!repo) return undefined;
-  const view = host.run("gh", ["repo", "view", repo, "--json", "nameWithOwner,isFork,parent"]);
+  const view = run("gh", ["repo", "view", repo, "--json", "nameWithOwner,isFork,parent"]);
   const v = view.code === 0 ? parse<RepoView>(view.stdout) : undefined;
-  const own = v?.nameWithOwner?.split("/")[0]?.toLowerCase();
-  if (!v || !own) return undefined;
+  if (!v?.nameWithOwner) return undefined;
   // A fork's PRs are opened on its upstream.
   const up = v.isFork ? (v.parent?.owner?.login && v.parent.name ? `${v.parent.owner.login}/${v.parent.name}` : undefined) : v.nameWithOwner;
   if (!up) return undefined;
   const at = repo.split("/").length === 3 ? `${repo.split("/")[0]}/${up}` : up;
-  const list = host.run("gh", ["pr", "list", "-R", at, "--head", name, "--state", "open", "--json", "number,headRepositoryOwner"]);
-  const rows = list.code === 0 ? parse<{ number?: number; headRepositoryOwner?: { login?: string } }[]>(list.stdout) : undefined;
+  const list = run("gh", ["pr", "list", "-R", at, "--head", name, "--state", "open", "--json", "number"]);
+  const rows = list.code === 0 ? parse<{ number?: number }[]>(list.stdout) : undefined;
   if (!Array.isArray(rows)) return undefined;
-  // `--head` takes a bare branch name, so another fork's branch of the same name is listed too.
-  const prs = rows.filter((p) => p.headRepositoryOwner?.login?.toLowerCase() === own && Number.isInteger(p.number)).map((p) => `${up.toLowerCase()}#${p.number}`);
+  // `--head` takes a bare branch name, so another fork's branch of the same name is counted too: the
+  // gate then asks for land or READY-WAIT more often, never less (a push remote other than origin).
+  const prs = rows.filter((p) => Number.isInteger(p.number)).map((p) => `${up.toLowerCase()}#${p.number}`);
   if (prs.length === 0) return [];
   try {
     const s = store();

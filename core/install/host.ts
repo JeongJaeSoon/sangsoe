@@ -11,7 +11,8 @@ export type RunEnv = Readonly<Record<string, string | undefined>>;
 
 // Everything install/uninstall/doctor read from or do to the machine, so tests run with no claude or orca.
 export type Host = {
-  run(cmd: string, args: readonly string[], env?: RunEnv): RunResult;
+  /** `timeoutMs`: a child still running then is killed and reads as a failed run (code 127). */
+  run(cmd: string, args: readonly string[], env?: RunEnv, timeoutMs?: number): RunResult;
   exists(path: string): boolean;
   readText(path: string): string;
   env: Readonly<Record<string, string | undefined>>;
@@ -19,7 +20,7 @@ export type Host = {
 };
 
 export const realHost: Host = {
-  run(cmd, args, env) {
+  run(cmd, args, env, timeoutMs) {
     let childEnv: NodeJS.ProcessEnv | undefined;
     if (env) {
       childEnv = { ...process.env };
@@ -28,7 +29,7 @@ export const realHost: Host = {
         else childEnv[k] = v;
       }
     }
-    const r = spawnSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: childEnv });
+    const r = spawnSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: childEnv, ...(timeoutMs ? { timeout: timeoutMs } : {}) });
     if (r.error) return { code: 127, stdout: "", stderr: r.error.message };
     return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
   },

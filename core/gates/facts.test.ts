@@ -12,15 +12,17 @@ type Answer = { code: number; stdout?: string; stderr?: string };
 
 function fakeHost(answer: (cmd: string, args: readonly string[]) => Answer | undefined) {
   const calls: string[][] = [];
+  const limits: (number | undefined)[] = [];
   const host: Host = {
     ...realHost,
-    run: (cmd, args) => {
+    run: (cmd, args, _env, timeoutMs) => {
       calls.push([cmd, ...args]);
+      limits.push(timeoutMs);
       const a = answer(cmd, args);
       return a ? { stdout: "", stderr: "", ...a } : { code: 1, stdout: "", stderr: "unexpected" };
     },
   };
-  return { host, calls };
+  return { host, calls, limits };
 }
 
 const NOT_FORK = { nameWithOwner: "acme/api", isFork: false, parent: null };
@@ -38,16 +40,31 @@ function checkout(url: string, gh: (args: readonly string[]) => Answer | undefin
 }
 
 test("decision 198: the open PRs are read for the session's worktree, by name, never from the hook's own cwd", () => {
-  const { host, calls } = checkout("git@github.com:acme/api.git", (args) =>
+  const { host, calls, limits } = checkout("git@github.com:acme/api.git", (args) =>
     args[0] === "repo" ? { code: 0, stdout: JSON.stringify(NOT_FORK) } : { code: 0, stdout: listed([7, "acme"], [8, "someone"]) },
   );
-  assert.deepEqual(openPrs(host, "/work/acme/api", noStore), [{ pr: "acme/api#7", landRequested: false }], "a same-named branch of another fork is not this one");
+  assert.deepEqual(
+    openPrs(host, "/work/acme/api", noStore),
+    [
+      { pr: "acme/api#7", landRequested: false },
+      { pr: "acme/api#8", landRequested: false },
+    ],
+    "a same-named branch pushed elsewhere still counts: the gate errs toward asking",
+  );
   assert.deepEqual(calls, [
     ["git", "-C", "/work/acme/api", "branch", "--show-current"],
     ["git", "-C", "/work/acme/api", "remote", "get-url", "origin"],
     ["gh", "repo", "view", "acme/api", "--json", "nameWithOwner,isFork,parent"],
-    ["gh", "pr", "list", "-R", "acme/api", "--head", "feature/x", "--state", "open", "--json", "number,headRepositoryOwner"],
+    ["gh", "pr", "list", "-R", "acme/api", "--head", "feature/x", "--state", "open", "--json", "number"],
   ]);
+  assert.ok(limits.every((t) => t !== undefined && t > 0 && t <= 12_000), "every read has a time limit inside the hook's");
+});
+
+test("decision 201: a read that runs out of time is a failed run, so the open PRs are unknown", () => {
+  const started = Date.now();
+  const r = realHost.run("sleep", ["5"], undefined, 200);
+  assert.notEqual(r.code, 0);
+  assert.ok(Date.now() - started < 3000, "the child was killed at its limit");
 });
 
 test("decision 201: an SSH host alias is resolved by ssh -G to the host it names", () => {
@@ -57,7 +74,7 @@ test("decision 201: an SSH host alias is resolved by ssh -G to the host it names
     () => ({ code: 0, stdout: "user git\nhostname github.com\nport 22\n" }),
   );
   assert.deepEqual(openPrs(host, "/work/acme/api", noStore), [{ pr: "acme/api#9", landRequested: false }]);
-  assert.deepEqual(calls[2], ["ssh", "-G", "gh-work"]);
+  assert.deepEqual(calls[2], ["ssh", "-G", "--", "gh-work"]);
   assert.deepEqual(calls[3], ["gh", "repo", "view", "Acme/api", "--json", "nameWithOwner,isFork,parent"]);
 });
 
@@ -75,15 +92,23 @@ test("decision 201: a GitHub Enterprise host is named to gh as HOST/OWNER/REPO",
   }
 });
 
-test("decision 201: a fork's PRs are read on its upstream, by the fork owner's head", () => {
+test("decision 201: a fork's PRs are read on its upstream", () => {
   const { host, calls } = checkout("git@github.com:me/api.git", (args) =>
     args[0] === "repo"
       ? { code: 0, stdout: JSON.stringify({ nameWithOwner: "me/api", isFork: true, parent: { name: "api", owner: { login: "acme" } } }) }
-      : { code: 0, stdout: listed([5, "acme"], [6, "Me"]) },
+      : { code: 0, stdout: listed([6, "Me"]) },
   );
   const landed = () => ({ events: () => [{ payload: { pr: "acme/api#6" } }] as never });
   assert.deepEqual(openPrs(host, "/w", landed), [{ pr: "acme/api#6", landRequested: true }]);
   assert.deepEqual(calls.at(-1)?.slice(0, 5), ["gh", "pr", "list", "-R", "acme/api"]);
+});
+
+test("decision 201: ssh.github.com, GitHub's SSH-over-443 host, is github.com", () => {
+  const { host, calls } = checkout("ssh://git@ssh.github.com:443/acme/api.git", (args) =>
+    args[0] === "repo" ? { code: 0, stdout: JSON.stringify(NOT_FORK) } : { code: 0, stdout: listed([4, "acme"]) },
+  );
+  assert.deepEqual(openPrs(host, "/w", noStore), [{ pr: "acme/api#4", landRequested: false }]);
+  assert.ok(!calls.some((c) => c[0] === "ssh"));
 });
 
 test("decision 201: what cannot be resolved or read is unknown", () => {

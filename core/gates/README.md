@@ -13,7 +13,7 @@ PreToolUse hook 한 번(이벤트당 프로세스 하나)이 여기 함수를 �
 | `self-land.ts` | `[gate:self-land]`: 역할 세션의 직접 `gh pr merge`, 열린 PR 을 land 요청 없이 둔 워커의 `worker_done`. 열린 PR 을 읽지 못한 `worker_done` 도 `READY-WAIT` 줄이 없으면 한국어 한 줄로 막는다(결정 201) |
 | `merge.ts` | 합치기 deny > ask > allow, 이긴 단계의 사유를 모두 보존 |
 | `shell.ts` | Bash 명령을 단순 명령·단어·백그라운드·루프로 읽는 작은 파서 |
-| `facts.ts` | 게이트가 물을 때만 읽는 사실: 역할(`agent_type` → Dispatch 머리말), 부하, 열린 PR(origin 을 `ssh -G` 로 푼 호스트와 `gh repo view` 로 `[HOST/]OWNER/REPO` 로 정하고, fork 는 upstream 에서 그 fork 소유자의 head 만 센다), 스크립트 본문 |
+| `facts.ts` | 게이트가 물을 때만 읽는 사실: 역할(`agent_type` → Dispatch 머리말), 부하, 열린 PR(origin 을 `ssh -G` 로 푼 호스트와 `gh repo view` 로 `[HOST/]OWNER/REPO` 로 정하고, fork 는 upstream 에서 센다. 읽기는 모두 hook 시간 안의 12초 예산을 나눠 쓰고, 넘으면 모름이다), 스크립트 본문 |
 | `record.ts` | 거부마다 `gate_denied` 한 줄, 명령 글은 파일로 |
 | `replay.ts` | 실제 명령 모음(`test/fixtures/hook-commands.jsonl`)으로 오탐·미탐을 잰다(R-09) |
 
