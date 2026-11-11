@@ -20,8 +20,8 @@ import {
 import type { CommandDef, Report } from "../contract.ts";
 
 // One process per hook event (R-09). The blocking PreToolUse hook reads Claude Code's input on stdin, runs
-// every gate, prints deny or ask (never allow) and records each deny; a failure exits non-zero, and the
-// hook's onFailure "block" turns that into a refusal: it fails closed. The recording hooks fail open.
+// every gate, prints deny or ask (never allow) and records each deny; a failure exits non-zero, which
+// pre-tool-use.sh turns into exit 2, a refusal: it fails closed (decision 208). The recording hooks fail open.
 
 const EVENTS = ["pre-tool-use", ...SESSION_HOOKS];
 
