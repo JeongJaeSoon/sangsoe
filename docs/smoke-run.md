@@ -618,3 +618,5 @@ orca plugin shot local.sangsoe --panel brief --width 360 --json
 | 14 | main 을 합친 #6 은 `verdict_not_at_head`(결정 158). 새 head 에 기록 → `merge_verdict`, `pr_merged`. 열린 S6 PR 0, 크리티컬 패스 "끝나지 않은 항목 없음" | FAIL (체크리스트 기대, 위 행을 고쳤다) |
 
 닫기: 워커 넷 worker_done → worker-release 넷 `released`, 리드 Run 의 Task 다섯(재리뷰 항목 포함) completed, 리드 worker_done → 오케스트레이터 세션이 release(`released`). 원격 `s6/*` 넷을 지웠다(`ls-remote` 빈 출력). 오케스트레이터 · 리드 세션의 worktree · 터미널과 설정 되돌리기, 설치본 되돌리기는 리드 몫이다.
+
+고침(위 기록은 본 그대로 둔다): 2 · 10 의 리드 Run 이 안 보이던 것, 9 · 10 의 다시 열린 #4 가 닫힘으로 읽히던 것, 8 뒤 위 PR 의 base 가 머지된 `s6/a` 로 남아 land 가 그 브랜치에 머지할 수 있던 것은 결정 216 이 고쳤다(`item_created.run`, `pr_reopened`, land 의 `base_merged` · `base_unrecorded`). 다음 S6 실행에서 9 의 retarget 을 하지 않으면 land 가 `base_merged` 와 `gh pr edit … --base main` fix 를 낸다.
