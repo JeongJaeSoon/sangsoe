@@ -123,7 +123,6 @@ function harness(s: Setup = {}) {
           : ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t", spec: `sangsoe-role: ${s.existingRole ?? "worker"}\nbrief` }] }),
       "orchestration-worker-start": () => (s.workerStart ? s.workerStart() : ok({ dispatchId: "ctx_new", worktreeId: CHILD_TREE })),
       "worktree-create": ok({ worktree: { id: CHILD_TREE, path: CHILD_PATH } }),
-      "terminal-close": ok({ closed: 1 }),
       ...s.replies,
     }),
   });
@@ -915,23 +914,18 @@ test("decision 200: the worktree's local settings are written before the session
   await start(sr, request({ task: { id: NEW_TASK }, model: raised.value }));
   assert.equal(flag(sr.called("worker-start")[0] ?? [], "effort"), "high", "the raised effort survives the floor");
 
-  // The plain shell `worktree create` opens is closed before the agent's own terminal starts.
-  const closed = order.indexOf("terminal close");
-  assert.ok(closed > order.indexOf("worktree create") && closed < order.indexOf("orchestration worker-start"));
-  assert.equal(flag(h.fake.calls.find((c) => c.slice(1, 3).join(" ") === "terminal close") ?? [], "worktree"), CHILD_SELECTOR);
-
-  // A definite failure with no Dispatch: no agent came up, so the empty worktree goes.
-  const rms = (x: ReturnType<typeof harness>) => x.fake.calls.filter((c) => c.slice(1, 3).join(" ") === "worktree rm");
-  const f = harness({ workerStart: () => fail("agent_failed") });
-  await start(f);
-  assert.equal(flag(rms(f)[0] ?? [], "worktree"), CHILD_SELECTOR);
-  // A Dispatch came back: it may still own a live terminal, so the worktree is left and named.
-  const d = harness({
-    workerStart: () => ({ code: 1, stdout: JSON.stringify({ ok: false, error: { code: "start_failed", message: "x", data: { dispatchId: "ctx_dead" } } }), stderr: "" }),
-  });
-  const failed = await start(d);
-  assert.equal(rms(d).length, 0);
-  assert.ok(failed.kind === "refused" && failed.detail.includes(CHILD_TREE), JSON.stringify(failed));
+  // A failed start may still own a live terminal, whatever Orca answered: no terminal is closed and
+  // no worktree removed; the refusal names the worktree.
+  const rms = (x: ReturnType<typeof harness>) => x.fake.calls.filter((c) => ["worktree rm", "terminal close"].includes(c.slice(1, 3).join(" ")));
+  for (const workerStart of [
+    () => fail("agent_failed"),
+    () => ({ code: 1, stdout: JSON.stringify({ ok: false, error: { code: "start_failed", message: "x", data: { dispatchId: "ctx_dead" } } }), stderr: "" }),
+  ]) {
+    const d = harness({ workerStart });
+    const failed = await start(d);
+    assert.equal(rms(d).length, 0);
+    assert.ok(failed.kind === "refused" && failed.detail.includes(CHILD_TREE), JSON.stringify(failed));
+  }
 });
 
 test("decisions 197, 200: every start passes --keep-open, the lifetime Orca gave a new-child worker", async () => {

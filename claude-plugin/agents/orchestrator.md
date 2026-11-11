@@ -42,7 +42,7 @@ effort: medium
 - 여러 PR·순서·배포 단계·완료 조건이 있는 일 → 리드를 시작하고 그 프로그램은 리드에게 맡긴다. 그 프로그램의 워커에게 직접 지시하지 않는다.
 - 리드를 시작하기 전에 Orca 의 중첩 워커 깊이 설정을 확인한다. 리드 아래에 워커를 열 수 없으면(깊이 2 미만) 리드를 시작하지 않고 그 프로그램을 네 Run 의 워커로 돌린다(결정 94 라).
 - 일이 다른 저장소에 있으면 `start_unit`(또는 `item_create`)의 `repo` 에 Orca 저장소 선택자(`id:`·`name:`·`path:`)를 준다. 네가 Orca worktree 밖(일반 폴더·폴더 문맥)에 있으면 `worktreeId` 를 비우고 `repo` 를 꼭 준다. 그때 새 세션의 계보는 네 Run 뿐이다(결정 197).
-- 리드는 `--keep-open` 으로 시작된다. 리드나 네가 시작한 워커의 worker_done 을 읽고 확인을 마치면 `orca orchestration worker-release --dispatch <id>` 로 직접 푼다. `start_unit` 이 연 세션은 `--keep-open` 이라 Orca 가 저절로 닫지 않는다(결정 197·200).
+- 리드는 `--keep-open` 으로 시작된다. 리드나 네가 시작한 워커의 worker_done 을 읽고 확인을 마치면 `orca orchestration worker-release --dispatch <id>` 로 직접 푼다. `start_unit` 이 연 세션은 `--keep-open` 이라 Orca 가 저절로 닫지 않는다(결정 197·200). `worker-release` 는 agent 터미널만 닫으므로, 이어서 `orca terminal close --worktree <그 worktree> --all` 로 worktree 를 만들 때 생긴 셸을 닫는다: 남으면 REAPER 가 그 worktree 를 치우지 않는다. 시작 거부(`start_refused`)가 남은 worktree 를 적었으면 살아 있는 터미널이 없는지 보고 `orca worktree rm` 으로 치운다.
 
 ## 오너에게 올리는 것
 

@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, openSync, readFileSync, readSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 
 // Claude Code's transcript is JSONL whose record shapes are not documented (P13). Every reader here
 // returns nothing for a shape it does not know, so a format change costs a missed record, never a wrong one.
@@ -48,25 +48,40 @@ export function tail(path: string | undefined, bytes = TAIL_BYTES): Rec[] {
 
 /**
  * The records anywhere in the file whose line contains `marker`: one long autonomous turn can push
- * a record far past the tail, and only marked lines are parsed.
+ * a record far past the tail, and only marked lines are parsed. Read in chunks: a transcript can
+ * pass the largest string Node holds.
  */
-export function marked(path: string | undefined, marker: string): Rec[] {
+export function marked(path: string | undefined, marker: string, chunk = 1 << 20): Rec[] {
   if (!path) return [];
-  let text: string;
-  try {
-    text = readFileSync(path, "utf8");
-  } catch {
-    return [];
-  }
   const out: Rec[] = [];
-  for (const line of text.split("\n")) {
-    if (!line.includes(marker)) continue;
+  const take = (line: Buffer) => {
+    if (!line.includes(marker)) return;
     try {
-      const r = JSON.parse(line) as unknown;
+      const r = JSON.parse(line.toString("utf8")) as unknown;
       if (r && typeof r === "object" && !Array.isArray(r)) out.push(r as Rec);
     } catch {
       // A partial last line is skipped.
     }
+  };
+  try {
+    const fd = openSync(path, "r");
+    try {
+      const buf = Buffer.alloc(chunk);
+      let rest = Buffer.alloc(0);
+      for (let n = readSync(fd, buf, 0, chunk, null); n > 0; n = readSync(fd, buf, 0, chunk, null)) {
+        let data = Buffer.concat([rest, buf.subarray(0, n)]);
+        for (let nl = data.indexOf(10); nl >= 0; nl = data.indexOf(10)) {
+          take(data.subarray(0, nl));
+          data = data.subarray(nl + 1);
+        }
+        rest = Buffer.from(data);
+      }
+      take(rest);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return out;
   }
   return out;
 }

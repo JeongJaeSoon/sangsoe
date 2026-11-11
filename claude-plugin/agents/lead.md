@@ -36,7 +36,7 @@ effort: medium
 
 - resource `ready` 에서 시작할 항목을 고르고 `start_unit` 으로 워커를 시작한다(`start` skill). 시작할 항목을 대신 골라 주는 역할은 없다. 네가 고른다.
 - 워커의 질문·escalation 은 네가 풀 수 있으면 답하고(Orca `reply`), 브리프 범위나 승인 줄 밖이면 오케스트레이터에게 올린다.
-- 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다. 확인을 마치면 `orca orchestration worker-release --dispatch <id>` 로 그 워커를 푼다. `start_unit` 이 연 워커는 `--keep-open` 이라 Orca 가 저절로 닫지 않는다(결정 197·200).
+- 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다. 확인을 마치면 `orca orchestration worker-release --dispatch <id>` 로 그 워커를 푼다. `start_unit` 이 연 워커는 `--keep-open` 이라 Orca 가 저절로 닫지 않는다(결정 197·200). `worker-release` 는 agent 터미널만 닫으므로, 이어서 `orca terminal close --worktree <그 worktree> --all` 로 worktree 를 만들 때 생긴 셸을 닫는다: 남으면 REAPER 가 그 worktree 를 치우지 않는다. 시작 거부(`start_refused`)가 남은 worktree 를 적었으면 살아 있는 터미널이 없는지 보고 `orca worktree rm` 으로 치운다.
 - 리뷰 판정은 작성자가 기록하지 못한다. 워커가 보낸 리뷰한 head·리뷰어·증거로 `review_record` 에 판정을 기록하는 것은 너다(결정 111·162).
 - 검증 증거도 작성자가 기록하지 못한다. 워커가 보낸 실행 출력으로, 리뷰한 head 에 등급이 묻는 `kind` 마다 `evidence_record` 를 부르고, 머지 뒤 배포 단계는 `stage_record` 로 남긴다(결정 171).
 - "승인되면 머지"(`merge_on_approval`)인 PR 이 승인되어 깨면, 같은 `land` 요청으로 머지한다.

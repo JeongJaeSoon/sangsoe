@@ -14,6 +14,7 @@ import {
   dedupeKey,
   EVENTS,
   localDay,
+  marked,
   MODEL_CATALOG,
   MODEL_KINDS,
   MODEL_POLICY,
@@ -73,6 +74,21 @@ test("advisorCalls counts each advisor iteration once, and its cost is the catal
   const usd = advisorCallCost(calls[0] ?? { model: "", input: 0, output: 0 });
   assert.equal(usd, (29631 * price.input + 282 * price.output) / 1_000_000);
   assert.equal(advisorCallCost({ model: "unknown-model", input: 1, output: 1 }), undefined);
+});
+
+test("the transcript is read in chunks: a marked line split across chunks, multibyte text and a last line with no newline all survive", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sangsoe-marked-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "t.jsonl");
+  const a = JSON.stringify({ type: "assistant", note: "가나다 advisor_message 라마" });
+  const b = JSON.stringify({ type: "user", note: "x".repeat(50) });
+  writeFileSync(file, `${a}\n${b}\n${a}`);
+  for (const chunk of [7, 16, 1 << 20]) {
+    const got = marked(file, "advisor_message", chunk);
+    assert.equal(got.length, 2, `chunk ${chunk}`);
+    assert.equal((got[0] as { note?: string }).note, "가나다 advisor_message 라마");
+  }
+  assert.deepEqual(marked(join(dir, "missing.jsonl"), "advisor_message"), []);
 });
 
 test("doctor's spend line: none without a store, a note instead of a throw when the store is unreadable", (t) => {

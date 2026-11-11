@@ -304,7 +304,6 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
       if (typeof w?.id !== "string" || typeof w.path !== "string") return unexpected("orca worktree create: no worktree id and path", r.value);
       return { ok: true, value: { id: w.id, path: w.path } };
     },
-    terminalCloseAll: (a) => run<unknown>("terminalCloseAll", { flags: { worktree: a.worktree, all: true } }),
     ports: async (a) => {
       const r = await shaped<Json>("ports", has("ports", rowsWith({ id: "string", port: "number" })), { flags: { worktree: a.worktree } });
       if (!r.ok) return r;

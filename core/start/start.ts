@@ -377,11 +377,8 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     ...(repo ? { repo } : {}),
   });
   if (!tree.ok) return failedAttempt("orca_error", `worktree create 실패 (${tree.error.code}: ${tree.error.message})`);
-  // create opens a plain shell; left open it would outlive worker-release and keep the reaper away.
-  const shell = await orca.terminalCloseAll({ worktree: `id:${tree.value.id}` });
   let plan = launch(choice, { orcaFlag, ownerSetting: false, worktreeFile: true, spent });
   const notes: string[] = [];
-  if (!shell.ok) notes.push(`새 worktree 의 첫 셸 터미널을 닫지 못했다 (${shell.error.code}): 풀 때 함께 닫는다`);
   if (plan.settings) {
     try {
       (ports.writeSettings ?? writeLocalSettings)(tree.value.path, plan.settings);
@@ -424,14 +421,12 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   if (!started.ok) {
     const dead = findKey(started.error.data, DISPATCH_KEYS);
     if (dead) store.append({ type: "worker_dead", source, payload: { reason: "start_failed" }, entity: "dispatch", entity_id: dead, target: taskId });
-    // With no Dispatch and a definite answer, no agent came up: the empty worktree goes. A lost answer
-    // or a Dispatch may still own a live terminal (Orca's recovery guide), so that one is left and
-    // named for the starter to clean up; the reaper does not judge a worktree with no Dispatch or PR.
-    if (!dead && started.error.code !== "response_lost") {
-      const rm = await orca.worktreeRm({ worktree: `id:${tree.value.id}` });
-      if (rm.ok) return failedAttempt("orca_error", `worker-start 실패 (${started.error.code}: ${started.error.message})`);
-    }
-    return failedAttempt("orca_error", `worker-start 실패 (${started.error.code}: ${started.error.message}), 남은 worktree(시작한 쪽이 치운다): ${tree.value.id}`);
+    // A failed start can still own a live terminal (Orca's recovery guide: a timeout or a lost answer
+    // never proves exit), so nothing here removes the worktree; the refusal names it for the starter.
+    return failedAttempt(
+      "orca_error",
+      `worker-start 실패 (${started.error.code}: ${started.error.message}), 남은 worktree: ${tree.value.id} (살아 있는 터미널이 없으면 orca worktree rm 으로 치운다)`,
+    );
   }
 
   // ⑤ no_dispatch: the receipt first, then dispatch-show (decision 94 (나)⑤).

@@ -74,7 +74,6 @@ export const ORCA_COMMANDS = {
   worktreeList: { path: ["worktree", "list"], flags: ["json", "repo", "limit"] },
   worktreePs: { path: ["worktree", "ps"], flags: ["json", "limit", "agent-wait"] },
   worktreeRm: { path: ["worktree", "rm"], flags: ["json", "worktree", "run-hooks", "delete-branch"] },
-  terminalCloseAll: { path: ["terminal", "close"], flags: ["json", "worktree", "all"] },
   worktreeCreate: { path: ["worktree", "create"], flags: ["json", "name", "no-parent", "parent-worktree", "repo", "setup"] },
   ports: { path: ["ports"], flags: ["json", "worktree"] },
 
