@@ -1,5 +1,6 @@
 import { pendingRereview, rereviewItem } from "../land/rereview.ts";
 import type { CoreDeps } from "../notify/result.ts";
+import type { Role } from "../start/types.ts";
 import type { Store } from "../store/store.ts";
 import { readInput } from "./entry.ts";
 import { foldFacts } from "./facts.ts";
@@ -36,7 +37,7 @@ export type OwnRunSync = { run: string; synced: SyncResult; rereview: RereviewRe
  * Orca call from a worker (bound to no Run) or unless the store names a pending item; then one
  * run-current, and the sync only when this session is bound to a Run the item belongs in.
  */
-export async function syncOwnRun(deps: CoreDeps, role: string, now: string): Promise<OwnRunSync> {
+export async function syncOwnRun(deps: CoreDeps, role: Role, now: string): Promise<OwnRunSync> {
   if (role === "worker") return { skipped: "a worker holds no Run" };
   const runs = rereviewRuns(deps.store);
   if (runs.size === 0) return { skipped: "nothing pending" };

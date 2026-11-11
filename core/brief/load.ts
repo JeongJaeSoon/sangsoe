@@ -32,16 +32,42 @@ function readableDeps(t: FullTaskRow): string[] {
 }
 
 type RunRead = Promise<readonly [Awaited<ReturnType<OrcaAdapter["taskList"]>>, Awaited<ReturnType<OrcaAdapter["gateList"]>>]>;
-const readRun = (orca: OrcaAdapter, run: string): RunRead => Promise.all([orca.taskList({ run, full: true }), orca.gateList({ run })]);
+type Lane = <T>(f: () => Promise<T>) => Promise<T>;
+
+/** Runs read at once: every Run an event ever named is read, so their number only grows. */
+const RUN_LANES = 4;
+
+function lanes(n: number): Lane {
+  let busy = 0;
+  const waiting: (() => void)[] = [];
+  return async (f) => {
+    while (busy >= n) await new Promise<void>((r) => waiting.push(r));
+    busy += 1;
+    try {
+      return await f();
+    } finally {
+      busy -= 1;
+      waiting.shift()?.();
+    }
+  };
+}
+
+const readRun = (orca: OrcaAdapter, run: string, lane: Lane): RunRead => lane(() => Promise.all([orca.taskList({ run, full: true }), orca.gateList({ run })] as const));
 
 /**
  * One Orca snapshot through the adapter: task-list --full and gate-list per Run, nothing cached. The
- * reads run side by side (each is a CLI process, about 0.14s); `started` holds reads already begun.
+ * reads run side by side, RUN_LANES Runs at a time (each is a CLI process, about 0.14s); `started`
+ * holds reads already begun in `lane`.
  */
-export async function readSnapshot(orca: OrcaAdapter, runs: readonly string[], started: ReadonlyMap<string, RunRead> = new Map()): Promise<Result<BriefSnapshot>> {
+export async function readSnapshot(
+  orca: OrcaAdapter,
+  runs: readonly string[],
+  started: ReadonlyMap<string, RunRead> = new Map(),
+  lane: Lane = lanes(RUN_LANES),
+): Promise<Result<BriefSnapshot>> {
   const tasks: BriefTask[] = [];
   const gates: BriefGate[] = [];
-  const reads = await Promise.all(runs.map((run) => started.get(run) ?? readRun(orca, run)));
+  const reads = await Promise.all(runs.map((run) => started.get(run) ?? readRun(orca, run, lane)));
   for (const [i, run] of runs.entries()) {
     const [tl, gl] = reads[i] ?? [];
     if (!tl?.ok) return refuse("orca_error", `task-list ${run}: ${tl?.error.code} ${tl?.error.message}`, "run sangsoe brief again once Orca answers");
@@ -100,9 +126,10 @@ export async function loadBriefInput(o: LoadOptions): Promise<Result<BriefInput>
   if (o.orcaFile) return done({ events, orca: JSON.parse(readFileSync(o.orcaFile, "utf8")) as BriefSnapshot, now: o.now });
   const orca = o.orca ?? createOrcaAdapter(nodeExec());
   const named = briefRuns(events, null, o.runs);
-  const started = new Map(named.map((run) => [run, readRun(orca, run)]));
+  const lane = lanes(RUN_LANES);
+  const started = new Map(named.map((run) => [run, readRun(orca, run, lane)]));
   const current = await orca.runCurrent();
   const runs = briefRuns(events, current.ok ? current.value.runId : null, o.runs);
-  const snap = await readSnapshot(orca, runs, started);
+  const snap = await readSnapshot(orca, runs, started, lane);
   return snap.ok ? done({ events, orca: snap.value, now: o.now }) : snap;
 }

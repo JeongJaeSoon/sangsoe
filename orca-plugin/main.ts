@@ -122,10 +122,9 @@ export default function activate(
     if ((input as { auto?: unknown } | null)?.auto !== true) stall?.poke();
     const r = await panel["panel.brief"](input);
     const s = r.ok ? (r.value as { status?: { text: string; tone: Tone; tooltip: string } }).status : undefined;
-    if (s) {
-      fromPanel = { at: clock.now(), s };
-      await status(s.text, s.tone, s.tooltip);
-    }
+    // A failed reading says nothing about now, so the round reads (and shows `?`) for itself.
+    fromPanel = s ? { at: clock.now(), s } : null;
+    if (s) await status(s.text, s.tone, s.tooltip);
     return r;
   });
   orca.panels.handle("panel.act", panel["panel.act"]);
