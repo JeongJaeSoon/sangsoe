@@ -860,7 +860,7 @@ done_when = "prod 배포가 stage_recorded 에 기록된다"</pre>
 <table>
 <thead><tr><th style="width:14%">단계</th><th style="width:22%">읽는 뷰</th><th>규칙</th></tr></thead>
 <tbody>
-<tr><td>1. 현황</td><td><code>owner_todo</code> + <code>decision</code> + <code>group_brief</code> + <code>group_items</code> + <code>item_status</code></td><td><b>표 네 절</b>(결정 89): 결정 필요 · 지금 오너가 할 일 · 진행 중 · 보류(있을 때만). 열과 폭은 아래 <a href="#brief-tables">§현황 1단계의 표</a>. <b>행</b>: 진행 중 절은 소유 리드마다 리드 행 하나(굵게, 우선순위)와 소유 리드가 없는 항목(단일 워커)을 모은 "그 외" 리드 행 하나, 그 아래에 그 묶음의 모든 항목·세션·PR 이 한 행씩이다. 접는 행이 없다. <b>정렬</b>: 묶음 우선순위 오름차순(<code>P0</code> 먼저) → 같으면 🚧 막힘이 가장 오래된 순 → 이름. 묶음 안은 🚧 → 🔄 → 🟢 → 📅, 같은 상태 안에서는 항목 우선순위 → 기다린 기간이 긴 순. 결정·오너 할 일은 경과가 긴 순, 보류는 기간이 긴 순. <b>겹치지 않는다</b>: 결정(<code>dNNN</code>)은 결정 필요에만 둔다. 오너 할 일 절에 둔 항목은 진행 중에 행을 만들지 않는다. 열린 결정이 걸린 항목은 진행 중에 행으로 남고 <code>다음</code> 칸이 <code>dNNN 답</code> 을 가리킨다. <b>접기</b>: ✅ 완료는 표에 넣지 않고 맨 아래 한 줄이 최근 N일(기본 7, 설정) 건수만 센다. 펼치면 목록(<code>--done</code>).</td></tr>
+<tr><td>1. 현황</td><td><code>owner_todo</code> + <code>decision</code> + <code>group_brief</code> + <code>group_items</code> + <code>item_status</code></td><td><b>표 네 절</b>(결정 89): 결정 필요 · 지금 오너가 할 일 · 열린 항목 · 보류(있을 때만). 열과 폭은 아래 <a href="#brief-tables">§현황 1단계의 표</a>. <b>행</b>: 열린 항목 절은 소유 리드마다 리드 행 하나(굵게, 우선순위)와 소유 리드가 없는 항목(단일 워커)을 모은 "그 외" 리드 행 하나, 그 아래에 그 묶음의 모든 항목·세션·PR 이 한 행씩이다. 접는 행이 없다. <b>정렬</b>: 묶음 우선순위 오름차순(<code>P0</code> 먼저) → 같으면 🚧 막힘이 가장 오래된 순 → 이름. 묶음 안은 🚧 → 🔄 → 🟢 → 📅, 같은 상태 안에서는 항목 우선순위 → 기다린 기간이 긴 순. 결정·오너 할 일은 경과가 긴 순, 보류는 기간이 긴 순. <b>겹치지 않는다</b>: 결정(<code>dNNN</code>)은 결정 필요에만 둔다. 오너 할 일 절에 둔 항목은 열린 항목 절에 행을 만들지 않는다. 열린 결정이 걸린 항목은 열린 항목 절에 행으로 남고 <code>다음</code> 칸이 <code>dNNN 답</code> 을 가리킨다. <b>접기</b>: ✅ 완료는 표에 넣지 않고 맨 아래 한 줄이 최근 N일(기본 7, 설정) 건수만 센다. 펼치면 목록(<code>--done</code>).</td></tr>
 <tr><td>2. 묶음 상세</td><td><code>group_items</code> + <code>item_status</code> + <code>edge</code></td><td>상태 순서는 🚧 → 🔄 → 🟢 → 📅 → ⏸️, 그 아래 접힌 ✅. 같은 상태 안에서는 항목 우선순위 → 기다린 기간이 긴 순. 한 줄은 항목·Orca 세션(워커)·PR 단위로 제목·기다리는 쪽·다음 할 일·링크·플래그. 맨 위 카드에 의존 그래프와 크리티컬 패스(요약 줄 바로 아래, 상태별 절 위).</td></tr>
 <tr><td>3. 항목 상세</td><td><code>item_timeline</code> + <code>evidence</code></td><td>최근 <code>event</code>(잡음 제외), 요지, 증거, 대화 기록 위치. 묶음 id 와 항목 번호로 CLI 와 화면이 같은 주소를 쓴다.</td></tr>
 </tbody></table>
@@ -875,8 +875,8 @@ done_when = "prod 배포가 stage_recorded 에 기록된다"</pre>
 <thead><tr><th style="width:14%">절</th><th style="width:30%">열 · 최대 표시 폭 · 출처</th><th>규칙</th></tr></thead>
 <tbody>
 <tr><td>결정 필요</td><td><code>ID</code> 4 · <code>결정</code> 20 · <code>추천</code> 16 · <code>묶음</code> 14 · <code>경과</code> 6<br>출처: <code>decision</code>(<code>dNNN</code>, 질문, 추천, 소유 묶음, <code>created_at</code>)</td><td>추천은 결정을 열 때 낸 한 줄이다. 긴 질문·선택지·"답이 없으면"은 3단계. 건수는 <code>owner_todo</code> 의 열린 결정 수와 같다.</td></tr>
-<tr><td>지금 오너가 할 일</td><td><code>ID</code> 4 · <code>할 일</code> 22 · <code>풀리는 일</code> 16 · <code>어디서</code> 10 · <code>경과</code> 6<br>출처: <code>owner_todo</code> 의 나머지 세 종류(<code>why_owner</code> 가 있는 항목, <code>waiting_human</code>, 전달되지 않은 답)</td><td><code>풀리는 일</code> 은 이 일이 풀면 움직이는 후속 항목이다. 열린 결정은 이 절에 넣지 않고, 이 절의 항목은 진행 중에 행을 만들지 않는다.</td></tr>
-<tr><td>열린 항목</td><td><code>상태</code> 4 · <code>항목</code> 24 · <code>PR</code> 12 · <code>다음</code> 12 · <code>누가</code> 10<br>출처: <code>group_brief</code>(리드 행), <code>group_items</code> + <code>item_status</code>(항목 행), Orca 참조(PR)</td><td><code>상태</code> 는 이모지 하나(🚧 🔄 🟢 📅). 🚨 는 <code>다음</code> 앞. 리드 행 <code>다음</code> = <code>N건·막힘 M</code>. <code>누가</code> = 🚧 기다리는 쪽, 🔄 일하는 워커(뒤에 기간), 🟢 📅 <code>—</code>. 절 이름 "진행 중"은 상태 🔄 와 다른 뜻이다(상태 열이 구분).</td></tr>
+<tr><td>지금 오너가 할 일</td><td><code>ID</code> 4 · <code>할 일</code> 22 · <code>풀리는 일</code> 16 · <code>어디서</code> 10 · <code>경과</code> 6<br>출처: <code>owner_todo</code> 의 나머지 세 종류(<code>why_owner</code> 가 있는 항목, <code>waiting_human</code>, 전달되지 않은 답)</td><td><code>풀리는 일</code> 은 이 일이 풀면 움직이는 후속 항목이다. 열린 결정은 이 절에 넣지 않고, 이 절의 항목은 열린 항목 절에 행을 만들지 않는다.</td></tr>
+<tr><td>열린 항목</td><td><code>상태</code> 4 · <code>항목</code> 24 · <code>PR</code> 12 · <code>다음</code> 12 · <code>누가</code> 10<br>출처: <code>group_brief</code>(리드 행), <code>group_items</code> + <code>item_status</code>(항목 행), Orca 참조(PR)</td><td><code>상태</code> 는 이모지 하나(🚧 🔄 🟢 📅). 🚨 는 <code>다음</code> 앞. 리드 행 <code>다음</code> = <code>N건·막힘 M</code>. <code>누가</code> = 🚧 기다리는 쪽, 🔄 일하는 워커(뒤에 기간), 🟢 📅 <code>—</code>. 절 이름 "열린 항목"은 상태 🔄 와 다른 뜻이다(상태 열이 구분).</td></tr>
 <tr><td>보류</td><td><code>상태</code> 4 · <code>항목</code> 24 · <code>PR</code> 12 · <code>다시 볼 조건</code> 16 · <code>기간</code> 4<br>출처: <code>item_status</code> 의 ⏸️, 다시 볼 trigger</td><td>없으면 절을 그리지 않는다(결정 필요·오너 할 일은 비어도 제목과 "없음").</td></tr>
 </tbody></table>
 <ul>
@@ -891,9 +891,9 @@ done_when = "prod 배포가 stage_recorded 에 기록된다"</pre>
 <thead><tr><th style="width:14%">버킷</th><th style="width:40%">정의 (항목 하나가 정확히 한 곳)</th><th>표에서 확인하는 수</th></tr></thead>
 <tbody>
 <tr><td>완료</td><td>✅ 인 항목 가운데 닫힌 시각이 최근 <code>brief.done_days</code> 일(기본 7) 안인 것. 🔍 근거 부족 포함, 🗑️ 취소 제외.</td><td>표에 행이 없다. 고정 입력에서 창 안에 닫힌 ✅ 항목 수. 맨 아래 줄은 창 길이(<code>완료는 최근 7일</code>)만 말한다.</td></tr>
-<tr><td>진행 중</td><td>🔄 인 항목.</td><td>진행 중 절의 🔄 항목 행 수(리드 행 제외)</td></tr>
-<tr><td>남은 것</td><td>🟢 + 📅 + ⏸️ (아직 시작하지 않은 것).</td><td>진행 중 절의 🟢·📅 항목 행 수(리드 행 제외) + 보류 절 행 수</td></tr>
-<tr><td>막힌 것</td><td>🚧 + 지금 오너가 할 일 절의 항목 행(<code>iNNN</code>). 오너가 하기 전에는 못 가는 일이라 저장된 상태와 상관없이 여기다.</td><td>진행 중 절의 🚧 항목 행 수(리드 행 제외) + 오너 할 일 절의 <code>iNNN</code> 행 수</td></tr>
+<tr><td>진행 중</td><td>🔄 인 항목.</td><td>열린 항목 절의 🔄 항목 행 수(리드 행 제외)</td></tr>
+<tr><td>남은 것</td><td>🟢 + 📅 + ⏸️ (아직 시작하지 않은 것).</td><td>열린 항목 절의 🟢·📅 항목 행 수(리드 행 제외) + 보류 절 행 수</td></tr>
+<tr><td>막힌 것</td><td>🚧 + 지금 오너가 할 일 절의 항목 행(<code>iNNN</code>). 오너가 하기 전에는 못 가는 일이라 저장된 상태와 상관없이 여기다.</td><td>열린 항목 절의 🚧 항목 행 수(리드 행 제외) + 오너 할 일 절의 <code>iNNN</code> 행 수</td></tr>
 </tbody></table>
 <ul>
   <li><b>세지 않는 것</b>: 리드 행, 결정 필요 절의 <code>dNNN</code> 행, 오너 할 일 절의 "전달되지 않은 답" 행(결정은 헤더의 <code>내가 할 일</code> 이 센다). 그래서 건수 줄의 합은 <code>완료</code> + 표의 모든 항목 행이다.</li>

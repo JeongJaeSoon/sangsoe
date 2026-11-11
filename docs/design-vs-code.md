@@ -224,7 +224,7 @@
 | 표 진행 중 | design.html §3 현황 보고는 표 네 절이다 | changed (결정 222) | `core/brief/build.ts:53`, `core/brief/build.ts:241`, `orca-plugin/panel/view.ts:721` | 결정 222 ④: 절과 탭의 이름은 "열린 항목" 이다. 묶음 안의 열린 항목을 상태와 상관없이 담아 요약 줄의 "🔄 진행 중" 과 다른 수를 셌다 |
 | 표 보류 | design.html §3 현황 보고는 표 네 절이다 | implemented | `core/brief/build.ts:53`, `core/brief/build.ts:239` | |
 | 완료 최근 7일 접힌 목록 | design.html §3 현황 보고는 표 네 절이다 | implemented | `orca-plugin/panel/view.ts:221`, `core/brief/render.ts:41`, `cli/commands/brief.ts:37` | G16 고침(U76, 결정 213, 줄 번호는 U76 기준): 글은 건수 줄로 접고 `sangsoe brief [<묶음>] --done` 이 같은 행을 표로 편다 |
-| 묶음 0개 안내 줄 | design.html §3 현황 보고는 표 네 절이다 | implemented | `orca-plugin/panel/view.ts:209`, `core/brief/render.ts:53` | G16 고침(U76, 결정 213, 줄 번호는 U76 기준): 글도 진행 중 절 아래에 패널 문장의 앞 두 문장을 둔다 |
+| 묶음 0개 안내 줄 | design.html §3 현황 보고는 표 네 절이다 | implemented | `orca-plugin/panel/view.ts:209`, `core/brief/render.ts:53` | G16 고침(U76, 결정 213, 줄 번호는 U76 기준): 글도 열린 항목 절 아래에 패널 문장의 앞 두 문장을 둔다 |
 | 상태 일곱과 읽기 상태 | design.html §3 상태와 용어 | implemented | `core/contract/transitions.ts:10`, `core/brief/item_status.ts:75` | 예정·준비됨·진행 중·막힘·보류·완료·취소, 검증 대기(결정 181), PR 모름·닫힘(결정 178). 머지 없이 닫힌 PR 의 완료 항목을 거두면 취소로 읽는다(결정 223) |
 | 플래그 넷 | design.html §3 상태와 용어 | implemented | `core/brief/build.ts:555`, `core/brief/item_status.ts:202` | 결정 필요·오류·확인 필요·근거 부족 |
 | 역할 표 GRAPH | design-appendix 역할과 완료 판정 표 | implemented | `core/graph/edit.ts:113`, `core/detect/queue/round.ts:66` | |
