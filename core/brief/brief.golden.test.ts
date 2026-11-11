@@ -38,7 +38,7 @@ test("(1) section order; empty first two sections show 없음; 보류 is left ou
   const heads = text.split("\n").filter((l) => l.startsWith("### "));
   assert.deepEqual(
     heads.map((h) => h.replace(/ \d+$/, "")),
-    ["### 결정 필요", "### 지금 오너가 할 일", "### 진행 중", "### 보류"],
+    ["### 결정 필요", "### 지금 오너가 할 일", "### 열린 항목", "### 보류"],
   );
   const bare = input({ events: events.filter((e) => !/^(decision_|waiting_|escalation_stale)/.test(e.type)), orca: { ...orca, gates: [] } });
   const noHold = { ...bare, orca: { ...bare.orca, tasks: bare.orca.tasks.filter((t) => !["task_28", "task_41", "task_35"].includes(t.id)) } };

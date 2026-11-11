@@ -67,7 +67,7 @@ test("(14) the four tables give each column one role: short cells nowrap, item c
     const rows = table(name);
     assert.ok(rows.length > 0, name);
     for (const r of rows) {
-      const got = Object.fromEntries(r.filter((c) => c.label).map((c) => [c.label, c.cls.replace(/\s*\bhd\b/, "").trim()]));
+      const got = Object.fromEntries(r.filter((c) => c.label).map((c) => [c.label, c.cls.replace(/\s*\b(?:hd|nil)\b/g, "").trim()]));
       assert.deepEqual(got, want[name], name);
     }
   }
@@ -88,10 +88,11 @@ test("(15) every card of the four tables opens with a title line: the item id, t
 });
 
 test("(15) a narrow panel draws each graph row as a bordered card under its section heading", () => {
-  assert.match(rule(NARROW, ".tbl.gt tbody"), /display: flex; flex-direction: column; gap: var\(--s2\);/);
-  const tr = rule(NARROW, ".tbl.gt tr");
-  assert.match(tr, /border: 1px solid var\(--rule-2\);/);
-  assert.match(tr, /border-radius: var\(--r2\);/);
+  // Decision 222 made the card every table's: one rule for list and graph rows.
+  assert.match(rule(NARROW, ".tbl tbody"), /display: flex; flex-direction: column; gap: var\(--s2\);/);
+  const tr = rule(NARROW, ".tbl tr");
+  assert.match(tr, /border: 1px solid var\(--rule\);/);
+  assert.match(tr, /border-radius: var\(--r3\);/);
   assert.match(rule(NARROW, ".tbl.gt td.hd"), /order: -2;.*font-weight: 600;/);
   assert.match(rule(NARROW, ".tbl.gt td.hd::before"), /content: none;/);
   assert.match(rule(NARROW, ".tbl.gt td.brk"), /order: -1;.*border-bottom: 1px solid var\(--rule\);/);

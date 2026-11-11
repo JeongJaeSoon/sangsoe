@@ -176,19 +176,31 @@ function cellHtml(c: Cell): string {
   return c.link ? `<a href="${esc(c.link)}" target="_blank" rel="noreferrer">${body}</a>` : body;
 }
 
-type RowOpts = { cls?: string; nav?: Target; acts?: string; idCol?: boolean; go?: string };
+/** `num`: the index among the cells after the title of a number that rides the card's head line. */
+type RowOpts = { cls?: string; nav?: Target; acts?: string; idCol?: boolean; go?: string; label?: string; num?: number };
+
+const isNil = (c: Cell) => c.text === "—" && !c.link;
 
 // Column 0 is the ID or state marker, column 1 the title; the rest carry their column name as the
-// 360px label (decision 89: a narrow panel folds each row into one block, no column is dropped).
+// 360px label (decision 89: a narrow panel folds each row into one card, no column is dropped).
+// An empty value keeps its cell, marked `nil`, so a wide table keeps its columns (decision 222 (20)).
 function rowHtml(t: Table, r: Row, o: RowOpts = {}): string {
   const [first, title, ...rest] = r.cells;
   const lead = o.idCol ? `<span class="id">${esc(first?.text ?? "")}</span>` : cellHtml(first ?? { text: "—" });
   const go = o.go ? `<span class="go" aria-hidden="true">${esc(o.go)} ›</span>` : "";
-  const titleText = (title ? (o.idCol ? cellHtml(title) : titleWithId(title)) : DASH) + go;
-  const tds = rest.map((c, i) => `<td data-l="${esc(t.columns[i + 2]?.name ?? "")}">${cellHtml(c)}</td>`).join("");
-  const nav = o.nav ? ` data-nav="${attr(o.nav)}" tabindex="0"${o.go ? ` aria-label="${esc(`${title?.text ?? ""} ${o.go}`)}"` : ""}` : "";
+  const titleText = go + (title ? (o.idCol ? cellHtml(title) : titleWithId(title)) : DASH);
+  const full = [o.idCol ? first?.text : "", (title?.text ?? "").replace(/^└ /, "")].filter(Boolean).join(" ");
+  const tds = rest
+    .map((c, i) => {
+      const cls = i === o.num ? "num" : isNil(c) ? "nil" : "";
+      return `<td data-l="${esc(t.columns[i + 2]?.name ?? "")}"${cls ? ` class="${cls}"` : ""}>${cellHtml(c)}</td>`;
+    })
+    .join("");
+  const bare = rest.length > 0 && rest.every((c, i) => i === o.num || isNil(c));
+  const cls = [o.cls, bare ? "bare" : ""].filter(Boolean).join(" ");
+  const nav = o.nav ? ` data-nav="${attr(o.nav)}" tabindex="0"${o.label ? ` aria-label="${esc(o.label)}"` : ""}` : "";
   const acts = o.acts === undefined ? "" : `<td class="acts">${o.acts}</td>`;
-  return `<tr data-id="${esc(r.id)}"${o.cls ? ` class="${o.cls}"` : ""}${nav}><td>${lead}</td><td class="title">${titleText}</td><td class="brk" aria-hidden="true"></td>${tds}${acts}</tr>`;
+  return `<tr data-id="${esc(r.id)}"${cls ? ` class="${cls}"` : ""}${nav}><td>${lead}</td><td class="title" title="${esc(full)}">${titleText}</td><td class="brk" aria-hidden="true"></td>${tds}${acts}</tr>`;
 }
 
 // "└ i033 스테이징 키 발급" → the id in the mono id style, the nesting mark left to CSS.
@@ -235,7 +247,10 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
     return rowHtml(m.ownerTodo, r, { idCol: true, acts });
   });
   const progress = m.inProgress.rows.map((r) => {
-    if (r.id.startsWith("lead:")) return rowHtml(m.inProgress, r, { cls: "lead", nav: { group: r.cells[1]?.text ?? "" }, go: "묶음 상세" });
+    if (r.id.startsWith("lead:")) {
+      const group = r.cells[1]?.text ?? "";
+      return rowHtml(m.inProgress, r, { cls: "lead", nav: { group }, go: "자세히", label: `${group} 묶음 자세히`, num: 1 });
+    }
     if (/^i\d{3,}$/.test(r.id)) return rowHtml(m.inProgress, r, { cls: "item", nav: { item: r.id } });
     return rowHtml(m.inProgress, r, { cls: "item" });
   });
@@ -255,7 +270,7 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
 
 // The chat text says the first two sentences (core/brief/render.ts NO_GROUP); test/brief/brief-text-199 holds the prefix.
 const NO_GROUP =
-  "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 진행 중 절에 그 행이 나온다. 패널은 리드를 띄우지 않는다.";
+  "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 열린 항목 절에 그 행이 나온다. 패널은 리드를 띄우지 않는다.";
 
 /** 완료 최근 N일 as one folded list (decision 199): the same rows as the ✅ count. */
 function doneFold(t: Table): string {
@@ -554,7 +569,7 @@ function gtTable(t: Table, o: GtOpts): string {
     const tds = r.cells.map((cell, i) => {
       const name = esc(t.columns[i]?.name ?? "");
       const role = o.roles[i] ?? "text";
-      const cls = `${ROLE_CLASS[role]}${o.head?.includes(i) ? " hd" : ""}`;
+      const cls = `${ROLE_CLASS[role]}${o.head?.includes(i) ? " hd" : ""}${isNil(cell) ? " nil" : ""}`;
       const word = o.stateOf?.[0] === i ? o.labels?.get(r.cells[o.stateOf[1]]?.text ?? "") : undefined;
       const c = word?.startsWith(cell.text) ? { ...cell, text: word } : cell;
       const open = `<td data-l="${name}" class="${cls}">`;
@@ -699,11 +714,11 @@ export const TABS = ["all", "todo", "prog"] as const;
 export type Tab = (typeof TABS)[number];
 
 function tabs(m: Overview, active: Tab): string {
-  // The same number as the 진행 중 section heading; 보류 rides along in the view but is not counted.
+  // The section's own title and number; 보류 rides along in the view but is not counted.
   const prog = m.inProgress.count;
   const one = (t: Tab, label: string, n: number | null) =>
     `<button type="button" role="tab" aria-selected="${t === active}" data-tab-to="${t}">${label}${n === null ? "" : ` <span class="count">${n}</span>`}</button>`;
-  return `<nav class="seg" role="tablist" aria-label="현황 보기">${one("all", "전체", null)}${one("todo", "할 일", m.todo.total)}${one("prog", "진행 중", prog)}</nav>`;
+  return `<nav class="seg" role="tablist" aria-label="현황 보기">${one("all", "전체", null)}${one("todo", "할 일", m.todo.total)}${one("prog", esc(m.inProgress.title), prog)}</nav>`;
 }
 
 // The last crumb is the screen shown, once and not a link; the back button sits apart (decision 218).

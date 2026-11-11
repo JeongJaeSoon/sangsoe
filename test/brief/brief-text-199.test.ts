@@ -29,7 +29,8 @@ test("현황 text: folded by default to the summary count, the bottom line as de
   const list = open.slice(open.indexOf("### ✅ 완료 최근 7일 2"));
   assert.match(list, /^### ✅ 완료 최근 7일 2\n\n\| 항목 \| PR \| 닫힘 \|/);
   assert.match(list, /\| i024 인덱스 추가 \| \[acme\/api#38\]\(https:\/\/github\.com\/acme\/api\/pull\/38\) \|/);
-  assert.ok(open.indexOf("### ✅ 완료 최근 7일") > open.indexOf("### 진행 중"), "the list sits under the four tables");
+  assert.ok(open.indexOf("### 열린 항목") >= 0, "the open-items table is there");
+  assert.ok(open.indexOf("### ✅ 완료 최근 7일") > open.indexOf("### 열린 항목"), "the list sits under the four tables");
 });
 
 test("묶음 상세 text: --done opens the same list under the state sections", () => {
@@ -60,7 +61,8 @@ test("0 groups: the text says how a group comes to be, the panel's line without 
   const panel = /<p class="hint0"[^>]*>([^<]*)<\/p>/.exec(renderStage(stage))?.[1];
   assert.equal(panel, `${line} 패널은 리드를 띄우지 않는다.`);
   const out = renderMarkdown(zero);
-  assert.ok(out.indexOf(line) > out.indexOf("### 진행 중"), "under 진행 중");
+  assert.ok(out.indexOf("### 열린 항목") >= 0, "the open-items heading is there");
+  assert.ok(out.indexOf(line) > out.indexOf("### 열린 항목"), "under 열린 항목");
 });
 
 test("sangsoe brief takes --done as a flag and hands it to the text", async () => {
