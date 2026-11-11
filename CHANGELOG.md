@@ -5,7 +5,7 @@ Decision numbers refer to `docs/decisions.md`.
 ## Unreleased
 
 - **A reopened PR is open again.** pr-monitor writes `pr_reopened` when a PR it recorded as closed is open on GitHub, and a second `pr_closed` when it closes again. The re-review item, the why-not-ready row and the stack-edge removal now see a PR that was closed and reopened (216).
-- **`land` does not merge into a merged PR's branch.** A PR stacked on a PR that merged with its branch kept still has that branch as its base on GitHub. `land` refuses it with `base_merged` and a fix line naming `gh pr edit <N> --base <base>`; a branch another open PR still uses as its head is not refused. Right after such a retarget, `land` refuses with `base_unrecorded` until pr-monitor records the base change, so the re-review of decision 215 applies (216).
+- **`land` does not merge into a merged PR's branch.** A PR stacked on a PR that merged with its branch kept still has that branch as its base on GitHub. `land` refuses it with `base_merged` and a fix line naming `gh pr edit <N> --base <base>`, read from pr-monitor's rows with or without a `stacked_on` edge; while another open PR uses that branch as its head, the refusal is `stack_order` naming that PR. Right after such a retarget, `land` refuses with `base_unrecorded` until pr-monitor records the base change, so the re-review of decision 215 applies (216).
 - **Items name their Run.** `item_created` and `unit_started` carry the Task's Run, so the plugin timer's queue round, `sangsoe brief` without `--run` and the panel read a lead's own Run and its items. `item_create` and `sangsoe item new` take `lead`, which `brief <group>` and `graph critical --lead` group by. Items made before this change are read as before (216).
 
 ## 0.1.4-rc.1 (pre-release)

@@ -257,9 +257,11 @@ async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, 
   const bases = [...opened.map((e) => str(e.payload.base)), ...rowsOf(r, "pr_base_changed", ref).map((e) => str(e.payload.to))].filter((b) => b !== undefined);
   const lastBase = bases.at(-1);
   if (lastBase && lastBase !== p.base.ref) {
+    // A move back to an earlier pair at the same head is a new turn (decision 216); the first keeps its old key.
+    const turn = rowsOf(r, "pr_base_changed", ref).length;
     plan(r, {
       type: "pr_base_changed",
-      dedupe_key: key("pr_base_changed", ref, lastBase, p.base.ref, p.head.sha),
+      dedupe_key: key("pr_base_changed", ref, lastBase, p.base.ref, p.head.sha, ...(turn > 0 ? [String(turn)] : [])),
       payload: { pr: ref, from: lastBase, to: p.base.ref },
     });
   }

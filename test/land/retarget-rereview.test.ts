@@ -307,12 +307,37 @@ test("S6 NOW-2: once the PR below merged with its branch kept, land refuses the 
   assert.deepEqual(x.merges, []);
 });
 
-test("S6 NOW-2: a merged PR's branch that a new open PR reuses is not dead", async () => {
+test("S6 NOW-2: a merged PR's branch that a new open PR reuses is not dead; that open PR goes first", async () => {
   const x = retargetWorld([], { below: true });
   await runMonitor("queue", x.monitor);
   x.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: BELOW, merge_sha: "c".repeat(40) } });
   x.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#13", base: "main", head_sha: "d".repeat(40), head: "feature-a" } });
   x.github("feature-a", "APPROVED", { belowGone: true });
   const r = await landPr(x.landDeps);
-  assert.notEqual(r.ok ? "ok" : r.refusal.code, "base_merged");
+  assert.equal(r.ok ? "ok" : r.refusal.code, "stack_order");
+  assert.match(r.ok ? "" : r.refusal.fix, /land acme\/api#13 first/);
+});
+
+test("S6 NOW-2: with no stacked_on edge (the PR below merged before a queue round), land still refuses the dead base", async () => {
+  const x = retargetWorld([], { below: true });
+  x.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: BELOW, merge_sha: "c".repeat(40) } });
+  x.github("feature-a", "APPROVED", { belowGone: true });
+  assert.deepEqual(x.store.events({ type: "edge_added" }), []);
+  const r = await landPr(x.landDeps);
+  assert.equal(r.ok ? "ok" : r.refusal.code, "base_merged");
+  assert.deepEqual(x.merges, []);
+});
+
+test("S6 NOW-2: retargeted back and forth at the same head, each move is recorded, so base_unrecorded clears", async () => {
+  const x = retargetWorld();
+  for (const base of ["main", "feature-a", "main"]) {
+    x.github(base, "DISMISSED");
+    await runMonitor("pr", x.monitor);
+  }
+  assert.deepEqual(
+    x.store.events({ type: "pr_base_changed" }).map((e) => e.payload.to),
+    ["main", "feature-a", "main"],
+  );
+  const r = await landPr(x.landDeps);
+  assert.equal(r.ok ? "ok" : r.refusal.code, "rereview_needed");
 });
