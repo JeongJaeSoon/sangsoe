@@ -522,7 +522,7 @@
 | G19 | 화면 언어 설정이 없다 | DROP | 오너가 한 사람이고 한국어를 쓴다. 다른 언어 사용자가 생기면 새 결정으로 |
 | G20 | 패널에 그래프 들여쓰기 대체와 Markdown 저장 버튼이 없다 | LATER | SVG 가 그려지지 않는 환경이 관측되거나 오너가 저장을 요청하면 |
 | G21 | 현황에 "내 지시는 어디까지 갔나" 접힘 구역이 없다 | LATER | 오너 지시를 항목으로 따라가야 하는 첫 경우(owner_class 와 함께, G28) |
-| G22 | `stacked_on` 간선이 자동으로 생기지 않고 base 변경 PR 의 land 재요청이 없다 | NOW | 흐름 3 과 실패 표의 stack_order 가 기대는 길이다. 재현: queue-monitor 가 `syncGraph` 를 stack 없이 부르고(`core/detect/queue/round.ts:66`) `relandPrs` 는 세기만 한다. 손으로 가는 길은 있다: `deliver-ticket` skill 이 `stacked_on` 간선을 걸라고 하고 land 가 간선으로 순서를 지킨다(`core/land/land.ts:385`). 그래서 빠지는 것은 세션이 간선을 잊은 경우의 자동 보정이다. 결정 212 ③ 이 자동 `stacked_on` 을 지었고 land 재요청이 남았다 |
+| G22 | `stacked_on` 간선이 자동으로 생기지 않고 base 변경 PR 의 land 재요청이 없다 | NOW | 흐름 3 과 실패 표의 stack_order 가 기대는 길이다. 재현: queue-monitor 가 `syncGraph` 를 stack 없이 부르고(`core/detect/queue/round.ts:66`) `relandPrs` 는 세기만 한다. 손으로 가는 길은 있다: `deliver-ticket` skill 이 `stacked_on` 간선을 걸라고 하고 land 가 간선으로 순서를 지킨다(`core/land/land.ts:385`). 그래서 빠지는 것은 세션이 간선을 잊은 경우의 자동 보정이다. 결정 212 ③ 이 자동 `stacked_on` 을 지었고, ⑥ 이 land 가 GRAPH 의 `pr:`·`item:` 노드 이름을 읽게 고쳤다(그 전에는 간선이 순서를 지키지 않았다). land 재요청이 남았다 |
 | G23 | `done_blockers` 가 완료 전환을 거부하지 않는다 | 닫힘(결정 212 ④) | 실패 표의 early_done·prod_gate 방지 장치이고 설계가 지어졌다고 적었다. 재현: 시험 밖 호출자 0. 설계가 거부할 자리로 둔 `item_transition` 입구는 결정 160 이 짓지 않았으므로, 고치는 단위는 Task 를 닫는 자리(pr-monitor 의 `closeTask`, `core/owner/done.ts`, 리드가 직접 부르는 Orca `task-update`) 가운데 어디서 막을지부터 정한다 |
 | G24 | `orphan_extra`(고아 부가 정보의 🚨 와 REAPER 거둠)가 없다 | LATER | Orca 에 Run 을 지우는 명령이 없어 고아가 생기기 어렵다. Orca 가 Run 삭제를 갖거나 Task 가 사라진 첫 경우 |
 | G25 | 닫힌 결정을 다시 묻는 길(`:r<n>`)이 없다 | LATER | 오너가 닫힌 결정을 다시 열어 달라고 한 첫 경우 |

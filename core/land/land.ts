@@ -367,6 +367,9 @@ async function verdictGate(a: GateReader & { repo: string; pr: string; head: str
 
 type StackNode = { kind: "pr" | "task" | "unmapped"; id: string };
 
+/** GRAPH writes `pr:<ref>` and `item:<task>` (core/graph/nodes.ts); older rows carry the bare id. */
+const bareNode = (n: string): string => n.replace(/^(pr|item):/, "");
+
 /**
  * The lowest unmerged PR this one is stacked on. Edges join Orca Task ids (glossary 부가 간선),
  * so PRs and tasks are joined through `pr_opened{pr, task}`; a predecessor task with no PR is
@@ -383,7 +386,7 @@ function unmergedBelow(pr: string, events: readonly StoredEvent[]): StackNode | 
       tasksOf.set(ref, (tasksOf.get(ref) ?? new Set()).add(e.payload.task));
     }
     if ((e.type !== "edge_added" && e.type !== "edge_removed") || e.payload.kind !== "stacked_on") continue;
-    edges.set(`${String(e.payload.pred)}\n${String(e.payload.succ)}`, e.type === "edge_added");
+    edges.set(`${bareNode(String(e.payload.pred))}\n${bareNode(String(e.payload.succ))}`, e.type === "edge_added");
   }
   const merged = new Set(events.filter((e) => e.type === "pr_merged").map((e) => String(e.payload.pr).toLowerCase()));
   const preds = (ref: string): StackNode[] => {
