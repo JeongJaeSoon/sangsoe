@@ -83,7 +83,7 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
   if (repo && !REPO_SELECTOR.test(repo)) return invalid(`repo "${repo}" is not an Orca repo selector`, "repo: id:<id>, name:<name> or path:<path>");
   const worktreeId = s("worktreeId");
   if (!worktreeId && role !== "orchestrator") {
-    return invalid("worktreeId is missing", "pass your own worktreeId; only an orchestrator outside every worktree leaves it out, and then passes repo");
+    return invalid("worktreeId is missing", "pass your own worktreeId; only an orchestrator leaves it out");
   }
   const out = await startUnit(ports, {
     requester: { role: role as Role, ...(worktreeId ? { worktreeId } : {}), runId: s("runId") ?? "", ...(taskId ? { taskId } : {}) },
@@ -123,7 +123,7 @@ export default {
       role: { type: "string", enum: ["orchestrator", "lead", "worker"], description: "Your own role." },
       worktreeId: {
         type: "string",
-        description: "Your own Orca worktree id; the new worktree is its child. Only an orchestrator running in no Orca worktree leaves it out, and then passes repo.",
+        description: "Your own Orca worktree id; the new worktree is its child. An orchestrator may leave it out: start_unit takes the worktree its folder is in, and outside every worktree it needs repo.",
       },
       repo: {
         type: "string",

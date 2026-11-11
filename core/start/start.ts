@@ -139,7 +139,7 @@ function firstPrompt(role: Role, t: NewTask): string {
 export async function startUnit(ports: StartPorts, req: StartRequest): Promise<StartOutcome> {
   const { orca, store } = ports;
   const source = ports.source ?? "core:start";
-  const { requester } = req;
+  let { requester } = req;
   let parentHandle: string | null = null;
   let requesterDispatch: string | undefined;
   let requesterActive = false;
@@ -254,12 +254,14 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     if (innermost?.id !== tree.id) {
       return refuse("lineage_invalid", `밝힌 worktree(${tree.path})가 부르는 세션의 작업 폴더(${cwd})가 있는 worktree 가 아니다`);
     }
+  } else if (innermost) {
+    // Decision 217: [gate:delegate] keeps the orchestrator from asking Orca which worktree it is in, so
+    // start_unit takes the one its folder is in, under the same live-Dispatch check a declared one gets.
+    const live = await liveDispatchIn(orca, innermost.id);
+    if (live) return refuse("lineage_invalid", live);
+    requester = { ...requester, worktreeId: innermost.id };
   } else {
-    // Orca resolves new-child from the caller's terminal and refuses it outside a managed worktree, so
-    // only an orchestrator that really runs outside every worktree may go without one (decision 197).
-    if (innermost) {
-      return refuse("lineage_invalid", `작업 폴더(${cwd})가 worktree ${innermost.path} 안에 있다: 그 worktree 를 밝힌다`);
-    }
+    // Orca refuses new-child outside a managed worktree, so one outside every worktree names a repo (decision 197).
     if (!(req.repo ?? ("id" in req.task ? storedRepo(store, req.task.id) : undefined))) return refuse("lineage_invalid", "worktree 밖의 오케스트레이터는 대상 저장소(repo)를 밝힌다: 새 worktree 를 둘 곳이 없다");
   }
 
