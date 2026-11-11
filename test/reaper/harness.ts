@@ -16,6 +16,7 @@ import {
   type Planned,
   type PortRow,
   type ReaperConfig,
+  type ReaperConfigRead,
   type ReaperDeps,
   type ReapOptions,
   type ReapReport,
@@ -286,7 +287,8 @@ export type World = {
   docker: FakeDocker;
   store: Store;
   clock: { now: number };
-  config: ReaperConfig | null;
+  /** null: no config file; `{ unreadable }`: a file the read could not parse. */
+  config: ReaperConfig | null | { unreadable: string };
   load: LoadSample;
   /** The timer period the round judges a pause by; unset in the scenarios that predate decision 182. */
   intervalMs?: number;
@@ -295,6 +297,9 @@ export type World = {
   round(o?: ReapOptions): Promise<ReapReport>;
   types(type: string): Record<string, unknown>[];
 };
+
+const configRead = (c: World["config"]): ReaperConfigRead =>
+  c === null ? { kind: "absent" } : "unreadable" in c ? { kind: "unreadable", why: c.unreadable } : { kind: "ok", config: c };
 
 export function world(): World {
   const clock = { now: Date.parse("2026-11-10T00:00:00Z") };
@@ -315,7 +320,7 @@ export function world(): World {
         events: (f) => store.events(f),
         ...(w.dryRun ? {} : { append: (e: Planned) => store.append(e) }),
         now: () => clock.now,
-        config: w.config,
+        config: configRead(w.config),
         sample: () => w.load,
         ...(w.intervalMs ? { intervalMs: w.intervalMs } : {}),
       };

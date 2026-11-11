@@ -149,10 +149,23 @@ test("resolve raises effort along the ladder first, then the next tier only with
   assert.equal(resolve("release-review", { tier: "fast", reason: "cheaper" }).ok, false, "no tier below");
 });
 
-function ctx(o: { now: Date; version: string; env?: Record<string, string>; home: string }) {
+const main = (repoId: string, path: string) => ({ id: `${repoId}::${path}`, repoId, projectId: `github:acme/${repoId}`, path, isMainWorktree: true });
+
+/** `tracked`: main checkouts whose git commits the local settings file; `gitCode` answers the rest. */
+function ctx(o: { now: Date; version: string; env?: Record<string, string>; home: string; tracked?: string[]; gitCode?: number | null; orcaDown?: boolean }) {
+  const rows = [main("api", "/w/api"), { ...main("api", "/w/api-child"), isMainWorktree: false }, main("web", "/w/web")];
   return {
-    orca: {} as never,
-    exec: async () => ({ code: 0, stdout: `${o.version} (Claude Code)\n`, stderr: "" }),
+    orca: {
+      worktreeList: async () =>
+        o.orcaDown
+          ? { ok: false, error: { code: "orca_unreachable", message: "" } }
+          : { ok: true, value: { rows, nonLocal: { rows: 0, hostIds: [] }, omittedHostIds: [], truncated: false } },
+    } as never,
+    exec: async (file: string, args: readonly string[]) => {
+      if (file !== "git") return { code: 0, stdout: `${o.version} (Claude Code)\n`, stderr: "" };
+      const code = o.tracked?.includes(args[1] ?? "") ? 0 : o.gitCode === undefined ? 1 : o.gitCode;
+      return { code, stdout: "", stderr: "" };
+    },
     coreVersion: "0",
     home: o.home,
     now: o.now,
@@ -165,23 +178,45 @@ test("doctor's model-table row: ok when fresh, warn past the floor, notice on a 
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const verified = Math.min(...CATALOG.map((c) => Date.parse(c.verified)));
   const fresh = new Date(verified + 86_400_000);
-  // Decision 187: no advisorModel key is a notice naming the owner's act; the key's value is never read.
+  // Decision 202: with no advisorModel key the advisor still reaches each start through the new
+  // worktree's local settings, so the row is ok and names that route.
   const none = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home }));
-  assert.equal(none.status, "notice");
-  assert.match(none.summary, /advisor not applied/);
-  assert.match(none.fix ?? "", /owner's act/);
+  assert.equal(none.status, "ok", none.summary);
+  assert.match(none.summary, /route worktree_file/);
+  assert.doesNotMatch(none.summary, /advisor not applied/);
+  // A repository that commits the file is where delivery really fails: a warning naming it.
+  const stuck = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, tracked: ["/w/web"] }));
+  assert.equal(stuck.status, "warn", stuck.summary);
+  assert.match(stuck.summary, /acme\/web/);
+  assert.doesNotMatch(stuck.summary, /acme\/api/);
+  assert.match(stuck.summary, /advisor not applied/);
+  assert.match(stuck.fix ?? "", /owner's act/);
+  // What git or Orca cannot answer is named as unchecked, not as tracked or clean.
+  const unreadable = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, gitCode: 128 }));
+  assert.equal(unreadable.status, "ok", unreadable.summary);
+  assert.match(unreadable.summary, /확인 못 한 저장소: acme\/api · acme\/web/);
+  const down = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, orcaDown: true }));
+  assert.match(down.summary, /확인 못 한 저장소: worktree list \(orca_unreachable\)/);
   mkdirSync(join(home, ".claude"));
   writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ advisorModel: "secret-value" }));
   const ok = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home }));
   assert.equal(ok.status, "ok", ok.summary);
   assert.doesNotMatch(ok.summary, /secret-value/);
+  // The owner's key is the named fallback there: a notice, not a failed delivery.
+  const fallback = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, tracked: ["/w/web"] }));
+  assert.equal(fallback.status, "notice", fallback.summary);
+  assert.match(fallback.summary, /route owner_setting/);
+  assert.match(fallback.fix ?? "", /stop committing/);
+  assert.doesNotMatch(fallback.fix ?? "", /set advisorModel/, "the key is already set");
+  assert.doesNotMatch(fallback.summary, /secret-value/);
   const off = await modelTable.run(ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, env: { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1" } }));
-  assert.equal(off.status, "notice", "the advisor's off switch counts as no advisor");
+  assert.equal(off.status, "notice", "the advisor's off switch in this environment is named");
+  assert.match(off.summary, /CLAUDE_CODE_DISABLE_ADVISOR_TOOL/);
   // Two owner-setting findings get both owner fixes, not the table-update fix.
   const both = await modelTable.run(
     ctx({ now: fresh, version: VERIFIED_WITH_CLAUDE_CODE, home, env: { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1", ANTHROPIC_DEFAULT_OPUS_MODEL: "x" } }),
   );
-  assert.match(both.fix ?? "", /owner's act/);
+  assert.match(both.fix ?? "", /unset CLAUDE_CODE_DISABLE_ADVISOR_TOOL/);
   assert.match(both.fix ?? "", /pins are the owner's settings/);
   assert.doesNotMatch(both.fix ?? "", /re-read the pages/);
   const old = new Date(verified + (STALE_DAYS + 1) * 86_400_000);

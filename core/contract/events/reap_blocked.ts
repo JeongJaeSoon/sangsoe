@@ -18,6 +18,7 @@ export default defineEvent(
       "in_use",
       "archive_hook_failed",
       "remote_host",
+      "config_unreadable",
     ),
   },
   { refine: refOrcaIdForWorktree },
