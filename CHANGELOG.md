@@ -2,7 +2,9 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
-## Unreleased
+## 0.1.4-rc.1 (pre-release)
+
+Everything since `v0.1.3`: decisions 193, 199, 211, 212, 213 and 215. A pre-release for the S6 dependency smoke; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.3.
 
 - **The panel's group detail follows the mockup's order.** Summary tiles, the dependency graph with its side tables, why not ready and the edge table come first, then the open items by state, the latest transitions and the folded 완료 최근 7일 list (199, 213).
 - **`sangsoe brief --done` opens the 완료 최근 7일 list.** The text keeps it folded to the ✅ count in the summary line; with the flag the same rows the panel lists print as a table, on 현황 and on a group's detail. A group's folded line now counts the window's rows (`✅ 완료 최근 7일 N건 (접힘)`), not every done item of the group. With no group, 현황 prints the panel's line on how a group comes to be under 진행 중 (199, 213).
