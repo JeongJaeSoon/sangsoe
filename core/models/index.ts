@@ -102,7 +102,8 @@ export type AdvisorRoute = "orca_flag" | "worktree_file" | "owner_setting" | "no
 
 export type Launch = {
   model: string;
-  effort: Effort;
+  /** What `--effort` gets; absent when Orca lists no effort for the model (decision 209). */
+  effort?: Effort;
   /** Passed as `--advisor` only when Orca's worker-start takes it. */
   advisor?: string;
   /** Written to the new worktree's local settings; absent when sangsoe cannot write there. */
@@ -128,7 +129,7 @@ export const ADVISOR_SPENT = "advisor off: this row's advisor budget is spent; i
  */
 export function launch(choice: Choice, path: AdvisorPath): Launch {
   const off = path.worktreeFile ? { settings: { disableAdvisor: true as const } } : {};
-  const out: Launch = { model: choice.model, effort: choice.effort, route: "none" };
+  const out = forOrca(choice.tier, { model: choice.model, effort: choice.effort, route: "none" });
   if (!choice.advisor) return { ...out, ...off };
   if (!path.spent) {
     if (path.orcaFlag) return { ...out, advisor: choice.advisor, route: "orca_flag" };
@@ -139,14 +140,23 @@ export function launch(choice: Choice, path: AdvisorPath): Launch {
   const floor = POLICY[choice.kind].withoutAdvisor;
   if (!floor || TIERS.indexOf(choice.tier) <= TIERS.indexOf(floor)) return { ...out, ...off, note: why };
   const base = catalogRow(floor).apiDefaultEffort;
+  const effort = EFFORTS.indexOf(choice.effort) > EFFORTS.indexOf(base) ? choice.effort : base;
   return {
-    model: aliasOf(floor),
-    effort: EFFORTS.indexOf(choice.effort) > EFFORTS.indexOf(base) ? choice.effort : base,
-    route: "none",
+    ...forOrca(floor, { model: aliasOf(floor), effort, route: "none" }),
     ...off,
     note: why,
     fallback: { from: `${choice.model}/${choice.effort}`, reason: why },
   };
+}
+
+/**
+ * Drops an effort Orca's worker-start would refuse with this tier's model (decision 209). Keyed on
+ * the tier, not the model string: a pinned dated id is outside Orca's catalog and would pass.
+ */
+function forOrca(tier: Tier, l: Launch & { effort: Effort }): Launch {
+  if (catalogRow(tier).orcaEfforts.includes(l.effort)) return l;
+  const { effort: _dropped, ...rest } = l;
+  return rest;
 }
 
 /**

@@ -82,7 +82,7 @@ export type StartOutcome =
       worktreeId?: string;
       /** The setup shell recorded on `unit_started` (decision 202); REAPER closes it after release. */
       shell?: string;
-      launch: { model: string; effort: string; advisor?: string; route: AdvisorRoute };
+      launch: { model: string; effort?: string; advisor?: string; route: AdvisorRoute };
       notes: string[];
     }
   /** Not a refusal (decision 94): the Task stays as it is and the caller tries again later. */
