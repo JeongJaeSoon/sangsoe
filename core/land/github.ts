@@ -12,10 +12,18 @@ export type Pull = {
   merge_commit_sha?: string | null;
   mergeable_state?: string;
   head: { sha: string };
-  base: { ref: string };
+  base: { ref: string; repo?: { default_branch?: string } };
   user: { login: string };
   labels?: { name: string }[];
 };
+
+/** A PR whose head branch is `branch` in the same repo, open or closed (decision 216). */
+export type BranchPull = { number: number; state: string; merged_at?: string | null; base: { ref: string } };
+
+export async function readBranchPulls(gh: GhClient, repo: string, branch: string): Promise<Read<BranchPull[]>> {
+  const owner = repo.slice(0, repo.indexOf("/"));
+  return lift<BranchPull[]>(await gh.get(`repos/${repo}/pulls?head=${owner}:${encodeURIComponent(branch)}&state=all&per_page=100`), `${repo} PRs from ${branch}`);
+}
 
 export type Read<T> = { kind: "ok"; data: T } | { kind: "unreadable"; why: string } | { kind: "rate_limited"; resetAt: number };
 

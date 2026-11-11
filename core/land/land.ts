@@ -1,5 +1,6 @@
 import type { StoredEvent } from "../contract/index.ts";
 import type { GhClient } from "../gh/client.ts";
+import { type Facts, foldFacts } from "../graph/facts.ts";
 import { type MergeCondition, readMergeConditions } from "../gh/merge-conditions.ts";
 import type { NewEvent } from "../store/store.ts";
 import { evidenceGaps } from "../verify/evidence.ts";
@@ -13,6 +14,7 @@ import {
   patchId,
   type Read,
   readDiff,
+  readBranchPulls,
   readLabels,
   readPull,
 } from "./github.ts";
@@ -185,6 +187,34 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
       bottom.id,
       `${pr} is stacked on task ${bottom.id}, which has no pr_opened, so its PR cannot be checked`,
       `open and land the PR of task ${bottom.id} first, or remove the stacked_on edge`,
+    );
+  }
+  const facts = foldFacts(events);
+  const dead = await branchOwner(gh, repo, input.pr, pull, facts);
+  if (dead?.open) {
+    throw new Refused(
+      "stack_order",
+      dead.pr,
+      `${pr}'s base ${pull.base.ref} is the head branch of ${dead.pr}, which has not merged`,
+      `land ${dead.pr} first, then retarget ${pr} to its base (gh pr edit ${input.pr} --repo ${repo} --base ${dead.base ?? `<${dead.pr}'s base>`}) and land again`,
+    );
+  }
+  if (dead) {
+    throw new Refused(
+      "base_merged",
+      dead.pr,
+      `${pr}'s base ${pull.base.ref} is the head branch of ${dead.pr}, which merged; GitHub keeps that branch and does not retarget ${pr}`,
+      `gh pr edit ${input.pr} --repo ${repo} --base ${dead.base ?? `<${dead.pr}'s base>`}, then land again after pr-monitor records the base change (sangsoe monitor run pr); the PR is re-reviewed at its new base`,
+    );
+  }
+  // pr_base_changed is what makes a review before a retarget stale (decision 215); judged before it exists, the old review would pass.
+  const recorded = facts.prs.get(pr)?.base;
+  if (recorded !== undefined && recorded !== pull.base.ref) {
+    throw new Refused(
+      "base_unrecorded",
+      "",
+      `${pr}'s base is ${pull.base.ref} on GitHub, but pr-monitor last recorded ${recorded}`,
+      "run sangsoe monitor run pr (the repo in watch.repos, the author not left out by watch.authors), then land again",
     );
   }
 
@@ -423,6 +453,36 @@ function unmergedBelow(pr: string, events: readonly StoredEvent[]): StackNode | 
 }
 
 const PR_REF = /^[a-z0-9_.-]+\/[a-z0-9_.-]+#[1-9][0-9]*$/;
+
+type BranchOwner = { pr: string; open: boolean; base: string | undefined };
+
+/**
+ * Decision 216: another PR whose head branch is this PR's base. GitHub's list is the source (it holds
+ * PRs pr-monitor never recorded); pr-monitor's rows stand in only when GitHub cannot be read. Stack
+ * edges are not asked: a PR with no Task, a removed edge, or one merged before a queue round has none.
+ * An open one goes first; else a merged one means a dead base, since land keeps the branch and GitHub
+ * retargets only when it deletes it. The default branch is never a dead base.
+ */
+async function branchOwner(gh: GhClient, repo: string, n: number, pull: Pull, facts: Facts): Promise<BranchOwner | null> {
+  const base = pull.base.ref;
+  if (pull.base.repo?.default_branch === base) return null;
+  const pr = `${repo.toLowerCase()}#${n}`;
+  const read = await readBranchPulls(gh, repo, base);
+  stopIfLimited(read);
+  const others =
+    read.kind === "ok"
+      ? read.data
+          .filter((p) => p.number !== n)
+          .map((p) => ({ pr: `${repo.toLowerCase()}#${p.number}`, open: p.state === "open", merged: Boolean(p.merged_at), at: p.merged_at ?? "", base: p.base.ref }))
+          .sort((a, b) => a.at.localeCompare(b.at))
+      : [...facts.prs.values()]
+          .filter((p) => p.pr !== pr && p.head === base && p.pr.startsWith(`${repo.toLowerCase()}#`))
+          .map((p) => ({ pr: p.pr, open: !p.merged && !p.closed, merged: p.merged, at: "", base: p.base }));
+  const open = others.find((p) => p.open);
+  if (open) return { pr: open.pr, open: true, base: open.base };
+  const merged = others.filter((p) => p.merged).at(-1);
+  return merged ? { pr: merged.pr, open: false, base: merged.base } : null;
+}
 
 async function reviewed(gh: GhClient, a: { repo: string; pr: string; head: string; base: string; events: readonly StoredEvent[] }): Promise<string> {
   // Decision 215: a verdict recorded before the latest base change was given against the old base.

@@ -152,6 +152,9 @@ export function foldFacts(events: readonly StoredEvent[]): Facts {
       case "pr_closed":
         pr(String(p.pr)).closed = true;
         break;
+      case "pr_reopened":
+        pr(String(p.pr)).closed = false;
+        break;
       case "decision_opened":
         decisionsOpened.add(String(p.decision));
         break;

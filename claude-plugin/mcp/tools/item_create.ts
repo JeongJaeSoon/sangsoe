@@ -21,6 +21,7 @@ export async function handle(input: Record<string, unknown>, ports: { orca: Orca
     ...Object.fromEntries(TIMING.filter((k) => input[k] !== undefined).map((k) => [k, input[k]])),
     ...(unitClass ? { unit_class: unitClass } : {}),
     ...(input.repo !== undefined ? { repo: input.repo } : {}),
+    ...(input.lead !== undefined ? { lead: input.lead } : {}),
   };
   // Checked against the event contract before the Task exists: a row that fails after it would
   // leave an item with no trigger, visible as ready.
@@ -54,7 +55,7 @@ const FIX = {
   task_create_failed: "check that the Run id is right and the deps are Tasks of that Run",
   invalid_role: "role is lead or worker: the session start_unit opens for this item",
   invalid_class: "class is default, hard, design or mechanical, and only for a worker item",
-  invalid_timing: "trigger and review_trigger are non-empty text, hold a boolean, exec_by owner, lead or worker, repo an Orca repo selector (id:, name: or path:)",
+  invalid_timing: "trigger and review_trigger are non-empty text, hold a boolean, exec_by owner, lead or worker, repo an Orca repo selector (id:, name: or path:), lead text",
   invalid_verify: "verify is one of pr_merged{pr} · orca_field{target,field,value} · plugin_approved{key} · run_ok{repo} · pr_found{repo,search}; cmdHint a non-empty command prefix",
 } as const;
 
@@ -84,6 +85,10 @@ export default {
         description: "The Orca repo selector (id:, name: or path:) start_unit puts this item's worktree in, when it is not the starter's own repo.",
       },
       who: { type: "string", description: "Who owns the item, e.g. lead:api." },
+      lead: {
+        type: "string",
+        description: "The lead group the item sits in: brief <group> and graph critical --lead name it. A lead making its own items passes its own name.",
+      },
       doneWhen: { type: "string", description: "One line: when the item is done." },
       verify: {
         type: "object",

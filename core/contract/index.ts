@@ -41,6 +41,7 @@ import pr_closed from "./events/pr_closed.ts";
 import pr_merged from "./events/pr_merged.ts";
 import pr_opened from "./events/pr_opened.ts";
 import pr_ready_to_merge from "./events/pr_ready_to_merge.ts";
+import pr_reopened from "./events/pr_reopened.ts";
 import plugin_approved from "./events/plugin_approved.ts";
 import pr_review_requested from "./events/pr_review_requested.ts";
 import pressure_high from "./events/pressure_high.ts";
@@ -130,6 +131,7 @@ export const EVENTS = {
   pr_merged,
   pr_opened,
   pr_ready_to_merge,
+  pr_reopened,
   plugin_approved,
   pr_review_requested,
   pressure_high,

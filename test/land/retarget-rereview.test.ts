@@ -42,7 +42,7 @@ function retargetWorld(also: string[] = [], o: { below?: boolean } = {}) {
     { currentRun: RUN },
   );
   const { store, orca } = w;
-  const pull = (base: string) => ({ number: 12, merged_at: null, state: "open", mergeable_state: "clean", user: { login: "alice" }, head: { sha: HEAD, ref: "feature-b", repo: { full_name: REPO } }, base: { ref: base }, labels: [] });
+  const pull = (base: string, state = "open") => ({ number: 12, merged_at: null, state, mergeable_state: "clean", user: { login: "alice" }, head: { sha: HEAD, ref: "feature-b", repo: { full_name: REPO } }, base: { ref: base, repo: { default_branch: "main" } }, labels: [] });
   const below = { number: 11, merged_at: null, state: "open", mergeable_state: "clean", user: { login: "alice" }, head: { sha: "b".repeat(40), ref: "feature-a", repo: { full_name: REPO } }, base: { ref: "main" }, labels: [] };
   const approval = (state: string) => [{ id: 501, user: { login: "bob" }, state, commit_id: HEAD, author_association: "MEMBER", submitted_at: "2026-11-10T09:00:00Z" }];
   const routes: Record<string, GhResponse<unknown>> = {
@@ -54,14 +54,25 @@ function retargetWorld(also: string[] = [], o: { below?: boolean } = {}) {
       { type: "required_status_checks", parameters: { required_status_checks: [{ context: "unit" }], strict_required_status_checks_policy: true } },
     ]),
   };
-  /** GitHub's side of the PR: its base and its one review, which a retarget dismisses. */
-  const github = (base: string, review: string) => {
-    routes[`repos/${REPO}/pulls?state=open&per_page=100`] = ok([pull(base), ...(o.below ? [below] : [])]);
-    routes[`repos/${REPO}/pulls/12`] = ok(pull(base));
+  // GitHub keeps a merged PR's branch and its rules: a PR still based on it is mergeable there.
+  routes[`repos/${REPO}/rules/branches/feature-a`] = routes[`repos/${REPO}/rules/branches/main`] as GhResponse<unknown>;
+  /**
+   * GitHub's side of the PR: its base and its one review, which a retarget dismisses. `closed`: #12
+   * is closed unmerged; `belowGone`: #11 is no longer open (merged, its branch kept).
+   */
+  const github = (base: string, review: string, s: { closed?: boolean; belowGone?: boolean } = {}) => {
+    const state = s.closed ? "closed" : "open";
+    routes[`repos/${REPO}/pulls?state=open&per_page=100`] = ok([...(s.closed ? [] : [pull(base)]), ...(o.below && !s.belowGone ? [below] : [])]);
+    routes[`repos/${REPO}/pulls?state=closed&sort=updated&direction=desc&per_page=30`] = ok(s.closed ? [pull(base, state)] : []);
+    routes[`repos/${REPO}/pulls/12`] = ok(pull(base, state));
     routes[`repos/${REPO}/pulls/12/reviews?per_page=100`] = ok(approval(review));
     routes[`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`] = ok(approval(review));
   };
   github("feature-a", "APPROVED");
+  /** GitHub's PRs whose head is `branch` (land's dead-base read); without it the read fails and land uses the store. */
+  const fromBranch = (branch: string, rows: unknown[]) => {
+    routes[`repos/${REPO}/pulls?head=acme:${branch}&state=all&per_page=100`] = ok(rows);
+  };
   const gh: GhClient = { get: async <T>(path: string) => (routes[path] ?? { kind: "error", status: 404, message: "Not Found" }) as GhResponse<T> };
   const monitor: MonitorDeps = {
     orca,
@@ -116,7 +127,7 @@ function retargetWorld(also: string[] = [], o: { below?: boolean } = {}) {
       // The shared in-memory store stays open after review record closes its handle.
       { exec: reviewExec, openStore: () => ({ events: (f: never) => store.events(f), append: (e: never) => store.append(e), close: () => {} }) as never },
     );
-  return { w, store, github, monitor, landDeps, merges, view, record };
+  return { w, store, github, fromBranch, monitor, landDeps, merges, view, record };
 }
 
 const landPr = (deps: LandDeps) => land({ repo: REPO, pr: 12 }, deps);
@@ -236,4 +247,126 @@ test("G22: retargeted off an open PR's head, the inferred stacked_on edge goes, 
   const landed = await landPr(x.landDeps);
   assert.ok(landed.ok, JSON.stringify(landed));
   assert.equal(x.merges.length, 1);
+});
+
+test("S6 NOW-1: a PR closed, then reopened and retargeted, is open again: re-review item, why row and unstack follow", async () => {
+  const x = retargetWorld([], { below: true });
+  const edge = { pred: `pr:${BELOW}`, succ: `item:${ITEM}`, kind: "stacked_on" };
+  await runMonitor("queue", x.monitor);
+  assert.deepEqual(x.store.events({ type: "edge_added" }).map((e) => e.payload), [edge]);
+
+  // Deleting feature-a by push closes #12 instead of retargeting it.
+  x.github("feature-a", "APPROVED", { closed: true });
+  await runMonitor("pr", x.monitor);
+  assert.equal(x.store.events({ type: "pr_closed" }).length, 1);
+
+  // The branch pushed back, #12 reopened, then retargeted to main.
+  x.github("main", "DISMISSED");
+  await runMonitor("pr", x.monitor);
+  assert.deepEqual(x.store.events({ type: "pr_reopened" }).map((e) => e.payload), [{ pr: PR }]);
+  assert.deepEqual(x.store.events({ type: "pr_base_changed" }).map((e) => e.payload), [{ pr: PR, from: "feature-a", to: "main" }]);
+
+  await runMonitor("queue", x.monitor);
+  assert.deepEqual(
+    x.store.events({ type: "edge_removed" }).map((e) => [e.payload.pred, e.payload.succ]),
+    [[edge.pred, edge.succ]],
+    "unstack reads the reopened PR as open",
+  );
+  const items = x.store.events({ type: "item_created" }).filter((e) => e.payload.task !== ITEM);
+  assert.equal(items.length, 1, "the re-review item is made for the reopened PR");
+  assert.deepEqual(graphRead.why(await x.view(), ITEM).map((e) => [e.pred, e.kind]), [[String(items[0]?.payload.task), "blocks"]]);
+
+  // Closed and reopened once more: each turn is its own row.
+  x.github("main", "DISMISSED", { closed: true });
+  await runMonitor("pr", x.monitor);
+  assert.equal(x.store.events({ type: "pr_closed" }).length, 2);
+  assert.deepEqual(graphRead.why(await x.view(), ITEM), [], "closed again: no row waits on it");
+  x.github("main", "DISMISSED");
+  await runMonitor("pr", x.monitor);
+  assert.equal(x.store.events({ type: "pr_reopened" }).length, 2);
+  assert.equal(graphRead.why(await x.view(), ITEM).length, 1);
+});
+
+test("S6 NOW-2: once the PR below merged with its branch kept, land refuses the PR still based on that branch and names the retarget", async () => {
+  const x = retargetWorld([], { below: true });
+  await runMonitor("queue", x.monitor);
+  // land merged #11 with gh pr merge --squash and kept feature-a; GitHub leaves #12 on it.
+  x.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: BELOW, merge_sha: "c".repeat(40) } });
+  x.github("feature-a", "APPROVED", { belowGone: true });
+
+  const dead = await landPr(x.landDeps);
+  assert.equal(dead.ok ? "ok" : dead.refusal.code, "base_merged", "an approved PR would merge into the merged PR's branch");
+  assert.match(dead.ok ? "" : dead.refusal.fix, /gh pr edit 12 --repo acme\/api --base main/);
+  assert.deepEqual(x.merges, []);
+  const dry = await land({ repo: REPO, pr: 12, dryRun: true }, x.landDeps);
+  assert.equal(dry.ok ? "ok" : dry.refusal.code, "base_merged", "the dry run says the same");
+
+  // Retargeted as the fix says; until pr-monitor records the change, land does not judge the old review.
+  x.github("main", "DISMISSED", { belowGone: true });
+  const unseen = await landPr(x.landDeps);
+  assert.equal(unseen.ok ? "ok" : unseen.refusal.code, "base_unrecorded");
+  await runMonitor("pr", x.monitor);
+  const held = await landPr(x.landDeps);
+  assert.equal(held.ok ? "ok" : held.refusal.code, "rereview_needed", "the retarget takes the G31 path");
+  assert.deepEqual(x.merges, []);
+});
+
+test("S6 NOW-2: a merged PR's branch that a new open PR reuses is not dead; that open PR goes first", async () => {
+  const x = retargetWorld([], { below: true });
+  await runMonitor("queue", x.monitor);
+  x.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: BELOW, merge_sha: "c".repeat(40) } });
+  x.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#13", base: "main", head_sha: "d".repeat(40), head: "feature-a" } });
+  x.github("feature-a", "APPROVED", { belowGone: true });
+  const r = await landPr(x.landDeps);
+  assert.equal(r.ok ? "ok" : r.refusal.code, "stack_order");
+  assert.match(r.ok ? "" : r.refusal.fix, /land acme\/api#13 first/);
+});
+
+test("S6 NOW-2: with no stacked_on edge (the PR below merged before a queue round), land still refuses the dead base", async () => {
+  const x = retargetWorld([], { below: true });
+  x.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: BELOW, merge_sha: "c".repeat(40) } });
+  x.github("feature-a", "APPROVED", { belowGone: true });
+  assert.deepEqual(x.store.events({ type: "edge_added" }), []);
+  const r = await landPr(x.landDeps);
+  assert.equal(r.ok ? "ok" : r.refusal.code, "base_merged");
+  assert.deepEqual(x.merges, []);
+});
+
+test("S6 NOW-2: GitHub's list names a merged PR below that pr-monitor never recorded", async () => {
+  const x = retargetWorld();
+  x.github("feature-a", "APPROVED");
+  x.fromBranch("feature-a", [{ number: 11, state: "closed", merged_at: "2026-11-10T10:00:00Z", base: { ref: "main" } }]);
+  const r = await landPr(x.landDeps);
+  assert.equal(r.ok ? "ok" : r.refusal.code, "base_merged");
+  assert.match(r.ok ? "" : r.refusal.fix, /--base main/);
+  assert.deepEqual(x.merges, []);
+
+  x.fromBranch("feature-a", [{ number: 11, state: "open", merged_at: null, base: { ref: "main" } }]);
+  const below = await landPr(x.landDeps);
+  assert.equal(below.ok ? "ok" : below.refusal.code, "stack_order", "an open PR below holds it, so no auto-merge is armed onto its branch");
+});
+
+test("S6 NOW-2: the default branch is never a dead base, even when a merged PR used it as its head", async () => {
+  const x = retargetWorld();
+  x.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#9", base: "develop", head_sha: "e".repeat(40), head: "main" } });
+  x.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#9", merge_sha: "f".repeat(40) } });
+  x.fromBranch("main", [{ number: 9, state: "closed", merged_at: "2026-11-10T10:00:00Z", base: { ref: "develop" } }]);
+  x.github("main", "DISMISSED");
+  await runMonitor("pr", x.monitor);
+  const r = await landPr(x.landDeps);
+  assert.equal(r.ok ? "ok" : r.refusal.code, "rereview_needed");
+});
+
+test("S6 NOW-2: retargeted back and forth at the same head, each move is recorded, so base_unrecorded clears", async () => {
+  const x = retargetWorld();
+  for (const base of ["main", "feature-a", "main"]) {
+    x.github(base, "DISMISSED");
+    await runMonitor("pr", x.monitor);
+  }
+  assert.deepEqual(
+    x.store.events({ type: "pr_base_changed" }).map((e) => e.payload.to),
+    ["main", "feature-a", "main"],
+  );
+  const r = await landPr(x.landDeps);
+  assert.equal(r.ok ? "ok" : r.refusal.code, "rereview_needed");
 });

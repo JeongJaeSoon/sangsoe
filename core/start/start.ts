@@ -304,7 +304,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     store.append({
       type: "item_created",
       source,
-      payload: { task: id, alias, who: requester.role === "orchestrator" ? "orchestrator" : `${requester.role}:${requester.runId}`, done_when: "spec 의 완료 조건", owner_action: 0 },
+      payload: { task: id, alias, who: requester.role === "orchestrator" ? "orchestrator" : `${requester.role}:${requester.runId}`, done_when: "spec 의 완료 조건", owner_action: 0, run: requester.runId },
       entity: "task",
       entity_id: id,
     });
@@ -422,6 +422,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       worktree: tree.id,
       ...(shell.handle ? { shell: shell.handle } : {}),
       setup: shell.setup,
+      run: requester.runId,
     },
   });
   // Every start keeps its terminal open, the lifetime Orca gives a new-child worker: in an existing

@@ -165,6 +165,9 @@ const ALLOWED = new Map<string, string>([
   ["cli:priority set:design-only", "160"],
   // The lead's own task-update close, the done_blockers close point design names no gate for.
   ["gate:done-blockers:code-only", "212"],
+  // The reopen row S6 needed; the appendix and glossary take it when their next edit folds 216 in.
+  ["event:pr_reopened:code-only", "216"],
+  ["event-glossary:pr_reopened:code-only", "216"],
 ]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };

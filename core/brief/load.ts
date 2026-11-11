@@ -13,8 +13,9 @@ import type { BriefGate, BriefInput, BriefSnapshot, BriefTask } from "./types.ts
 const STATUSES: readonly ViewTaskStatus[] = ["pending", "ready", "dispatched", "blocked", "completed", "failed"];
 
 /**
- * Runs the brief reads: the orchestrator's current Run and every Run an event names. item_created
- * carries no Run, so an item in another Run is seen only when `extra` names it.
+ * Runs the brief reads: the orchestrator's current Run and every Run an event names, item_created's
+ * and unit_started's among them (decision 216). An item recorded before 216 is seen only when its
+ * Run is current or `extra` names it.
  */
 export function briefRuns(events: readonly StoredEvent[], current: string | null, extra: readonly string[] = []): string[] {
   const named = events.flatMap((e) => (typeof e.payload.run === "string" ? [e.payload.run] : []));

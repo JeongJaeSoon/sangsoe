@@ -62,7 +62,8 @@ export function judgeQueue(input: ViewInput, cfg: { decisionWaitMinutes: number 
 
   const runOf = joinedRuns(input.events);
   const openedAt = seqOf(input.events, "decision_opened", "decision");
-  const closedAt = seqOf(input.events, "pr_closed", "pr");
+  // The latest close: a PR reopened and closed again lost its cause at the second close (decision 216).
+  const closedAt = new Map(input.events.filter((e) => e.type === "pr_closed").map((e) => [String(e.payload.pr), e.seq] as const));
   const answered = new Map(
     input.events.filter((e) => e.type === "decision_answered" && e.payload.late !== true).map((e) => [String(e.payload.decision), e] as const),
   );

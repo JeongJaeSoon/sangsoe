@@ -36,6 +36,7 @@
 {"type":"pr_base_changed","source":"pr-monitor","payload":{"pr":"acme/api#12","from":"feature-a","to":"main"}}
 {"type":"pr_changes_requested","source":"pr-monitor","payload":{"pr":"acme/api#12","reviewer":"octocat"}}
 {"type":"pr_closed","source":"pr-monitor","payload":{"pr":"acme/api#14"}}
+{"type":"pr_reopened","source":"pr-monitor","payload":{"pr":"acme/api#14"}}
 {"type":"pr_merged","source":"pr-monitor","payload":{"pr":"acme/api#12","merge_sha":"d4e5f6a"}}
 {"type":"pr_opened","source":"pr-monitor","payload":{"pr":"acme/api#12","task":"task_a1"}}
 {"type":"pr_ready_to_merge","source":"pr-monitor","payload":{"pr":"acme/api#12"}}

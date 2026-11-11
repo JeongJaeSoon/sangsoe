@@ -38,7 +38,7 @@ export async function createItem(orca: OrcaAdapter, store: Pick<Store, "append" 
   store.append({
     type: "item_created",
     source: "core:item",
-    payload: { task, alias, who: a.who, done_when: a.doneWhen, owner_action: 0 },
+    payload: { task, alias, who: a.who, done_when: a.doneWhen, owner_action: 0, run: a.run },
     entity: "task",
     entity_id: task,
   });

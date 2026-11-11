@@ -227,6 +227,16 @@ async function onMerged(r: Reads, repo: string, p: ListedPull, link: Link | null
   }
 }
 
+/** The head branch, only when it lives in the PR's own repository (pr_opened.head). */
+const headBranch = (repo: string, p: ListedPull) => (p.head.repo?.full_name?.toLowerCase() === repo.toLowerCase() ? { head: p.head.ref } : {});
+
+/** How often the PR closed unmerged, and whether a pr_reopened came after the last close (decision 216). */
+function closeTurns(r: Reads, ref: string): { closes: number; reopened: boolean } {
+  const closed = rowsOf(r, "pr_closed", ref);
+  const last = closed.at(-1)?.seq ?? 0;
+  return { closes: closed.length, reopened: rowsOf(r, "pr_reopened", ref).some((e) => e.seq > last) };
+}
+
 async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, level: string): Promise<void> {
   const ref = prRef(repo, p.number);
   const opened = rowsOf(r, "pr_opened", ref);
@@ -235,17 +245,23 @@ async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, 
     plan(r, {
       type: "pr_opened",
       dedupe_key: task ? key("pr_opened", ref, task) : key("pr_opened", ref),
-      payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha, ...(p.head.repo?.full_name?.toLowerCase() === repo.toLowerCase() ? { head: p.head.ref } : {}) },
+      payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha, ...headBranch(repo, p) },
     });
   }
   if (link && !link.linked) await addReference(r, repo, p);
+  const turns = closeTurns(r, ref);
+  if (turns.closes > 0 && !turns.reopened) {
+    plan(r, { type: "pr_reopened", dedupe_key: key("pr_reopened", ref, String(turns.closes)), payload: { pr: ref } });
+  }
 
   const bases = [...opened.map((e) => str(e.payload.base)), ...rowsOf(r, "pr_base_changed", ref).map((e) => str(e.payload.to))].filter((b) => b !== undefined);
   const lastBase = bases.at(-1);
   if (lastBase && lastBase !== p.base.ref) {
+    // A move back to an earlier pair at the same head is a new turn (decision 216); the first keeps its old key.
+    const turn = rowsOf(r, "pr_base_changed", ref).length;
     plan(r, {
       type: "pr_base_changed",
-      dedupe_key: key("pr_base_changed", ref, lastBase, p.base.ref, p.head.sha),
+      dedupe_key: key("pr_base_changed", ref, lastBase, p.base.ref, p.head.sha, ...(turn > 0 ? [String(turn)] : [])),
       payload: { pr: ref, from: lastBase, to: p.base.ref },
     });
   }
@@ -480,7 +496,7 @@ async function mainCi(r: Reads): Promise<void> {
 }
 
 const REVIEW_TYPES = ["pr_review_requested", "pr_changes_requested", "review_commented", "review_replied"];
-const TYPES = ["pr_opened", "pr_merged", "pr_closed", "pr_base_changed", "verify_tier_set", "land_requested", "pr_ready_to_merge", "main_green", "main_red", "ci_failed", "item_transition", "review_verdict", ...REVIEW_TYPES];
+const TYPES = ["pr_opened", "pr_merged", "pr_closed", "pr_reopened", "pr_base_changed", "verify_tier_set", "land_requested", "pr_ready_to_merge", "main_green", "main_red", "ci_failed", "item_transition", "review_verdict", ...REVIEW_TYPES];
 
 /**
  * One pr-monitor round. GitHub through core/gh only, Orca through the adapter only; the PR's link to
@@ -526,11 +542,14 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal): Promise<Read
           if (level !== "essential" && rowsOf(r, "pr_merged", ref).length === 0 && !known && link?.linked) {
             const task = link.tasks.length === 1 ? link.tasks[0]?.task : undefined;
             // Seen first already merged: the item↔PR row land and the brief read still gets written.
-            plan(r, { type: "pr_opened", dedupe_key: task ? key("pr_opened", ref, task) : key("pr_opened", ref), payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha } });
+            plan(r, { type: "pr_opened", dedupe_key: task ? key("pr_opened", ref, task) : key("pr_opened", ref), payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha, ...headBranch(repo, p) } });
           }
           await onMerged(r, repo, p, link);
-        } else if (rowsOf(r, "pr_closed", ref).length === 0) {
-          plan(r, { type: "pr_closed", dedupe_key: key("pr_closed", ref), payload: { pr: ref } });
+        } else {
+          const t = closeTurns(r, ref);
+          // The first close keeps the key it always had; a close after a reopen is the next turn.
+          if (t.closes === 0) plan(r, { type: "pr_closed", dedupe_key: key("pr_closed", ref), payload: { pr: ref } });
+          else if (t.reopened) plan(r, { type: "pr_closed", dedupe_key: key("pr_closed", ref, String(t.closes + 1)), payload: { pr: ref } });
         }
       }
     }
