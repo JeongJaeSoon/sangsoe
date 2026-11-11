@@ -16,6 +16,7 @@ import {
   readLabels,
   readPull,
 } from "./github.ts";
+import { lastBaseChange, rereviewItem, verdictsSinceBase } from "./rereview.ts";
 
 // The land judgment (decisions 72, 79, 81, 85; appendix #role-cards): one function for the dry
 // run, the real run and every entrance (R-03). Every refusal after the PR is named is a
@@ -306,7 +307,7 @@ const OWN_CHECKS: Partial<Record<MergeCondition["id"], (gh: GhClient, a: OwnInpu
 
 /** The reviewers whose verdict at exactly `head` decision 158 counts; refuses when there is none. */
 function verdictApproval(events: readonly StoredEvent[], pr: string, head: string, pull: Pull): string {
-  const atHead = events.filter((e) => e.type === "review_verdict" && e.payload.pr === pr && e.payload.head_sha === head);
+  const atHead = verdictsSinceBase(events, pr).filter((e) => e.payload.head_sha === head);
   const recordHead = `record a verdict on ${short(head)} with sangsoe review record`;
   if (atHead.length === 0) throw new Refused("verdict_not_at_head", "", `no verdict was recorded at ${short(head)} itself`, recordHead);
   const author = pull.user.login.toLowerCase();
@@ -420,7 +421,9 @@ function unmergedBelow(pr: string, events: readonly StoredEvent[]): StackNode | 
 const PR_REF = /^[a-z0-9_.-]+\/[a-z0-9_.-]+#[1-9][0-9]*$/;
 
 async function reviewed(gh: GhClient, a: { repo: string; pr: string; head: string; base: string; events: readonly StoredEvent[] }): Promise<string> {
-  const verdicts = a.events.filter((e) => e.type === "review_verdict" && e.payload.pr === a.pr);
+  // Decision 215: a verdict recorded before the latest base change was given against the old base.
+  const verdicts = verdictsSinceBase(a.events, a.pr);
+  const change = lastBaseChange(a.events, a.pr);
   const atHead = verdicts.filter((e) => e.payload.head_sha === a.head);
   const actOn = atHead.find((e) => Number(e.payload.act_on) > 0);
   if (actOn) {
@@ -432,16 +435,22 @@ async function reviewed(gh: GhClient, a: { repo: string; pr: string; head: strin
     (sha) => !verdicts.some((e) => e.payload.head_sha === sha && Number(e.payload.act_on) > 0),
   );
   const reviewHead = `review the head ${short(a.head)} and record the verdict with sangsoe review record`;
+  if (older.length === 0 && change) {
+    const item = rereviewItem(a.events, a.pr, change.seq);
+    throw new Refused(
+      "rereview_needed",
+      "",
+      `${a.pr}'s base moved from ${change.from} to ${change.to} and no review was recorded after it${item ? ` (re-review item ${item})` : ""}`,
+      reviewHead,
+    );
+  }
   if (older.length === 0) throw new Refused("review_missing", "", `no review verdict for ${a.pr}`, reviewHead);
 
-  // Patch-id inheritance: a clean verdict on an older head carries over only when that head's own
-  // change equals the current one, compared against the current base and every base it had.
-  const bases = [a.base, ...a.events.filter((e) => e.type === "pr_base_changed" && e.payload.pr === a.pr).map((e) => String(e.payload.from))];
+  // Patch-id inheritance: a clean verdict on an older head, recorded on the current base, carries
+  // over only when that head's own change equals the current one.
   const now = await patchId(gh, a.repo, a.base, a.head);
   for (const sha of older) {
-    for (const base of new Set(bases)) {
-      if (now !== null && (await patchId(gh, a.repo, base, sha)) === now) return `verdict inherited from ${short(sha)} by patch-id`;
-    }
+    if (now !== null && (await patchId(gh, a.repo, a.base, sha)) === now) return `verdict inherited from ${short(sha)} by patch-id`;
   }
   const last = older.at(-1) as string;
   throw new Refused("review_stale", short(last), `the verdict is for ${short(last)}, the head is ${short(a.head)} and the patch-ids differ`, reviewHead);

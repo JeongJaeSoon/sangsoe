@@ -6,6 +6,7 @@ import { decisionMoot } from "../../decision/moot.ts";
 import { isOpenGate } from "../../decision/waiters.ts";
 import type { GhClient } from "../../gh/client.ts";
 import { notifyReady } from "../../graph/notify-ready.ts";
+import { rereviewItems } from "../../graph/rereview.ts";
 import { readSnapshot } from "../../graph/snapshot.ts";
 import { syncGraph } from "../../graph/sync.ts";
 import { probeRound } from "../../owner/probe.ts";
@@ -65,7 +66,12 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   if (core) {
     const s = syncGraph(core, input.orca);
     calls.push(`graph sync: added ${s.added.length}, reland ${s.relandPrs.length}, dangling ${s.dangling.length}, refused ${s.refused.length}`);
-  } else calls.push("would call graph sync");
+    if (!signal.aborted) {
+      const rr = await rereviewItems(core, input.orca);
+      calls.push(`rereview items: made ${rr.made.length}${rr.made.length ? ` (${rr.made.join(", ")})` : ""}, refused ${rr.refused.length}`);
+      unseen.push(...rr.refused.map((x) => `re-review item ${x}`));
+    }
+  } else calls.push("would call graph sync", "would call rereview items");
 
   if (j.ready.length > 0) {
     const runOf = new Map(input.orca.tasks.map((t) => [t.id, t.runId]));

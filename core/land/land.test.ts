@@ -306,32 +306,42 @@ test("a removed stacked_on edge no longer blocks", async () => {
   assert.ok((await land(input(), h.deps)).ok);
 });
 
-function retarget(samePatch: boolean): Harness {
+/** `reviewedAfter`: the verdict on OLD was recorded after the base change, against main. */
+function retarget(samePatch: boolean, reviewedAfter = false): Harness {
   const r0 = routes();
   const patch = (body: string) => ok({ status: "ahead", files: [{ filename: "core/a.ts", patch: body }] });
-  r0[`repos/${REPO}/compare/feature-a...${OLD}`] = patch("@@ -3,1 +3,1 @@\n-a\n+b");
+  r0[`repos/${REPO}/compare/feature-a...${OLD}`] = patch("@@ -9,1 +9,1 @@\n-a\n+b");
+  r0[`repos/${REPO}/compare/main...${OLD}`] = patch("@@ -9,1 +9,1 @@\n-a\n+b");
   r0[`repos/${REPO}/compare/main...${HEAD}`] = patch(samePatch ? "@@ -9,1 +9,1 @@\n-a\n+ b" : "@@ -9,1 +9,1 @@\n-a\n+c");
   const h = harness(r0);
+  const moved = () => h.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from: "feature-a", to: "main" } });
+  if (reviewedAfter) moved();
   verdict(h.store, OLD);
   evidence(h.store, "test");
   evidence(h.store, "run");
-  h.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from: "feature-a", to: "main" } });
+  if (!reviewedAfter) moved();
   return h;
 }
 
-test("scenario retarget_approval (land side): base changed and the head differs, so land refuses for re-review", async () => {
-  const h = retarget(false);
-  const r = await land(input(), h.deps);
-  assert.equal(r.ok ? "" : r.refusal.code, "review_stale");
-  assert.match(r.ok ? "" : r.refusal.fix, /review the head aaaaaaa/);
-  assert.deepEqual(landRows(h.store), [`land_failed:review_stale:${OLD.slice(0, 7)}`]);
+test("scenario retarget_approval (land side): base changed after the verdict, so land refuses for re-review", async () => {
+  for (const samePatch of [false, true]) {
+    const h = retarget(samePatch);
+    const r = await land(input(), h.deps);
+    assert.equal(r.ok ? "" : r.refusal.code, "rereview_needed", `decision 215: the same patch-id does not carry a verdict across the base change (${samePatch})`);
+    assert.match(r.ok ? "" : r.refusal.reason, /base moved from feature-a to main/);
+    assert.match(r.ok ? "" : r.refusal.fix, /review the head aaaaaaa/);
+    assert.deepEqual(landRows(h.store), ["land_failed:rereview_needed"]);
+  }
 });
 
-test("scenario retarget_approval (land side): the same patch-id inherits the verdict", async () => {
-  const h = retarget(true);
-  const r = await land(input(), h.deps);
+test("scenario retarget_approval (land side): a verdict recorded after the base change inherits by patch-id, or is stale", async () => {
+  const same = retarget(true, true);
+  const r = await land(input(), same.deps);
   assert.ok(r.ok, JSON.stringify(r));
   assert.match(r.value.note, /verdict inherited from ccccccc by patch-id/);
+  const other = retarget(false, true);
+  const s = await land(input(), other.deps);
+  assert.equal(s.ok ? "" : s.refusal.reason.split(" ")[0], `review_stale:${OLD.slice(0, 7)}`);
 });
 
 test("refusals before the judgment: unreadable PR, closed PR, draft, moved head, rate limit", async () => {

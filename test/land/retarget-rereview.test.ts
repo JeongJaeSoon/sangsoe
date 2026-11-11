@@ -15,6 +15,7 @@ import {
   runMonitor,
   VERSION,
   type ViewInput,
+  type ViewTask,
 } from "../../core/index.ts";
 import { createWorld } from "../decision/world.ts";
 
@@ -89,7 +90,7 @@ function retargetWorld() {
   store.append({ type: "land_requested", source: "land", payload: { pr: PR, head_sha: HEAD, reason: "merge_on_approval" } });
   const view = async (): Promise<ViewInput> => {
     const listed = await orca.taskList({ run: RUN });
-    const tasks = listed.ok ? listed.value.map((t) => ({ id: t.id, runId: RUN, status: t.status, deps: [] as string[] })) : [];
+    const tasks = listed.ok ? listed.value.map((t): ViewTask => ({ id: t.id, runId: RUN, status: t.status as ViewTask["status"], deps: [] })) : [];
     return { events: store.events(), orca: { tasks, gates: [] }, now: new Date(NOW).toISOString() };
   };
   // review record reads the PR's author, head and base from GitHub through gh api.
