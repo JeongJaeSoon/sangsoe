@@ -64,6 +64,19 @@ test("최근 전환, 크리티컬 패스 (상태 · 단계 이름), 스택 PR �
   assert.match(sectionOf(html, "edges"), /간선 <span class="count">11<\/span>/);
 });
 
+test("group detail sections follow hallmark group.html: graph, why, edges, then the open items by state, 최근 전환 and 완료", () => {
+  const html = renderStage(group);
+  const at = (needle: string) => {
+    const i = html.indexOf(needle);
+    assert.ok(i >= 0, needle);
+    return i;
+  };
+  const order = ['<dl class="figs"', 'id="h-graph"', 'id="h-why"', 'id="h-edges"', 'id="h-s0"', 'id="h-recent"', '<details class="fold">'].map(at);
+  assert.deepEqual(order, [...order].sort((a, b) => a - b));
+  const last = gm().sections.length - 1;
+  assert.ok(at(`id="h-s${last}"`) < at('id="h-recent"'), "최근 전환 sits right under the state sections");
+});
+
 test("왜 준비되지 않았나: 항목 is the item with its title, 막는 선행 is not drawn as the row title", () => {
   const why = sectionOf(renderStage(group), "why");
   assert.doesNotMatch(why, /class="title"/);
