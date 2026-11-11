@@ -2,7 +2,9 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
-## Unreleased
+## 0.1.4-rc.3 (pre-release)
+
+Everything since `v0.1.4-rc.2`: decisions 217 and 218. A pre-release for the S6 re-run of what failed on rc.2; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.3.
 
 - **A re-review item reaches a lead's Run without a hand-run round.** Orca lets only the session bound to a Run create Tasks in it, so the plugin timer's queue round was refused (`consumer_fenced`) and made no item. The round now wakes that Run with one `🔁 rereview_item` status message per base change, and `sangsoe graph sync --run <run>`, which the message names, makes the item and its `blocks` edge from the lead's own session. The Orca plugin's content changed (the vendored core), so it needs re-approval (217).
 - **An orchestrator inside an Orca worktree can leave `worktreeId` out of `start_unit`.** `[gate:delegate]` keeps the orchestrator from running `orca worktree current`, so it could not learn the id `start_unit` asked for. `start_unit` now takes the innermost worktree its folder is in, under the same live-Dispatch check a declared one gets (217).
