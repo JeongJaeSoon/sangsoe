@@ -41,6 +41,12 @@ Optional `grace_minutes` (default 30) and `min_gap_minutes` (default 10, the flo
 { "watch": { "repos": ["acme/api"] } }
 ```
 
+**Load thresholds.** While the machine is at `warn` or `danger`, the pressure gate holds a heavy start (`start_unit`, `docker compose up`, `orca worktree create`) and names the metric that binds first, with its value and threshold, for example `디스크 여유 8 GB ≤ 위험 10 GB`. The same thresholds judge the resource monitor, REAPER and a Run's free slots. Each metric is a `[warn, danger]` pair; the defaults are below (decision 210). The `capacity` key is optional and each entry overrides only its metric. A malformed entry keeps the default: a free amount needs warn above danger, load per CPU needs warn below danger, both as numbers 0 or more.
+
+```json
+{ "capacity": { "disk_free_gb": [20, 10], "load_per_cpu": [1.3, 2.0], "mem_free_pct": [20, 10] } }
+```
+
 Open a new Claude Code session to pick up the plugin.
 
 **Claude profiles.** Claude Code keeps its plugins per configuration directory: `CLAUDE_CONFIG_DIR` when that is set, otherwise `~/.claude`. `sangsoe install` registers into the directory it runs under, and also into the one Orca starts new Claude sessions with, which it reads from `orca account list --json`. When that is another directory, install repeats its `claude` lines for it as `claude (Orca profile <dir>): …`. Doctor prints the directory it checked as `ok       claude profile: checked <dir> (…)`, and the Orca one as an `orca claude profile` row: `ok` when Orca uses the checked directory or the plugin is enabled at this version there, otherwise `warn` with `sangsoe install` as the fix (or `orca open` when Orca's answer cannot be read). `sangsoe uninstall` removes the registration from both directories. Homebrew itself writes nothing to your home directory.
