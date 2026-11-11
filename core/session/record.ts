@@ -3,6 +3,7 @@ import { decisionAnswer } from "../decision/answer.ts";
 import { advisorCalls } from "../models/spend.ts";
 import { readDecision } from "../decision/waiters.ts";
 import type { CoreDeps } from "../notify/result.ts";
+import { classifyPrompt } from "../owner/prompt.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
 import type { Store } from "../store/store.ts";
 import { hashOf, mask, summarize } from "./mask.ts";
@@ -68,16 +69,6 @@ const released = (store: Store, signal: ReleaseSignal, source: string) => {
   return recordReleases(store, { events }, signal, source);
 };
 
-// Prompts no person typed (decision 173's shape rule, widened by decision 196): Orca's brief, Orca's
-// new-mail nudge and its mail-delivery turn, another session's message and a background task's
-// notice, which Claude Code also hands to UserPromptSubmit.
-const NOT_OWNER = [
-  /^Please carry out this task from my Orca coordinator/,
-  /^You are working inside Orca, a multi-agent IDE\./,
-  /^You have (\d+|new) orchestration messages?\b/,
-  /^Another Claude session sent a message:/,
-  /^<task-notification>/,
-];
 const DECISION_NO = /\bd\d{3,}\b/g;
 const ANSWER_SHAPE = /^\s*(d\d{3,})\b/;
 
@@ -89,8 +80,7 @@ const ANSWER_SHAPE = /^\s*(d\d{3,})\b/;
  */
 async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
   const text = input.prompt ?? "";
-  const start = text.trimStart();
-  if (start === "" || NOT_OWNER.some((re) => re.test(start))) return;
+  if (classifyPrompt(text) !== "owner") return;
   const masked = mask(text);
   const key = dedupeKey(EVENTS.owner_action, input.session_id, input.prompt_id ?? hashOf(`${masked}\n${tail(input.transcript_path).length}`));
   const action = deps.store.appendOwnerAction(
