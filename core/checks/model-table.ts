@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   ADVISOR_FROM_SETTING,
+  ADVISOR_FROM_WORKTREE,
   ADVISOR_NOT_APPLIED,
   CATALOG,
   catalogAgeDays,
@@ -14,8 +15,9 @@ import {
   spendText,
   VERIFIED_WITH_CLAUDE_CODE,
 } from "../models/index.ts";
+import { LOCAL_SETTINGS } from "../start/local-settings.ts";
 import { defaultDbPath, Store } from "../store/store.ts";
-import type { Check, CheckStatus } from "./check.ts";
+import type { Check, CheckContext, CheckStatus } from "./check.ts";
 
 const id = "model-table";
 const FIX = "re-read the pages in core/models/README.md and update core/models/table.ts (a new decision line)";
@@ -59,7 +61,33 @@ export function advisorSetting(env: Record<string, string | undefined>, home: st
 }
 
 const ADVISOR_FIX =
-  "setting advisorModel is the owner's act (sangsoe never writes it); a frontier advisor also needs the owner's one-time usage-credits consent through /model";
+  "stop committing .claude/settings.local.json in that repository, or set advisorModel in your own settings (the owner's act; sangsoe never writes it)";
+const ADVISOR_ROUTE = `route worktree_file: ${ADVISOR_FROM_WORKTREE}`;
+const TRACKED_FIX =
+  "stop committing .claude/settings.local.json in that repository so start_unit can write each worktree's advisor (decision 202)";
+const ENV_OFF_FIX = "unset CLAUDE_CODE_DISABLE_ADVISOR_TOOL where Orca starts its sessions if rows should get their advisor";
+
+/**
+ * Decision 202: start_unit cannot write the advisor into a worktree of a repository that commits
+ * `.claude/settings.local.json`. Read from each local main checkout Orca lists; what git or Orca
+ * cannot answer is named as unchecked, never as either answer.
+ */
+export async function trackedLocalSettings(ctx: CheckContext): Promise<{ tracked: string[]; unchecked: string[] }> {
+  const out = { tracked: [] as string[], unchecked: [] as string[] };
+  const list = await ctx.orca.worktreeList({ limit: 1000 });
+  if (!list.ok) return { ...out, unchecked: [`worktree list (${list.error.code})`] };
+  if (list.value.truncated) out.unchecked.push("worktree list truncated");
+  const seen = new Set<string>();
+  for (const row of list.value.rows) {
+    if (!row.isMainWorktree || seen.has(row.repoId)) continue;
+    seen.add(row.repoId);
+    const name = row.projectId?.replace(/^github:/, "") ?? row.displayName;
+    const r = await ctx.exec("git", ["-C", row.path, "ls-files", "--error-unmatch", LOCAL_SETTINGS]).catch(() => ({ code: null }));
+    if (r.code === 0) out.tracked.push(name);
+    else if (r.code !== 1) out.unchecked.push(name);
+  }
+  return out;
+}
 
 const RANK: Record<CheckStatus, number> = { ok: 0, notice: 1, warn: 2, fail: 3 };
 
@@ -86,28 +114,56 @@ export const modelTable: Check = {
   async run(ctx) {
     const now = ctx.now ?? new Date();
     const env = ctx.env ?? process.env;
-    const findings: { status: CheckStatus; text: string }[] = [];
+    const home = ctx.home ?? homedir();
+    const findings: { status: CheckStatus; text: string; fix: string }[] = [];
     const age = catalogAgeDays(now);
-    if (age > STALE_DAYS) findings.push({ status: "warn", text: `모델 표 확인이 ${age}일 지났다(기준 ${STALE_DAYS}일)` });
+    if (age > STALE_DAYS) findings.push({ status: "warn", text: `모델 표 확인이 ${age}일 지났다(기준 ${STALE_DAYS}일)`, fix: FIX });
     // An unreadable version only drops this one comparison; the date floor still holds.
     const v = await ctx.exec("claude", ["--version"]).catch(() => ({ stdout: "" }));
     const installed = /\d+\.\d+\.\d+/.exec(v.stdout)?.[0];
     if (installed && compareVersions(installed, VERIFIED_WITH_CLAUDE_CODE) > 0) {
-      findings.push({ status: "notice", text: `Claude Code ${installed} 이 표를 확인한 ${VERIFIED_WITH_CLAUDE_CODE} 보다 새롭다: alias 가 옮겨 갔을 수 있다` });
+      findings.push({
+        status: "notice",
+        text: `Claude Code ${installed} 이 표를 확인한 ${VERIFIED_WITH_CLAUDE_CODE} 보다 새롭다: alias 가 옮겨 갔을 수 있다`,
+        fix: FIX,
+      });
     }
-    const pins = activePins(env, ctx.home ?? homedir());
+    const pins = activePins(env, home);
     if (pins.length > 0) {
-      findings.push({ status: "notice", text: `alias 고정 ${pins.length}개: ${pins.join(" · ")} — 풀린 모델은 상태 줄로 확인` });
+      findings.push({ status: "notice", text: `alias 고정 ${pins.length}개: ${pins.join(" · ")} — 풀린 모델은 상태 줄로 확인`, fix: PIN_FIX });
     }
-    const advisor = advisorSetting(env, ctx.home ?? homedir());
-    if (!advisor) findings.push({ status: "notice", text: ADVISOR_NOT_APPLIED });
-    const used = spendToday(ctx.home ?? homedir(), now);
-    const tail = used ? `; ${used}` : "";
-    if (findings.length === 0) return { id, status: "ok", summary: `모델 표 확인 ${age}일 전, 고정 없음, ${ADVISOR_FROM_SETTING}${tail}` };
+    // Decision 202: the advisor goes through each new worktree's local settings, not the owner's key.
+    // Only where that file cannot be written does the owner's key (decision 187) matter.
+    if (env.CLAUDE_CODE_DISABLE_ADVISOR_TOOL) {
+      findings.push({
+        status: "notice",
+        text: "이 환경에 CLAUDE_CODE_DISABLE_ADVISOR_TOOL 이 있다: 세션이 이 환경을 이어받으면 worktree 파일의 advisor 도 꺼질 수 있다",
+        fix: ENV_OFF_FIX,
+      });
+    }
+    const repos = await trackedLocalSettings(ctx);
+    if (repos.tracked.length > 0) {
+      const names = repos.tracked.join(" · ");
+      findings.push(
+        advisorSetting(env, home)
+          ? {
+              status: "notice",
+              text: `${LOCAL_SETTINGS} 를 커밋한 저장소(${names}): worktree 파일을 쓰지 못해 advisor 는 오너 설정에서 온다(route owner_setting). ${ADVISOR_FROM_SETTING}; advisor 를 꺼야 하는 시작도 끄지 못한다`,
+              fix: TRACKED_FIX,
+            }
+          : {
+              status: "warn",
+              text: `${LOCAL_SETTINGS} 를 커밋한 저장소(${names}): ${ADVISOR_NOT_APPLIED}; 구현 워커는 바닥 tier 로 시작한다`,
+              fix: ADVISOR_FIX,
+            },
+      );
+    }
+    const unchecked = repos.unchecked.length > 0 ? `; 확인 못 한 저장소: ${repos.unchecked.join(" · ")}` : "";
+    const used = spendToday(home, now);
+    const tail = `${unchecked}${used ? `; ${used}` : ""}`;
+    if (findings.length === 0) return { id, status: "ok", summary: `모델 표 확인 ${age}일 전, 고정 없음, ${ADVISOR_ROUTE}${tail}` };
     const status = findings.reduce<CheckStatus>((s, f) => (RANK[f.status] > RANK[s] ? f.status : s), "ok");
-    // Each finding's own fix: pins and the advisor key are the owner's settings, not a table update.
-    const stale = findings.length > (pins.length > 0 ? 1 : 0) + (advisor ? 0 : 1);
-    const fix = [...(stale ? [FIX] : []), ...(pins.length > 0 ? [PIN_FIX] : []), ...(advisor ? [] : [ADVISOR_FIX])].join("; ");
+    const fix = [...new Set(findings.map((f) => f.fix))].join("; ");
     return { id, status, summary: `${findings.map((f) => f.text).join("; ")}${tail}`, fix };
   },
 };

@@ -22,9 +22,9 @@
 | 실행 | `core/land/` | X | ④ 공유 코어 | land 판정 함수(`sangsoe land`·MCP `land`, 머지하는 유일한 길) · `merge_confirm` · `gh pr merge --auto` 를 부르는 유일한 자리 |
 | 실행 | `core/verify/` | X | ④ 공유 코어 | `verify_tier` 순수 함수(V0~V3) · head 별 증거 점검 · `deploys_after` 항목의 dev 증거 판정 |
 | 실행 | `core/gates/` | X | ④ 공유 코어 | 막는 hook 의 판정 함수: 게이트 4종 · 시작 가드 · 모양 검사 · 합치기 · `gate_denied` 기록 |
-| 실행 | `core/start/` | X | ④ 공유 코어 | 세션을 여는 유일한 시작 함수(Task + Dispatch + new-child lineage)와 lineage·깊이 검사, `unit_lineage_complete` 읽기(결정 94) |
+| 실행 | `core/start/` | X | ④ 공유 코어 | 세션을 여는 유일한 시작 함수(Task + Dispatch)와 lineage·깊이 검사, `unit_lineage_complete` 읽기(결정 94). 시작은 두 단계다: agent 없이 `worktree create`(요청자 worktree 를 `--parent-worktree id:` 로, worktree 밖의 오케스트레이터는 `--no-parent`) → 그 `.claude/settings.local.json` 에 행의 advisor 쓰기 → `worker-start --worktree id:<그것> --keep-open`. create 가 연 셸은 `unit_started` 에 남긴다(결정 202) |
 | 실행 | `core/capacity/` | X | ④ 공유 코어 | 부하 판정 함수 하나(압박 게이트·resource-monitor·REAPER·`capacity` 공용, 결정 83) |
-| 실행 | `core/reaper/` | X | ④ 공유 코어 | REAPER 라운드(표시 → 정리): 루트 읽기 · 끝남 판정 · 삭제 전 검사 · `worktree rm --run-hooks` · 기록된 Docker id · `resource_record` 몸체(결정 82·83·86·88, 결정 144·145) |
+| 실행 | `core/reaper/` | X | ④ 공유 코어 | REAPER 라운드(표시 → 정리): 루트 읽기 · 끝남 판정 · 삭제 전 검사 · `worktree rm --run-hooks` · 기록된 Docker id · `resource_record` 몸체(결정 82·83·86·88, 결정 144·145). 닫는 터미널은 `unit_started` 에 남은 setup 셸 하나뿐이고, 그 기록이 `setup: none` 이며 Dispatch 가 모두 풀렸을 때만 닫는다(결정 202). `reaper` 설정 파일을 읽지 못한 라운드는 셸도 닫지 않고 아무것도 지우지 않는다(결정 201) |
 | 실행 | `core/recover/` | X | ④ 공유 코어 | `sangsoe recover` 의 읽기 전용 표(결정 80 N4) |
 | 실행 | `core/decision/` | X | ④ 공유 코어 | 결정 루프: `decision_open`(재질문 게이트) · `decision_answer` · `moot` 닫기 · 결정 84③ 읽기 |
 | 실행 | `core/notify/` | X | ④ 공유 코어 | `notify`: Orca 메시지 한 번 + `notified`, 받는 순서 · `term_` 거부 |
