@@ -558,6 +558,7 @@ test("decision 202: a unit whose row budget is spent starts with the advisor off
     request({ task: { id: NEW_TASK } }),
   );
   assert.ok(owned.kind === "started" && owned.notes.some((n) => n.includes("오너 설정의 advisorModel")), JSON.stringify(owned));
+  assert.ok(!owned.notes.includes(ADVISOR_SPENT), "no claim that the advisor is off");
 });
 
 test("decision 202: the setup shell is recorded only when it is the worktree's one non-agent terminal, and kept with a setup script", async () => {
@@ -613,6 +614,17 @@ test("decision 202: a definite failed start closes only the recorded shell and r
     assert.deepEqual(acts(d), []);
     assert.ok(failed.kind === "refused" && failed.detail.includes(CHILD_TREE), JSON.stringify(failed));
   }
+  // A lost request Orca still holds, whose replay is refused without an id: the first one reached Orca.
+  let sent = 0;
+  const replayed = harness({
+    workerStart: () =>
+      sent++ === 0 ? { code: 1, stdout: "", stderr: "lost; retry with --retry-request req_held" } : fail("agent_failed"),
+    replies: { "orchestration-request-show": ok({ state: "pending" }) },
+  });
+  const held = await start(replayed);
+  assert.equal(sent, 2, "replayed once");
+  assert.deepEqual(acts(replayed), []);
+  assert.ok(held.kind === "refused" && held.detail.includes(CHILD_TREE) && held.detail.includes(SHELL), JSON.stringify(held));
   // A setup that may still be running is not cut short: the shell and the worktree stay, both named.
   for (const [replies, hookFile] of [
     [{ "repo-show": ok({ repo: { hookSettings: { scripts: { setup: "npm ci" } } } }) }, false],

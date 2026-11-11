@@ -67,7 +67,9 @@ export const roleLine = (role: Role) => `${ROLE_LINE_PREFIX} ${role}`;
 async function write(orca: OrcaAdapter, first: Promise<OrcaResult<Receipt>>, again: (o: WriteOptions) => Promise<OrcaResult<Receipt>>) {
   const r = await first;
   if (r.ok || r.error.code !== "response_lost" || !r.requestId) return r;
-  return recoverWrite(orca, r.requestId, again);
+  const replayed = await recoverWrite(orca, r.requestId, again);
+  // The first request reached Orca: a refused replay must not read as a definite failure (decision 202).
+  return replayed.ok || replayed.requestId ? replayed : { ...replayed, requestId: r.requestId };
 }
 
 const MAX_WORKER_PAGES = 50;
@@ -393,7 +395,8 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       const owner = ownerSetting();
       plan = launch(choice, { orcaFlag, ownerSetting: choice.advisor && !orcaFlag ? owner : false, spent });
       // Without the file sangsoe cannot turn off an advisor the owner's own setting attaches.
-      if ((spent || !choice.advisor) && owner) notes.push("advisor 를 끄지 못했다: 오너 설정의 advisorModel 이 이 세션에 붙는다");
+      // That note replaces the plan's "advisor off" one, which would no longer be true.
+      if ((spent || !choice.advisor) && owner) plan = { ...plan, note: "advisor 를 끄지 못했다: 오너 설정의 advisorModel 이 이 세션에 붙는다" };
     }
   }
   // Before worker-start: the new session's SessionStart reads this row for its budget and finish lines.
@@ -439,7 +442,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     const code = started.error.code;
     const unknown = dead || started.requestId !== undefined || ["response_lost", "request_absent", "unexpected_shape"].includes(code) || code.startsWith("exit_");
     const left = unknown
-      ? `남은 worktree: ${tree.id} (시작 결과를 알 수 없다: ${dead ? `Dispatch ${dead}` : code})`
+      ? `남은 worktree: ${tree.id}${shell.handle ? `, 셸 ${shell.handle}` : ""} (시작 결과를 알 수 없다: ${dead ? `Dispatch ${dead}` : code})`
       : shell.setup !== "none"
         ? `남은 worktree: ${tree.id}${shell.handle ? `, 셸 ${shell.handle}` : ""} (setup ${shell.setup}: 끝났는지 알 수 없어 닫지 않는다)`
         : await removeFailed(orca, tree.id, shell.handle);

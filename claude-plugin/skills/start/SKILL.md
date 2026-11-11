@@ -50,7 +50,7 @@ description: "Use when a sangsoe lead or the orchestrator starts a session on an
 
 advisor 는 행이 정한 tier 로 붙는다(결정 202). Orca 의 `worker-start` 에 advisor 옵션이 있으면 그것을 쓰고, 지금처럼 없으면 `start_unit` 이 새 worktree 를 먼저 만들고, 그 worktree 의 `.claude/settings.local.json` 에 행의 advisor 를 적은 뒤 세션을 띄운다. advisor 가 없는 행과 advisor 예산을 다 쓴 단위는 같은 파일로 advisor 를 끈다. 오너 설정은 쓰지 않는다. 그 파일을 쓰지 못하면(다른 호스트의 worktree, 저장소가 그 파일을 커밋해 둔 경우) 결정 187 의 길로 시작하고 `notes` 가 말한다: 오너 설정 `advisorModel` 이 있으면 그 advisor 가 붙고(sangsoe 는 그 tier 를 모른다. 끄지도 못한다), 없으면 advisor 가 꼭 있어야 하는 행(구현 워커)은 `withoutAdvisor` tier 로 시작하고 `model_changed` 를 남긴다. 짝이 맞지 않는 선택(advisor 가 본 모델보다 낮은 tier)은 `model_invalid` 로 거부된다.
 
-`worktree create` 가 여는 셸은 release 뒤에도 남는다. `start_unit` 이 그 handle 을 기록하고, setup 스크립트가 없는 저장소면 REAPER 가 release 뒤에 닫는다. setup 스크립트가 있거나 있는지 모르면 닫지 않는다: `notes` 가 그 handle 을 남은 것으로 말하니, 오너에게 보이는 보고에 옮긴다. 너는 `terminal close` 를 부르지 않는다. 시작이 실패해 `refused` 의 `detail` 에 `남은 worktree` 가 있으면 그 worktree(와 셸)는 Orca 가 아직 쓰고 있을 수 있는 것이다: 지우지 말고 그대로 위로 올린다.
+`worktree create` 가 여는 셸은 release 뒤에도 남는다. `start_unit` 이 그 handle 을 기록하고, setup 스크립트가 없는 저장소면 REAPER 가 release 뒤에 닫는다. setup 스크립트가 있거나 있는지 모르면 닫지 않는다: `notes` 가 그 handle 을 남은 것으로 말하니, 오너에게 보이는 보고에 옮긴다. 너는 `terminal close` 를 부르지 않는다. 시작이 실패해 `refused` 의 `detail` 에 `남은 worktree` 가 있으면 그 worktree(와 셸)는 Orca 가 아직 쓰고 있을 수 있는 것이다: 지우지 말고 그대로 위로 올린다. `worktree create 실패` 의 `요청한 이름` 은 응답을 잃은 create 가 만들었을 수 있는 worktree 다: `orca worktree list` 에서 그 이름을 찾아 있으면 같이 올린다.
 
 alias 는 바깥 설정(`ANTHROPIC_DEFAULT_*_MODEL`)에 고정될 수 있다. 시작한 워커의 첫 보고나 상태 줄에서 실제로 풀린 모델이 그 tier 의 현재 ID 와 다르면 워커를 다시 띄우지 말고 그 사실을 위로 올린다. `doctor` 의 `model-table` 행이 지금 걸린 고정을 보인다.
 
