@@ -2,7 +2,9 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
-## Unreleased
+## 0.1.4-rc.2 (pre-release)
+
+Everything since `v0.1.4-rc.1`: decision 216. A pre-release for the S6 re-run; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.3.
 
 - **A reopened PR is open again.** pr-monitor writes `pr_reopened` when a PR it recorded as closed is open on GitHub, and a second `pr_closed` when it closes again. The re-review item, the why-not-ready row and the stack-edge removal now see a PR that was closed and reopened (216).
 - **`land` does not merge into a merged PR's branch.** A PR stacked on a PR that merged with its branch kept still has that branch as its base on GitHub. `land` refuses it with `base_merged` and a fix line naming `gh pr edit <N> --base <base>`, read from GitHub's PRs for that branch (pr-monitor's rows when GitHub cannot be read) with or without a `stacked_on` edge; while another open PR uses that branch as its head, the refusal is `stack_order` naming that PR. The repo's default branch is never read as dead; a long-lived non-default branch such as `develop` can be. Right after such a retarget, `land` refuses with `base_unrecorded` until pr-monitor records the base change, so the re-review of decision 215 applies (216).
