@@ -393,11 +393,12 @@ function unmergedBelow(pr: string, events: readonly StoredEvent[]): StackNode | 
     const succs = new Set([ref, ...(tasksOf.get(ref) ?? [])]);
     return [...edges.entries()]
       .filter(([k, live]) => live && succs.has(k.slice(k.indexOf("\n") + 1)))
-      .map(([k]) => {
+      .map(([k]): StackNode => {
         const p = k.slice(0, k.indexOf("\n"));
         const mapped = PR_REF.test(p.toLowerCase()) ? p.toLowerCase() : prOf.get(p);
         return mapped ? { kind: "pr", id: mapped } : { kind: "task", id: p };
-      });
+      })
+      .filter((n) => n.id !== ref);
   };
   if (!tasksOf.has(pr)) {
     // Without this PR's task the edges ending at it cannot be found, so any edge whose

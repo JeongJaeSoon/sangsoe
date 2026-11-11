@@ -79,3 +79,11 @@ test("a base branch that moved onto a PR's head stacks it; a fork head, a shared
   await runMonitor("queue", deps(merged.store, merged));
   assert.deepEqual(stacked(merged), []);
 });
+
+test("two stacked PRs of one task add no edge, so the lower one is not made to wait on itself", async () => {
+  const w = world();
+  opened(w, "acme/api#10", T1, "main", "part1");
+  opened(w, "acme/api#11", T1, "part1", "part2");
+  await runMonitor("queue", deps(w.store, w));
+  assert.deepEqual(stacked(w), []);
+});

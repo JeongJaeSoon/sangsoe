@@ -526,20 +526,26 @@ const RESTART_RULE: Record<RestartDueRow["rule"], string> = {
 
 /**
  * Design N1: the orchestrator's and leads' sessions restart_due names, one line each. Only a role's
- * latest session counts: a /clear or a new start records a newer session_started for the same Run
- * and role, and the old session's rows no longer say anything.
+ * latest session counts: a /clear or a new start records a newer session_started for the same Task
+ * (or, without one, the same held Run), and the old session's rows no longer say anything. A lead
+ * whose Task is closed has ended and is not listed.
  */
 export function restartDueLines(input: BriefInput): string[] {
-  const latest = new Map<string, { session: string; who: string }>();
+  const closed = new Set(input.orca.tasks.filter((t) => t.status === "completed" || t.status === "failed").map((t) => t.id));
+  const latest = new Map<string, { session: string; who: string; task?: string }>();
   for (const e of input.events) {
     if (e.type !== "session_started") continue;
     const role = String(e.payload.role);
     if (role !== "orchestrator" && role !== "lead") continue;
     // The Run it holds, else the Task its Dispatch runs: a lead started by start_unit has both.
     const run = e.target ?? e.subject ?? "";
-    latest.set(`${role}\n${e.target ?? ""}\n${e.entity_id ?? ""}`, { session: String(e.payload.session), who: `${role}${run ? ` ${run}` : ""}` });
+    latest.set(`${role}\n${e.entity_id ?? e.target ?? ""}`, {
+      session: String(e.payload.session),
+      who: `${role}${run ? ` ${run}` : ""}`,
+      ...(e.entity_id ? { task: e.entity_id } : {}),
+    });
   }
-  const live = new Map([...latest.values()].map((s) => [s.session, s.who]));
+  const live = new Map([...latest.values()].filter((s) => !(s.task && closed.has(s.task))).map((s) => [s.session, s.who]));
   const rules = new Map<string, string[]>();
   for (const r of restart_due(input, DEFAULT_RESTART_RULES)) if (live.has(r.session)) rules.set(r.session, [...(rules.get(r.session) ?? []), RESTART_RULE[r.rule]]);
   return [...rules].map(([s, why]) => `♻️ 재시작 권함 · ${live.get(s)} · ${why.join(", ")} · handoff_save 뒤 /clear`);

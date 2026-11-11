@@ -157,7 +157,8 @@ function closeTask(ref: string, sha: string, task: string, linked: LinkedTask | 
       if (linked) {
         const l = await d.orca.taskList({ run: linked.run, full: true });
         tasks = l.ok ? snapshotTasks(l.value as FullTaskRow[], linked.run) : [];
-        const status = tasks.find((t) => t.id === task)?.status ?? null;
+        // The raw status: the snapshot folds statuses it does not list (Orca's "cancelled") into blocked.
+        const status = l.ok ? (l.value.find((x) => x.id === task)?.status ?? null) : null;
         if (status && isClosedTask(status)) return { ok: true, detail: `already ${status}`, planned: [] };
         from = status ? itemStateOf(status) : null;
       }

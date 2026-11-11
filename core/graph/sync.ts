@@ -61,6 +61,8 @@ export function syncGraph(deps: Pick<CoreDeps, "store">, snapshot: OrcaSnapshot,
     const pr = facts.prs.get(s.pr);
     if (!pr || pr.merged || pr.closed) continue;
     for (const task of pr.tasks) {
+      // Two PRs of one task stacked on each other order themselves by their base; an edge would make the lower one wait on itself.
+      if (s.inferred && facts.prs.get(s.base)?.tasks.has(task)) continue;
       if (s.inferred && facts.removals.has(edgeId(prNode(s.base), itemRef(task), "stacked_on"))) continue;
       const r = addEdgeTo(deps, snapshot, { pred: prNode(s.base), succ: itemRef(task), kind: "stacked_on" });
       if (r.ok && r.value.status === "added") added.push(`${prNode(s.base)} → ${itemRef(task)}`);

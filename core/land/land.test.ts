@@ -295,6 +295,16 @@ test("a PR with no task mapping is not refused by an item:<task> edge whose succ
   assert.ok((await land(input(), h.deps)).ok, "the edge is acme/api#13's, not this PR's");
 });
 
+test("an edge from this PR to its own task does not make it wait on itself (decision 212 ⑥)", async () => {
+  const h = harness(routes());
+  ready(h.store);
+  opened(h.store, PR, "task_c");
+  opened(h.store, "acme/api#13", "task_c");
+  stackEdge(h.store, `pr:${PR}`, "item:task_c");
+  const r = await land(input(), h.deps);
+  assert.ok(r.ok, JSON.stringify(r));
+});
+
 test("a stacked_on predecessor task with no PR opened fails closed", async () => {
   const h = harness(routes());
   ready(h.store);

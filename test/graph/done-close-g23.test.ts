@@ -26,6 +26,17 @@ test("완료 on an owner item whose PR is still open is refused with the blocker
   assert.equal(w.tasks.get(T)?.status, "completed");
 });
 
+test("a PR closed unmerged and replaced by a merged PR of the same task does not block the close", async () => {
+  const w = ownerWorld();
+  w.item(T, { who: "owner" });
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#5", task: T } });
+  w.store.append({ type: "pr_closed", source: "pr-monitor", payload: { pr: "acme/api#5" } });
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: T } });
+  w.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#7", merge_sha: "abc1234" } });
+  const r = await ownerDone({ orca: w.orca, store: w.store }, w.input(), w.facts(), { task: T });
+  assert.ok(r.ok, JSON.stringify(r));
+});
+
 /** A host whose `orca … task-list` answers with these Tasks; nothing else runs. */
 function host(tasks: unknown[] | null): Host & { ran: string[][] } {
   const ran: string[][] = [];
