@@ -61,6 +61,8 @@ Every `brew upgrade sangsoe` needs a new review record and a new approval. Each 
 4. `sangsoe plugin approve --dry-run`, then `sangsoe plugin approve`. It prints `recorded plugin_approved (seq N)` and `enabled`.
 5. `sangsoe doctor` exits 0 with every row `ok` or `notice`, including `orca plugin: local.sangsoe <new version>, running`. A `notice` row does not change the exit code; the usual ones are those step 4 of Install names.
 
+A Claude Code session that was running during `brew upgrade sangsoe` keeps working: a tool call made while the plugin folder is missing goes ahead with a `PreToolUse` hook error instead of being held. Open a new session to pick up the new plugin.
+
 Upgrading from `0.1.0` adds the `land allow` row and changes others; `CHANGELOG.md` lists them, and what upgrading from an older release adds.
 
 The approval covers the core the Orca plugin runs. A release packs a copy of `core/` into `orca-plugin/vendor/`, the plugin loads only that copy, and approve and doctor compare the whole folder, the copy included, with the reviewed source. A changed file anywhere in the installed folder turns `orca-plugin-content` into `FAIL`, with `sangsoe plugin approve` as the fix. This holds for a release only: when the plugin folder sits in a git checkout, the worker falls back to the checkout's `../core`, which the approval's dirty check does not cover.
@@ -69,7 +71,9 @@ Reinstalling the same version (`brew reinstall sangsoe`, then `sangsoe install`)
 
 ## Uninstall
 
-Run `sangsoe uninstall` first. It prints `claude: uninstalled sangsoe@sangsoe`, `claude: removed marketplace sangsoe`, `orca: unloaded local.sangsoe` and ``kept: ~/.local/share/sangsoe (data) and ~/.config/sangsoe (settings); `brew uninstall sangsoe` removes the tree``. A registration that is already gone prints `was not installed`, `was not added` or `no sangsoe development plugin loaded` instead, and is not an error. Then run `brew uninstall sangsoe`. Neither deletes `~/.local/share/sangsoe` (data) or `~/.config/sangsoe` (settings). `brew uninstall` also removes `node` if `node` was only installed for sangsoe.
+Run `sangsoe uninstall` before `brew uninstall sangsoe`: once the tree is gone, the `sangsoe` command that removes the registrations is gone with it. Uninstall prints `claude: uninstalled sangsoe@sangsoe`, `claude: removed marketplace sangsoe`, ``claude: restart every running Claude Code session that loaded sangsoe@sangsoe; until then it keeps the plugin's hooks``, `orca: unloaded local.sangsoe` and ``kept: ~/.local/share/sangsoe (data) and ~/.config/sangsoe (settings); `brew uninstall sangsoe` removes the tree``. It removes the marketplace from every scope Claude Code lists it in. A registration that is already gone prints `was not installed`, `was not added` or `no sangsoe development plugin loaded` instead, and is not an error. Then run `brew uninstall sangsoe`. Neither deletes `~/.local/share/sangsoe` (data) or `~/.config/sangsoe` (settings). `brew uninstall` also removes `node` if `node` was only installed for sangsoe.
+
+**Running sessions.** A Claude Code session keeps the hooks it loaded at start, so uninstalling does not take sangsoe's hooks out of a session that is already running. After `brew uninstall sangsoe` such a session still runs its tools, but each call shows a `PreToolUse` hook error and the sangsoe gates no longer check it. Restart those sessions.
 
 ## Land
 
