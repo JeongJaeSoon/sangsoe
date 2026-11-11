@@ -651,3 +651,27 @@ store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (1
 닫기: 워커 넷 worker_done → worker-release 넷 `released`, 리드 Run 의 Task 다섯(재리뷰 항목 포함) completed, 리드 worker_done. #9 · #10 을 닫고 원격 `s6r/*` 넷을 지웠다(`ls-remote` 빈 출력, 열린 PR 0). rc.2 설치본과 smoke 저장소 설정은 rc.3 재실행까지 그대로 둔다.
 
 고침: 10 의 재리뷰 항목과 O3 의 `worktreeId` 는 결정 217 이 고쳤다. 막힌 재리뷰 항목은 리드 Run 을 깨워 리드가 만들고, 오케스트레이터는 `worktreeId` 를 비워도 된다. 다음 재실행은 rc.3 에서 10 · NOW-1 의 재리뷰 항목과 왜 행, O3 만 다시 잰다.
+
+### S6 두 번째 재실행 기록 (2026-11-12 JST, 설치본 0.1.4-rc.3)
+
+결정 217 · 218 을 설치본에서 잰다: 오케스트레이터의 `worktreeId` 없는 `start_unit`(O3), 손 라운드 없이 리드 Run 에 생기는 재리뷰 항목(NOW-3(b)), 다시 연 PR 의 재리뷰 항목과 왜 행(NOW-1), 묶음 상세의 다섯 가지.
+
+설치: 버전 PR #100(머지 347de207) 에 서명 태그 `v0.1.4-rc.3`, release run 의 smoke 가 `ok tree: … (sangsoe 0.1.4-rc.3)`, pre-release. tap PR 39 가 `Formula/sangsoe-rc.rb` 를 rc.3 로 올렸다(`sangsoe land`, `merge_verdict`). `brew upgrade sangsoe-rc` → `sangsoe 0.1.4-rc.3`, `sangsoe install` → `approval waits — fingerprint ap1-a64c12da…`, `plugin approve --dry-run` 세 점검 ok, 내용 `20a5177e…` 는 풀어 놓은 릴리스 tarball 의 `orca plugin inspect` 와 같다. 오너가 approve, `sangsoe doctor` 종료 코드 0 과 `orca plugin: local.sangsoe 0.1.4-rc.3, running`. `brew test` 는 Homebrew Ruby 의 TLS 로 NOT VERIFIED.
+
+고정물(새로, 셋): A #11 `s6r2/a` → `main`, B #12 `s6r2/b` → `s6r2/a`, C #13 `s6r2/c` → `s6r2/b`. 오케스트레이터 Run `run_5d2453dcb97e`(리드 항목 i020), 리드 Run `run_ce107f27a48e`(i021–i023, `lead: lead:s6r2`). 리드는 queue 라운드를 돌리지 않고 `🔁 rereview_item` 깨움만 기다렸다.
+
+| # | 본 것 | 판정 |
+|---|---|---|
+| O3 | 오케스트레이터가 `worktreeId` 없이 `start_unit` → `started`, 읽은 worktree 는 smoke 저장소의 것 | PASS |
+| 워커 | 워커 셋이 PR 이 열린 채 worker_done(succeeded), Task 셋 completed. rc.2 에서 본 gate 막힘은 다시 나지 않았다 | 관찰 |
+| 패널 | A 머지 전 `sangsoe brief lead:s6r2`: 머리 `열린 4건·막힘 3`, 🚧 셋에 왜 행 셋(i021 자기 PR, i022 ← i021 · i023 ← i022 `stacked_on`), 크리티컬 패스 `i021 → i022 → i023` | PASS (🚧 마다 왜 행, C 가 B 를 기다림, 열린 N건) |
+| 패널 | 브레드크럼 한 번, 범례 접힘: 패널이 html 이라 `orca plugin shot --act` 가 거부, 묶음 상세를 찍지 못했다 | NOT VERIFIED |
+| NOW-3(b) | #11 land(`merge_verdict`), #12 retarget → `pr_base_changed`. land #12 `rereview_needed`(항목 없음). plugin 타이머의 queue 라운드는 돌았지만(17:57:42 `edge_removed`) `notified` 행이 없고 10분 동안 깨움 0. U82 의 queue 라운드는 `rereview items: made 0, refused 0, fenced 1`, 깨움 act 는 `send_failed`. #13 retarget 뒤에도 같다(18:15:42 라운드, `notified` 0) | FAIL (fenced 는 잡지만 깨움이 리드 Run 에 닿지 않는다) |
+| 10 | 손 `sangsoe graph sync --run run_ce107f27a48e`(리드 세션, 깨움 대신) → `made #12 → i024`. land `rereview_needed … (re-review item i024)`, 왜 표 i022 ← i024 `blocks`. `behind_base` 뒤 main 을 합친 새 head 에 기록 → `merge_verdict`, 리드가 i024 를 닫았다 | PASS (손 sync 뒤) |
+| NOW-1 | #13 `gh pr close` → `pr_closed`, `gh pr reopen` → `pr_reopened`. B 머지와 #13 retarget 뒤 손 sync → `made #13 → i025`. land `rereview_needed … (re-review item i025)`, 왜 표 i023 ← i025 `blocks`, 크리티컬 패스 `i025 → i023` | PASS (손 sync 뒤) |
+
+깨움의 길: queue 라운드(`core/detect/queue/round.ts` 의 fenced 깨움) → `sendNotice` → `notify` → `orca orchestration send --to run:<리드 Run> --type status`, plugin worker 프로세스가 CLI 를 띄운다. 이 세션에서 같은 호출은 자기 Dispatch 의 `dispatch_run_mismatch` 로 거부된다. Dispatch 없는 호출은 이 실행에서 하지 못했다. 타이머의 act 결과는 거부 코드만 남고 로그 · `probe.report` 에 없어 Orca 의 오류 원문은 보이지 않는다. 응답이 사라진 경우는 `notified` 행을 남기므로, 행이 없다는 것은 Orca 가 두 번 다 거부로 답했다는 뜻이다. Orca host API 에는 orchestration 메시지를 보내는 메서드가 없고 `workspace:read` · `agent:read` 는 읽기만 덮는다.
+
+닫기: #11 · #12 머지(`sangsoe land`), #13 닫음, 원격 `s6r2/*` 삭제, 열린 PR 0. 리드 Run 의 Task 다섯(재리뷰 항목 둘 포함) completed, 워커 셋 `released`, 리드 worker_done 뒤 `released`.
+
+남은 것: NOW-3(b) 의 깨움 전송과 그 실패를 남기지 않는 act 보고는 다음 고침이 다룬다. 정식 0.1.4 는 그 고침의 rc 뒤로 미룬다.
