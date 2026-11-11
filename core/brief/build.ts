@@ -1,5 +1,6 @@
 import type { ItemReading, ItemState, OwnerTodoRow, WaitsOn } from "../contract/index.ts";
 import { ITEM_READINGS, READING_LABEL, STATE_LABEL } from "../contract/index.ts";
+import { isKind, localDay, POLICY, spend, spendText } from "../models/index.ts";
 import { linkedActs } from "../owner/link.ts";
 import { item_timeline } from "../store/views/item_timeline.ts";
 import { graphRead } from "../graph/read.ts";
@@ -212,6 +213,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     }));
 
   const decisions = decisionRows.length;
+  const today = advisorToday(input);
   return {
     stage: 1,
     now,
@@ -224,6 +226,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     onHold: holdRows.length > 0 ? table("보류", COLS.onHold, holdRows) : null,
     doneDays,
     evidenceShort,
+    ...(today ? { advisorToday: today } : {}),
   };
 }
 
@@ -340,7 +343,27 @@ const NINE: Readonly<Record<string, (s: (k: string) => string) => string>> = {
   // A marker only (decision 196): the outcome stays in Orca.
   worker_done: () => "워커 완료 보고 받음",
 };
-const SKIP = new Set(["item_extra_set", "priority_set", "item_ready"]);
+// unit_started and advisor_used are drawn once, as the item's model line (decision 200).
+const SKIP = new Set(["item_extra_set", "priority_set", "item_ready", "unit_started", "advisor_used"]);
+
+/** Decision 200: the row the last start picked, and the unit's advisor spend against its budget. */
+function modelLine(input: BriefInput, task: string): string | undefined {
+  const last = input.events.filter((e) => e.type === "unit_started" && e.entity_id === task).at(-1);
+  const kind = String(last?.payload.kind ?? "");
+  if (!last || !isKind(kind)) return undefined;
+  const row = POLICY[kind];
+  const p = last.payload;
+  const advisor = typeof p.advisor === "string" ? ` · advisor ${p.advisor}` : " · advisor 없음";
+  const per = row.budget.per === "day" ? "하루" : "단위";
+  const used = spend(input.events.filter((e) => e.type === "advisor_used"), { task });
+  return `모델: ${row.label} · ${String(p.model)} · effort ${String(p.effort)}${advisor} · 예산 ${row.budget.calls}회/${per} · ${spendText(used)}`;
+}
+
+/** Decision 200: today's advisor calls over every session; undefined on a day with none. */
+function advisorToday(input: BriefInput): string | undefined {
+  const s = spend(input.events.filter((e) => e.type === "advisor_used"), { day: localDay(new Date(input.now)) });
+  return s.calls > 0 ? `오늘 ${spendText(s)}` : undefined;
+}
 
 function chainText(type: string, p: Record<string, unknown>): string {
   const s = (k: string) => (typeof p[k] === "string" ? String(p[k]) : "");
@@ -379,6 +402,7 @@ export function buildItem(input: BriefInput, alias: string, opts: BuildOptions =
     f.unclear ? "⚠️" : "",
     f.evidenceShort ? "🔍" : "",
   ].join("");
+  const model = modelLine(input, f.task);
   return {
     stage: 3,
     now: input.now,
@@ -388,6 +412,7 @@ export function buildItem(input: BriefInput, alias: string, opts: BuildOptions =
     flags,
     who: f.who,
     priority: f.priority,
+    ...(model ? { model } : {}),
     chain: table("시간순", COLS.chain, rows),
   };
 }

@@ -21,7 +21,7 @@ export default defineEvent("item_extra_set", {
   why_owner: opt(str),
   links: opt(arr(str)),
   /** The worker unit's class from item_create; start_unit reads it when given no class or kind (decision 187). */
-  unit_class: opt(oneOf("default", "hard", "design", "mechanical")),
+  unit_class: opt(oneOf("default", "hard", "design", "mechanical", "docs")),
   /** The Orca repo selector start_unit passes as `worker-start --repo` for this item (decision 197). */
   repo: opt(match(/^(id|name|path):\S/, "Orca repo selector id:|name:|path:")),
 });

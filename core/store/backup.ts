@@ -35,6 +35,7 @@ export const HOST_TYPES = [
 
 /** No reader can return these, so a lost database loses them unless they are copied. */
 export const OWN_TYPES = [
+  "advisor_used",
   "capacity_free",
   "compacted",
   "decision_answered",
@@ -84,6 +85,7 @@ export const OWN_TYPES = [
   "todo_due",
   "trigger_unclear",
   "turn_ended",
+  "unit_started",
   "unmapped_reviewer",
   "waiting_human",
   "waiting_released",

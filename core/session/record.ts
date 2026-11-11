@@ -1,5 +1,6 @@
 import { dedupeKey, EVENTS } from "../contract/index.ts";
 import { decisionAnswer } from "../decision/answer.ts";
+import { advisorCalls } from "../models/spend.ts";
 import { readDecision } from "../decision/waiters.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
@@ -37,6 +38,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
       break;
     case "stop":
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
+      advisorUsed(deps.store, row, input);
       turnEnded(deps.store, row, input);
       released(deps.store, { kind: "turn_ended", session: input.session_id }, "Stop");
       await workerIdle(deps, row, input);
@@ -52,6 +54,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
       break;
     case "session-end":
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
+      advisorUsed(deps.store, row, input);
       released(deps.store, { kind: "session_ended", session: input.session_id, evidence: "session_ended" }, "SessionEnd");
       break;
   }
@@ -115,6 +118,22 @@ async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
   const callerRun = current.ok && typeof current.value.runId === "string" ? current.value.runId : "";
   // A refusal (an owner_action already used, a moot close) is the record's answer; the hook stays silent.
   await decisionAnswer(deps, { decision: d, answer: masked, ownerAction: action.seq, linkedBy: "hook", callerRun });
+}
+
+/**
+ * Decision 200: each advisor call in the transcript's tail, once. The tail overlaps between turns,
+ * so the call's own key is the dedupe key; a turn longer than the tail can miss a call (undercount).
+ */
+function advisorUsed(store: Store, row: SessionRow, input: SessionHookInput): void {
+  for (const c of advisorCalls(tail(input.transcript_path))) {
+    store.append({
+      type: "advisor_used",
+      source: "Stop",
+      ...(row.task ? { entity: "task", entity_id: row.task } : {}),
+      dedupe_key: dedupeKey(EVENTS.advisor_used, input.session_id, c.key),
+      payload: { session: input.session_id, msg: c.key, model: c.model, input_tokens: c.input, output_tokens: c.output },
+    });
+  }
 }
 
 function turnEnded(store: Store, row: SessionRow, input: SessionHookInput): void {

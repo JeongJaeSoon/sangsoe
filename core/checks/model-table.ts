@@ -1,16 +1,19 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
-  ADVISOR_FROM_SETTING,
-  ADVISOR_NOT_APPLIED,
+  ADVISOR_FROM_WORKTREE,
   CATALOG,
   catalogAgeDays,
   compareVersions,
+  localDay,
   PIN_KEYS,
   STALE_DAYS,
+  spend,
+  spendText,
   VERIFIED_WITH_CLAUDE_CODE,
 } from "../models/index.ts";
+import { defaultDbPath, Store } from "../store/store.ts";
 import type { Check, CheckStatus } from "./check.ts";
 
 const id = "model-table";
@@ -55,9 +58,22 @@ export function advisorSetting(env: Record<string, string | undefined>, home: st
 }
 
 const ADVISOR_FIX =
-  "setting advisorModel is the owner's act (sangsoe never writes it); a frontier advisor also needs the owner's one-time usage-credits consent through /model";
+  "the off switch is the owner's act (sangsoe never writes user settings); a frontier advisor also needs the owner's one-time usage-credits consent through /model";
+const ADVISOR_OFF = "advisor 가 사용자 환경(CLAUDE_CODE_DISABLE_ADVISOR_TOOL)에서 꺼져 있다: worktree 설정의 advisorModel 도 닿지 않는다";
 
 const RANK: Record<CheckStatus, number> = { ok: 0, notice: 1, warn: 2, fail: 3 };
+
+/** Decision 200: today's advisor calls and estimated cost, read from the store; nothing without one. */
+export function spendToday(home: string, now: Date): string | undefined {
+  const path = defaultDbPath(home);
+  if (!existsSync(path)) return undefined;
+  const store = Store.open({ path });
+  try {
+    return `오늘 ${spendText(spend(store.events({ type: "advisor_used" }), { day: localDay(now) }))}`;
+  } finally {
+    store.close();
+  }
+}
 
 // Decision 165: the table goes stale by date, by a newer Claude Code, and by pins it cannot see.
 export const modelTable: Check = {
@@ -78,13 +94,19 @@ export const modelTable: Check = {
     if (pins.length > 0) {
       findings.push({ status: "notice", text: `alias 고정 ${pins.length}개: ${pins.join(" · ")} — 풀린 모델은 상태 줄로 확인` });
     }
-    const advisor = advisorSetting(env, ctx.home ?? homedir());
-    if (!advisor) findings.push({ status: "notice", text: ADVISOR_NOT_APPLIED });
-    if (findings.length === 0) return { id, status: "ok", summary: `모델 표 확인 ${age}일 전, 고정 없음, ${ADVISOR_FROM_SETTING}` };
+    // A user-level off switch beats every worktree's advisorModel; only the owner turns it back on.
+    const userEnv = readSettings(env.CLAUDE_CONFIG_DIR ?? join(ctx.home ?? homedir(), ".claude")).env;
+    if (env.CLAUDE_CODE_DISABLE_ADVISOR_TOOL || userEnv?.CLAUDE_CODE_DISABLE_ADVISOR_TOOL) {
+      findings.push({ status: "notice", text: ADVISOR_OFF });
+    }
+    const used = spendToday(ctx.home ?? homedir(), now);
+    const tail = used ? `; ${used}` : "";
+    if (findings.length === 0) return { id, status: "ok", summary: `모델 표 확인 ${age}일 전, 고정 없음, ${ADVISOR_FROM_WORKTREE}${tail}` };
     const status = findings.reduce<CheckStatus>((s, f) => (RANK[f.status] > RANK[s] ? f.status : s), "ok");
-    // Each finding's own fix: pins and the advisor key are the owner's settings, not a table update.
-    const stale = findings.length > (pins.length > 0 ? 1 : 0) + (advisor ? 0 : 1);
-    const fix = [...(stale ? [FIX] : []), ...(pins.length > 0 ? [PIN_FIX] : []), ...(advisor ? [] : [ADVISOR_FIX])].join("; ");
-    return { id, status, summary: findings.map((f) => f.text).join("; "), fix };
+    const off = findings.some((f) => f.text === ADVISOR_OFF);
+    // Each finding's own fix: pins and the off switch are the owner's settings, not a table update.
+    const stale = findings.length > (pins.length > 0 ? 1 : 0) + (off ? 1 : 0);
+    const fix = [...(stale ? [FIX] : []), ...(pins.length > 0 ? [PIN_FIX] : []), ...(off ? [ADVISOR_FIX] : [])].join("; ");
+    return { id, status, summary: `${findings.map((f) => f.text).join("; ")}${tail}`, fix };
   },
 };

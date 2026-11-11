@@ -8,7 +8,9 @@ import { handle as itemCreate } from "../../claude-plugin/mcp/tools/item_create.
 import { handle } from "../../claude-plugin/mcp/tools/start_unit.ts";
 import {
   ADVISOR_FROM_SETTING,
+  ADVISOR_FROM_WORKTREE,
   ADVISOR_NOT_APPLIED,
+  ADVISOR_SPENT,
   checkLineage,
   classKind,
   createOrcaAdapter,
@@ -24,11 +26,15 @@ import {
   type StartRequest,
   Store,
   startUnit,
+  type WorktreeSettings,
 } from "../../core/index.ts";
 import { createFakeOrca, type FakeReply } from "../fake-orca/index.ts";
 
 const PARENT_TREE = "repo-0001::/home/dev/src/api";
-const CHILD_TREE = "repo-0001::/home/dev/workspaces/api/feature-a";
+const CHILD_PATH = "/home/dev/workspaces/api/feature-a";
+const CHILD_TREE = `repo-0001::${CHILD_PATH}`;
+/** What worker-start's --worktree names after start_unit made the worktree (decision 200). */
+const CHILD_SELECTOR = `id:${CHILD_TREE}`;
 const ORCH = "term_00000000-0000-4000-8000-00000000000f";
 /** The lead's own Run, where it creates and starts; its Dispatch lives in the orchestrator's. */
 const RUN = "run_000000000001";
@@ -116,13 +122,17 @@ function harness(s: Setup = {}) {
           ? s.taskList()
           : ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t", spec: `sangsoe-role: ${s.existingRole ?? "worker"}\nbrief` }] }),
       "orchestration-worker-start": () => (s.workerStart ? s.workerStart() : ok({ dispatchId: "ctx_new", worktreeId: CHILD_TREE })),
+      "worktree-create": ok({ worktree: { id: CHILD_TREE, path: CHILD_PATH } }),
       ...s.replies,
     }),
   });
   const store = Store.open({ path: ":memory:" });
   const orca = createOrcaAdapter(fake.exec);
   const called = (sub: string) => fake.calls.filter((c) => c.slice(1, 3).join(" ") === `orchestration ${sub}`);
-  return { fake, store, orca, called, signals: () => store.events({ type: "signal" }) };
+  const created = () => fake.calls.filter((c) => c.slice(1, 3).join(" ") === "worktree create");
+  /** Every local-settings write, in order: the worktree path and what went in. */
+  const written: { path: string; settings: WorktreeSettings }[] = [];
+  return { fake, store, orca, called, created, written, signals: () => store.events({ type: "signal" }) };
 }
 
 const lead: Requester = { role: "lead", worktreeId: PARENT_TREE, taskId: "task_lead", runId: RUN };
@@ -146,6 +156,9 @@ const ports = (h: H, slots: () => number = () => 1, cwd = CALLER_CWD) => ({
   slots,
   cwd: () => cwd,
   advisorSetting: () => true,
+  writeSettings: (path: string, settings: WorktreeSettings) => {
+    h.written.push({ path, settings });
+  },
 });
 async function start(h: H, req: StartRequest = request(), slots: () => number = () => 1) {
   return startUnit(ports(h, slots), req);
@@ -346,12 +359,12 @@ test("worker_start_dispatched (2): enough depth → a Dispatch and no event", as
     alias: "i001",
     dispatchId: "ctx_new",
     worktreeId: CHILD_TREE,
-    launch: { model: MODEL_CATALOG.find((c) => c.tier === worker.tier)?.alias, effort: worker.effort },
-    notes: [ADVISOR_FROM_SETTING],
+    launch: { model: MODEL_CATALOG.find((c) => c.tier === worker.tier)?.alias, effort: worker.effort, route: "worktree_file" },
+    notes: [ADVISOR_FROM_WORKTREE],
   });
-  assert.deepEqual(h.store.events().map((e) => e.type), ["item_created"], "only the new Task's alias row");
+  assert.deepEqual(h.store.events().map((e) => e.type), ["item_created", "unit_started"], "the alias row and the row it started on");
   const ws = h.called("worker-start")[0] ?? [];
-  assert.equal(flag(ws, "worktree"), "new-child");
+  assert.equal(flag(ws, "worktree"), CHILD_SELECTOR);
   assert.equal(flag(ws, "task"), NEW_TASK);
   assert.equal(flag(ws, "run"), RUN);
 });
@@ -614,8 +627,12 @@ test("decision 187: each unit class launches its row's main model and, through O
 
 test("decision 187: without Orca's option the advisor flag is never sent; the owner's setting or the worker's floor decides", async () => {
   const worker = MODEL_POLICY.worker;
+  // Decision 200's file cannot be written here, so decision 187's two paths decide.
+  const noFile = () => {
+    throw new Error("remote worktree");
+  };
   const h = harness();
-  const r = await handle(unitBase, { ...ports(h), advisorSetting: () => true });
+  const r = await handle(unitBase, { ...ports(h), advisorSetting: () => true, writeSettings: noFile });
   const ws = h.called("worker-start")[0] ?? [];
   assert.ok(!ws.includes("--advisor"));
   assert.equal(flag(ws, "model"), aliasOf(worker.tier));
@@ -623,7 +640,7 @@ test("decision 187: without Orca's option the advisor flag is never sent; the ow
   assert.deepEqual(h.store.events({ type: "model_changed" }), []);
 
   const h2 = harness();
-  const r2 = await handle(unitBase, { ...ports(h2), advisorSetting: () => false });
+  const r2 = await handle(unitBase, { ...ports(h2), advisorSetting: () => false, writeSettings: noFile });
   const ws2 = h2.called("worker-start")[0] ?? [];
   assert.ok(!ws2.includes("--advisor"));
   assert.equal(flag(ws2, "model"), aliasOf(worker.withoutAdvisor), "a worker never runs its main tier without an advisor");
@@ -757,14 +774,18 @@ test("unit_lineage_complete: a missing Dispatch, a different parent or Run, a cr
 const { worktreeId: _tree, ...plainFolder } = orchestrator;
 const TARGET = "name:acme-web";
 
-test("decision 197: an orchestrator in no worktree (cwd / or a plain folder) starts with new-top-level --repo, lineage on its Run", async () => {
+test("decision 197: an orchestrator in no worktree (cwd / or a plain folder) starts a top-level worktree in --repo, lineage on its Run", async () => {
   for (const cwd of ["/", "/srv/owner-notes"]) {
     const h = harness();
     const out = await startUnit(ports(h, () => 1, cwd), request({ requester: plainFolder, childRole: "lead", repo: TARGET }));
     assert.equal(out.kind, "started", JSON.stringify(out));
+    // Decision 200: the worktree is made first, with no parent (new-top-level's lineage), in the target repo.
+    const made = h.created()[0] ?? [];
+    assert.equal(flag(made, "repo"), TARGET);
+    assert.ok(!made.includes("--parent-worktree"), "no parent worktree to keep");
     const ws = h.called("worker-start")[0] ?? [];
-    assert.equal(flag(ws, "worktree"), "new-top-level");
-    assert.equal(flag(ws, "repo"), TARGET);
+    assert.equal(flag(ws, "worktree"), CHILD_SELECTOR);
+    assert.ok(!ws.includes("--repo"), "Orca refuses creation flags on an existing worktree");
     assert.equal(flag(ws, "run"), RUN);
     assert.equal(h.called("worker-list").length, 0, "no worktree to scan for a Dispatch");
   }
@@ -799,20 +820,83 @@ test("decision 197: without a worktree, only an orchestrator outside every workt
   assertRefused(bad, await start(bad, request({ repo: "acme-web" })), "lineage_invalid");
 });
 
-test("decision 197: a target repo rides on new-child, so the parent worktree is kept; an item's recorded repo is used by id", async () => {
+test("decision 197: a target repo rides on the parent's child worktree, so the parent worktree is kept; an item's recorded repo is used by id", async () => {
   const h = harness();
   assert.equal((await start(h, request({ repo: TARGET }))).kind, "started");
-  const ws = h.called("worker-start")[0] ?? [];
-  assert.equal(flag(ws, "worktree"), "new-child");
-  assert.equal(flag(ws, "repo"), TARGET);
+  // Decision 200: new-child's lineage, made explicit: the requester's worktree is the new one's parent.
+  const made = h.created()[0] ?? [];
+  assert.equal(flag(made, "parent-worktree"), `id:${PARENT_TREE}`);
+  assert.equal(flag(made, "repo"), TARGET);
+  assert.equal(flag(h.called("worker-start")[0] ?? [], "worktree"), CHILD_SELECTOR);
 
   const byId = harness();
   byId.store.append({ type: "item_extra_set", source: "core:item", payload: { task: NEW_TASK, repo: "path:/home/dev/src/web" }, entity: "task", entity_id: NEW_TASK });
   assert.equal((await start(byId, request({ task: { id: NEW_TASK } }))).kind, "started");
-  assert.equal(flag(byId.called("worker-start")[0] ?? [], "repo"), "path:/home/dev/src/web");
+  assert.equal(flag(byId.created()[0] ?? [], "repo"), "path:/home/dev/src/web");
   const mine = harness();
   await start(mine, request());
-  assert.ok(!(mine.called("worker-start")[0] ?? []).includes("--repo"), "no repo given or recorded: the requester's own");
+  assert.ok(!(mine.created()[0] ?? []).includes("--repo"), "no repo given or recorded: the requester's own");
+});
+
+test("decision 200: the worktree's local settings are written before the session starts, per row", async () => {
+  // A worker row with an advisor: advisorModel goes into the new worktree, not --advisor.
+  const h = harness();
+  const out = await start(h);
+  assert.equal(out.kind, "started");
+  assert.deepEqual(h.written, [{ path: CHILD_PATH, settings: { advisorModel: aliasOf(MODEL_POLICY.worker.advisor) } }]);
+  const order = h.fake.calls.map((c) => c.slice(1, 3).join(" "));
+  assert.ok(order.indexOf("worktree create") < order.indexOf("orchestration worker-start"), "the worktree exists before the session");
+  const started = h.store.events({ type: "unit_started" });
+  assert.equal(started.length, 1);
+  assert.deepEqual(
+    { ...started[0]?.payload },
+    {
+      dispatch: "ctx_new",
+      kind: "worker",
+      picked_by: "role",
+      model: aliasOf(MODEL_POLICY.worker.tier),
+      effort: MODEL_POLICY.worker.effort,
+      advisor: aliasOf(MODEL_POLICY.worker.advisor),
+      route: "worktree_file",
+      budget: MODEL_POLICY.worker.budget.calls,
+      budget_per: "unit",
+      used: 0,
+    },
+  );
+  assert.equal(started[0]?.entity_id, NEW_TASK);
+
+  // A row with no advisor turns off one the owner's own setting would add.
+  const review = resolveModel("review");
+  assert.ok(review.ok);
+  const r = harness();
+  await start(r, request({ model: review.value, pickedBy: "kind" }));
+  assert.deepEqual(r.written[0]?.settings, { disableAdvisor: true });
+  assert.equal(r.store.events({ type: "unit_started" })[0]?.payload.picked_by, "kind");
+
+  // A spent budget turns the advisor off at this start, and the worker row leaves its main tier.
+  const s = harness();
+  for (let i = 0; i < MODEL_POLICY.worker.budget.calls; i++) {
+    s.store.append({
+      type: "advisor_used",
+      source: "Stop",
+      entity: "task",
+      entity_id: NEW_TASK,
+      dedupe_key: dedupeKey(EVENTS.advisor_used, "sess-0", `m${i}`),
+      payload: { session: "sess-0", msg: `m${i}`, model: "x", input_tokens: 1, output_tokens: 1 },
+    });
+  }
+  const spent = await start(s, request({ task: { id: NEW_TASK } }));
+  assert.equal(spent.kind, "started");
+  assert.deepEqual(s.written[0]?.settings, { disableAdvisor: true });
+  assert.equal(flag(s.called("worker-start")[0] ?? [], "model"), aliasOf(MODEL_POLICY.worker.withoutAdvisor));
+  assert.ok(spent.kind === "started" && spent.notes.includes(ADVISOR_SPENT));
+  assert.equal(s.store.events({ type: "unit_started" })[0]?.payload.used, MODEL_POLICY.worker.budget.calls);
+
+  // A failed worker-start removes the empty worktree it made.
+  const f = harness({ workerStart: () => fail("agent_failed") });
+  await start(f);
+  const rm = f.fake.calls.filter((c) => c.slice(1, 3).join(" ") === "worktree rm");
+  assert.equal(flag(rm[0] ?? [], "worktree"), CHILD_SELECTOR);
 });
 
 test("decision 197: a lead starts with --keep-open; a worker does not", async () => {
@@ -872,5 +956,7 @@ test("decision 197: MCP start_unit takes repo and lets only an orchestrator leav
   const o = harness();
   const out = await handle({ role: "orchestrator", runId: RUN, childRole: "lead", spec: "x", repo: TARGET }, ports(o, () => 1, "/"));
   assert.ok(out.ok, JSON.stringify(out));
-  assert.equal(flag(o.called("worker-start")[0] ?? [], "worktree"), "new-top-level");
+  assert.equal(flag(o.created()[0] ?? [], "repo"), TARGET);
+  assert.ok(!(o.created()[0] ?? []).includes("--parent-worktree"), "top-level: no parent worktree");
+  assert.equal(flag(o.called("worker-start")[0] ?? [], "worktree"), CHILD_SELECTOR);
 });

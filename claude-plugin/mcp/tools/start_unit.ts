@@ -65,7 +65,7 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
   }
   const kind = s("kind") ?? (unitClass ? classKind(unitClass) : childRole);
   if (!isModelKind(kind) || (childRole === "lead" ? kind !== "lead" : kind === "lead" || kind === "orchestrator")) {
-    return invalid(`kind "${kind}" does not fit childRole ${childRole}`, "a lead is kind lead; a worker is worker, hard, design, review, release-review or sweep");
+    return invalid(`kind "${kind}" does not fit childRole ${childRole}`, "a lead is kind lead; a worker is worker, hard, design, review, release-review, sweep or docs");
   }
   const effort = s("effort");
   const tier = s("tier");
@@ -94,6 +94,7 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
     agent: s("agent") ?? "claude",
     ...(references ? { references } : {}),
     model: model.value,
+    pickedBy: s("kind") ? "kind" : unitClass ? "class" : "role",
   });
   // A class given here stays with the Task, so a restart by id without one keeps it.
   const startedTask = "taskId" in out ? out.taskId : undefined;
@@ -145,7 +146,7 @@ export default {
         type: "string",
         enum: [...UNIT_CLASSES],
         description:
-          "Workers: the unit class (default, hard, design, mechanical); picks main model, advisor and effort from resource models. Default: the class item_create recorded, else default.",
+          "Workers: the unit class (default, hard, design, mechanical, docs); picks main model, advisor, effort and advisor budget from resource models. Default: the class item_create recorded, else default.",
       },
       kind: {
         type: "string",

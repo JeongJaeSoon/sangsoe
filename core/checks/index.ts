@@ -15,7 +15,7 @@ import { tierConfig } from "./tier-config.ts";
 import { watchRepos } from "./watch-repos.ts";
 
 export * from "./check.ts";
-export { advisorSetting, modelTable } from "./model-table.ts";
+export { activePins, advisorSetting, modelTable } from "./model-table.ts";
 export { REQUIRED_CAPABILITIES } from "./orca-capabilities.ts";
 
 /** The start checks and `doctor` run this one list; only the formatter differs. */

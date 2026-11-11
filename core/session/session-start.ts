@@ -1,4 +1,5 @@
 import { answerNotifiedKey, dedupeKey, dedupeSegment, EVENTS } from "../contract/index.ts";
+import { isEffort, isKind, rowLines } from "../models/index.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { decision as decisionView } from "../store/views/decision.ts";
 import { roleLine } from "../start/start.ts";
@@ -53,6 +54,7 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   });
 
   const lines = [`${roleLine(role)}${loc ? ` · Task ${loc.task} · Dispatch ${loc.dispatch} · Run ${loc.run}` : ""}`];
+  if (loc) lines.push(...unitRowLines(store, loc.task));
   const run = held ?? before;
   if (held) lines.push(`Run ${held} 을 쥐고 있다(run-current).`);
   else if (before && role !== "worker") lines.push(`run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use ${before}`);
@@ -70,6 +72,14 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   }
   for (const deliver of late) lines.push(...deliver());
   return lines;
+}
+
+/** Decision 200: the row start_unit picked for this Task, as the budget and finish lines it asks for. */
+function unitRowLines(store: CoreDeps["store"], task: string): string[] {
+  const last = store.events({ type: "unit_started" }).filter((e) => e.entity_id === task).at(-1);
+  const kind = String(last?.payload.kind ?? "");
+  const effort = String(last?.payload.effort ?? "");
+  return isKind(kind) && isEffort(effort) ? rowLines(kind, effort) : [];
 }
 
 /** A line to inject, written as `notified` only when it is taken; empty when it already rode once. */

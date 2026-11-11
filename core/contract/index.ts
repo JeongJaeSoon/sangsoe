@@ -1,4 +1,5 @@
 import type { EventDef } from "./define.ts";
+import advisor_used from "./events/advisor_used.ts";
 import capacity_free from "./events/capacity_free.ts";
 import ci_failed from "./events/ci_failed.ts";
 import close_suggested from "./events/close_suggested.ts";
@@ -65,6 +66,7 @@ import timer_stalled from "./events/timer_stalled.ts";
 import todo_due from "./events/todo_due.ts";
 import trigger_unclear from "./events/trigger_unclear.ts";
 import turn_ended from "./events/turn_ended.ts";
+import unit_started from "./events/unit_started.ts";
 import unmapped_reviewer from "./events/unmapped_reviewer.ts";
 import verify_tier_set from "./events/verify_tier_set.ts";
 import waiting_decision from "./events/waiting_decision.ts";
@@ -86,6 +88,7 @@ export { ITEM_READINGS, READING_LABEL } from "./views.ts";
 
 // A new event type is one file under events/ plus one import line and one entry here (split §1.3).
 export const EVENTS = {
+  advisor_used,
   capacity_free,
   ci_failed,
   close_suggested,
@@ -152,6 +155,7 @@ export const EVENTS = {
   todo_due,
   trigger_unclear,
   turn_ended,
+  unit_started,
   unmapped_reviewer,
   verify_tier_set,
   waiting_decision,

@@ -294,6 +294,13 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     worktreePs: (a) =>
       local("worktreePs", "worktrees", "hostId", "worktreeId", { flags: { limit: a.limit, "agent-wait": a.agentWait } }),
     worktreeRm: (a) => run("worktreeRm", { flags: { worktree: a.worktree, "run-hooks": true, "delete-branch": true } }),
+    worktreeCreate: async (a) => {
+      const r = await run<unknown>("worktreeCreate", { flags: { name: a.name, "parent-worktree": a.parent, repo: a.repo, setup: "run" } });
+      if (!r.ok) return r;
+      const w = isObject(r.value) && isObject(r.value.worktree) ? r.value.worktree : undefined;
+      if (typeof w?.id !== "string" || typeof w.path !== "string") return unexpected("orca worktree create: no worktree id and path", r.value);
+      return { ok: true, value: { id: w.id, path: w.path } };
+    },
     ports: async (a) => {
       const r = await shaped<Json>("ports", has("ports", rowsWith({ id: "string", port: "number" })), { flags: { worktree: a.worktree } });
       if (!r.ok) return r;

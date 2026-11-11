@@ -35,6 +35,7 @@
     {"command":"search","path":["search"],"flags":["help","json","pairing-code","environment","query","scope","fresh","limit","cursor","agent","path","since","sort","debug","index-status"]},
     {"command":"status","path":["status"],"flags":["help","json","pairing-code","environment"]},
     {"command":"terminal wait","path":["terminal","wait"],"flags":["help","json","pairing-code","environment","terminal","for","timeout-ms"]},
+    {"command":"worktree create","path":["worktree","create"],"flags":["help","json","pairing-code","environment","repo","project","host","project-host-setup","name","agent","prompt","model","effort","surface","retry-launch","base-branch","branch","reference","reference-site","issue","pr","linear-issue","gitlab-issue","gitlab-mr","comment","setup","parent-worktree","no-parent","run-hooks","activate"]},
     {"command":"worktree list","path":["worktree","list"],"flags":["help","json","pairing-code","environment","repo","limit"]},
     {"command":"worktree ps","path":["worktree","ps"],"flags":["help","json","pairing-code","environment","limit","agent-wait"]},
     {"command":"worktree rm","path":["worktree","rm"],"flags":["help","json","pairing-code","environment","worktree","force","delete-branch","run-hooks","allow-failed-archive-hook"]},

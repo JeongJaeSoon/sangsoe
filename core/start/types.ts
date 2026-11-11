@@ -1,5 +1,5 @@
 import type { OrcaAdapter } from "../contract/orca.ts";
-import type { Choice } from "../models/index.ts";
+import type { AdvisorRoute, Choice, WorktreeSettings } from "../models/index.ts";
 import type { Store } from "../store/store.ts";
 
 export type Role = "orchestrator" | "lead" | "worker";
@@ -41,6 +41,8 @@ export type StartRequest = {
   references?: string[];
   /** From `resolveModel` (decision 164); absent means the child role's own row. */
   model?: Choice;
+  /** How the caller picked `model`'s row, recorded on `unit_started` (decision 200); default role. */
+  pickedBy?: "kind" | "class" | "role";
   /**
    * The Orca repo selector (`id:`, `name:` or `path:`) the new worktree goes in; absent means the
    * requester's own repo. Required when the requester names no worktree (decision 197).
@@ -78,7 +80,7 @@ export type StartOutcome =
       alias?: string;
       dispatchId: string;
       worktreeId?: string;
-      launch: { model: string; effort: string; advisor?: string };
+      launch: { model: string; effort: string; advisor?: string; route: AdvisorRoute };
       notes: string[];
     }
   /** Not a refusal (decision 94): the Task stays as it is and the caller tries again later. */
@@ -101,4 +103,6 @@ export type StartPorts = {
   cwd?: () => string;
   /** Whether the owner's settings name an advisor (key presence only). Default reads the user settings. */
   advisorSetting?: () => boolean;
+  /** Writes the new worktree's local settings before its session starts (decision 200); throws when it cannot. */
+  writeSettings?: (worktreePath: string, s: WorktreeSettings) => void;
 };

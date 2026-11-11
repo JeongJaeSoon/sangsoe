@@ -286,6 +286,8 @@
 | | 검증 등급이 정해지거나 바뀜(pr-monitor 가 쓰는 하나뿐인 쪽) | `verify_tier_set` | — |
 | | 워커 완료 보고. PR 이 걸린 일은 그 본문이 머지 대기 보고다(결정 175). 실제 보고는 Orca 메시지이고, 이 이름의 event 줄은 orca-monitor 가 그 메시지를 본 표지(id 만, `outcome`·본문 없음)다(결정 196) | `worker_done` | — |
 | | 모델 도중 변경({from, to, reason}) | `model_changed` | — |
+| | 단위 시작 행: `start_unit` 이 고른 정책 행과 고른 까닭(kind·class·role), 모델·effort·advisor·전달 길·예산과 시작 때 쓴 호출 수(결정 200) | `unit_started` | — |
+| | advisor 호출 한 번: Stop hook 이 transcript 에서 읽은 advisor 의 모델과 토큰 수. 비용은 읽을 때 카탈로그 가격으로 계산한다(결정 200) | `advisor_used` | — |
 | | 신호 한 종류 묶음({kind}) | `signal` | — |
 | | `signal` 의 kind | `loss` · `wait` · `orchestrator_correction` · `main_flake` · `start_refused` | — |
 | | 시작 함수가 Dispatch 있는 세션을 열지 못해 시작을 거부함(결정 94). `reason` 은 `capability_missing` · `lineage_invalid` · `depth_exceeded` · `model_invalid`(advisor 짝이 맞지 않음, 결정 187) · `orca_error` · `no_dispatch` 중 하나다. 일이 들어간 세션은 없고, 시작을 요청한 세션이 그 일을 맡긴 쪽에 escalation 으로 올린다 | `start_refused` · `capability_missing` · `lineage_invalid` · `depth_exceeded` · `model_invalid` · `orca_error` · `no_dispatch` | `start_fallback`(결정 59 의 옛 이름. 결정 94 가 `start_refused` 로 바꿨다) |
@@ -395,6 +397,7 @@
 | brief 묶음 | 2단계. 묶음 id(`lead:<name>`·`<name>`·`others`)를 받는다 | `sangsoe brief <id|name>` | — |
 | brief 항목 | 3단계. 묶음과 항목(`iNNN`)을 받는다 | `sangsoe brief <id> <item>` | — |
 | todo | 오너 할 일 | `sangsoe todo` | — |
+| models | 모델 표 보기: 카탈로그 · 일의 종류별 정책 · 지금 걸린 고정 · 확인한 날(읽기만, 토큰 X). `--markdown` 은 `docs/models.md` 의 원문을 낸다(결정 200) | `sangsoe models` | — |
 | verify-tier | PR 의 검증 등급과 사유, 요구 증거와 모자란 것을 보인다(읽기 전용, 아무것도 쓰지 않는다). 셸 호출자(사람 · 시험 · CI)용이고 에이전트는 land tool 의 결과와 항목 상세로 본다 | `sangsoe verify-tier <pr>` | — |
 | land | land 요청 하나: 판정하고 조건 넷이 참이면 머지를 예약하고 아니면 승인되면 머지를 남긴다 | `sangsoe land <pr>` | orch land |
 | recover | 머신·Orca 재시작 뒤 항목 ↔ 마지막 세션 표와 Orca 가 내는 되살리기 `next` 를 출력한다(읽기 전용, 아무것도 실행하지 않는다) | `sangsoe recover` | orch reboot |

@@ -26,6 +26,8 @@ const DESIGN_TABLE = [
   "worktree ps",
   "worktree list",
   "worktree rm",
+  // Decision 200: start_unit makes the worktree first so its local settings exist before the session.
+  "worktree create",
   "reference add",
   "reference find",
   "ports",

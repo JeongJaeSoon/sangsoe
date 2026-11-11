@@ -6,6 +6,7 @@ import {
   DEFAULT_RESTART_RULES,
   handoffSave,
   mask,
+  modelRowLines,
   ownerMarks,
   recordHook,
   restart_due,
@@ -63,6 +64,20 @@ test("late_answer_reaches_next_worker: after /clear the new session gets neither
   const again = await hook(w, "session-start", { session_id: "s2", source: "clear", model: "claude-x" }, VERSION);
   assert.deepEqual(again, [`sangsoe-role: lead · Task ${TASK} · Dispatch ${DISPATCH} · Run ${TASK_RUN}`, "Run run_lead 을 쥐고 있다(run-current)."]);
   assert.equal(w.store.events({ type: "notified" }).length, 2, "one for the handoff, one for d001");
+});
+
+test("decision 200: SessionStart adds the started row's advisor budget and, below high effort, the finish line", async () => {
+  const w = createSessionWorld({ spec: "sangsoe-role: worker\nx", heldRun: null });
+  w.store.append({
+    type: "unit_started",
+    source: "mcp:start_unit",
+    entity: "task",
+    entity_id: TASK,
+    payload: { dispatch: DISPATCH, kind: "worker", picked_by: "class", model: "m", effort: "medium", route: "worktree_file", budget: 3, budget_per: "unit", used: 0 },
+  });
+  const lines = await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
+  assert.deepEqual(lines.slice(1), modelRowLines("worker", "medium"));
+  assert.equal(lines.length, 3, "the budget line and the finish line");
 });
 
 test("a lead whose Run binding is gone is told to run-use the Run its earlier session held", async () => {
