@@ -63,7 +63,7 @@ export type MergePort = (a: { repo: string; pr: number; head: string }) => Promi
 /** Merges now with `method`, pinned to `head` (decision 158). */
 export type MergeNowPort = (a: { repo: string; pr: number; head: string; method: MergeMethod }) => Promise<{ ok: boolean; message: string }>;
 export type PrGatePort = (a: { repo: string; pr: number }) => Promise<Read<PrGate>>;
-/** `mergeNow` and `prGate` serve decision 158 only; without them that path refuses. */
+/** `mergeNow` serves decision 158; `prGate` also feeds decision 204's own checks. Without them those paths refuse. */
 export type LandDeps = {
   gh: GhClient;
   openStore: () => LandStore;

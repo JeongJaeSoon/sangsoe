@@ -411,6 +411,21 @@ test("204: a GitHub approval does not merge past an own check that fails", async
   assert.deepEqual(h.merges, []);
 });
 
+test("204: a GitHub approval does not merge without a verdict the own check counts at the head", async () => {
+  const h = harness({
+    optIn: false,
+    pull: { mergeable_state: "clean" },
+    reviews: [{ user: { login: "bob" }, state: "APPROVED", commit_id: HEAD, author_association: "MEMBER" }],
+    checkRuns: { total_count: 1, check_runs: [{ status: "completed", conclusion: "success" }] },
+  });
+  ready(h.store);
+  h.editEvents((rows) => rows.map((e) => (e.type === "review_verdict" ? { ...e, actor: "worker:u30" } : e)));
+  const r = await land(input(), h.deps);
+  assert.equal(refusal(r), "verdict_unaccepted");
+  assert.match(r.ok ? "" : r.refusal.reason, /required_review_and_ci \(own\)/);
+  assert.deepEqual(h.merges, []);
+});
+
 test("204: waiting for approval does not refuse; it shows the own conditions as read", async () => {
   const h = harness({ optIn: false, compare: "diverged" });
   ready(h.store);
