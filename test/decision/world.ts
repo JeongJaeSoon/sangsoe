@@ -23,14 +23,31 @@ export interface World {
   failSendTo(address: string | null): void;
   /** The next send arrives but its response is lost, with or without Orca's request id on stderr. */
   loseNextSend(withRequestId: boolean): void;
-  /** From now on task-create refuses a Run other than run-current's, as Orca does (consumer_fenced). */
-  fence(): void;
+  /**
+   * From now on the caller is checked as real Orca checks it (S6 runs rc.1-rc.3, decision 219):
+   * task-create on a Run the caller is not bound to is consumer_fenced; a send to run:<X> from a caller
+   * whose Dispatch belongs to another Run is dispatch_run_mismatch; a send from a process with no
+   * terminal (the plugin worker's timer) is refused. Until called, every caller passes.
+   */
+  strict(): void;
+  /** Who calls from now on: the Run it is bound to, its Dispatch's Run, and whether it has a terminal. */
+  as(caller: Caller): void;
 }
 
+/** The calling process as Orca sees it. The plugin timer: no Run, no Dispatch, no terminal. */
+export type Caller = { run: string | null; dispatchRun?: string; terminal: boolean };
+export const TIMER: Caller = { run: null, terminal: false };
+
+/**
+ * The no-terminal send refusal. The S6 capture showed only that Orca answers not ok; until a capture
+ * names its code this generic one stands in (decision 219).
+ */
+export const NO_TERMINAL_CODE = "sender_unresolved";
+
 const ok = (result: unknown): ExecResult => ({ code: 0, stdout: JSON.stringify({ ok: true, result }), stderr: "" });
-const err = (code: string): ExecResult => ({
+const err = (code: string, message = code): ExecResult => ({
   code: 1,
-  stdout: JSON.stringify({ ok: false, error: { code, message: code } }),
+  stdout: JSON.stringify({ ok: false, error: { code, message } }),
   stderr: "",
 });
 
@@ -53,7 +70,9 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
   let current = o.currentRun ?? null;
   let deadAddress: string | null = null;
   let lose: boolean | null = null;
-  let fenced = false;
+  let strict = false;
+  let dispatchRun: string | undefined;
+  let terminal = true;
   const requests = new Map<string, string>();
   const runOf = (task: string) => taskMap.get(task)?.run;
   const replies: Record<string, FakeReply> = {
@@ -74,7 +93,9 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
       });
     },
     "orchestration-task-create": (args: readonly string[]) => {
-      if (fenced && flag(args, "run") !== current) return err("consumer_fenced");
+      if (strict && flag(args, "run") !== current) {
+        return err("consumer_fenced", `Run ${flag(args, "run")} is bound to another consumer; only its own session may create Tasks on it.`);
+      }
       // Its own counter, so a carrier Task does not shift the gate and message ids tests name.
       const id = `task_9${String(++created).padStart(11, "0")}`;
       taskMap.set(id, { id, run: flag(args, "run") ?? "run_unbound", status: "pending", title: flag(args, "task-title") ?? id });
@@ -109,6 +130,11 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
     },
     "orchestration-send": (args: readonly string[]) => {
       if (o.failSend || flag(args, "to") === deadAddress) return err("recipient_not_found");
+      const to = flag(args, "to") ?? "";
+      if (strict && !terminal && !flag(args, "from")) return err(NO_TERMINAL_CODE, "Could not resolve the sender of this message: pass --from <terminal handle>.");
+      if (strict && dispatchRun && to.startsWith("run:") && to.slice(4) !== dispatchRun) {
+        return err("dispatch_run_mismatch", `Dispatch ctx_caller belongs to Run ${dispatchRun}, not ${to.slice(4)}.`);
+      }
       // Orca replays a request it already did without sending again.
       const replay = flag(args, "retry-request");
       if (replay && requests.has(replay)) return ok({ message: { id: requests.get(replay) } });
@@ -167,8 +193,13 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
     loseNextSend: (withRequestId) => {
       lose = withRequestId;
     },
-    fence: () => {
-      fenced = true;
+    strict: () => {
+      strict = true;
+    },
+    as: (c) => {
+      current = c.run;
+      dispatchRun = c.dispatchRun;
+      terminal = c.terminal;
     },
   };
 }

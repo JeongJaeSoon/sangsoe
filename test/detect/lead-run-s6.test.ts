@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { handle as itemCreate } from "../../claude-plugin/mcp/tools/item_create.ts";
-import { graphSyncCommand } from "../../cli/commands/graph-sync.ts";
 import {
   briefRuns,
   buildBrief,
@@ -12,17 +11,20 @@ import {
   type MonitorDeps,
   nullChatProvider,
   readSnapshot,
+  recordHook,
   runMonitor,
   VERSION,
   type ViewInput,
 } from "../../core/index.ts";
-import { createWorld } from "../decision/world.ts";
+import { createWorld, TIMER } from "../decision/world.ts";
 
 // S6 NOW-3: a lead makes its items in its own Run. The plugin timer's rounds and the brief run with
 // no current Run (or the orchestrator's), so they read only the Runs events name; the items must name theirs.
 
 const LEAD_RUN = "run_00000000000l";
+const ORCH_RUN = "run_000000000orc";
 const LEAD = "lead:s6";
+const LEAD_SESSION = "cc-lead-s6";
 const PR = "acme/api#4";
 const NOW = Date.parse("2026-11-11T03:00:00Z");
 
@@ -51,6 +53,22 @@ async function leadWorld() {
   return { w, task, monitor, view };
 }
 
+/** The PR of the lead's item moved its base: the item is done, its PR waits on a re-review. */
+function baseMoved(x: Awaited<ReturnType<typeof leadWorld>>, from = "s6/a", to = "main") {
+  const t = x.w.tasks.get(x.task);
+  assert.ok(t);
+  t.status = "completed";
+  if (from === "s6/a") x.w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR, task: x.task, base: from, head_sha: "a".repeat(40), head: "s6/b" } });
+  x.w.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from, to } });
+}
+
+/** A lead session the SessionStart hook recorded, as Orca binds it: its own Run, its Dispatch in the orchestrator's. */
+function leadSession(x: Awaited<ReturnType<typeof leadWorld>>) {
+  x.w.store.append({ type: "session_started", source: "SessionStart", target: `run:${LEAD_RUN}`, payload: { session: LEAD_SESSION, role: "lead", model: "m" } });
+}
+
+const asLead = (x: Awaited<ReturnType<typeof leadWorld>>) => x.w.as({ run: LEAD_RUN, dispatchRun: ORCH_RUN, terminal: true });
+
 test("S6 NOW-3: an item made in a lead's Run names that Run, so a read with no current Run sees it", async () => {
   const x = await leadWorld();
   assert.deepEqual(briefRuns(x.w.store.events(), null), [LEAD_RUN]);
@@ -61,52 +79,74 @@ test("S6 NOW-3: an item made in a lead's Run names that Run, so a read with no c
   assert.deepEqual(criticalPath(input, LEAD).path.map((n) => n.task), [x.task], "graph critical --lead finds it");
 });
 
-test("S6 NOW-3: the plugin timer's queue round makes the re-review item for a lead Run's PR", async () => {
+test("decision 219: the fake refuses what real Orca refuses the timer, a lead and an unbound caller", async () => {
   const x = await leadWorld();
-  const t = x.w.tasks.get(x.task);
-  assert.ok(t);
-  t.status = "completed";
-  x.w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR, task: x.task, base: "s6/a", head_sha: "a".repeat(40), head: "s6/b" } });
-  x.w.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from: "s6/a", to: "main" } });
-
-  await runMonitor("queue", x.monitor);
-  const made = x.w.store.events({ type: "item_created" }).filter((e) => e.payload.task !== x.task);
-  assert.equal(made.length, 1, "none refused as outside the Runs read this round");
-  assert.equal(made[0]?.payload.run, LEAD_RUN, "the re-review item names its Run too");
-  assert.deepEqual(graphRead.why(await x.view(), x.task).map((r) => r.kind), ["blocks"]);
+  x.w.strict();
+  x.w.as(TIMER);
+  const fenced = await x.w.orca.taskCreate({ run: LEAD_RUN, spec: "x", title: "x" });
+  assert.ok(!fenced.ok);
+  assert.equal(fenced.error.code, "consumer_fenced");
+  assert.notEqual(fenced.error.message, fenced.error.code, "Orca's message is more than its code");
+  const timerSend = await x.w.orca.send({ to: `run:${LEAD_RUN}`, subject: "s", body: "b", type: "status" });
+  assert.ok(!timerSend.ok, "a process with no terminal cannot send");
+  asLead(x);
+  const leadSend = await x.w.orca.send({ to: `run:${LEAD_RUN}`, subject: "s", body: "b", type: "status" });
+  assert.ok(!leadSend.ok);
+  assert.equal(leadSend.error.code, "dispatch_run_mismatch", "a lead's Dispatch is in the orchestrator's Run");
+  assert.ok((await x.w.orca.taskCreate({ run: LEAD_RUN, spec: "x", title: "x" })).ok, "the bound session creates Tasks on its Run");
 });
 
-test("S6 re-run NOW-A: a round fenced out of the lead's Run wakes that Run once, and the lead's graph sync makes the item", async () => {
+test("decision 219: the timer round makes no re-review item and sends no doomed wake; the lead's Stop hook makes the item", async () => {
   const x = await leadWorld();
-  const t = x.w.tasks.get(x.task);
-  assert.ok(t);
-  t.status = "completed";
-  x.w.fence();
-  x.w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR, task: x.task, base: "s6/a", head_sha: "a".repeat(40), head: "s6/b" } });
-  x.w.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from: "s6/a", to: "main" } });
+  x.w.strict();
+  x.w.as(TIMER);
+  leadSession(x);
+  baseMoved(x);
   const others = () => x.w.store.events({ type: "item_created" }).filter((e) => e.payload.task !== x.task);
-  const wakes = () => x.w.sends.filter((s) => s.to === `run:${LEAD_RUN}` && s.subject.startsWith("🔁 rereview_item"));
 
-  await runMonitor("queue", x.monitor);
+  const round = await runMonitor("queue", x.monitor);
   assert.equal(others().length, 0, "Orca fences the timer out of the lead's Run");
-  assert.equal(wakes().length, 1, "the Run's bound session is woken instead");
-  assert.equal(wakes()[0]?.type, "status", "the timer holds no Dispatch");
-  assert.ok(wakes()[0]?.body.includes(`sangsoe graph sync --run ${LEAD_RUN}`), wakes()[0]?.body);
+  assert.deepEqual(x.w.calls("orchestration send"), [], "no send the timer cannot make");
+  assert.ok(round.calls.some((c) => c.includes(`left to run:${LEAD_RUN}`)), round.calls.join("\n"));
 
-  await runMonitor("queue", x.monitor);
-  assert.equal(wakes().length, 1, "one wake per base change, not one per round");
+  // Nothing pending for another Run's session: no Orca call at all.
+  asLead(x);
+  const before = x.w.calls().length;
+  x.w.store.append({ type: "session_started", source: "SessionStart", payload: { session: "cc-other", role: "worker", model: "m" } });
+  x.w.as({ run: ORCH_RUN, terminal: true });
+  await recordHook("stop", { store: x.w.store, orca: x.w.orca }, { session_id: "cc-other" });
+  assert.equal(others().length, 0, "a session bound to another Run does not make it");
+  assert.deepEqual(x.w.calls().slice(before), [["orchestration", "run-current"]]);
 
-  // The lead's session is bound to its Run, so its task-create passes.
-  x.w.useRun(LEAD_RUN);
-  const out = await graphSyncCommand({ run: [LEAD_RUN] }, { orca: x.w.orca, store: x.w.store });
-  assert.ok(out.ok, JSON.stringify(out));
-  assert.equal(others().length, 1);
+  asLead(x);
+  await recordHook("stop", { store: x.w.store, orca: x.w.orca }, { session_id: LEAD_SESSION });
+  assert.equal(others().length, 1, "the lead's own hook made the item, no command run by anyone");
   assert.equal(others()[0]?.payload.run, LEAD_RUN);
   assert.deepEqual(graphRead.why(await x.view(), x.task).map((r) => r.kind), ["blocks"]);
 
-  // The next base change of the same PR needs its own item, so it wakes the Run again.
-  x.w.useRun("run_000000000orc");
-  x.w.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from: "main", to: "release" } });
-  await runMonitor("queue", x.monitor);
-  assert.equal(wakes().length, 2);
+  // Made once: the next wake's hooks read the store and stop there.
+  const after = x.w.calls().length;
+  await recordHook("user-prompt-submit", { store: x.w.store, orca: x.w.orca }, { session_id: LEAD_SESSION, prompt: "You have 1 orchestration message." });
+  assert.equal(others().length, 1);
+  assert.deepEqual(x.w.calls().slice(after), [], "nothing pending: one store read, no Orca call");
+
+  // The next base change of the same PR needs its own item; the lead's next wake makes it.
+  baseMoved(x, "main", "release");
+  await recordHook("user-prompt-submit", { store: x.w.store, orca: x.w.orca }, { session_id: LEAD_SESSION, prompt: "You have 1 orchestration message." });
+  assert.equal(others().length, 2);
+});
+
+test("decision 219: a failed wake keeps Orca's code and message in the round's act", async () => {
+  const x = await leadWorld();
+  x.w.strict();
+  x.w.as(TIMER);
+  const t = x.w.tasks.get(x.task);
+  assert.ok(t);
+  t.status = "ready";
+  x.w.store.append({ type: "item_extra_set", source: "test", payload: { task: x.task, exec_by: "owner", trigger: "2026-01-01" } });
+  const round = await runMonitor("queue", x.monitor);
+  const act = round.acts.find((a) => a.what.startsWith(`notify run:${LEAD_RUN}`));
+  assert.ok(act, JSON.stringify(round.acts));
+  assert.equal(act.ok, false);
+  assert.match(act.detail, /send_failed: .*sender_unresolved Could not resolve the sender/);
 });
