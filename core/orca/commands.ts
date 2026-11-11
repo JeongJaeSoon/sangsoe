@@ -40,6 +40,7 @@ export const ORCA_COMMANDS = {
 
   runCurrent: { path: ["orchestration", "run-current"], flags: ["json"] },
   runShow: { path: ["orchestration", "run-show"], flags: ["json", "id", "full"] },
+  runList: { path: ["orchestration", "run-list"], flags: ["json", "limit", "cursor"] },
 
   gateCreate: {
     path: ["orchestration", "gate-create"],

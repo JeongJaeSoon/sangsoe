@@ -42,7 +42,7 @@ export type ReaperDeps = {
 
 export type ReapOptions = { trigger?: "timer" | "hint"; markOnly?: boolean; signal?: AbortSignal };
 
-export type BlockReason = CheckReason | "in_use" | "archive_hook_failed" | "remote_host" | "config_unreadable";
+export type BlockReason = CheckReason | "in_use" | "archive_hook_failed" | "remote_host" | "config_unreadable" | "repo_unreadable";
 export type Blocked = { kind: string; ref: string; reason: BlockReason };
 
 export type ReapReport = {
@@ -325,10 +325,26 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     }
     repos.set(repo, [...(repos.get(repo) ?? []), c]);
   }
+  // Decision 207: a repository counts as sangsoe's when a card sangsoe started or recorded is in it. An
+  // unreadable one fails the round closed; another owner's keeps its cards and says so once.
+  const started = new Set(d.events({ type: "unit_started" }).map((e) => String((e.payload as { worktree?: unknown }).worktree ?? "")));
+  const own = new Set(
+    d
+      .events({ type: "resource" })
+      .map((e) => e.payload as { kind: string; ref: string })
+      .filter((p) => p.kind === "worktree")
+      .map((p) => p.ref),
+  );
+  const managed = new Set(scope.filter((c) => started.has(c.id) || own.has(c.instanceId)).flatMap((c) => repoOf(c) ?? []));
   for (const [repo, cs] of repos) {
     const heads = await openPrHeads(d.gh, repo);
-    if (!heads) {
+    if (!heads && managed.has(repo)) {
       rootFailed(`open PRs of ${repo}`);
+      continue;
+    }
+    if (!heads) {
+      for (const c of cs) unknown.add(c.id);
+      block("repo", repo, "repo_unreadable");
       continue;
     }
     for (const c of cs) if (heads.has(branchOf(c))) marked.add(c.id);

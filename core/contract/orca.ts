@@ -281,6 +281,8 @@ export interface OrcaAdapter {
   // Run (`run-create`·`run-use` are the sessions' own verbs, decision 193)
   runCurrent(): Promise<OrcaResult<RunCurrent>>;
   runShow(a: { id: string }): Promise<OrcaResult<RunShow>>;
+  /** Every Run, newest first: worker-list without `--run` sees only the bound Run's Dispatches (decision 207). */
+  runList(a: { limit?: number; cursor?: string }): Promise<OrcaResult<{ runs: { id: string }[]; nextCursor?: string }>>;
 
   // Gate
   gateCreate(
