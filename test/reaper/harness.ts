@@ -13,6 +13,7 @@ import {
   type LoadSample,
   type LocalRows,
   type OrcaResult,
+  type Planned,
   type PortRow,
   type ReaperConfig,
   type ReaperDeps,
@@ -21,6 +22,7 @@ import {
   reapRound,
   Store,
   type TaskRow,
+  type TerminalRow,
   type WorkerRow,
   type WorkerShow,
   type WorktreePsRow,
@@ -148,6 +150,22 @@ export class FakeOrca {
     this.cards = this.cards.filter((c) => `id:${c.id}` !== a.worktree);
     return { ok: true, value: { removed: true } };
   }
+  /** Card id → its live terminals (decision 202). A closed one leaves this list and the card's ps count. */
+  terminals = new Map<string, TerminalRow[]>();
+  async terminalList(a: { worktree: string }): Promise<OrcaResult<LocalRows<TerminalRow>>> {
+    this.calls.push(`terminalList ${a.worktree}`);
+    if (this.failing.has("terminalList")) return fail("runtime_unreachable");
+    return { ok: true, value: rows(this.terminals.get(a.worktree.replace(/^id:/, "")) ?? []) };
+  }
+  async terminalClose(a: { terminal: string }): Promise<OrcaResult<Record<string, unknown>>> {
+    this.calls.push(`terminalClose ${a.terminal}`);
+    for (const [id, ts] of this.terminals) {
+      if (!ts.some((t) => t.handle === a.terminal)) continue;
+      this.terminals.set(id, ts.filter((t) => t.handle !== a.terminal));
+      this.ps = this.ps.map((p) => (p.worktreeId === id ? { ...p, liveTerminalCount: p.liveTerminalCount - 1 } : p));
+    }
+    return { ok: true, value: { close: { handle: a.terminal } } };
+  }
 }
 
 export type Pr = { number: number; state: "open" | "closed"; merged_at: string | null; head: { sha: string; ref: string } };
@@ -272,6 +290,8 @@ export type World = {
   load: LoadSample;
   /** The timer period the round judges a pause by; unset in the scenarios that predate decision 182. */
   intervalMs?: number;
+  /** `sangsoe reap run --dry-run`: the round gets no `append`. */
+  dryRun?: boolean;
   round(o?: ReapOptions): Promise<ReapReport>;
   types(type: string): Record<string, unknown>[];
 };
@@ -293,7 +313,7 @@ export function world(): World {
         gh: w.gh,
         exec: w.docker.exec,
         events: (f) => store.events(f),
-        append: (e) => store.append(e),
+        ...(w.dryRun ? {} : { append: (e: Planned) => store.append(e) }),
         now: () => clock.now,
         config: w.config,
         sample: () => w.load,
@@ -327,9 +347,15 @@ export async function rounds(w: World, n: number, gapMin = 20): Promise<ReapRepo
   return last;
 }
 
-/** Calls REAPER must never make, on any path (decision 74 O-12, 82 R6, 86 ①). */
+/**
+ * Calls REAPER must never make, on any path (decision 74 O-12, 82 R6, 86 ①). The one terminal it
+ * may close is a setup shell start_unit recorded on `unit_started` (decision 202).
+ */
 export function assertNeverForbidden(w: World): void {
+  const recorded = new Set(w.types("unit_started").map((p) => p.shell));
   for (const c of w.orca.calls) {
+    if (c.startsWith("terminalList ")) continue;
+    if (c.startsWith("terminalClose ") && recorded.has(c.slice("terminalClose ".length))) continue;
     if (/release|terminal|force|allow-failed/i.test(c)) throw new Error(`forbidden orca call: ${c}`);
   }
 }

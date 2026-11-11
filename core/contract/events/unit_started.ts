@@ -10,9 +10,18 @@ export default defineEvent("unit_started", {
   model: str,
   effort: str,
   advisor: opt(str),
-  route: oneOf("orca_flag", "owner_setting", "none"),
+  route: oneOf("orca_flag", "worktree_file", "owner_setting", "none"),
   budget: int,
   budget_per: oneOf("unit", "day"),
   /** Advisor calls already counted against the budget when this start was made. */
   used: int,
+  /** Decision 202: the worktree start_unit created for this session. */
+  worktree: opt(str),
+  /**
+   * Decision 202: the plain shell `worktree create` opened there, the only terminal REAPER may close
+   * (after every Dispatch in that worktree is released, and only with `setup: none`).
+   */
+  shell: opt(str),
+  /** Whether a repo setup script may still run in `shell`: Orca gives no setup-done signal. */
+  setup: opt(oneOf("none", "script", "unknown")),
 });

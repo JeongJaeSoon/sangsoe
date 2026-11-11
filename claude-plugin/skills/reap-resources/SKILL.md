@@ -13,7 +13,7 @@ description: "Use when a sangsoe session must clean up what it started or deal w
 - **확인한 턴에 내린다.** 검증·프리뷰용 stack 은 확인이 끝난 그 턴에 `docker compose -p <project> down` 으로 내린다. `-v` 는 붙이지 않는다.
 - **내가 띄운 것만.** 프로세스는 이 세션이 띄우고 PID 를 기록한 것만 그 PID 로 끝낸다. 이름·패턴으로 고르는 kill, 라벨로 고르는 Docker 정리는 쓰지 않는다.
 - **남겨야 하면** 이유와 기한을 `resource_record` 에 적는다.
-- 파일은 지우지 않고 휴지통으로 옮긴다. worktree·터미널은 건드리지 않는다. worktree 는 REAPER 가 안전 검사 뒤에, 터미널은 Orca 가 worker_done 뒤에 닫는다.
+- 파일은 지우지 않고 휴지통으로 옮긴다. worktree·터미널은 건드리지 않는다. worktree 는 REAPER 가 안전 검사 뒤에 지운다. 세션 터미널은 시작한 쪽이 `worker-release` 로 풀고, `start_unit` 이 만든 worktree 의 setup 셸은 REAPER 가 풀린 뒤 기록된 handle 하나로 닫는다(결정 202). setup 스크립트가 있는 저장소의 셸은 남고 `start_unit` 의 notes 가 그 handle 을 적는다: 오너가 확인하고 닫는다.
 
 ## REAPER 의 보고를 받았을 때
 

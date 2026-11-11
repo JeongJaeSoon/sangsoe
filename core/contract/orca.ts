@@ -80,6 +80,14 @@ export type WorktreePsAgent = {
   agentWait?: AgentWait;
 };
 
+/** `terminal list --worktree` (measured 2026-11-11): an agent's terminal names its `agentIdentity`. */
+export type TerminalRow = {
+  handle: string;
+  worktreeId?: string;
+  executionHostId?: string;
+  agentIdentity?: string;
+};
+
 export type WorktreePsRow = {
   worktreeId: string;
   hostId?: string;
@@ -327,6 +335,17 @@ export interface OrcaAdapter {
   worktreePs(a: { limit?: number; agentWait?: boolean }): Promise<OrcaResult<LocalRows<WorktreePsRow>>>;
   /** Always `--run-hooks --delete-branch`, never `--force` (decision 86). */
   worktreeRm(a: { worktree: string }): Promise<OrcaResult<Receipt>>;
+  /**
+   * A worktree with no agent yet (decisions 200, 202): start_unit writes its local settings, then
+   * starts the worker in it. `parent` keeps new-child's lineage; without it Orca records none.
+   */
+  worktreeCreate(a: { name: string; parent?: string; repo?: string }): Promise<OrcaResult<{ id: string; path: string; repoId?: string }>>;
+  /** Live terminals of one worktree; an agent's carries `agentIdentity`, the plain shell create opens does not. */
+  terminalList(a: { worktree: string }): Promise<OrcaResult<LocalRows<TerminalRow>>>;
+  /** One terminal by its handle, never `--all` (decision 202): only a handle start_unit recorded. */
+  terminalClose(a: { terminal: string }): Promise<OrcaResult<Receipt>>;
+  /** The repo's setup script as Orca holds it (`hookSettings.scripts.setup`); "" when none. */
+  repoShow(a: { repo: string }): Promise<OrcaResult<{ setup: string }>>;
   /** Listeners tied to one worktree; `non_local_host` when Orca scanned another host (decision 88). */
   ports(a: { worktree: string }): Promise<OrcaResult<PortRow[]>>;
 

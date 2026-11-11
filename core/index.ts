@@ -198,8 +198,11 @@ export * from "./reaper/index.ts";
 export {
   type Alias as ModelAlias,
   ADVISOR_FROM_SETTING,
+  ADVISOR_FROM_WORKTREE,
   ADVISOR_NOT_APPLIED,
+  ADVISOR_SPENT,
   type AdvisorPath,
+  type WorktreeSettings,
   advisorCalls,
   callCost as advisorCallCost,
   localDay,

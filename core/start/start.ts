@@ -1,5 +1,6 @@
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { advisorSetting } from "../checks/model-table.ts";
 import { REQUIRED_CAPABILITIES } from "../checks/orca-capabilities.ts";
 import type { OrcaAdapter, OrcaResult, Receipt, TaskRow, WriteOptions } from "../contract/orca.ts";
@@ -11,6 +12,7 @@ import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import { type Choice, launch, localDay, POLICY, pairing, resolve, spend } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
+import { writeLocalSettings } from "./local-settings.ts";
 import { type NewTask, REPO_SELECTOR, type RefusalReason, type Role, type StartOutcome, type StartPorts, type StartRefusal, type StartRequest } from "./types.ts";
 
 type Json = Record<string, unknown>;
@@ -32,7 +34,6 @@ export function findKey(v: unknown, keys: readonly string[], depth = 0): string 
 
 const DISPATCH_KEYS = ["dispatchId", "dispatch_id"] as const;
 const TASK_KEYS = ["taskId", "task_id"] as const;
-const WORKTREE_KEYS = ["worktreeId", "worktree_id", "workspace"] as const;
 
 function defaultChoice(childRole: "lead" | "worker"): Choice {
   const r = resolve(childRole);
@@ -66,7 +67,9 @@ export const roleLine = (role: Role) => `${ROLE_LINE_PREFIX} ${role}`;
 async function write(orca: OrcaAdapter, first: Promise<OrcaResult<Receipt>>, again: (o: WriteOptions) => Promise<OrcaResult<Receipt>>) {
   const r = await first;
   if (r.ok || r.error.code !== "response_lost" || !r.requestId) return r;
-  return recoverWrite(orca, r.requestId, again);
+  const replayed = await recoverWrite(orca, r.requestId, again);
+  // The first request reached Orca: a refused replay must not read as a definite failure (decision 202).
+  return replayed.ok || replayed.requestId ? replayed : { ...replayed, requestId: r.requestId };
 }
 
 const MAX_WORKER_PAGES = 50;
@@ -128,8 +131,9 @@ function firstPrompt(role: Role, t: NewTask): string {
 
 /**
  * The one path that opens a session (decision 94): lineage and depth → task-create --deps →
- * ready and capacity → `unit_started` (decision 200) → worker-start --task <id> --worktree new-child
- * → Dispatch read back.
+ * ready and capacity → worktree create (the parent's child) → its setup shell and local settings →
+ * `unit_started` (decisions 200, 202) → worker-start --task <id> --worktree id:<it> --keep-open →
+ * Dispatch read back.
  * A refusal writes one `signal{start_refused}` and escalates to whoever handed the requester its work.
  */
 export async function startUnit(ports: StartPorts, req: StartRequest): Promise<StartOutcome> {
@@ -360,17 +364,41 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
 
   // ④ orca_error
   const orcaFlag = choice.advisor ? await orcaTakesAdvisor(orca) : false;
+  const ownerSetting = () => (ports.advisorSetting ?? (() => advisorSetting(process.env, homedir())))();
   const row = POLICY[choice.kind];
   const used = spend(store.events({ type: "advisor_used" }), {
     task: taskId,
     ...(row.budget.per === "day" ? { day: localDay(new Date()) } : {}),
   }).calls;
-  // Decision 200: the budget is counted and shown, not enforced here. Turning the advisor off at the
-  // next start needs the worktree-local route, a follow-up unit.
-  const plan = launch(choice, {
-    orcaFlag,
-    ownerSetting: choice.advisor && !orcaFlag ? (ports.advisorSetting ?? (() => advisorSetting(process.env, homedir())))() : false,
+  const spent = row.budget.calls > 0 && used >= row.budget.calls;
+  // Decision 202: the worktree first, with no agent, so its local settings exist before the session
+  // reads them. --parent-worktree keeps new-child's parentWorktreeId; without a worktree the lineage
+  // is the Run alone (decision 197).
+  const name = `${alias ?? taskId}-${Date.now().toString(36)}`;
+  const made = await orca.worktreeCreate({
+    name,
+    ...(requester.worktreeId ? { parent: `id:${requester.worktreeId}` } : {}),
+    ...(repo ? { repo } : {}),
   });
+  // A lost answer may still have made it: the name lets the starter find it in `worktree list`.
+  if (!made.ok) return failedAttempt("orca_error", `worktree create 실패 (${made.error.code}: ${made.error.message}), 요청한 이름: ${name}`);
+  const tree = made.value;
+  const notes: string[] = [];
+  const shell = await setupShell(orca, tree, ports.hookFile ?? ((p) => existsSync(join(p, "orca.yaml"))));
+  if (shell.note) notes.push(shell.note);
+  let plan = launch(choice, { orcaFlag, ownerSetting: false, worktreeFile: true, spent });
+  if (plan.settings) {
+    try {
+      (ports.writeSettings ?? writeLocalSettings)(tree.path, plan.settings);
+    } catch (err) {
+      notes.push(`worktree 설정 파일을 쓰지 못했다 (${(err as Error).message}): 오너 설정 경로로 시작한다`);
+      const owner = ownerSetting();
+      plan = launch(choice, { orcaFlag, ownerSetting: choice.advisor && !orcaFlag ? owner : false, spent });
+      // Without the file sangsoe cannot turn off an advisor the owner's own setting attaches.
+      // That note replaces the plan's "advisor off" one, which would no longer be true.
+      if ((spent || !choice.advisor) && owner) plan = { ...plan, note: "advisor 를 끄지 못했다: 오너 설정의 advisorModel 이 이 세션에 붙는다" };
+    }
+  }
   // Before worker-start: the new session's SessionStart reads this row for its budget and finish lines.
   store.append({
     type: "unit_started",
@@ -387,26 +415,38 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       budget: row.budget.calls,
       budget_per: row.budget.per,
       used,
+      worktree: tree.id,
+      ...(shell.handle ? { shell: shell.handle } : {}),
+      setup: shell.setup,
     },
   });
-  // new-child keeps parentWorktreeId; without a worktree the lineage is the Run alone (decision 197).
-  // A lead's terminal is the one the owner watches: kept open until the orchestrator releases it.
+  // Every start keeps its terminal open, the lifetime Orca gives a new-child worker: in an existing
+  // worktree Orca would close it at worker_done, before the starter reads it. The starter releases it.
   const startArgs = {
     task: taskId,
     agent: req.agent,
-    worktree: requester.worktreeId ? ("new-child" as const) : ("new-top-level" as const),
+    worktree: { existing: `id:${tree.id}` },
     run: requester.runId,
     model: plan.model,
     effort: plan.effort,
-    ...(repo ? { repo } : {}),
-    ...(req.childRole === "lead" ? { keepOpen: true } : {}),
+    keepOpen: true,
     ...(plan.advisor ? { advisor: plan.advisor } : {}),
   };
   const started = await write(orca, orca.workerStart(startArgs), (o) => orca.workerStart(startArgs, o));
   if (!started.ok) {
     const dead = findKey(started.error.data, DISPATCH_KEYS);
     if (dead) store.append({ type: "worker_dead", source, payload: { reason: "start_failed" }, entity: "dispatch", entity_id: dead, target: taskId });
-    return failedAttempt("orca_error", `worker-start 실패 (${started.error.code}: ${started.error.message})`);
+    // Only Orca's own refusal (JSON ok:false, no request id, no Dispatch) is a definite failure: a lost
+    // answer, a recovery that could not prove nothing ran, or a non-zero exit may still own a live
+    // agent (Orca's recovery guide). A setup that may still be running is not cut short either.
+    const code = started.error.code;
+    const unknown = dead || started.requestId !== undefined || ["response_lost", "request_absent", "unexpected_shape"].includes(code) || code.startsWith("exit_");
+    const left = unknown
+      ? `남은 worktree: ${tree.id}${shell.handle ? `, 셸 ${shell.handle}` : ""} (시작 결과를 알 수 없다: ${dead ? `Dispatch ${dead}` : code})`
+      : shell.setup !== "none"
+        ? `남은 worktree: ${tree.id}${shell.handle ? `, 셸 ${shell.handle}` : ""} (setup ${shell.setup}: 끝났는지 알 수 없어 닫지 않는다)`
+        : await removeFailed(orca, tree.id, shell.handle);
+    return failedAttempt("orca_error", `worker-start 실패 (${started.error.code}: ${started.error.message})${left ? `, ${left}` : ""}`);
   }
 
   // ⑤ no_dispatch: the receipt first, then dispatch-show (decision 94 (나)⑤).
@@ -415,7 +455,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     const d = await orca.dispatchShow({ task: taskId });
     if (d.ok && typeof d.value.id === "string") dispatchId = d.value.id;
   }
-  const worktreeId = findKey(started.value, WORKTREE_KEYS);
+  const worktreeId = tree.id;
   if (!dispatchId) {
     const left = [findKey(started.value, ["terminal", "handle"]), worktreeId].filter(Boolean).join(" · ");
     return failedAttempt("no_dispatch", `worker-start 는 끝났지만 Dispatch 가 없다${left ? ` (남은 것: ${left})` : ""}`);
@@ -427,16 +467,65 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     store.append({ type: "model_changed", source, payload: { from: moved.from, to, reason: moved.reason }, entity: "task", entity_id: taskId });
   }
 
-  const notes: string[] = plan.note ? [plan.note] : [];
+  if (plan.note) notes.unshift(plan.note);
   if (req.references?.length) {
-    if (!worktreeId) notes.push("reference add 건너뜀: 새 worktree id 를 영수증에서 찾지 못했다");
-    else {
-      const ref = await orca.referenceAdd({ worktree: worktreeId, urls: req.references });
-      if (!ref.ok) notes.push(`reference add 실패 (${ref.error.code}), 시작은 계속`);
-    }
+    const ref = await orca.referenceAdd({ worktree: worktreeId, urls: req.references });
+    if (!ref.ok) notes.push(`reference add 실패 (${ref.error.code}), 시작은 계속`);
   }
   const launched = { model: plan.model, effort: plan.effort, ...(plan.advisor ? { advisor: plan.advisor } : {}), route: plan.route };
-  return { kind: "started", taskId, ...(alias ? { alias } : {}), dispatchId, ...(worktreeId ? { worktreeId } : {}), launch: launched, notes };
+  return {
+    kind: "started",
+    taskId,
+    ...(alias ? { alias } : {}),
+    dispatchId,
+    worktreeId,
+    ...(shell.handle ? { shell: shell.handle } : {}),
+    launch: launched,
+    notes,
+  };
+}
+
+type SetupShell = { handle?: string; setup: "none" | "script" | "unknown"; note?: string };
+
+/**
+ * Decision 202: the plain shell `worktree create` opened, read right after create: the worktree's
+ * one terminal, with no agent in it. Anything else is not recorded, so nothing will close it.
+ * Orca gives no setup-done signal, so `none` needs both an empty setup script and no `orca.yaml`.
+ */
+async function setupShell(orca: OrcaAdapter, tree: { id: string; path: string; repoId?: string }, hookFile: (path: string) => boolean): Promise<SetupShell> {
+  let setup: SetupShell["setup"] = "unknown";
+  if (tree.repoId) {
+    const r = await orca.repoShow({ repo: `id:${tree.repoId}` });
+    if (r.ok) setup = r.value.setup.trim() === "" && !hookFile(tree.path) ? "none" : "script";
+  }
+  const list = await orca.terminalList({ worktree: `id:${tree.id}` });
+  const rows = list.ok && !list.value.truncated && list.value.nonLocal.rows === 0 ? list.value.rows : [];
+  const only = rows.length === 1 ? rows[0] : undefined;
+  if (!only || only.agentIdentity) {
+    const why = list.ok ? `터미널 ${rows.length}개` : `terminal list 실패 (${list.error.code})`;
+    return { setup, note: `새 worktree 의 setup 셸을 기록하지 못했다(${why}): 아무 터미널도 닫지 않는다` };
+  }
+  if (setup !== "none") {
+    return { handle: only.handle, setup, note: `setup 셸 ${only.handle} 은 닫지 않는다(setup ${setup}: Orca 는 setup 이 끝났는지 알리지 않는다). 오너가 확인하고 닫는다` };
+  }
+  return { handle: only.handle, setup };
+}
+
+/**
+ * A definite failed start (decision 202): the recorded shell is closed and the worktree removed only
+ * when that shell is its one terminal; anything else stays, named for the starter.
+ */
+async function removeFailed(orca: OrcaAdapter, tree: string, shell: string | undefined): Promise<string | null> {
+  const list = await orca.terminalList({ worktree: `id:${tree}` });
+  if (!list.ok || list.value.truncated || list.value.nonLocal.rows > 0) return `남은 worktree: ${tree} (터미널을 다 읽지 못했다)`;
+  const others = list.value.rows.filter((t) => t.handle !== shell);
+  if (others.length > 0) return `남은 worktree: ${tree} (기록하지 않은 터미널 ${others.map((t) => t.handle).join(" · ")})`;
+  if (shell && list.value.rows.length > 0) {
+    const closed = await orca.terminalClose({ terminal: shell });
+    if (!closed.ok) return `남은 worktree: ${tree} (셸 ${shell} 을 닫지 못했다: ${closed.error.code})`;
+  }
+  const rm = await orca.worktreeRm({ worktree: `id:${tree}` });
+  return rm.ok ? null : `남은 worktree: ${tree} (worktree rm 실패: ${rm.error.code})`;
 }
 
 /** The target repo item_create recorded for this Task, the latest one. */

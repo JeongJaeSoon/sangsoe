@@ -11,7 +11,7 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 
 정책 행은 한국어 이름(`label`), 한 줄 이유(`why`), advisor 호출 예산(`budget`, 단위마다 또는 하루)도 적는다(결정 200).
 
-`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort`·advisor 로 풀고, `launch` 가 그 advisor 가 닿는 길(Orca 의 옵션, 오너 설정 `advisorModel`, 없음)에 맞춰 시작 인자를 정한다. `rowLines` 가 SessionStart 에 넣을 예산 줄과 "일 전체를 끝까지 한다" 줄을 만든다. `spend.ts` 가 transcript 의 advisor 호출을 세고(`advisor_used`) 카탈로그 가격으로 비용을 계산하고, `view.ts` 가 `sangsoe models` 보기와 `docs/models.md` 를 만든다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다. 옮긴 tier 는 카탈로그의 API 기본 effort 에서 시작한다(frontier 는 `high`, 결정 172).
+`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort`·advisor 로 풀고, `launch` 가 그 advisor 가 닿는 길(Orca 의 옵션 → 새 worktree 의 `.claude/settings.local.json` → 오너 설정 `advisorModel` → 없음)에 맞춰 시작 인자와 worktree 에 쓸 설정을 정한다. advisor 가 없는 행과 예산을 다 쓴 단위는 그 파일에 advisor 를 끄는 env 를 쓰고, 구현 행은 바닥 tier 로 간다(결정 202). `rowLines` 가 SessionStart 에 넣을 예산 줄과 "일 전체를 끝까지 한다" 줄을 만든다. `spend.ts` 가 transcript 의 advisor 호출을 세고(`advisor_used`) 카탈로그 가격으로 비용을 계산하고, `view.ts` 가 `sangsoe models` 보기와 `docs/models.md` 를 만든다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다. 옮긴 tier 는 카탈로그의 API 기본 effort 에서 시작한다(frontier 는 `high`, 결정 172).
 
 ## 읽는 곳
 
