@@ -92,13 +92,14 @@ main[data-view="todo"] [data-tab="prog"], main[data-view="prog"] [data-tab="todo
 .trail li + li::before { content: "›"; margin: 0 var(--s1); }
 .trail [aria-current] { color: var(--ink); font-weight: 600; }
 button.link { border: 0; background: none; padding: 0; color: var(--link); font: inherit; cursor: pointer; }
-h1 { font-size: var(--text-base); line-height: 20px; margin-bottom: var(--s2); }
+/* Three heading steps (decision 220 (3)): the screen's title, a section, a table inside a section. */
+h1 { font-size: var(--text-md); line-height: 22px; margin-bottom: var(--s2); }
 h1 .dim { color: var(--ink-2); font-weight: 400; }
-h3 { font-size: var(--text-sm); color: var(--muted); font-weight: 500; padding: var(--s1) 0; }
+h3 { font-size: var(--text-xs); line-height: 16px; color: var(--muted); font-weight: 600; padding: var(--s1) 0; }
 .sumline { margin: 0 0 var(--s3); padding: var(--s1) var(--s2); background: var(--accent-soft); border-radius: var(--r2); font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
-section { margin: 0 0 var(--s3); }
+section { margin: 0 0 var(--s5); }
 .sec-h { display: flex; align-items: baseline; gap: var(--s2); padding: var(--s1) 0; border-bottom: 1px solid var(--rule); }
-.sec-h h2 { font-size: var(--text-sm); line-height: 20px; }
+.sec-h h2 { font-size: var(--text-base); line-height: 20px; }
 .sec-h .count { color: var(--muted); font-weight: 400; }
 .sec-h .hint, .sec-h .none { margin-left: auto; color: var(--muted); font-size: var(--text-xs); }
 section.nil { margin: 0; }
@@ -108,7 +109,8 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .tbl { width: 100%; border-collapse: collapse; }
 .tbl th { text-align: left; font-weight: 500; font-size: var(--text-xs); line-height: 16px; color: var(--muted); padding: var(--s2) var(--s3); white-space: nowrap; border-bottom: 1px solid var(--rule); }
 .tbl td { height: 40px; padding: var(--s1) var(--s3); border-bottom: 1px solid var(--rule); vertical-align: middle; overflow-wrap: anywhere; line-height: 20px; }
-.tbl th:first-child, .tbl td:first-child { padding-left: var(--s1); width: 64px; }
+.tbl th:first-child, .tbl td:first-child { padding-left: var(--s1); }
+.tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child { width: 64px; }
 .tbl tbody tr:hover { background: var(--paper-2); }
 .tbl tr[data-nav] { cursor: pointer; }
 .tbl .id { white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); margin-right: var(--s1); }
@@ -190,7 +192,13 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .legend { margin-top: var(--s3); }
 .legend summary { cursor: pointer; font-size: var(--text-sm); color: var(--muted); font-weight: 500; padding: var(--s1) 0; }
 .side > * + * { margin-top: var(--s4); }
-.gt td:first-child { width: auto; }
+/* Graph tables size columns by role, the same in all of them (decision 220 (14)). anywhere would let
+   the table squeeze a column to one glyph; keep-all keeps a Hangul word whole. */
+.tbl.gt td { overflow-wrap: break-word; word-break: keep-all; }
+.tbl.gt td.nw { white-space: nowrap; width: 1%; }
+.tbl.gt td.it { min-width: 8em; }
+.tbl.gt td.tx { min-width: 10em; }
+.tbl.gt .hs { display: none; }
 @container panel (min-width: 900px) {
   .gwrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
@@ -217,12 +225,21 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   /* Seven figure cells wrap as 4 + 3, never one cell alone on a line (decision 219 (13)). */
   .figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2) var(--s3); }
   .figs .aside { padding-left: 0; border-left: 0; }
-  /* graph tables: every cell is a label | value line, labels share one 72px column (hallmark .gt) */
-  .tbl.gt tr { display: block; padding: var(--s2) var(--s1); }
-  .tbl.gt td, .tbl.gt td:first-child { display: block; position: relative; min-height: 20px; margin: 0; padding: 2px 0 2px 72px; font-size: var(--text-sm); line-height: 16px; color: var(--ink); }
+  /* Graph tables: one bordered card per row (decision 220 (15)). The head cells (item id and state)
+     make its title line over a rule; every other cell is a label | value line on one 72px label column. */
+  .tbl.gt { margin-top: var(--s2); }
+  .tbl.gt tbody { display: flex; flex-direction: column; gap: var(--s2); }
+  .tbl.gt tr { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--s2); padding: var(--s2) var(--s3); border: 1px solid var(--rule-2); border-radius: var(--r2); }
+  .tbl.gt tr.broken { border-color: var(--bad); }
+  .tbl.gt td, .tbl.gt td:first-child { flex: 0 0 100%; display: block; position: relative; width: auto; min-width: 0; min-height: 20px; margin: 0; padding: 2px 0 2px 72px; font-size: var(--text-sm); line-height: 16px; color: var(--ink); white-space: normal; }
   .tbl.gt tr.broken td { color: var(--bad); }
   .tbl.gt td[data-l]::before { position: absolute; left: 0; top: 2px; margin: 0; }
+  .tbl.gt td.hd { order: -2; flex: 0 1 auto; padding: 0; font-size: var(--text-base); line-height: 20px; font-weight: 600; }
+  .tbl.gt td.hd::before { content: none; }
+  .tbl.gt td.brk { order: -1; flex: 0 0 100%; min-height: 0; height: 0; padding: 0; margin: var(--s1) 0; border-bottom: 1px solid var(--rule); }
+  .tbl.gt .hs { display: inline; margin-left: var(--s2); color: var(--ink-2); font-size: var(--text-sm); font-weight: 400; }
   .tbl.gt td > svg { margin-top: 4px; }
+  .tbl.gt td.hd > svg { margin-top: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 `;

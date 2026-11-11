@@ -528,32 +528,53 @@ export function dagSvg(m: Pick<GroupDetail, "edges" | "criticalPath"> & Pick<Gro
   return `<svg class="dag" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.w} ${L.h}" style="max-width:${L.w}px" role="img" aria-label="${esc(label)}">${defs}${paths.join("")}${boxes.join("")}${labels.join("")}</svg>`;
 }
 
+/**
+ * A column's role sets its width rule in every graph table (decision 220 (14)): short cells stay on
+ * one line, item cells (an id, its title) and the long text share the rest.
+ */
+type Role = "step" | "kind" | "short" | "item" | "text";
+const ROLE_CLASS: Record<Role, string> = { step: "nw", kind: "kind nw", short: "nw", item: "it", text: "tx" };
+
 // Graph tables label every cell (hallmark's .gt), so a folded row never runs a name into its meaning.
 type GtOpts = {
-  kinds?: readonly number[];
-  step?: boolean;
+  roles: readonly Role[];
+  /** The cells that title a row's card in a narrow panel (decision 220 (15)). */
+  head?: readonly number[];
   titles?: ReadonlyMap<string, string>;
-  idCols?: readonly number[];
+  /** Each item's own state: the title's item gets it when no head cell already shows it. */
+  states?: ReadonlyMap<string, { mark: string; label: string }>;
   /** [state column, the column naming whose state it is]: a bare marker there gets its word. */
   stateOf?: readonly [number, number];
   labels?: ReadonlyMap<string, string>;
 };
 
-function gtTable(t: Table, o: GtOpts = {}): string {
+function gtTable(t: Table, o: GtOpts): string {
   const head = t.columns.map((c) => `<th>${esc(c.name)}</th>`).join("");
   const rows = t.rows.map((r) => {
     const tds = r.cells.map((cell, i) => {
       const name = esc(t.columns[i]?.name ?? "");
+      const role = o.roles[i] ?? "text";
+      const cls = `${ROLE_CLASS[role]}${o.head?.includes(i) ? " hd" : ""}`;
       const word = o.stateOf?.[0] === i ? o.labels?.get(r.cells[o.stateOf[1]]?.text ?? "") : undefined;
       const c = word?.startsWith(cell.text) ? { ...cell, text: word } : cell;
-      if (o.step && i === 0) return `<td data-l="${name}"><span class="step">${esc(c.text)}</span></td>`;
-      if (o.kinds?.includes(i)) return `<td data-l="${name}" class="kind">${esc(c.text)}</td>`;
-      const titled = o.idCols?.includes(i) && o.titles?.has(c.text) ? { ...c, text: `${c.text} ${o.titles.get(c.text)}` } : c;
-      return `<td data-l="${name}">${/^i\d{3,} /.test(titled.text) ? titleWithId(titled) : cellHtml(titled)}</td>`;
+      const open = `<td data-l="${name}" class="${cls}">`;
+      if (role === "step") return `${open}<span class="step">${esc(c.text)}</span></td>`;
+      if (role === "kind") return `${open}${esc(c.text)}</td>`;
+      const titled = role === "item" && o.titles?.has(c.text) ? { ...c, text: `${c.text} ${o.titles.get(c.text)}` } : c;
+      const body = /^i\d{3,} /.test(titled.text) ? titleWithId(titled) : cellHtml(titled);
+      return `${open}${body}${o.head?.includes(i) ? headState(c.text, r, o) : ""}</td>`;
     });
+    // The title line's rule in a narrow card; hidden in a wide table.
+    if (o.head?.length) tds.splice(Math.max(...o.head) + 1, 0, '<td class="brk" aria-hidden="true"></td>');
     return `<tr data-id="${esc(r.id)}"${r.broken ? ' class="broken"' : ""}>${tds.join("")}</tr>`;
   });
   return `<table class="tbl gt"><thead><tr>${head}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+
+function headState(text: string, r: Row, o: GtOpts): string {
+  const s = o.states?.get(/^(i\d{3,})\b/.exec(text)?.[1] ?? "");
+  if (!s || r.cells.some((c, i) => o.head?.includes(i) && c.text.includes(s.mark))) return "";
+  return `<span class="hs">${esc(s.label)}</span>`;
 }
 
 function gtSection(id: string, t: Table, body: string, hint = ""): string {
@@ -578,8 +599,12 @@ function figures(m: GroupDetail, f: GroupFigures): string {
 function legend(): string {
   const line = (cls: string) => `<svg viewBox="0 0 40 8" aria-hidden="true"><line class="${cls}" x1="0" y1="4" x2="40" y2="4"/></svg>`;
   const rows = [
-    ...Object.entries(EDGE_KINDS).map(([k, v]) => `<tr><td data-l="선 모양">${line(k)}</td><td data-l="간선" class="kind">${k}</td><td data-l="뜻">${esc(v)}</td></tr>`),
-    ...MARKS.map(([cls, name, v]) => `<tr><td data-l="선 모양">${line(cls)}</td><td data-l="간선">${name}</td><td data-l="뜻">${esc(v)}</td></tr>`),
+    ...Object.entries(EDGE_KINDS).map(
+      ([k, v]) => `<tr><td data-l="선 모양" class="nw hd">${line(k)}</td><td data-l="간선" class="kind nw hd">${k}</td><td class="brk" aria-hidden="true"></td><td data-l="뜻" class="tx">${esc(v)}</td></tr>`,
+    ),
+    ...MARKS.map(
+      ([cls, name, v]) => `<tr><td data-l="선 모양" class="nw hd">${line(cls)}</td><td data-l="간선" class="nw hd">${name}</td><td class="brk" aria-hidden="true"></td><td data-l="뜻" class="tx">${esc(v)}</td></tr>`,
+    ),
   ];
   return `<details class="legend"><summary>간선 종류</summary><table class="tbl gt"><thead><tr><th>선 모양</th><th>간선</th><th>뜻</th></tr></thead><tbody>${rows.join("")}</tbody></table></details>`;
 }
@@ -589,6 +614,7 @@ function group(m: GroupDetail): string {
   const nodes = m.nodes ?? [];
   const titles = new Map(nodes.map((n) => [n.id, n.title]));
   const labels = new Map(nodes.flatMap((n) => (n.stateLabel ? [[n.id, n.stateLabel] as const] : [])));
+  const states = new Map(nodes.map((n) => [n.id, { mark: n.state, label: n.stateLabel ?? n.state }]));
   const refs = m.edges.filter((e) => !titles.has(e.pred));
   const refLine =
     refs.length === 0
@@ -599,20 +625,26 @@ function group(m: GroupDetail): string {
       ? '<p class="empty">간선 없음</p>'
       : `${nodes.length > 0 ? dagSvg({ edges: m.edges, criticalPath: m.criticalPath, nodes, brokenEdges: m.brokenEdges ?? [] }, `${m.lead} 의존 그래프.${m.criticalPath.length > 0 ? ` 크리티컬 패스는 ${m.criticalPath.join(", ")} 순서.` : ""}`) : ""}${refLine}${legend()}`;
   const side = [
-    m.critical ? sub(m.critical, gtTable(m.critical, { step: true })) : "",
-    m.stack ? sub(m.stack, gtTable(m.stack)) : "",
-    ...(m.release ?? []).map((t) => sub(t, gtTable(t, { kinds: [0] }))),
-    m.broken ? sub(m.broken, gtTable(m.broken, { idCols: [0], titles })) : "",
+    m.critical ? sub(m.critical, gtTable(m.critical, { roles: ["step", "item", "short", "text"], head: [0, 1, 2] })) : "",
+    m.stack ? sub(m.stack, gtTable(m.stack, { roles: ["short", "short", "item", "short"], head: [0, 2, 3] })) : "",
+    ...(m.release ?? []).map((t) => sub(t, gtTable(t, { roles: ["kind", "text", "text"], head: [0] }))),
+    m.broken ? sub(m.broken, gtTable(m.broken, { roles: ["item", "item", "text"], head: [0], titles, states })) : "",
   ].join("");
   return [
     `<h1>${esc(m.lead)} <span class="pri">${esc(m.priority)}</span> <span class="dim">· 열린 ${m.items}건 · 막힘 ${m.blockedCount}</span></h1>`,
     m.figures ? figures(m, m.figures) : "",
     `<section aria-labelledby="h-graph"><div class="sec-h"><h2 id="h-graph">의존 그래프</h2><span class="hint">위에서 아래로. 굵은 선과 번호가 크리티컬 패스</span></div>`,
     `<div class="gwrap"><div class="gl">${graph}</div><div class="side">${side}</div></div></section>`,
-    gtSection("why", m.why, gtTable(m.why, { kinds: [2], idCols: [0, 1], titles, stateOf: [3, 1], labels }), "<code>sangsoe graph why</code>"),
-    m.edgeList ? gtSection("edges", m.edgeList, gtTable(m.edgeList, { kinds: [0] })) : "",
+    gtSection(
+      "why",
+      m.why,
+      gtTable(m.why, { roles: ["item", "item", "kind", "short", "text"], head: [0], titles, states, stateOf: [3, 1], labels }),
+      "<code>sangsoe graph why</code>",
+    ),
+    // An edge's card is titled by the item it holds back.
+    m.edgeList ? gtSection("edges", m.edgeList, gtTable(m.edgeList, { roles: ["kind", "item", "item", "text"], head: [2], states })) : "",
     ...m.sections.map((t, i) => section(`s${i}`, t, items(t))),
-    m.recent ? gtSection("recent", m.recent, gtTable(m.recent)) : "",
+    m.recent ? gtSection("recent", m.recent, gtTable(m.recent, { roles: ["short", "item", "text"], head: [1] })) : "",
     m.done ? doneFold(m.done) : "",
     `<p class="foot">터미널: <code>sangsoe brief ${esc(m.lead)}</code></p>`,
   ].join("");

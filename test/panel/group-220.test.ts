@@ -72,7 +72,7 @@ test("(15) every card of the four tables opens with a title line: the item id, t
       assert.ok(head.length > 0, `${name}: no title cell`);
       const line = head.map((c) => c.text).join(" ");
       assert.match(line, /i\d{3}/, `${name}: ${line}`);
-      assert.match(line, /[📅🟢🔄🚧⏳✅⏸️🗑️❓]/u, `${name}: ${line} names no state`);
+      assert.match(line, /📅|🟢|🔄|🚧|⏳|✅|⏸️|🗑️|❓/u, `${name}: ${line} names no state`);
       const brk = r.findIndex((c) => c.cls === "brk");
       assert.ok(brk > 0, `${name}: no rule under the title line`);
     }
