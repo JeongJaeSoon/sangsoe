@@ -8,6 +8,7 @@
 - `pending.ts` — `verify` 가 있는 오너 항목마다 probe 가 참을 본 시각(없으면 ⏳ 검증 대기). GRAPH 와 브리프가 같은 것을 읽는다(결정 181).
 - `link.ts` — 오너 입력(`!` 줄 · 채팅)을 열린 항목에 잇는 규칙(결정 91⑥(2), 오탐 방지 (가)–(마))과 그 기록.
 - `probe.ts` — `verify` kind 다섯의 읽기(Orca 는 `core/orca` 어댑터, GitHub 은 `core/gh` 로만)와 라운드 한 번의 기록.
+- `prompt.ts` — 채팅 hook 이 받은 prompt 가 오너의 말인지, Orca·Claude Code 가 넣은 줄(`orca_nudge`)인지 머리의 꼴로 가른다(결정 173·196·206). `orca_nudge` 는 `owner_action` 을 쓰지 않으니 결정을 답하지도, 대기를 오너가 푼 것으로 적지도 않는다.
 - `release.ts` — `waiting_human` 이 풀리는 신호와 `waiting_released`, 리드가 못 푼 대기의 판정. 비로컬 행은 풀지도 `moot` 로 닫지도 않는다.
 - `done.ts` — 패널 "완료" 버튼 함수.
 
