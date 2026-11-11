@@ -21,6 +21,7 @@ export const HOST_TYPES = [
   "pr_merged",
   "pr_opened",
   "pr_ready_to_merge",
+  "pr_reopened",
   "pr_review_requested",
   "rate_limited",
   "review_commented",

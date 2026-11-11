@@ -120,6 +120,9 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     } else if (e.type === "pr_opened" && str(p.task)) {
       prTask.set(String(p.pr), String(p.task));
       prOpen.set(String(p.task), String(p.pr));
+    } else if (e.type === "pr_reopened") {
+      const t = prTask.get(String(p.pr));
+      if (t) prOpen.set(t, String(p.pr));
     } else if (e.type === "pr_merged" || e.type === "pr_closed") {
       const t = prTask.get(String(p.pr));
       if (t && prOpen.get(t) === p.pr) prOpen.delete(t);
