@@ -124,7 +124,9 @@ export interface GroupFigures {
 }
 
 /** GRAPH's why row as stage 2 reads it: the edge with ready.ts's 선행 상태 and 해야 할 일. */
-export interface WhyEdge extends Edge {
+export interface WhyEdge extends Omit<Edge, "kind"> {
+  /** An edge kind, or what holds the item itself (decision 218): its own PR, an owner gate, Orca's 🚧. */
+  readonly kind: Edge["kind"] | "pr" | "gate" | "orca";
   readonly predState: string;
   readonly dangling: boolean;
   readonly todo: string;

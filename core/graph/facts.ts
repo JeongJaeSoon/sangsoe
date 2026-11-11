@@ -24,6 +24,7 @@ export interface ItemExtra {
   est?: string;
   trigger?: string;
   hold?: boolean;
+  reviewTrigger?: string;
   flow?: string;
   step?: string;
   stage?: Stage;
@@ -78,6 +79,7 @@ const EXTRA_FIELDS: Readonly<Record<string, keyof ItemExtra>> = {
   est: "est",
   trigger: "trigger",
   hold: "hold",
+  review_trigger: "reviewTrigger",
   flow: "flow",
   step: "step",
   stage: "stage",

@@ -1,6 +1,7 @@
 import type { ViewInput, ViewTask } from "../contract/views.ts";
 import { type Facts, foldFacts } from "./facts.ts";
 import { parseNode } from "./nodes.ts";
+import { holdOf } from "./ready.ts";
 
 // Decision 29 and appendix "크리티컬 패스": the longest chain of unfinished items in one group (a
 // lead), external predecessors from other groups included as named endpoints. A node weighs its `est`
@@ -30,22 +31,43 @@ export interface ItemGraph {
   readonly preds: ReadonlyMap<string, readonly string[]>;
 }
 
-/** Unfinished items and the item → item edges among them, from Orca deps and extra edges. */
+/**
+ * Unfinished items and the item → item edges among them, from Orca deps and extra edges. Decision 218:
+ * an item its own PR still holds is unfinished, and an open PR predecessor stands for the items it is
+ * bound to, unless that edge would close a cycle (edge_add checks cycles on node names, not PR owners).
+ */
 export function itemGraph(input: ViewInput, facts: Facts): ItemGraph {
-  const live = new Set(input.orca.tasks.filter((t) => !finished(t)).map((t) => t.id));
+  const live = new Set(input.orca.tasks.filter((t) => !finished(t) || holdOf(t, facts, [])?.by === "pr").map((t) => t.id));
   const preds = new Map<string, string[]>();
   const link = (p: string, s: string) => {
-    if (!live.has(p) || !live.has(s)) return;
+    if (!live.has(p) || !live.has(s) || p === s) return;
     const list = preds.get(s) ?? [];
     if (!list.includes(p)) list.push(p);
     preds.set(s, list);
   };
   for (const t of input.orca.tasks) for (const d of t.deps) link(d, t.id);
+  const viaPr: [string, string][] = [];
   for (const e of facts.edges) {
     const p = parseNode(e.pred);
     const s = parseNode(e.succ);
-    if (p?.kind === "item" && s?.kind === "item") link(p.task, s.task);
+    if (s?.kind !== "item") continue;
+    if (p?.kind === "item") link(p.task, s.task);
+    const pr = p?.kind === "pr" ? facts.prs.get(p.pr) : undefined;
+    if (pr && !pr.merged && !pr.closed) for (const t of pr.tasks) viaPr.push([t, s.task]);
   }
+  const reaches = (from: string, to: string): boolean => {
+    const seen = new Set<string>();
+    const stack = [from];
+    while (stack.length > 0) {
+      const n = stack.pop() as string;
+      if (n === to) return true;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      stack.push(...(preds.get(n) ?? []));
+    }
+    return false;
+  };
+  for (const [p, s] of viaPr) if (!reaches(p, s)) link(p, s);
   return { nodes: [...live], preds };
 }
 

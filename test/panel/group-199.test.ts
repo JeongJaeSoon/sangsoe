@@ -43,12 +43,12 @@ test("완료 최근 7일 folds into a list on 현황 and on the group, one item 
   }
 });
 
-test("group summary tiles: 우선순위, 7일, 진행, 막힘, 남은 것 with its split, 오너, 플래그", () => {
+test("group summary tiles: 우선순위, 진행, 막힘, 남은 것 with its split, then 7일 apart (decision 218), 오너, 플래그", () => {
   const html = renderStage(group);
   const figs = /<dl class="figs"[^>]*>(.*?)<\/dl>/s.exec(html)?.[1] ?? "";
   assert.deepEqual(
     [...figs.matchAll(/<dt>([^<]*)<\/dt>/g)].map((x) => x[1]),
-    ["우선순위", "✅ 7일", "🔄 진행 중", "🚧 막힘", "남은 것", "🙋 오너", "🚨 플래그"],
+    ["우선순위", "🔄 진행 중", "🚧 막힘", "남은 것", "✅ 7일", "🙋 오너", "🚨 플래그"],
   );
   assert.match(figs, /<dd>7 <small>📅 5, 🟢 2, ⏸️ 0<\/small><\/dd>/);
 });
@@ -87,7 +87,7 @@ test("왜 준비되지 않았나: 항목 is the item with its title, 막는 선�
 });
 
 test("legend: four kinds and the two marks, every cell labelled so a folded row keeps kind and meaning apart", () => {
-  const legend = /<div class="legend">(.*?)<\/div>/s.exec(renderStage(group))?.[1] ?? "";
+  const legend = /<details class="legend">(.*?)<\/details>/s.exec(renderStage(group))?.[1] ?? "";
   const rows = [...legend.matchAll(/<tr><td data-l="선 모양">.*?<td data-l="간선"[^>]*>([^<]*)<\/td><td data-l="뜻">/g)].map((x) => x[1]);
   assert.deepEqual(rows, ["blocks", "after", "stacked_on", "deploys_after", "굵은 선", "붉은 점선"]);
 });

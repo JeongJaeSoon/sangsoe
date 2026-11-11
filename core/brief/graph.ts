@@ -18,6 +18,6 @@ export interface GraphRead {
   edges(input: ViewInput): readonly Edge[];
   /** Longest open chain inside `tasks`, first element is what slows them now. */
   criticalPath(input: ViewInput, tasks: readonly string[]): readonly string[];
-  /** Unmet predecessors of one task. */
-  why(input: ViewInput, task: string): readonly Edge[];
+  /** Unmet predecessors of one task, and what holds it (decision 218). */
+  why(input: ViewInput, task: string): readonly (Omit<Edge, "kind"> & { readonly kind: EdgeKind | "pr" | "gate" | "orca" })[];
 }

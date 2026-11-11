@@ -210,7 +210,7 @@
 | N7 감시 범위 필터 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/detect/pr/config.ts:30`, `core/detect/pr/round.ts:494` | |
 | N8 보고 주소 규칙 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/gates/report-address.ts:20` | |
 | 현황 1단계 | design.html §3 오너가 보는 것 | implemented | `core/brief/build.ts:133`, `core/brief/render.ts:35` | |
-| 묶음 상세 2단계 | design.html §3 오너가 보는 것 | implemented | `core/brief/build.ts:297`, `orca-plugin/panel/view.ts:545` | G13 고침(U76, 결정 213, 줄 번호는 U76 기준): 패널은 시안 순서대로 요약 수치 → 의존 그래프 → 왜 준비되지 않았나 → 간선 → 상태별 절 → 최근 전환 → 접힌 완료. 글은 지금 꼴을 지킨다(결정 213 ④) |
+| 묶음 상세 2단계 | design.html §3 오너가 보는 것 | changed (결정 218) | `core/brief/build.ts:300`, `orca-plugin/panel/view.ts:551` | G13 고침(U76, 결정 213): 패널은 시안 순서대로 요약 수치 → 의존 그래프 → 왜 준비되지 않았나 → 간선 → 상태별 절 → 최근 전환 → 접힌 완료. 글은 지금 꼴을 지킨다(결정 213 ④). 결정 218: 머리는 "열린 N건 · 막힘 M"(🔄 + 🚧 + 남은 것, ✅ 는 따로), 🚧 항목마다 왜 행, 묶음 안 항목의 PR 마디는 그 항목(`core/brief/build.ts:310`) |
 | 항목 상세 3단계 | design.html §3 오너가 보는 것 | partial | `core/brief/build.ts:541`, `orca-plugin/panel/view.ts:578` | G14 — 대화 기록 위치(세션 id·메시지 uuid)가 없다 |
 | 줌 보조 화면 | design.html §3 오너가 보는 것 | missing | `orca-plugin/panel/view.ts:600` | G15 — 결정 92 ③ 의 별도 보기가 없다 |
 | 상태 표시줄 항목 | design.html §3 오너가 보는 것 | implemented | `core/brief/panel.ts:57`, `orca-plugin/main.ts:83` | 결정 170 |
@@ -255,7 +255,7 @@
 | 저장소 위생과 설치 | design-appendix 게이트와 원칙 | implemented | `test/hooks-registered.test.ts:23` | |
 | 게이트가 담은 가정 여섯 | design-appendix 게이트가 담은 가정 | implemented | `core/gates/pressure.ts:20`, `core/approve/review-verdict.ts:74` | 가정을 다시 재는 절차는 코드 밖 |
 | 패널 index 현황 | design-appendix 패널 화면 | partial | `orca-plugin/panel/view.ts:180` | G21 — "내 지시는 어디까지 갔나" 접힘 구역이 없다 |
-| 패널 group 묶음 상세 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:454`, `orca-plugin/panel/view.ts:545` | G13 고침(U76, 결정 213, 줄 번호는 U76 기준): SVG DAG 와 시안의 절 순서 |
+| 패널 group 묶음 상세 | design-appendix 패널 화면 | changed (결정 218) | `orca-plugin/panel/view.ts:459`, `orca-plugin/panel/view.ts:551` | G13 고침(U76, 결정 213): SVG DAG 와 시안의 절 순서. 결정 218: 브레드크럼은 지금 화면을 한 번(`orca-plugin/panel/view.ts:642`, 같은 행 두 번 누르기는 쌓지 않음 `orca-plugin/panel/view.ts:87`), 간선 범례는 접혀서 시작(`orca-plugin/panel/view.ts:542`) |
 | 패널 item 항목 상세 | design-appendix 패널 화면 | changed (결정 136) | `orca-plugin/panel/view.ts:578` | 버튼은 추천대로·다른 답·완료 셋. 대화 기록 위치는 G14 |
 | 패널 zoom | design-appendix 패널 화면 | missing | `orca-plugin/panel/view.ts:600` | G15 |
 | 패널 머리 행과 탭 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:607`, `orca-plugin/panel/view.ts:626` | 결정 169 |
@@ -368,13 +368,13 @@
 | 불변식 item 전환 | design-appendix 데이터 소유 | partial | `core/contract/transitions.ts:19`, `core/store/store.ts:364` | G24 — 허용 쌍 19 는 강제, done_blockers 는 닫는 세 자리에서 적용(결정 212 ④), orphan_extra 없음 |
 | 불변식 decision | design-appendix 데이터 소유 | partial | `core/decision/open.ts:64`, `core/decision/answer.ts:57` | G25 — 키 유일·닫힘 순서는 있고 다시 묻기(`:r<n>`)가 없다 |
 | 선행 노드 종류·모름과 없음 | design-appendix 간선과 ready 계산 | implemented | `core/graph/edit.ts:26`, `core/graph/ready.ts:88` | |
-| 📅 → 🟢 쓰는 쪽 없음·왜 표 | design-appendix 간선과 ready 계산 | implemented | `core/graph/ready.ts:186`, `core/graph/notify-ready.ts:1` | |
+| 📅 → 🟢 쓰는 쪽 없음·왜 표 | design-appendix 간선과 ready 계산 | changed (결정 218) | `core/graph/ready.ts:262`, `core/graph/notify-ready.ts:1` | 결정 218: 항목을 스스로 잡는 것(자기 PR, 오너 gate, Orca 막힘)은 `holdOf`(`core/graph/ready.ts:76`) 하나가 답하고, 항목 상태의 🚧 와 왜 행(`core/graph/ready.ts:87`)이 그것을 읽는다 |
 | 순환 검사·같은 간선 합침·edge_no_cycle | design-appendix 순환 거부 | implemented | `core/graph/edit.ts:113`, `core/store/schema.ts:14` | |
 | 틀 TOML·펼치기·dry-run | design-appendix 흐름 틀 형식 | implemented | `core/graph/flow.ts:132`, `core/graph/flow.ts:217` | |
 | ship-change 틀 | design-appendix 흐름 틀 형식 | changed (결정 126) | `core/graph/flows/ship-change.toml:41` | |
 | ship-batch 틀·owner 단계·건너뛰기 이유 | design-appendix 흐름 틀 형식 | implemented | `core/graph/flows/ship-batch.toml:15`, `core/graph/edit.ts:174` | |
 | 틀 항목 완료 조건 | design-appendix 흐름 틀 형식 | implemented | `core/graph/flow.ts:311`, `core/gates/done-blockers.ts:12` | 흐름 뿌리는 단계가 다 있고 끝나고 PR 이 머지돼야 닫힌다(결정 212 ④) |
-| 크리티컬 패스·영향 범위 | design-appendix 크리티컬 패스, 영향 범위 | implemented | `core/graph/critical.ts:58`, `core/graph/critical.ts:137` | |
+| 크리티컬 패스·영향 범위 | design-appendix 크리티컬 패스, 영향 범위 | changed (결정 218) | `core/graph/critical.ts:39`, `core/graph/critical.ts:159` | 결정 218: 자기 PR 이 잡은 완료 Task 도 끝나지 않은 항목이고, 열린 PR 마디의 간선은 그 PR 이 묶인 항목에서 나온다(PR 을 거쳐 순환이 되면 잇지 않는다) |
 | GRAPH 상주 안 함 | design-appendix GRAPH: 모듈과 CLI | implemented | `core/graph/index.ts:5` | |
 
 ## 4. 흐름 · 지시 · 결정 루프 · 실패 방지 · 기존 설계 참고 (본문 5절, 부록 실패 표·지시 분류·전달 규칙·일이 기다리는 곳·결정 루프·기존 설계 참고)

@@ -62,7 +62,7 @@ function overview(m: Overview, open: boolean): string[] {
 function group(m: GroupDetail, open: boolean): string[] {
   const edges = m.edges.map((e) => `- ${e.pred} → ${e.succ} (${e.kind}${e.met === null ? ", 외부 선행" : e.met ? ", 충족" : ""})`);
   return [
-    `묶음 상세 · ${m.lead} ${m.priority} · ${m.items}건·막힘 ${m.blockedCount} · ${stamp(m.now)}`,
+    `묶음 상세 · ${m.lead} ${m.priority} · 열린 ${m.items}건·막힘 ${m.blockedCount} · ${stamp(m.now)}`,
     "",
     `크리티컬 패스: ${m.criticalPath.length > 0 ? `${m.criticalPath.join(" → ")} (추정)` : "없음"}`,
     "",

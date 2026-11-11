@@ -84,7 +84,11 @@ details.menu { position: relative; }
 .seg .count { font-weight: 400; color: var(--muted); }
 main { padding: var(--s2) var(--s3) 0; }
 main[data-view="todo"] [data-tab="prog"], main[data-view="prog"] [data-tab="todo"] { display: none; }
-.crumbs { color: var(--muted); font-size: var(--text-sm); margin: var(--s2) var(--s3) 0; }
+.crumbs { display: flex; align-items: baseline; gap: var(--s3); color: var(--muted); font-size: var(--text-sm); margin: var(--s2) var(--s3) 0; }
+.crumbs .back { padding-right: var(--s3); border-right: 1px solid var(--rule); }
+.trail { display: flex; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.trail li + li::before { content: "›"; margin: 0 var(--s1); }
+.trail [aria-current] { color: var(--ink); font-weight: 600; }
 button.link { border: 0; background: none; padding: 0; color: var(--link); font: inherit; cursor: pointer; }
 h1 { font-size: var(--text-base); line-height: 20px; margin-bottom: var(--s2); }
 h1 .dim { color: var(--ink-2); font-weight: 400; }
@@ -115,6 +119,7 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .hint0 { margin: 0 0 var(--s3); padding: var(--s2) var(--s3); border: 1px dashed var(--rule-2); border-radius: var(--r2); color: var(--ink-2); font-size: var(--text-sm); }
 .figs { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin: 0 0 var(--s4); padding: var(--s2) 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
 .figs div { min-width: 0; }
+.figs .aside { padding-left: var(--s5); border-left: 1px solid var(--rule); }
 .figs dt { color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
 .figs dd { margin: 0; font-size: var(--text-md); font-weight: 600; line-height: 20px; }
 .figs dd small { font-size: var(--text-xs); font-weight: 400; color: var(--ink-2); margin-left: var(--s1); }
@@ -181,6 +186,7 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .gt line { stroke: var(--ink-2); stroke-width: 1.5; }
 .gt .step { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: var(--text-xs); font-weight: 700; }
 .legend { margin-top: var(--s3); }
+.legend summary { cursor: pointer; font-size: var(--text-sm); color: var(--muted); font-weight: 500; padding: var(--s1) 0; }
 .side > * + * { margin-top: var(--s4); }
 .gt td:first-child { width: auto; }
 @container panel (min-width: 900px) {

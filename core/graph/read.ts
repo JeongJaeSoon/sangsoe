@@ -12,7 +12,11 @@ export interface GraphEdge {
   readonly kind: EdgeKind;
 }
 
-export interface GraphWhyEdge extends GraphEdge {
+/** An edge kind, or what holds the item itself (decision 218): its own PR, an owner gate, Orca's 🚧. */
+export type WhyKind = EdgeKind | "pr" | "gate" | "orca";
+
+export interface GraphWhyEdge extends Omit<GraphEdge, "kind"> {
+  readonly kind: WhyKind;
   readonly predState: string;
   /** A ✅-less end the lead resolves (decision 26): cancelled, or a PR closed without merge. */
   readonly dangling: boolean;
@@ -45,10 +49,10 @@ export const graphRead = {
     const order = (t: string) => facts.items.get(t)?.createdSeq ?? 1e9 + tasks.indexOf(t);
     return longestPath([...keep], preds, (t) => weightOf(facts.items.get(t)?.est) ?? 1, order).path;
   },
-  /** The unmet edges into `task` (trigger and hold rows left out), with the why table's state and to-do. */
+  /** The unmet edges into `task` and what holds it (trigger and hold rows left out), with the why table's state and to-do. */
   why(input: ViewInput, task: string): GraphWhyEdge[] {
     return why(input, task)
-      .rows.filter((r) => r.kind !== "trigger" && r.kind !== "hold" && r.kind !== "orca")
-      .map((r) => ({ pred: bare(r.pred), succ: task, kind: r.kind as EdgeKind, predState: r.predState, dangling: r.dangling, todo: r.todo }));
+      .rows.filter((r) => r.kind !== "trigger" && r.kind !== "hold")
+      .map((r) => ({ pred: bare(r.pred), succ: task, kind: r.kind as WhyKind, predState: r.predState, dangling: r.dangling, todo: r.todo }));
   },
 };
