@@ -499,3 +499,87 @@ REAPER 표시 라운드(`sangsoe reap run --dry-run --mark-only`, worktree 를 �
 REAPER 도 smoke 저장소의 열린 PR 을 소문자 이름으로 읽다 못 읽었다(같은 대소문자 결함). 루트를 못 읽어 정리 0 으로 닫힌 것은 설계대로다.
 
 리허설 판정(rc.4): PASS (손으로 release. 소문자 PR 읽기는 finding)
+
+## S6 의존 관리 smoke (실행 체크리스트, 준비: U80)
+
+S6 는 의존 관리를 실제 GitHub 와 실제 Orca 에서 잰다: PR 3개 stack(`stacked_on`) 과 `after` 간선 하나를 걸고, 아래에서부터 land 하며 단계마다 event 행 · land 거부 글 · 패널의 "왜 준비되지 않았나" 행 · 크리티컬 패스를 읽는다. 이 절은 실행 전의 틀이다. 실행하면 단계마다 "본 것" 칸을 채우고 판정을 `PASS` · `FAIL` · `NOT VERIFIED`(이유) 로 적는다. 위 1–10 항목과 같은 판정 줄 꼴은 실행 기록을 이 절 아래에 더할 때 쓴다(`test/e2e/smoke/smoke-run.test.ts` 는 숫자로 시작하는 `## ` 절만 센다).
+
+### 고정물 (JeongJaeSoon/sangsoe-smoke, U79 가 만듦)
+
+| 이름 | PR | head 브랜치 → base | 바꾼 것 | 첫 head |
+|---|---|---|---|---|
+| A | #3 | `s6/a` → `main` | `docs/s6-a.md` 새 파일 3줄 | `78dbc6da` |
+| B | #4 | `s6/b` → `s6/a` | `docs/s6-b.md` 새 파일 3줄 | `235f9a9a` |
+| C | #5 | `s6/c` → `s6/b` | `docs/s6-c.md` 새 파일 3줄 | `4c7e3054` |
+| D | #6 | `s6/d` → `main` | `docs/s6-d.md` 새 파일 3줄 | `fbda6d6b` |
+
+넷 다 draft 가 아닌 보통 PR 이다(land 는 draft 를 `pr_not_open` 으로 거부한다, `core/land/land.ts:156-159`). 모두 `docs/` 만 바꿔 오너 설정의 `docs_globs` 로 V0 이고, 그래서 증거 행이 필요 없다(V0 은 필수 CI 만). 저장소에는 workflow 가 없고 GitHub 에는 skip 하는 CodeRabbit 상태 하나만 붙는다. P2 의 #2 가 같은 저장소에서 `merge_verdict` 로 머지됐으니 이 rollup 은 통과로 읽힌다(항목 3). 저장소 설정은 `delete_branch_on_merge: false`, 브랜치 규칙 없음이다.
+
+### 설치: 사전 릴리스 빌드 (오너 결정 A)
+
+S6 는 U75 · U78 이 머지된 뒤의 사전 릴리스(`v0.1.4-rc.1`)에서 돈다. 안정 formula 는 건드리지 않는다. 아래 brew 단계는 모두 실행 전이다(NOT VERIFIED).
+
+1. 버전 PR: sangsoe 저장소에 `package.json` 의 `version` 을 `0.1.4-rc.1` 로 올리는 PR 을 land 한다. 릴리스 workflow 는 태그가 `v` + `package.json` 버전과 다르면 멈춘다(`.github/workflows/release.yml:30-40`).
+2. 태그: 그 PR 의 머지 커밋에 `v0.1.4-rc.1` 을 달아 push 한다. 버전에 `-` 가 있으면 workflow 가 `prerelease=true` 로 정하고(`release.yml:42-47`) `gh release create … --prerelease` 로 낸다(`release.yml:100-101`). 확인: `gh release view v0.1.4-rc.1 --json isPrerelease` 가 `true`, 릴리스 run 의 smoke 단계가 `ok tree: … (sangsoe 0.1.4-rc.1)` 를 찍는다.
+3. tap: `JeongJaeSoon/homebrew-tap` 에 새 파일 `Formula/sangsoe-rc.rb`(class `SangsoeRc`)를 더하는 PR 하나. 내용은 지금의 `Formula/sangsoe.rb` 와 같고 셋만 다르다: `url` 은 `…/releases/download/v0.1.4-rc.1/sangsoe-0.1.4-rc.1.tar.gz`, `sha256` 은 릴리스의 `.sha256` asset(내려받은 tarball 로 다시 계산해 같은지 본다), 그리고 `conflicts_with "sangsoe", because: "both install the sangsoe command"`. `Formula/sangsoe.rb` 는 0.1.3 그대로 둔다. tap 의 workflow 는 agent-guard formula 에만 반응해 이 PR 에서는 CI 가 돌지 않는다.
+4. 설치(세션 밖 터미널에서, 오너 또는 오케스트레이터):
+   - `brew unlink sangsoe` → `brew install jeongjaesoon/tap/sangsoe-rc` → `sangsoe --version` 이 `sangsoe 0.1.4-rc.1`. `conflicts_with` 가 unlink 만으로 풀리지 않으면 README Uninstall 순서대로 0.1.3 을 지운다(저장소 · 설정은 남는다).
+   - `sangsoe install`: wrapper 가 `SANGSOE_ROOT` 를 `opt/sangsoe-rc/libexec` 로 넘기므로(`core/install/host.ts:46-50`) Claude marketplace 와 Orca plugin 이 그 경로로 다시 등록되고 Orca 는 `approval waits — fingerprint <지문 id>` 를 낸다.
+   - 승인: 리드가 버전 PR 의 리뷰를 `sangsoe review record --pr <버전 PR> --head <리뷰한 head> --act-on 0 --reviewer claude-fresh-context` 로 기록 → 오케스트레이터가 `sangsoe plugin approve --dry-run` 으로 지문과 세 점검을 보고 → `sangsoe plugin approve` → `sangsoe doctor` 종료 코드 0, `orca plugin: local.sangsoe 0.1.4-rc.1, running`.
+   - 떠 있던 Claude 세션은 다시 띄운다. 설치본과 버전이 다른 MCP 서버는 `start_unit` 이 `server_stale` 로 거부한다(결정 211).
+5. 되돌리기: S6 가 PASS 면 v0.1.4 안정판의 tap PR 이 `Formula/sangsoe.rb` 를 올리고 `Formula/sangsoe-rc.rb` 를 지운다. 설치본은 `brew uninstall sangsoe-rc` → `brew link sangsoe`(또는 `brew upgrade sangsoe`) → `sangsoe install` → 승인 → `sangsoe doctor`. FAIL 이면 같은 순서로 0.1.3 에 돌아간다.
+
+### 실행 전 조건
+
+| 조건 | 확인 명령 | 통과 규칙 |
+|---|---|---|
+| 설치본이 rc 다 | `sangsoe --version` · `sangsoe doctor` | `0.1.4-rc.1`, doctor 종료 코드 0 |
+| U75 · U78 이 그 빌드에 있다 | `git log --oneline v0.1.4-rc.1` 에 두 단위의 머지 커밋 | 둘 다 있음 |
+| 격리 | P2 "환경" 과 같다: 세션을 띄우기 직전마다 `CLAUDE_CODE_PLUGIN_DIRS` 가 `''`, 세션 transcript 의 `agent-skills:` skill 0 | 세 세션 모두 0 |
+| land 가 verdict 로 머지해도 되는 저장소 | `~/.config/sangsoe/config.json` 의 `verdict_merge_repos` 에 `JeongJaeSoon/sangsoe-smoke` | 있음. 지금은 없다: 오너가 S6 동안만 더하고 끝에 뺀다 |
+| pr-monitor 가 smoke 저장소를 본다 | 같은 파일의 `watch.repos`(또는 P2 처럼 scratch home 설정) | 있음. 지금은 `watch` 키가 없다 |
+| 고정물이 그대로다 | `gh pr view <3..6> -R JeongJaeSoon/sangsoe-smoke --json state,baseRefName,headRefOid` | 위 표와 같음, 넷 다 OPEN |
+
+### 단계
+
+각 단계의 "볼 것" 은 같은 넷을 읽는다. event 는 저장소를 읽기 전용으로 연다:
+
+```
+sqlite3 -readonly ~/.local/share/sangsoe/sangsoe.db "select seq, ts, type, after from event where seq > <앞 단계의 마지막 seq> and (subject like '%sangsoe-smoke%' or after like '%sangsoe-smoke%' or type in ('edge_added','edge_removed')) order by seq"
+sangsoe brief <리드 묶음>          # 크리티컬 패스 · 의존 · "왜 준비되지 않았나" 표 (패널 묶음 상세와 같은 모델)
+sangsoe graph critical --run <리드 Run> --lead <리드 묶음>
+orca plugin shot local.sangsoe --panel brief --width 360 --json
+```
+
+패널은 html 이라 `plugin shot --act` 로 묶음 상세를 열 수 없다(항목 8). 묶음 상세 화면은 오너가 한 번 눌러 연 상태로 shot 을 찍고, 못 찍은 단계는 `sangsoe brief <리드 묶음>` 출력으로 대신하고 그렇게 적는다.
+
+| # | 하는 일 (누가 · 명령 또는 도구) | 볼 것 | 통과 규칙 |
+|---|---|---|---|
+| 1 | 오케스트레이터를 smoke 저장소의 Orca worktree 에서 띄운다(`start_unit` 은 자식을 부모의 저장소에 연다, P2 "교차 저장소"). `run-create` → `item_create`(role lead) → `start_unit`(lead) | 리드 Run id, 리드 묶음 이름 | 리드가 smoke 저장소 worktree 에 열림 |
+| 2 | 리드가 항목 넷(A · B · C · D)을 `item_create` 하고 `start_unit` 으로 워커 넷을 연다. 워커마다 자기 worktree 에서 `git switch s6/<a·b·c·d>` 만 하고 push 하지 않는다. 브랜치 하나에 worktree 하나여야 한다 | `sangsoe monitor run pr` 두 라운드: 첫 라운드는 브랜치 worktree 에 PR 참조를 더하고(`core/detect/pr/round.ts:231`, `:327-344`), 다음 라운드가 `pr_opened{pr, task, base, head_sha}` 를 쓴다(`round.ts:220-230`) | `pr_opened` 넷, 각각 `task` 가 그 항목의 Task id 이고 서로 다름. `task` 없는 행만 있으면 FAIL(뒤 단계의 간선이 걸릴 곳이 없다) |
+| 3 | `stacked_on` 자동 생성(U75 G22): `sangsoe monitor run queue` 한 라운드 | `edge_added{pred: pr:jeongjaesoon/sangsoe-smoke#3, succ: item:<B task>, kind: stacked_on}` 과 #4 → C 의 행 | 두 행이 손 없이 생김. 행 꼴과 라운드 출력은 U75 머지 뒤 채운다. 생기지 않으면 FAIL 로 적고 오늘 있는 손 길로 이어 간다: `sangsoe graph sync --run <리드 Run> --stack jeongjaesoon/sangsoe-smoke#4=jeongjaesoon/sangsoe-smoke#3 --stack jeongjaesoon/sangsoe-smoke#5=jeongjaesoon/sangsoe-smoke#4`(`cli/commands/graph-sync.ts:24`) |
+| 4 | 리드가 `edge_add {pred: "jeongjaesoon/sangsoe-smoke#4", succ: "<D 의 iNNN>", kind: "after"}` | `edge_added{kind: after}` 한 행. `sangsoe brief <리드 묶음>` 의 의존 세 줄, 왜 표에 B(선행 #3, stacked_on, 열림) · C(선행 #4, stacked_on, 열림) · D(선행 #4, after, 열림, "선행 PR 머지를 기다린다", `core/graph/ready.ts:100`) | 세 행이 그 글로 나옴. 크리티컬 패스가 "없음" 이 아니고 이웃한 두 마디가 모두 간선으로 이어짐. 패널 shot 의 숫자가 `sangsoe brief` 와 같음 |
+| 5 | 리드(작성자 아님)가 네 PR 의 지금 head 에 verdict 를 남긴다: `sangsoe review record --repo JeongJaeSoon/sangsoe-smoke --pr <N> --head <sha> --act-on 0 --reviewer <리드 이름>` | `review_verdict` 넷 | 넷, 각 head 가 `gh pr view` 의 `headRefOid` 와 같음 |
+| 6 | 순서 가드: B 와 C 를 먼저 land 해 본다(머지하지 않게 `--dry-run`): `sangsoe land --repo JeongJaeSoon/sangsoe-smoke --pr 4 --dry-run --json`, `--pr 5` 도 | 거부 code `stack_order`, fix 가 `land jeongjaesoon/sangsoe-smoke#3 first` (`core/land/land.ts:169-172`). `land_failed` 행은 dry run 이라 없다 | 둘 다 `stack_order` 이고 #3 을 이름. **알려진 결함**: 0.1.3 까지의 land 는 GRAPH 가 쓰는 마디 이름(`pr:…` · `item:…`)을 읽지 못해 이 거부가 나지 않는다(`land.ts:375-418` 이 맨 Task id 로 맞춘다). 리드가 U75 6번째 부분(결정 212)으로 넘겼다. rc 에 그 고침이 없으면 여기서 FAIL 이고, 실제 land 를 하면 B 가 `s6/a` 에 머지되므로 S6 를 멈춘다 |
+| 7 | D 의 `after`: `sangsoe land --repo JeongJaeSoon/sangsoe-smoke --pr 6 --dry-run --json` | land 는 `after` 간선을 읽지 않는다(`land.ts:385` 는 `stacked_on` 만). 거부가 아니면 결과의 action 을 적는다 | 관찰만: D 의 순서는 왜 행과 크리티컬 패스로 보이고 land 는 막지 않는다. 결과가 이와 다르면 그 글을 그대로 적는다 |
+| 8 | A 를 land: `sangsoe land --repo JeongJaeSoon/sangsoe-smoke --pr 3 --head <A head> --json`(P2 처럼 auto mode 가 막으면 오너의 `!` 줄) → `sangsoe monitor run pr` | action `merge_verdict`, `land_requested` · `pr_merged` 행, A Task 의 `task-update completed`(또는 "already completed"). 왜 표에서 B 의 행이 사라지고 C · D 는 남음. 크리티컬 패스가 A 를 뺌 | 머지 커밋이 main 에 있고 위가 모두 맞음 |
+| 9 | retarget: smoke clone 에서 `git push origin --delete s6/a`. 저장소가 머지 뒤 브랜치를 지우지 않고 land 도 지우지 않으므로 이 단계가 retarget 을 일으킨다. 그 뒤 `sangsoe monitor run pr` | `gh pr view 4 --json baseRefName,reviews` 의 base 가 `main`. `pr_base_changed{pr: …#4, from: s6/a, to: main}`(`round.ts:233-241`). 승인 해제: 위 `reviews` 의 APPROVED 가 DISMISSED 로 바뀜 | base 가 main 이고 `pr_base_changed` 한 행. 승인 해제는 네 PR 의 작성자가 같은 계정이라 작성자가 아닌 계정이 9 전에 B 를 승인했을 때만 잴 수 있다. 없으면 NOT VERIFIED(승인할 다른 계정 없음) |
+| 10 | G31 재리뷰 막음(U78): `sangsoe land --repo JeongJaeSoon/sangsoe-smoke --pr 4 --dry-run --json` · `sangsoe brief <리드 묶음>` · 패널 shot | U78 이 만드는 재리뷰 항목과 land 의 거부 글, 왜 표의 그 행. 행 꼴 · 거부 code · 글은 U78 머지 뒤 채운다 | B 가 새 head 의 리뷰 없이 머지 대기에 오르지 않음. 0.1.3 까지는 head 가 같으면 base 가 바뀌어도 head 에 묶인 verdict 가 그대로 통하고(`land.ts:424-429`), 거부는 `behind_base`(`land.ts:290-301`)뿐이다 |
+| 11 | `behind_base` 풀기: smoke clone 에서 `git switch s6/b && git merge origin/main && git push`(A 는 squash 로 들어가 같은 파일을 같은 내용으로 더하므로 충돌 없음) → `sangsoe monitor run pr` → `sangsoe land --pr 4 --dry-run --json` | 새 head. B 의 파일 목록. land 결과: U78 이 있으면 10 의 막음이 남고, 없으면 옛 verdict 가 patch-id 로 이어진다(`land.ts:437-444`, note `verdict inherited from … by patch-id`) | U78 의 막음이 새 head 에서도 남음. patch-id 승계로 바로 통과하면 FAIL(G31 이 뜻한 빈틈 그대로) |
+| 12 | 새 head 를 리뷰해 기록: 5 와 같은 `sangsoe review record … --pr 4 --head <새 head>` → land B: `sangsoe land --pr 4 --head <새 head> --json` → `sangsoe monitor run pr` | 재리뷰 항목이 닫힘(꼴은 U78 뒤 채움), `merge_verdict`, `pr_merged`. 왜 표: C 는 선행 #4 머지됨으로 충족, D 의 after 행이 사라짐. 크리티컬 패스 갱신 | 기록 하나로 막음이 풀리고 머지됨. D 의 왜 행이 0 |
+| 13 | C 를 같은 길로: `git push origin --delete s6/b` → 9 · 10 · 11 · 12 를 #5 에 | 9–12 와 같은 넷 | 9–12 와 같은 규칙 |
+| 14 | D 를 land: base 는 처음부터 main 이라 retarget 이 없다. `git switch s6/d && git merge origin/main && git push` → 리뷰 기록 또는 patch-id 승계 → `sangsoe land --pr 6 --head <head> --json` | `behind_base` 뒤 새 head. D 에는 재리뷰 항목이 생기지 않음(base 가 바뀌지 않았다). `merge_verdict`, `pr_merged`. 묶음의 왜 표 0행, 크리티컬 패스 "없음" | D 에 G31 막음이 없고 머지됨. 열린 S6 PR 0 |
+
+### 닫기 (P2 항목 10 과 같은 길)
+
+| 대상 | 명령 | 확인 |
+|---|---|---|
+| 워커 넷 · 리드 | 각자 `worker_done`, 남은 Dispatch 는 `orca orchestration worker-release --dispatch <id>` | `terminalState released` |
+| 터미널 | `orca terminal close` (오케스트레이터 · 빈 셸) | `ptyKilled true` |
+| worktree | `orca worktree rm --worktree id:<id> --delete-branch` 넷 + 리드 + 오케스트레이터 | 지우기 전 미커밋 0, main 밖 커밋 0 |
+| 원격 브랜치 | `git push origin --delete s6/c s6/d`(a · b 는 9 · 13 에서 지움) | `git ls-remote origin 's6/*'` 가 빈 출력 |
+| PR | 넷 다 머지됨. 실행이 중간에 멈추면 남은 PR 은 열린 채 두고 보고에 적는다 | `gh pr list -R JeongJaeSoon/sangsoe-smoke --state open` 에 S6 PR 없음 |
+| 설정 | `verdict_merge_repos` · `watch.repos` 에 더한 smoke 저장소를 뺀다 | `sangsoe doctor` 의 `tier-config` · `watch-repos` 행이 S6 전과 같음 |
+| Orca 저장소 등록 | Orca CLI 에 내리는 명령이 없어 남는다(준비 순서 1) | 보고에 적음 |
+| scratch clone | 휴지통으로 | 없음 |
+| 설치본 | 위 "설치" 5 | `sangsoe doctor` 종료 코드 0 |
