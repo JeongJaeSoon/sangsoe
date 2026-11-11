@@ -81,6 +81,8 @@ export interface Overview {
   readonly done: Table;
   /** Today's advisor calls and estimated cost (decision 200); absent on a day with none. */
   readonly advisorToday?: string;
+  /** Orchestrator and lead sessions restart_due names (design N1); absent when none. */
+  readonly restartDue?: readonly string[];
 }
 
 export interface GraphEdgeRow {
