@@ -17,21 +17,21 @@
 | 절 | 행 | implemented | partial | missing | cut | changed |
 |---|---|---|---|---|---|---|
 | 0. 오너의 고정 규칙 | 5 | 4 | 1 | 0 | 0 | 0 |
-| 1. 칸 배치 · Orca CLI · 설치 | 131 | 90 | 11 | 9 | 1 | 20 |
-| 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 79 | 17 | 2 | 6 | 11 |
-| 3. 데이터 · MCP · CLI · GRAPH | 80 | 53 | 9 | 1 | 3 | 14 |
-| 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 32 | 7 | 4 | 6 | 8 |
+| 1. 칸 배치 · Orca CLI · 설치 | 131 | 93 | 8 | 9 | 1 | 20 |
+| 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 84 | 11 | 2 | 6 | 12 |
+| 3. 데이터 · MCP · CLI · GRAPH | 80 | 55 | 7 | 1 | 3 | 14 |
+| 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 34 | 5 | 4 | 6 | 8 |
 | 5. 결정이 자르거나 바꾼 것 | 45 | 0 | 0 | 0 | 13 | 32 |
-| 합계 | 433 | 258 | 45 | 16 | 29 | 85 |
+| 합계 | 433 | 270 | 32 | 16 | 29 | 86 |
 
-`partial`·`missing` 61행은 갭 36개(`G1`–`G36`)로 묶인다. 제안은 NOW 8 · LATER 24 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
+`partial`·`missing` 48행은 갭 29개(`G1`–`G36` 에서 U77 이 고친 `G2`, U76 이 고친 `G13` `G16`, 결정 212 가 닫은 `G10`·`G11`·`G23`·`G29` 를 뺀 것)로 묶인다. 제안은 NOW 1 · LATER 24 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
 
 ## 0. 오너의 고정 규칙
 
 | 규칙 | 상태 | 코드 | 근거 |
 |---|---|---|---|
 | 데이터를 두 번 저장하지 않는다(사실마다 원본 하나, Orca·Claude plugin 의 데이터를 복사하지 않음) | implemented | `core/contract/define.ts:44`, `core/contract/define.ts:55`, `core/contract/contract.test.ts:97` | Orca 가 원본인 칸(`title`·`status`·`spec`·`deps`·`question`·`options`·`message_body`)은 페이로드 어디에 있든 `append` 가 거부한다. 캐시 예외는 부록 표의 셋이고 `pr_ref`·`gh_budget`·`gh_seen` 은 예약만 된 빈 표다(결정 186). `owner_text` 는 대화 기록이 지워질 때를 위한 보존 사본으로 설계가 이름을 붙인 예외다(`core/store/schema.ts:60`). |
-| Orca plugin · Orca CLI · Claude plugin 의 기본 기능을 최대한 쓴다 | partial | `core/orca/commands.ts:22`, `orca-plugin/timer.ts:20`, `claude-plugin/mcp/server.ts:198` | G1·G2·G3·G6 — 상주 감지는 Orca plugin worker 타이머, 에이전트 입구는 Claude Code plugin 의 stdio MCP 서버이고, 코어가 Orca 를 부르는 길은 명령 표 하나다. 다만 패널이 그 표 밖에서 Orca CLI 를 부르고(G1), 부록 "Orca 기능 활용 표" 가 쓴다고 적은 기능 몇이 코드에도 세션 글에도 없다(G2·G3·G6). |
+| Orca plugin · Orca CLI · Claude plugin 의 기본 기능을 최대한 쓴다 | partial | `core/orca/commands.ts:22`, `orca-plugin/timer.ts:20`, `claude-plugin/mcp/server.ts:198` | G1·G3·G6 — 상주 감지는 Orca plugin worker 타이머, 에이전트 입구는 Claude Code plugin 의 stdio MCP 서버이고, 코어가 Orca 를 부르는 길은 명령 표 하나다. 다만 패널이 그 표 밖에서 Orca CLI 를 부르고(G1), 부록 "Orca 기능 활용 표" 가 쓴다고 적은 기능 몇이 코드에도 세션 글에도 없다(G3·G6). |
 | 설계한 층 구성을 지킨다 | implemented | `test/layout.test.ts:76`, `test/layout.test.ts:84`, `test/layout.test.ts:126` | `docs/architecture.md` 의 층→디렉터리 표가 유일한 목록이고, 폴더 README 의 표지가 표와 다르거나 다른 칸이 `core/index.ts` 밖을 import 하면 시험이 실패한다. |
 | 토큰을 쓰는 것과 쓰지 않는 것이 나뉜다 | implemented | `test/layout.test.ts:84`, `test/layout.test.ts:111`, `test/layout.test.ts:118` | 판단 층(`claude-plugin/skills/`·`agents/`)만 토큰을 쓰고, 토큰 O 폴더에 코드가 있거나 토큰 X 폴더에 프롬프트가 있으면 실패한다. |
 | launch agent 금지(LaunchAgent·launchd 없음) | implemented | `test/layout.test.ts:135`, `core/gates/start.ts:134` | 트리에 property-list 작업 정의가 있으면 시험이 실패하고, 시작 가드가 `launchctl` 로 에이전트를 띄우는 명령을 막는다(`test/fixtures/hook-commands.jsonl` 의 deny 사례). 주기 일은 Orca plugin worker 타이머뿐이다. |
@@ -52,7 +52,7 @@
 | 배치표 ① Task·Run | design.html §2 배치표 | implemented | `core/orca/commands.ts:29`, `core/start/item.ts:33` | task-create 에 deps·parent·run |
 | 배치표 ① 게이트·메시지 | design.html §2 배치표 | implemented | `core/decision/open.ts:127`, `core/decision/release.ts:80` | 받은 편지함 사본 없음 |
 | 배치표 ① 워커·Dispatch·Auto-close | design.html §2 배치표 | changed (결정 197) | `core/start/start.ts:436`, `claude-plugin/agents/lead.md:39` | 모든 시작이 keep-open, 시작한 쪽이 worker-release |
-| 배치표 ① 카드 표시·참조·검색 | design.html §2 배치표 | partial | `core/orca/commands.ts:84` | G2 — 결정 193 이 `worktree set`·`reference list`·`search` 를 세션의 자기 글로 옮겼으나 agent·sangsoe skill 본문에 그 동사가 없다 |
+| 배치표 ① 카드 표시·참조·검색 | design.html §2 배치표 | implemented | `core/orca/commands.ts:84`, `claude-plugin/skills/deliver-ticket/SKILL.md:49`, `claude-plugin/skills/orchestrate/SKILL.md:32`, `claude-plugin/skills/intake/SKILL.md:33` | 결정 193 이 세션의 자기 글로 옮긴 `worktree set`·`reference list`·`search` 를 agent·sangsoe skill 본문이 부른다(U77 에서 고침, 줄은 U77 머지 기준). `test/session-verbs.test.ts` 가 지킨다 |
 | 배치표 ① plugin 켜기 | design.html §2 배치표 | implemented | `core/approve/approve.ts:191` | approve 만 enable 을 부른다 |
 | 배치표 ② 패널 | design.html §2 배치표 | implemented | `orca-plugin/orca-plugin.json:13`, `orca-plugin/main.ts:114` | 화면 내용은 2절 |
 | 배치표 ② 상태 표시줄 | design.html §2 배치표 | implemented | `orca-plugin/orca-plugin.json:20`, `orca-plugin/main.ts:83` | 클릭은 `sangsoe.open` |
@@ -79,10 +79,10 @@
 | 첫째 칸 메시지 | design.html 첫째 칸 | changed (결정 203) | `core/orca/commands.ts:57`, `core/orca/commands.ts:62` | 코어는 send·inbox, ask·reply 는 세션 글 |
 | 첫째 칸 워커·Dispatch 두 단계 | design.html 첫째 칸 | changed (결정 202) | `core/start/start.ts:381`, `core/start/start.ts:439` | create → 설정 파일 → worker-start keep-open |
 | 첫째 칸 Auto-close | design.html 첫째 칸 | changed (결정 197) | `claude-plugin/agents/orchestrator.md:45`, `core/reaper/round.ts:148` | REAPER 는 setup 셸 handle 하나만 닫는다 |
-| 첫째 칸 카드 표시·조회 | design.html 첫째 칸 | partial | `core/orca/commands.ts:75`, `core/reaper/round.ts:449` | G2 — ps·list·rm 은 있고 `worktree set` 은 세션 글에도 없다 |
+| 첫째 칸 카드 표시·조회 | design.html 첫째 칸 | implemented | `core/orca/commands.ts:75`, `core/reaper/round.ts:449`, `claude-plugin/skills/deliver-ticket/SKILL.md:49` | ps·list·rm 은 어댑터에 있고, `worktree set` 은 워커가 PR 을 열 때 자기 카드에 쓴다(U77 에서 고침) |
 | 첫째 칸 포트 | design.html 첫째 칸 | implemented | `core/reaper/live.ts:10`, `core/orca/adapter.ts:343` | 비로컬 호스트 답은 거부 |
 | 첫째 칸 참조 | design.html 첫째 칸 | partial | `core/detect/pr/round.ts:102`, `core/detect/pr/round.ts:340` | G4 — add·find 는 있고(시작 때 `references` 를 붙이는 길은 `core/start/start.ts:475`) `reference remove` 행이 없다 |
-| 첫째 칸 검색 | design.html 첫째 칸 | partial | `claude-plugin/skills/general/recall/SKILL.md:22` | G2 — 결정 193 으로 세션 글이 됐고 ③ 의 일반 스킬 `recall` 은 부르지만 역할 agent·sangsoe skill 본문에는 없다 |
+| 첫째 칸 검색 | design.html 첫째 칸 | implemented | `claude-plugin/skills/general/recall/SKILL.md:22`, `claude-plugin/skills/intake/SKILL.md:33`, `claude-plugin/skills/orchestrate/SKILL.md:68` | 결정 193 으로 세션 글이 됐다. 일반 스킬 `recall` 과, 오너 원문 찾기(`intake`)·재시작 뒤 앞 세션 찾기(`orchestrate`)가 `--index-status` 가 켜졌을 때만 부른다(U77 에서 고침) |
 | 첫째 칸 진단 | design.html 첫째 칸 | implemented | `core/detect/resource/round.ts:21` | resource-monitor |
 | 첫째 칸 plugin 켜기 | design.html 첫째 칸 | implemented | `core/approve/approve.ts:67`, `core/approve/approve.ts:165` | 종료 코드 3 의 두 사유를 가른다 |
 | 첫째 칸 자동화 안 씀 | design.html 첫째 칸 | implemented | `core/orca/commands.ts:22` | automations 행 없음 |
@@ -200,9 +200,9 @@
 | orca-monitor | design.html §3 monitor 다섯 | implemented | `core/detect/orca/judge.ts:130`, `core/detect/orca/mail.ts:125` | 결정 196 |
 | pr-monitor | design.html §3 monitor 다섯 | implemented | `core/detect/pr/round.ts:473`, `core/detect/pr/reviews.ts:37` | 캐시는 프로세스 메모리(결정 186) |
 | 타이머 멈춤 감지 | design.html §3 monitor 다섯 | implemented | `core/detect/queue/stall.ts:33`, `orca-plugin/main.ts:164` | |
-| N1 재시작 감지와 인계 | design.html §3 복구와 운영 규칙 여덟 | partial | `core/session/restart-due.ts:18`, `core/session/session-start.ts:63` | G10 — `restart_due` 뷰는 몸체가 있으나 시험 밖에서 부르는 곳이 없다. 오케스트레이터 글은 "`restart_due` 가 오면" 을 기다리지만 그것을 알리는 코드가 없다 |
+| N1 재시작 감지와 인계 | design.html §3 복구와 운영 규칙 여덟 | changed (결정 212) | `core/session/restart-due.ts:18`, `core/brief/build.ts:532`, `core/brief/panel.ts:57`, `core/session/session-start.ts:63` | brief 와 상태 표시줄 B 가 역할마다 마지막 오케스트레이터·리드 세션의 `restart_due` 를 보인다. "인계 저장됨" 은 보이지 않는다: 인계는 Orca 메시지이고 brief 는 우편함을 읽지 않는다(결정 212 ①) |
 | N2 main 감시와 동결 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/detect/pr/round.ts:418`, `core/land/land.ts:164` | |
-| N3 깨움 확인 | design.html §3 복구와 운영 규칙 여덟 | partial | `core/detect/orca/judge.ts:204` | G11 — `wake_unconfirmed` 를 쓰기만 하고 한 단계 위로 올리는 코드가 없다 |
+| N3 깨움 확인 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/detect/orca/judge.ts:204`, `core/detect/orca/round.ts:103` | 읽히지 않은 줄이 간 곳의 다음 칸에 notify escalation 으로 한 번, `status` 로 올린다. 오케스트레이터 칸은 줄로 남는다(결정 212 ②) |
 | N4 머신 재시작 복구 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/recover/recover.ts:21`, `core/detect/orca/judge.ts:99` | |
 | N5 릴리스 묶음 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/graph/flows/ship-batch.toml:17`, `core/graph/flows/ship-batch.toml:30` | |
 | N6 리뷰 의뢰 기록 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/session/review-ask.ts:41` | 리마인드 뷰는 다음 행 |
@@ -210,7 +210,7 @@
 | N7 감시 범위 필터 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/detect/pr/config.ts:30`, `core/detect/pr/round.ts:494` | |
 | N8 보고 주소 규칙 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/gates/report-address.ts:20` | |
 | 현황 1단계 | design.html §3 오너가 보는 것 | implemented | `core/brief/build.ts:133`, `core/brief/render.ts:35` | |
-| 묶음 상세 2단계 | design.html §3 오너가 보는 것 | partial | `core/brief/build.ts:297`, `orca-plugin/panel/view.ts:544` | G13 — 상태별 절이 그래프 위에 온다. 시안 순서로 옮기기는 결정 199 ⑥ 이 남겼다 |
+| 묶음 상세 2단계 | design.html §3 오너가 보는 것 | implemented | `core/brief/build.ts:297`, `orca-plugin/panel/view.ts:545` | G13 고침(U76, 결정 213, 줄 번호는 U76 기준): 패널은 시안 순서대로 요약 수치 → 의존 그래프 → 왜 준비되지 않았나 → 간선 → 상태별 절 → 최근 전환 → 접힌 완료. 글은 지금 꼴을 지킨다(결정 213 ④) |
 | 항목 상세 3단계 | design.html §3 오너가 보는 것 | partial | `core/brief/build.ts:541`, `orca-plugin/panel/view.ts:578` | G14 — 대화 기록 위치(세션 id·메시지 uuid)가 없다 |
 | 줌 보조 화면 | design.html §3 오너가 보는 것 | missing | `orca-plugin/panel/view.ts:600` | G15 — 결정 92 ③ 의 별도 보기가 없다 |
 | 상태 표시줄 항목 | design.html §3 오너가 보는 것 | implemented | `core/brief/panel.ts:57`, `orca-plugin/main.ts:83` | 결정 170 |
@@ -220,8 +220,8 @@
 | 표 지금 오너가 할 일 | design.html §3 현황 보고는 표 네 절이다 | implemented | `core/brief/build.ts:51`, `core/brief/build.ts:277` | |
 | 표 진행 중 | design.html §3 현황 보고는 표 네 절이다 | implemented | `core/brief/build.ts:52`, `core/brief/build.ts:189` | |
 | 표 보류 | design.html §3 현황 보고는 표 네 절이다 | implemented | `core/brief/build.ts:53`, `core/brief/build.ts:239` | |
-| 완료 최근 7일 접힌 목록 | design.html §3 현황 보고는 표 네 절이다 | partial | `orca-plugin/panel/view.ts:220`, `core/brief/render.ts:46` | G16 — 패널에는 있고 채팅 글에는 창 길이 줄뿐이며 `--done` 옵션이 없다. 글에 새 부분을 더하는 일은 결정 199 ⑥ 이 다음 패널 단위로 남겼다 |
-| 묶음 0개 안내 줄 | design.html §3 현황 보고는 표 네 절이다 | partial | `orca-plugin/panel/view.ts:209` | G16 — 패널에만 있고 글 렌더러에는 없다 |
+| 완료 최근 7일 접힌 목록 | design.html §3 현황 보고는 표 네 절이다 | implemented | `orca-plugin/panel/view.ts:221`, `core/brief/render.ts:41`, `cli/commands/brief.ts:37` | G16 고침(U76, 결정 213, 줄 번호는 U76 기준): 글은 건수 줄로 접고 `sangsoe brief [<묶음>] --done` 이 같은 행을 표로 편다 |
+| 묶음 0개 안내 줄 | design.html §3 현황 보고는 표 네 절이다 | implemented | `orca-plugin/panel/view.ts:209`, `core/brief/render.ts:53` | G16 고침(U76, 결정 213, 줄 번호는 U76 기준): 글도 진행 중 절 아래에 패널 문장의 앞 두 문장을 둔다 |
 | 상태 일곱과 읽기 상태 | design.html §3 상태와 용어 | implemented | `core/contract/transitions.ts:10`, `core/brief/item_status.ts:75` | 예정·준비됨·진행 중·막힘·보류·완료·취소, 검증 대기(결정 181), PR 모름·닫힘(결정 178) |
 | 플래그 넷 | design.html §3 상태와 용어 | implemented | `core/brief/build.ts:555`, `core/brief/item_status.ts:202` | 결정 필요·오류·확인 필요·근거 부족 |
 | 역할 표 GRAPH | design-appendix 역할과 완료 판정 표 | implemented | `core/graph/edit.ts:113`, `core/detect/queue/round.ts:66` | |
@@ -255,7 +255,7 @@
 | 저장소 위생과 설치 | design-appendix 게이트와 원칙 | implemented | `test/hooks-registered.test.ts:23` | |
 | 게이트가 담은 가정 여섯 | design-appendix 게이트가 담은 가정 | implemented | `core/gates/pressure.ts:20`, `core/approve/review-verdict.ts:74` | 가정을 다시 재는 절차는 코드 밖 |
 | 패널 index 현황 | design-appendix 패널 화면 | partial | `orca-plugin/panel/view.ts:180` | G21 — "내 지시는 어디까지 갔나" 접힘 구역이 없다 |
-| 패널 group 묶음 상세 | design-appendix 패널 화면 | partial | `orca-plugin/panel/view.ts:454`, `orca-plugin/panel/view.ts:544` | G13 — SVG DAG 는 있고 절 순서는 결정 199 ⑥ 이 남겼다 |
+| 패널 group 묶음 상세 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:454`, `orca-plugin/panel/view.ts:545` | G13 고침(U76, 결정 213, 줄 번호는 U76 기준): SVG DAG 와 시안의 절 순서 |
 | 패널 item 항목 상세 | design-appendix 패널 화면 | changed (결정 136) | `orca-plugin/panel/view.ts:578` | 버튼은 추천대로·다른 답·완료 셋. 대화 기록 위치는 G14 |
 | 패널 zoom | design-appendix 패널 화면 | missing | `orca-plugin/panel/view.ts:600` | G15 |
 | 패널 머리 행과 탭 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:607`, `orca-plugin/panel/view.ts:626` | 결정 169 |
@@ -325,7 +325,7 @@
 | CLI recover·verify-tier·monitor run·migrate | design.html 배치표 | implemented | `cli/commands/recover.ts:15`, `cli/commands/monitor.ts:29` | |
 | CLI decision·item new | design-appendix 결정 루프 | implemented | `cli/commands/decision.ts:26`, `cli/commands/item-new.ts:70` | |
 | CLI graph add·remove·ready·why·expand·critical·impact | design-appendix GRAPH: 모듈과 CLI | implemented | `cli/commands/graph-add.ts:11`, `cli/commands/graph-why.ts:15` | |
-| CLI graph sync | design-appendix GRAPH: 모듈과 CLI | partial | `cli/commands/graph-sync.ts:22`, `core/graph/sync.ts:28` | G22 — `stacked_on` 은 호출자가 준 stack 사실로만 더하는데 queue-monitor 는 stack 없이 부른다(`core/detect/queue/round.ts:66`). base 가 바뀐 PR 은 목록만 내고 land 재요청을 하지 않는다 |
+| CLI graph sync | design-appendix GRAPH: 모듈과 CLI | partial | `cli/commands/graph-sync.ts:22`, `core/graph/sync.ts:28` | G22 — queue-monitor 는 `pr_opened` 의 head·base 로 `stacked_on` 을 스스로 더한다(`core/graph/sync.ts:35`, `core/detect/queue/round.ts:66`, 결정 212 ③). 남은 것: base 가 바뀐 PR 은 목록만 내고 land 재요청을 하지 않는다 |
 | CLI graph skip | design-appendix 신호 흐름 | changed (결정 195) | `cli/commands/graph-skip.ts:11` | |
 | CLI graph(인자 없음)·priority set·owner-text redact | design.html 의존 관리, design-appendix sqlite 스키마 | cut (결정 160) | `core/store/store.ts:420` | LATER — 오너가 우선순위나 원문 지우기를 요청한 첫 경우 |
 | CLI hook·reap run·resource record·models·version | design-appendix 신호 흐름 | implemented | `cli/commands/hook.ts:29`, `cli/commands/reap.ts:27` | 설계 본문에 이름이 없는 셸 입구 |
@@ -355,7 +355,7 @@
 | 뷰 owner_action·item_extra·item·evidence·edge | design-appendix sqlite 스키마 | changed (결정 160) | `core/graph/facts.ts:1`, `core/brief/item_status.ts:222` | 이름 있는 함수 없이 같은 event 를 접는다 |
 | 뷰 decision·owner_todo·item_timeline·edge_ok·ready·flow_gap·group_brief·group_items·restart_due | design-appendix sqlite 스키마 | implemented | `core/store/views/decision.ts:11`, `core/graph/ready.ts:213` | restart_due 를 부르는 쪽은 G10 |
 | 뷰 item_status 의 🚨 orphan_extra | design-appendix sqlite 스키마 | missing | `core/brief/item_status.ts:222`, `core/contract/views.ts:90` | G24 — 주석에 이름만 있고 판정이 없다 |
-| 뷰 done_blockers | design-appendix sqlite 스키마 | partial | `core/graph/flow.ts:311` | G23 — 함수는 있으나 시험 밖에서 부르는 곳이 없어 완료 전환 거부가 걸리지 않는다 |
+| 뷰 done_blockers | design-appendix sqlite 스키마 | implemented | `core/graph/flow.ts:311`, `core/detect/pr/round.ts:165`, `core/owner/done.ts:47`, `core/gates/done-blockers.ts:12` | Task 를 닫는 세 자리(pr-monitor 의 닫기, 패널의 완료, 역할 세션의 `task-update --status completed`)가 막는 것을 적어 거부한다(결정 212 ④) |
 | 뷰 ask_due | design-appendix sqlite 스키마 | cut (결정 161) | `core/contract/views.ts:182` | 시그니처만. LATER 조건은 2절 N6 |
 | 소유 PR·Run·Task·게이트·대화 기록 | design-appendix 데이터 소유 | implemented | `core/detect/pr/round.ts:1`, `core/decision/open.ts:137` | |
 | 소유 부가 정보·간선·결정 키 | design-appendix 데이터 소유 | implemented | `core/store/schema.ts:111` | event 만 정본 |
@@ -365,7 +365,7 @@
 | Run 범위 다섯 곳 | design-appendix 데이터 소유 | partial | `core/graph/edit.ts:192` | G24 — 넷째(고아 부가 정보 표시와 REAPER 의 거둠)가 없다 |
 | 불변식 event 인덱스 | design-appendix 데이터 소유 | partial | `core/store/schema.ts:54` | G26 — `edge_*` 의 pred 표현식 인덱스가 없다 |
 | 불변식 owner_text·edge DAG·ready·크리티컬 패스·notify·owner_todo·counter | design-appendix 데이터 소유 | implemented | `core/store/schema.ts:14`, `core/graph/critical.ts:100` | |
-| 불변식 item 전환 | design-appendix 데이터 소유 | partial | `core/contract/transitions.ts:19`, `core/store/store.ts:364` | G23·G24 — 허용 쌍 19 는 강제, done_blockers 미적용과 orphan_extra 없음 |
+| 불변식 item 전환 | design-appendix 데이터 소유 | partial | `core/contract/transitions.ts:19`, `core/store/store.ts:364` | G24 — 허용 쌍 19 는 강제, done_blockers 는 닫는 세 자리에서 적용(결정 212 ④), orphan_extra 없음 |
 | 불변식 decision | design-appendix 데이터 소유 | partial | `core/decision/open.ts:64`, `core/decision/answer.ts:57` | G25 — 키 유일·닫힘 순서는 있고 다시 묻기(`:r<n>`)가 없다 |
 | 선행 노드 종류·모름과 없음 | design-appendix 간선과 ready 계산 | implemented | `core/graph/edit.ts:26`, `core/graph/ready.ts:88` | |
 | 📅 → 🟢 쓰는 쪽 없음·왜 표 | design-appendix 간선과 ready 계산 | implemented | `core/graph/ready.ts:186`, `core/graph/notify-ready.ts:1` | |
@@ -373,7 +373,7 @@
 | 틀 TOML·펼치기·dry-run | design-appendix 흐름 틀 형식 | implemented | `core/graph/flow.ts:132`, `core/graph/flow.ts:217` | |
 | ship-change 틀 | design-appendix 흐름 틀 형식 | changed (결정 126) | `core/graph/flows/ship-change.toml:41` | |
 | ship-batch 틀·owner 단계·건너뛰기 이유 | design-appendix 흐름 틀 형식 | implemented | `core/graph/flows/ship-batch.toml:15`, `core/graph/edit.ts:174` | |
-| 틀 항목 완료 조건 | design-appendix 흐름 틀 형식 | partial | `core/graph/flow.ts:311` | G23 |
+| 틀 항목 완료 조건 | design-appendix 흐름 틀 형식 | implemented | `core/graph/flow.ts:311`, `core/gates/done-blockers.ts:12` | 흐름 뿌리는 단계가 다 있고 끝나고 PR 이 머지돼야 닫힌다(결정 212 ④) |
 | 크리티컬 패스·영향 범위 | design-appendix 크리티컬 패스, 영향 범위 | implemented | `core/graph/critical.ts:58`, `core/graph/critical.ts:137` | |
 | GRAPH 상주 안 함 | design-appendix GRAPH: 모듈과 CLI | implemented | `core/graph/index.ts:5` | |
 
@@ -398,7 +398,7 @@
 | 흐름 3 worker_done·worker-release | design.html §5 흐름 3 | implemented | `claude-plugin/agents/worker.md:23`, `claude-plugin/agents/lead.md:39` | 결정 175·197 |
 | 흐름 3 머지 전 🚧·pr_ready_to_merge | design.html §5 흐름 3 | implemented | `core/brief/item_status.ts:155`, `core/detect/pr/round.ts:391` | |
 | 흐름 3 머지 확인 → completed | design.html §5 흐름 3 | implemented | `core/land/github.ts:248`, `core/detect/pr/round.ts:200` | |
-| 흐름 3 deploys_after 항목의 🔍 | design.html §5 흐름 3 | partial | `core/verify/evidence.ts:50`, `core/graph/ready.ts:137` | G29 — 후속 준비는 stage 기록으로 막는다. 머지된 항목에 🔍 를 다는 `mergedItemMark` 는 있으나 시험 밖에서 부르는 곳이 없다 |
+| 흐름 3 deploys_after 항목의 🔍 | design.html §5 흐름 3 | implemented | `core/verify/evidence.ts:50`, `core/brief/item_status.ts:216`, `core/graph/ready.ts:137` | 후속 준비는 stage 기록으로 막고, 머지된 항목은 dev 칸과 통과한 dev 증거가 없으면 🔍 다(결정 212 ⑤) |
 | 흐름 3 main 빨강이면 동결 | design.html §5 흐름 3 | implemented | `core/land/land.ts:165`, `core/detect/pr/round.ts:457` | |
 | 흐름 3 REAPER 표시 → 정리·삭제 전 검사·rm·Docker | design.html §5 흐름 3 | implemented | `core/reaper/round.ts:388`, `core/reaper/docker.ts:25` | 결정 194 |
 | 흐름 3 라운드 시각·pr_merged 힌트 | design.html §5 흐름 3 | implemented | `core/detect/queue/stall.ts:35`, `orca-plugin/reaper/round.ts:10` | |
@@ -409,7 +409,7 @@
 | 경계 다섯 | design.html §5 경계마다 무엇이 오가나 | implemented | `cli/commands/hook.ts:51`, `core/orca/adapter.ts:291` | hook·MCP·worker·Orca CLI·두 plugin |
 | 실패 stack_order·review_timing·cross_lead·stack_bottom·overlap_order·unknown_is_not_ready·merge_suggests_close·precheck_blocks_send·repo_level_main | design-appendix 실패 → 방지 장치 → 회귀 시험 | implemented | `core/graph/ready.ts:133`, `test/graph/regressions.test.ts:20` | 장치와 시험이 모두 있다 |
 | 실패 retarget_approval | design-appendix 실패 → 방지 장치 → 회귀 시험 | partial | `core/land/land.ts:440`, `core/land/land.test.ts:322` | G31 — head 가 다르면 거부·patch-id 승계는 있고 재리뷰 항목을 blocks 로 만드는 코드가 없다 |
-| 실패 early_done·prod_gate | design-appendix 실패 → 방지 장치 → 회귀 시험 | partial | `core/graph/flow.ts:311`, `test/graph/flow.test.ts:124` | G23 — done_blockers 가 전환을 거부하지 않는다 |
+| 실패 early_done·prod_gate | design-appendix 실패 → 방지 장치 → 회귀 시험 | implemented | `core/graph/flow.ts:311`, `test/graph/flow.test.ts:124`, `test/graph/done-close-g23.test.ts` | 닫는 세 자리가 done_blockers 로 거부한다(결정 212 ④) |
 | 분류 바로 답·읽기·범위·시각 대기 | design-appendix 지시 분류 표 | changed (결정 162) | `claude-plugin/skills/intake/SKILL.md:18`, `claude-plugin/skills/intake/SKILL.md:32` | owner_class 줄 없이, 범위는 Orca send |
 | 분류 새 일·오너 판단·열린 결정의 답 | design-appendix 지시 분류 표 | implemented | `core/start/item.ts:33`, `core/decision/open.ts:45` | |
 | 지시가 흐르는 그림 | design-appendix 지시가 흐르는 그림 | changed (결정 162) | `core/session/record.ts:85`, `core/store/schema.ts:60` | |
@@ -502,7 +502,7 @@
 | G | 갭 | 제안 | 이유 · 다시 볼 조건 |
 |---|---|---|---|
 | G1 | 패널이 `terminal create`·`plugin open` 을 어댑터 밖에서 부른다 | LATER | 명령 표 대조(`orca-commands`)가 이 두 줄을 보지 못한다. Orca 가 그 인자를 바꾼 첫 버전에서 패널 호출을 `ORCA_COMMANDS` 표에 올린다 |
-| G2 | 결정 193 이 세션 글로 옮긴 `worktree set`·`reference list`·`search` 가 agent·skill 본문에 없다 | NOW | 결정 193 ④ 가 "세션이 자기 글로 부른다" 고 적었고 오너의 고정 규칙(Orca 내장 기능 최대 사용)이 있다. 카드 상태 표시(`worktree set`)는 오너가 Orca 에서 보는 화면이다. 고칠 것은 lead·worker 글 몇 줄이다 |
+| G2 | 결정 193 이 세션 글로 옮긴 `worktree set`·`reference list`·`search` 가 agent·skill 본문에 없다 | NOW | 결정 193 ④ 가 "세션이 자기 글로 부른다" 고 적었고 오너의 고정 규칙(Orca 내장 기능 최대 사용)이 있다. 카드 상태 표시(`worktree set`)는 오너가 Orca 에서 보는 화면이다. 고칠 것은 lead·worker 글 몇 줄이다. U77 에서 고쳤다: agent 셋과 `deliver-ticket`·`orchestrate`·`intake` 가 세 동사를 부르고 `test/session-verbs.test.ts` 가 지킨다 |
 | G3 | Orca plugin storage 를 쓰지 않는다 | LATER | 지금 패널은 매번 store 와 Orca 에서 읽어 잃는 상태가 없다. 패널이 다시 열 때 잃으면 안 되는 화면 상태가 생기면 |
 | G4 | `reference remove` 행이 없다 | LATER | 붙인 참조를 떼야 하는 첫 경우(잘못 붙인 티켓) |
 | G5 | 매니페스트는 읽기 능력만 선언하고 패널은 쓰기 CLI 를 부른다 | LATER | Orca 가 trusted-worker 의 CLI 호출에도 능력 선언을 요구하게 되면 |
@@ -510,26 +510,26 @@
 | G7 | Orca 연동 우회 둘(세션 조작 "모름" 응답 `agent_session_operation_unknown`, 기존 터미널에 Dispatch)이 없다 | LATER | 그 오류 코드나 실패가 관측된 첫 경우 |
 | G8 | 남는 파일 표의 브리프·리드 기록 경로, 압박 이력, 실행 로그 폴더를 쓰는 코드가 없다 | DROP | 브리프는 Orca Task spec, 리드 기록은 Orca 메시지와 event 가 원본이라 파일 사본은 이중 저장이 된다. 압박 이력은 G17 과 함께 다시 본다 |
 | G9 | formula 를 이 저장소에서 확인할 수 없다 | LATER | 탭 저장소를 대조하는 릴리스 점검 단위에서 |
-| G10 | `restart_due` 를 부르는 쪽이 없다(N1) | NOW | 설계가 지어졌다고 적은 복구 규칙이고, 오케스트레이터 글이 이 신호를 기다린다. 재현: 시험 밖 호출자 0 |
-| G11 | `wake_unconfirmed` 를 한 단계 위로 올리지 않는다(N3) | NOW | 설계가 지어졌다고 적은 복구 규칙이다. 깨움이 실패하면 아무도 모른다 |
+| G10 | `restart_due` 를 부르는 쪽이 없다(N1) | 닫힘(결정 212 ①) | 설계가 지어졌다고 적은 복구 규칙이고, 오케스트레이터 글이 이 신호를 기다린다. 재현: 시험 밖 호출자 0 |
+| G11 | `wake_unconfirmed` 를 한 단계 위로 올리지 않는다(N3) | 닫힘(결정 212 ②) | 설계가 지어졌다고 적은 복구 규칙이다. 깨움이 실패하면 아무도 모른다 |
 | G12 | resource-monitor 의 누수 검사가 Docker 만 본다 | LATER | Docker 밖의 누수(프로세스·compose·worktree)가 처음 관측되면 |
-| G13 | 묶음 상세의 절 순서가 시안과 다르다 | NOW | 결정 199 ⑥ 이 "다음 패널 단위의 일" 로 남겼다. 다시 볼 조건이 아니라 예정된 일이라 G16 과 한 단위로 |
+| G13 | 묶음 상세의 절 순서가 시안과 다르다 | 고침(U76) | 결정 199 ⑥ 이 "다음 패널 단위의 일" 로 남겼다. 그래프 · 왜 · 간선 뒤에 상태별 절과 최근 전환이 온다(`test/panel/group-199.test.ts`) |
 | G14 | 항목 상세에 대화 기록 위치가 없다 | LATER | reflect 나 오너가 항목에서 대화로 가야 하는 첫 경우 |
 | G15 | 줌 보조 화면이 없다 | DROP | 결정 92 가 기본이 아닌 별도 보기로 낮췄고 시안 파일도 저장소에 없다. 오너가 다시 원하면 새 결정으로 |
-| G16 | 채팅 글 현황에 완료 7일 목록·묶음 0개 안내가 없다 | NOW | 결정 199 ⑥ 이 `sangsoe brief` 글에 새 부분을 더하는 일을 다음 패널 단위로 남겼다. G13 과 한 단위로 |
+| G16 | 채팅 글 현황에 완료 7일 목록·묶음 0개 안내가 없다 | 고침(U76) | 결정 199 ⑥ 이 `sangsoe brief` 글에 새 부분을 더하는 일을 다음 패널 단위로 남겼다. 글은 `--done` 으로 목록을 펴고 묶음 0개면 패널과 같은 안내 줄을 둔다(`test/brief/brief-text-199.test.ts`) |
 | G17 | 압박 게이트가 기다릴 순서를 알려 주지 않고 맞추는 무거운 작업이 셋뿐이다 | LATER | 압박 거부 뒤 같은 명령이 되풀이된 것이 관측되면 |
 | G18 | 스킬 크기 상한 시험과 hook 호출당 비용 측정이 없다 | LATER | 스킬이 상한을 넘은 첫 PR, 또는 hook 지연이 체감되면 |
 | G19 | 화면 언어 설정이 없다 | DROP | 오너가 한 사람이고 한국어를 쓴다. 다른 언어 사용자가 생기면 새 결정으로 |
 | G20 | 패널에 그래프 들여쓰기 대체와 Markdown 저장 버튼이 없다 | LATER | SVG 가 그려지지 않는 환경이 관측되거나 오너가 저장을 요청하면 |
 | G21 | 현황에 "내 지시는 어디까지 갔나" 접힘 구역이 없다 | LATER | 오너 지시를 항목으로 따라가야 하는 첫 경우(owner_class 와 함께, G28) |
-| G22 | `stacked_on` 간선이 자동으로 생기지 않고 base 변경 PR 의 land 재요청이 없다 | NOW | 흐름 3 과 실패 표의 stack_order 가 기대는 길이다. 재현: queue-monitor 가 `syncGraph` 를 stack 없이 부르고(`core/detect/queue/round.ts:66`) `relandPrs` 는 세기만 한다. 손으로 가는 길은 있다: `deliver-ticket` skill 이 `stacked_on` 간선을 걸라고 하고 land 가 간선으로 순서를 지킨다(`core/land/land.ts:385`). 그래서 빠지는 것은 세션이 간선을 잊은 경우의 자동 보정이다 |
-| G23 | `done_blockers` 가 완료 전환을 거부하지 않는다 | NOW | 실패 표의 early_done·prod_gate 방지 장치이고 설계가 지어졌다고 적었다. 재현: 시험 밖 호출자 0. 설계가 거부할 자리로 둔 `item_transition` 입구는 결정 160 이 짓지 않았으므로, 고치는 단위는 Task 를 닫는 자리(pr-monitor 의 `closeTask`, `core/owner/done.ts`, 리드가 직접 부르는 Orca `task-update`) 가운데 어디서 막을지부터 정한다 |
+| G22 | `stacked_on` 간선이 자동으로 생기지 않고 base 변경 PR 의 land 재요청이 없다 | NOW | 흐름 3 과 실패 표의 stack_order 가 기대는 길이다. 재현: queue-monitor 가 `syncGraph` 를 stack 없이 부르고(`core/detect/queue/round.ts:66`) `relandPrs` 는 세기만 한다. 손으로 가는 길은 있다: `deliver-ticket` skill 이 `stacked_on` 간선을 걸라고 하고 land 가 간선으로 순서를 지킨다(`core/land/land.ts:385`). 그래서 빠지는 것은 세션이 간선을 잊은 경우의 자동 보정이다. 결정 212 ③ 이 자동 `stacked_on` 을 지었고, ⑥ 이 land 가 GRAPH 의 `pr:`·`item:` 노드 이름을 읽게 고쳤다(그 전에는 간선이 순서를 지키지 않았다). land 재요청이 남았다 |
+| G23 | `done_blockers` 가 완료 전환을 거부하지 않는다 | 닫힘(결정 212 ④) | 실패 표의 early_done·prod_gate 방지 장치이고 설계가 지어졌다고 적었다. 재현: 시험 밖 호출자 0. 설계가 거부할 자리로 둔 `item_transition` 입구는 결정 160 이 짓지 않았으므로, 고치는 단위는 Task 를 닫는 자리(pr-monitor 의 `closeTask`, `core/owner/done.ts`, 리드가 직접 부르는 Orca `task-update`) 가운데 어디서 막을지부터 정한다 |
 | G24 | `orphan_extra`(고아 부가 정보의 🚨 와 REAPER 거둠)가 없다 | LATER | Orca 에 Run 을 지우는 명령이 없어 고아가 생기기 어렵다. Orca 가 Run 삭제를 갖거나 Task 가 사라진 첫 경우 |
 | G25 | 닫힌 결정을 다시 묻는 길(`:r<n>`)이 없다 | LATER | 오너가 닫힌 결정을 다시 열어 달라고 한 첫 경우 |
 | G26 | `edge_*` 의 pred 표현식 인덱스가 없다 | DROP | 지금 규모에서 차이가 없고 영향 범위 계산은 메모리에서 접는다. 느린 질의가 관측되면 새로 연다 |
 | G27 | `signal` 의 네 종류를 쓰는 곳이 없다 | LATER | 그 종류를 남겨야 하는 판단(reflect 의 측정)이 sangsoe 로 옮겨질 때 |
 | G28 | `owner_class` 계약과 표시를 지우는 길이 쓰이지 않은 채 남았다 | LATER | 결정 162 의 조건: 오너 발언 hook 이 seq 를 맥락에 붙이는 단위 |
-| G29 | dev 증거 없이 머지된 deploys_after 항목에 🔍 를 달지 않는다 | NOW | 흐름 3 이 적은 표시이고, 배포 단계가 남은 항목이 이것으로 오너에게 보인다. 재현: `mergedItemMark` 의 시험 밖 호출자 0(G23 과 같은 꼴: 함수는 있고 연결이 없다). 지금의 🔍 (`core/brief/item_status.ts:202`)는 증거가 있는지만 보고 dev 단계는 보지 않으므로 이것을 덮지 않는다 |
+| G29 | dev 증거 없이 머지된 deploys_after 항목에 🔍 를 달지 않는다 | 닫힘(결정 212 ⑤) | 흐름 3 이 적은 표시이고, 배포 단계가 남은 항목이 이것으로 오너에게 보인다. 재현: `mergedItemMark` 의 시험 밖 호출자 0(G23 과 같은 꼴: 함수는 있고 연결이 없다). 지금의 🔍 (`core/brief/item_status.ts:202`)는 증거가 있는지만 보고 dev 단계는 보지 않으므로 이것을 덮지 않는다 |
 | G30 | 깨울지를 event 의 `needs` 칸이 아니라 판정마다 정한다 | LATER | 깨움이 빠지거나 넘친 첫 경우에 `needs` 로 모은다 |
 | G31 | retarget 뒤 재리뷰 항목을 blocks 로 만들지 않는다 | LATER | base 를 바꾼 PR 이 리뷰 없이 머지 대기에 오른 첫 경우 |
 | G32 | 재개 뒤 대기를 다시 붙이라는 안내가 없다 | LATER | Orca 가 깨움을 밀어 주므로 지금은 필요가 없다. 재시작 뒤 메시지를 놓친 첫 경우 |

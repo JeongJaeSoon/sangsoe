@@ -74,7 +74,7 @@ test("the delegate gate lets the orchestrator read each sangsoe resource its age
   const servers = Object.keys((JSON.parse(read("claude-plugin/.mcp.json")) as { mcpServers: object }).mcpServers);
   const named = [...read("claude-plugin/agents/orchestrator.md").matchAll(/resource `([a-z_]+)`/g)].map((m) => m[1] ?? "");
   assert.ok(named.length > 0, "orchestrator.md names no resource");
-  const role: GateFacts = { role: () => "orchestrator", load: () => ({ level: "ok", reasons: [] }), ownOpenPrs: () => undefined, readScript: () => undefined };
+  const role: GateFacts = { role: () => "orchestrator", load: () => ({ level: "ok", reasons: [] }), ownOpenPrs: () => undefined, readScript: () => undefined, doneBlockers: () => [] };
   const verdict = (tool: string, input: Record<string, unknown>) =>
     evaluate({ tool, input, cwd: "/work/acme", subagent: false }, role).decision;
   // The agent text names a resource, not its server: the first call is a list with no server.

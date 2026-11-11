@@ -325,11 +325,13 @@ export function doneBlockers(input: ViewInput, task: string, by: DoneBy = {}): s
     const finished = t?.status === "completed" || (t?.status === "failed" && t.result === "cancelled");
     if (!finished) out.push(`open_child: ${c.alias ?? c.task} (${c.step})`);
   }
+  // A closed PR whose task later merged another PR was replaced, not abandoned.
+  const landed = new Set([...facts.prs.values()].filter((p) => p.merged).flatMap((p) => [...p.tasks]));
   for (const p of facts.prs.values()) {
     const bound = [...p.tasks].filter((t) => scope.includes(t));
     if (bound.length === 0 || p.merged) continue;
     if (!p.closed) out.push(`open_pr: ${p.pr}`);
-    else for (const t of bound) if (!(tasks.get(t)?.status === "failed" && tasks.get(t)?.result === "cancelled")) out.push(`closed_pr: ${p.pr} (그 항목을 이유와 함께 취소한다)`);
+    else for (const t of bound) if (!landed.has(t) && !(tasks.get(t)?.status === "failed" && tasks.get(t)?.result === "cancelled")) out.push(`closed_pr: ${p.pr} (그 항목을 이유와 함께 취소한다)`);
   }
   return out;
 }

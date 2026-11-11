@@ -11,6 +11,7 @@ PreToolUse hook 한 번(이벤트당 프로세스 하나)이 여기 함수를 �
 | `pressure.ts` | `[gate:pressure]`: 부하가 warn·danger 일 때 무거운 시작(compose up · worktree 생성 · `start_unit`). 부하 판정은 `core/capacity` 의 `judgeLoad` 하나 |
 | `delegate.ts` | `[gate:delegate]`: 오케스트레이터 본 대화의 조율 밖 도구 호출 |
 | `self-land.ts` | `[gate:self-land]`: 역할 세션의 직접 `gh pr merge`, 열린 PR 을 land 요청 없이 둔 워커의 `worker_done`. 열린 PR 을 읽지 못한 `worker_done` 도 `READY-WAIT` 줄이 없으면 한국어 한 줄로 막는다(결정 201) |
+| `done-blockers.ts` | `[gate:done-blockers]`: 역할 세션의 `orca orchestration task-update --status completed` 를 `done_blockers` 가 남아 있으면 막고 막는 것을 적는다. 저장소나 그 Run 의 `task-list --full` 을 못 읽어도 막는다. 사람 세션(general)은 보지 않는다(결정 212) |
 | `merge.ts` | 합치기 deny > ask > allow, 이긴 단계의 사유를 모두 보존 |
 | `shell.ts` | Bash 명령을 단순 명령·단어·백그라운드·루프로 읽는 작은 파서 |
 | `facts.ts` | 게이트가 물을 때만 읽는 사실: 역할(`agent_type` → Dispatch 머리말), 부하, 열린 PR(origin 을 `ssh -G` 로 푼 호스트와 `gh repo view` 로 `[HOST/]OWNER/REPO` 로 정하고, fork 는 upstream 에서 센다. 읽기는 모두 hook 시간 안의 12초 예산을 나눠 쓰고, 넘으면 모름이다), 스크립트 본문 |

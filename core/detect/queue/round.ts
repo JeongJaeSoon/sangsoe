@@ -63,7 +63,7 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   const core = d.core;
 
   if (core) {
-    const s = syncGraph(core, input.orca);
+    const s = syncGraph(core, input.orca, [], { infer: true });
     calls.push(`graph sync: added ${s.added.length}, reland ${s.relandPrs.length}, dangling ${s.dangling.length}, refused ${s.refused.length}`);
   } else calls.push("would call graph sync");
 

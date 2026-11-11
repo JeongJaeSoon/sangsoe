@@ -1,12 +1,12 @@
 import type { OrcaSnapshot } from "../contract/views.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { addEdgeTo } from "./edit.ts";
-import { foldFacts } from "./facts.ts";
+import { edgeId, type Facts, foldFacts, type PrFact } from "./facts.ts";
 import { itemRef, prNode } from "./nodes.ts";
 
 // `graph sync` (decision 50): queue-monitor calls it after detector signals pile up. Detectors only write
-// signals; GRAPH turns them into edges. pr_opened does not carry a PR's base, so the caller (which reads
-// GitHub) passes the stack facts it saw: which open PR sits on which other PR.
+// signals; GRAPH turns them into edges. queue-monitor infers stacks from pr_opened's head and base rows
+// (decision 212 ③); `graph sync --stack` still passes a stack fact by hand.
 
 export interface StackFact {
   readonly pr: string;
@@ -25,14 +25,45 @@ export interface SyncResult {
   readonly refused: readonly string[];
 }
 
-export function syncGraph(deps: Pick<CoreDeps, "store">, snapshot: OrcaSnapshot, stacks: readonly StackFact[] = []): SyncResult {
+const repoOf = (pr: string) => pr.slice(0, pr.indexOf("#"));
+const isOpen = (p: PrFact) => p.opened && !p.merged && !p.closed;
+
+/**
+ * The stacks pr-monitor's rows already show: an open PR whose base branch is the head branch of exactly
+ * one other open PR in the same repository. A branch two open PRs share says nothing.
+ */
+export function inferStacks(facts: Facts): StackFact[] {
+  const heads = new Map<string, string[]>();
+  for (const p of facts.prs.values()) {
+    if (!isOpen(p) || p.head === undefined) continue;
+    const k = `${repoOf(p.pr)}\n${p.head}`;
+    heads.set(k, [...(heads.get(k) ?? []), p.pr]);
+  }
+  const out: StackFact[] = [];
+  for (const p of facts.prs.values()) {
+    if (!isOpen(p) || p.base === undefined) continue;
+    const on = heads.get(`${repoOf(p.pr)}\n${p.base}`) ?? [];
+    if (on.length === 1 && on[0] !== p.pr) out.push({ pr: p.pr, base: on[0] as string });
+  }
+  return out;
+}
+
+/**
+ * `infer` adds the stacks inferStacks reads, except an edge a session removed: removing it is the
+ * session's call, and the next round must not put it back. Stacks the caller names are added as given.
+ */
+export function syncGraph(deps: Pick<CoreDeps, "store">, snapshot: OrcaSnapshot, stacks: readonly StackFact[] = [], o: { infer?: boolean } = {}): SyncResult {
   const facts = foldFacts(deps.store.events());
   const added: string[] = [];
   const refused: string[] = [];
-  for (const s of stacks) {
+  const inferred = o.infer ? inferStacks(facts).map((s) => ({ ...s, inferred: true })) : [];
+  for (const s of [...stacks.map((x) => ({ ...x, inferred: false })), ...inferred]) {
     const pr = facts.prs.get(s.pr);
     if (!pr || pr.merged || pr.closed) continue;
     for (const task of pr.tasks) {
+      // Two PRs of one task stacked on each other order themselves by their base; an edge would make the lower one wait on itself.
+      if (s.inferred && facts.prs.get(s.base)?.tasks.has(task)) continue;
+      if (s.inferred && facts.removals.has(edgeId(prNode(s.base), itemRef(task), "stacked_on"))) continue;
       const r = addEdgeTo(deps, snapshot, { pred: prNode(s.base), succ: itemRef(task), kind: "stacked_on" });
       if (r.ok && r.value.status === "added") added.push(`${prNode(s.base)} → ${itemRef(task)}`);
       if (!r.ok) refused.push(`${s.pr}: ${r.refusal.code} ${r.refusal.reason}`);
