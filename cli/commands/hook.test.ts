@@ -61,7 +61,7 @@ test("a normal call prints nothing and records nothing", () => {
   assert.deepEqual(readdirSync(home), []);
 });
 
-test("unreadable input exits non-zero, which onFailure block turns into a refusal", () => {
+test("unreadable input exits 2, a refusal", () => {
   const home = mkdtempSync(join(tmpdir(), "sangsoe-hook-"));
   const r = hook(home, "not json");
   assert.equal(r.code, 2);
