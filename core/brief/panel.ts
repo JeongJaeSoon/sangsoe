@@ -55,11 +55,13 @@ export const STATUS_TEXT_MAX = 64;
  * has anything to do.
  */
 export function statusBarItem(o: Overview): StatusBarItem {
-  const text = `✨ SANGSOE  🚧 ${o.summary.blocked} · 결정 ${o.todo.decisions} · 🔄 ${o.summary.doing}`;
+  // Design N1: the owner types /clear, so a session due for a restart is the owner's to see.
+  const restart = o.restartDue?.length ?? 0;
+  const text = `✨ SANGSOE  🚧 ${o.summary.blocked} · 결정 ${o.todo.decisions} · 🔄 ${o.summary.doing}${restart > 0 ? ` · ♻️ ${restart}` : ""}`;
   return {
     text: text.slice(0, STATUS_TEXT_MAX),
-    tone: o.todo.total > 0 ? "danger" : "neutral",
-    tooltip: `sangsoe: 내가 할 일 ${o.todo.total} (결정 ${o.todo.decisions} + 할 일 ${o.todo.other})`,
+    tone: o.todo.total > 0 || restart > 0 ? "danger" : "neutral",
+    tooltip: [`sangsoe: 내가 할 일 ${o.todo.total} (결정 ${o.todo.decisions} + 할 일 ${o.todo.other})`, ...(o.restartDue ?? [])].join("\n"),
   };
 }
 

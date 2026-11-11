@@ -138,6 +138,30 @@ test("merge_suggests_close (§9 X4): merge confirmed → pr_merged, the PR item'
   assert.equal(w.calls.length, 1, "and closes nothing twice");
 });
 
+test("done_blockers refuse the close: a second PR of the same item still open keeps its Task open (decision 212 ④)", async () => {
+  const w = world();
+  w.link(7, "task_item", "blocked");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#9", task: "task_item" } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
+  w.merged(7, SHA);
+  const r = await w.round();
+  assert.deepEqual(r.acts.map((a) => [a.ok, a.detail]), [[false, "done_blockers: open_pr: acme/api#9"]]);
+  assert.deepEqual(w.calls, [], "no task-update");
+  assert.equal(w.tasks.get("task_item")?.status, "blocked");
+  assert.ok(!r.written.some((x) => x.type === "item_transition"));
+});
+
+test("a Task Orca reports cancelled is left as it is when its PR merges", async () => {
+  const w = world();
+  w.link(7, "task_item", "cancelled" as never);
+  w.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
+  w.merged(7, SHA);
+  const r = await w.round();
+  assert.deepEqual(r.acts.map((a) => [a.ok, a.detail]), [[true, "already cancelled"]]);
+  assert.deepEqual(w.calls, []);
+});
+
 test("a released worker's Task is still found: the workspace's Dispatch comes from worker-list, and an owner's merge of it is linked", async () => {
   const w = world();
   w.link(7, "task_item", "blocked", "run_lead", true);
@@ -206,6 +230,16 @@ test("retarget_approval (pr_base_changed side): a new base is one row against th
   assert.deepEqual(r.written.map((x) => x.type), ["pr_base_changed"]);
   assert.deepEqual(w.rows("pr_base_changed")[0]?.payload, { pr: "acme/api#10", from: "feature-a", to: "main" });
   assert.deepEqual((await w.round()).written, []);
+});
+
+test("pr_opened records the head branch only when the head lives in the PR's own repository (decision 212 ③)", async () => {
+  const w = world();
+  w.link(11, "task_a", "dispatched");
+  w.link(12, "task_b", "dispatched");
+  w.routes[OPEN] = ok([listed(11), listed(12, { head: { sha: HEAD, ref: "feature-12", repo: { full_name: "someone/api" } } })]);
+  await w.round({ tier: () => null });
+  const heads = w.rows("pr_opened").map((e) => [e.payload.pr, e.payload.head ?? null]);
+  assert.deepEqual(heads, [["acme/api#11", "feature-11"], ["acme/api#12", null]]);
 });
 
 function mainRuns(w: ReturnType<typeof world>, sha: string, runs: Record<string, unknown>[], jobs = 3) {

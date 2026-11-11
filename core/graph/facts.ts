@@ -38,6 +38,10 @@ export interface PrFact {
   closed: boolean;
   /** Tasks the PR is attached to (pr_opened.task). */
   readonly tasks: Set<string>;
+  /** Its head branch when the head lives in the PR's own repository (pr_opened.head). */
+  head?: string;
+  /** Its base branch as last seen: pr_opened.base, then each pr_base_changed.to. */
+  base?: string;
 }
 
 export interface FlowRecord {
@@ -135,8 +139,13 @@ export function foldFacts(events: readonly StoredEvent[]): Facts {
         const x = pr(String(p.pr));
         x.opened = true;
         if (typeof p.task === "string") x.tasks.add(p.task);
+        if (typeof p.head === "string") x.head = p.head;
+        if (typeof p.base === "string" && x.base === undefined) x.base = p.base;
         break;
       }
+      case "pr_base_changed":
+        pr(String(p.pr)).base = String(p.to);
+        break;
       case "pr_merged":
         pr(String(p.pr)).merged = true;
         break;

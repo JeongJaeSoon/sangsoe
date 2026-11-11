@@ -573,5 +573,5 @@ test("one notify path: core/detect and the plugin's monitors reach notify only t
   assert.deepEqual(callers, ["core/detect/notice.ts"]);
   assert.deepEqual(files.filter((f) => /\.send\(/.test(readFileSync(f, "utf8"))), [], "no Orca send beside notify");
   const users = files.filter((f) => readFileSync(f, "utf8").includes("sendNotice("));
-  assert.deepEqual(users.sort(), ["core/detect/notice.ts", "core/detect/pr/round.ts", "core/detect/queue/round.ts"]);
+  assert.deepEqual(users.sort(), ["core/detect/notice.ts", "core/detect/orca/round.ts", "core/detect/pr/round.ts", "core/detect/queue/round.ts"]);
 });

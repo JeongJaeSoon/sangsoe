@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { dedupeKey, EVENTS, type ViewInput } from "../contract/index.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
+import { doneBlockers } from "../graph/flow.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
 import type { Store } from "../store/store.ts";
 import { DONE_EVIDENCE, ownerMarks } from "./marks.ts";
@@ -20,7 +21,7 @@ export interface OwnerDone {
  * effect (decision 181: a to-do closes on verification); the readers, not this, hold it there.
  */
 export async function ownerDone(
-  ports: { readonly orca: Pick<OrcaAdapter, "taskUpdate">; readonly store: Pick<Store, "append" | "appendOwnerAction"> },
+  ports: { readonly orca: Pick<OrcaAdapter, "taskUpdate">; readonly store: Pick<Store, "append" | "appendOwnerAction" | "events"> },
   input: ViewInput,
   facts: readonly OwnerItemFacts[],
   a: { readonly task: string; readonly session?: string },
@@ -42,6 +43,9 @@ export async function ownerDone(
     },
     text,
   );
+  // Decision 212 ④: the press is the owner_action the owner gate asks for; any other blocker refuses.
+  const blockers = doneBlockers({ ...input, events: store.events() }, f.task, { owner: true, ownerAction: action.seq });
+  if (blockers.length > 0) return refuse("done_blocked", `${f.alias} cannot be ✅ yet: ${blockers.join(" · ")}`, "clear what blocks it, then press 완료 again");
   const r = await orca.taskUpdate({ id: f.task, status: "completed", result: "owner_done" });
   if (!r.ok) return refuse("orca_error", `task-update ${f.task}: ${r.error.code} ${r.error.message}`, "press 완료 again once Orca answers");
   store.append({

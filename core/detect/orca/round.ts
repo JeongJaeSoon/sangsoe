@@ -1,6 +1,9 @@
-import { dedupeKey, EVENTS } from "../../contract/index.ts";
+import { dedupeKey, dedupeSegment, EVENTS } from "../../contract/index.ts";
 import type { GateRow, LocalRows, OrcaResult, WorkerRow, WorkerShow } from "../../contract/orca.ts";
-import type { MonitorDeps, Reading } from "../monitor.ts";
+import type { Act, MonitorDeps, Planned, Reading } from "../monitor.ts";
+import { runAbove, sendNotice } from "../notice.ts";
+
+type Notice = Parameters<typeof sendNotice>[1];
 import { isUnfinished, judgeOrca, keepLastRead, type Observed, ORCA_EVENT_TYPES, observe } from "./judge.ts";
 import { readRefusalHead, refusalPath } from "./mail.ts";
 
@@ -85,5 +88,76 @@ export async function orcaRound(d: MonitorDeps, signal: AbortSignal): Promise<Re
   const reads = { ps: value(ps), workers: workerRows, shows, runs, gates, inbox: mail, events, refusals };
   const reading = judgeOrca(reads, d.now(), d.config, previous);
   if (!signal.aborted) previous = keepLastRead(previous, observe(reads));
-  return reading;
+  const raise = await wakeRaises(d, reading.planned, signal);
+  return { ...reading, unseen: [...reading.unseen, ...raise.unseen], acts: [...(reading.acts ?? []), ...raise.acts] };
+}
+
+const TIER_SUFFIX = /:(worker|lead|orchestrator)$/;
+
+/**
+ * Design N3: an unread wake goes one tier up the receiving order, through notify's escalation under
+ * the told row's own key, so one condition reaches each tier once. The next tier is read from where
+ * the unread row went: a Dispatch's Run, or the Run above a Run. `status`, since the monitor holds no
+ * Dispatch (decision 197 ⑥). The orchestrator has no one above it in the order: the row stays the signal.
+ */
+async function wakeRaises(d: MonitorDeps, planned: readonly Planned[], signal: AbortSignal): Promise<{ acts: Act[]; unseen: string[] }> {
+  const acts: Act[] = [];
+  const unseen: string[] = [];
+  const wakes = planned.filter((e) => e.type === "wake_unconfirmed");
+  if (wakes.length === 0) return { acts, unseen };
+  const told = d.events({ type: "notified" });
+  const keys = new Set(told.flatMap((e) => (e.dedupe_key ? [e.dedupe_key] : [])));
+  const above = runAbove(d.orca);
+  for (const w of wakes) {
+    if (signal.aborted) break;
+    const msg = String((w.payload as { msg_id: string }).msg_id);
+    const row = told.find((e) => e.payload.msg_id === msg);
+    if (!row?.dedupe_key || !row.target) continue;
+    const tier = TIER_SUFFIX.exec(row.dedupe_key)?.[1];
+    if (tier === "orchestrator") continue;
+    const base = row.dedupe_key.replace(TIER_SUFFIX, "");
+    const to = String(row.payload.to);
+    let chain: Notice["chain"];
+    let next: Notice["to"];
+    if (to.startsWith("dispatch:")) {
+      if (keys.has(`${base}:${dedupeSegment("lead")}`)) continue;
+      const dispatch = to.slice("dispatch:".length);
+      const s = await d.orca.workerShow({ dispatch });
+      if (!s.ok || !s.value.runId) {
+        unseen.push(`Run of ${dispatch} for wake ${msg}`);
+        continue;
+      }
+      chain = { dispatch, leadRun: s.value.runId };
+      next = "lead";
+    } else {
+      if (keys.has(`${base}:${dedupeSegment("orchestrator")}`)) continue;
+      const run = to.slice("run:".length);
+      const a = await above(run);
+      if (a.kind !== "above") {
+        unseen.push(`Run above ${run} for wake ${msg}${a.kind === "top" ? ": none, its coordinator is no Dispatch" : ""}`);
+        continue;
+      }
+      chain = { leadRun: run, orchestratorRun: a.run };
+      next = "orchestrator";
+    }
+    const target = row.target;
+    acts.push({
+      what: `raise unread ${msg} (${to}) to ${next}`,
+      wake: true,
+      run: async (dd) => ({
+        ...(await sendNotice(dd, {
+          key: { target, dedupe_key: base },
+          to: next,
+          chain,
+          subject: `⏰ wake_unconfirmed: ${target}`,
+          body: `${msg} to ${to} is still unread after ${d.config.wakeMinutes} minutes.`,
+          escalate: true,
+          msgType: "status",
+          source: "orca-monitor",
+        })),
+        planned: [],
+      }),
+    });
+  }
+  return { acts, unseen };
 }

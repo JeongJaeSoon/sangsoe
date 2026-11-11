@@ -4,7 +4,7 @@ export type LoadVerdict = { level: "ok" | "warn" | "danger"; reasons: readonly s
 export type Decision = "allow" | "ask" | "deny";
 
 /** The four gates of appendix #gates, the start guard (decision 94 (마)) and the report-address shape check (N8). */
-export type GateName = "pressure" | "sleep-loop" | "delegate" | "self-land" | "start" | "report-address";
+export type GateName = "pressure" | "sleep-loop" | "delegate" | "self-land" | "start" | "report-address" | "done-blockers";
 
 export type Verdict = { decision: Decision; gate: GateName; reason: string };
 
@@ -32,6 +32,8 @@ export type Facts = {
   ownOpenPrs(): readonly OpenPr[] | undefined;
   /** A script file a command runs, so a start wrapped in a script is read too. */
   readScript(path: string): string | undefined;
+  /** done_blockers of a Task over the store and its Run's task list (the bound Run without `run`). */
+  doneBlockers(task: string, run?: string): readonly string[] | undefined;
 };
 
 /** null is "no opinion": the call goes on to Claude Code's own permission check. */
