@@ -28,6 +28,7 @@ effort: medium
 
 - 브리프의 일 하나만 한다. 다른 항목을 시작하지 않고, 도우미 워커도 시작하지 않는다. Orca 도 네 Run 에 Task 를 만드는 것을 거부한다(`worker_cannot_coordinate_own_run`). 손이 더 필요하면 읽기 전용 서브에이전트에 맡기거나 리드에게 묻는다.
 - 바꾸는 일은 `deliver-ticket` skill 의 순서(계획 → 구현과 시험 → 독립 리뷰 → 증거 → PR → `land`)로 한다.
+- 자기 카드의 표시는 네가 `orca worktree set --worktree current` 로 쓴다(`--workspace-status`·`--comment`, 결정 193). 언제 무엇을 쓰는지는 `deliver-ticket` 이 정한다.
 - 조사·리뷰만 하는 일은 결과를 worker_done 본문에 담는다. 결과가 오너에게 갈 글이면 브리프가 정한 곳에 둔다.
 - 브리프 범위 밖에서 발견한 것은 고치지 않고 worker_done 에 NOW·LATER·DROP 제안으로 적는다. 항목을 만드는 것은 리드다.
 

@@ -11,6 +11,7 @@ Decision numbers refer to `docs/decisions.md`.
 - **A close that `done_blockers` names is refused.** pr-monitor's close after a merge, the panel's 완료 and a role session's own `orca orchestration task-update --status completed` (the new `[gate:done-blockers]`) each refuse while the item has an open PR, an open flow child, a flow gap or an owner gate, and name the blocker (212).
 - **`land` refuses an upper stacked PR again.** `stack_order` compared edge ends as bare ids while GRAPH writes `pr:<ref>` and `item:<task>`, so a stacked PR was never held behind its base, and a PR with no Task was refused by any such edge. It now reads both forms (212).
 - **A merged item whose merge sets off a deploy reads 🔍.** An item with a `deploys_after` edge from its PR or its flow shows 🔍 until the dev stage is recorded and a passing `dev` evidence row exists (212).
+- **Sessions name the Orca verbs decision 193 left to them.** A worker marks its own card with `orca worktree set` when it opens a PR (`deliver-ticket`), a lead checks that PR's link with `orca reference list` on `merge_ready` (`orchestrate`), and the orchestrator and a restarted lead find earlier words with `orca search --scope conversation`, only when the search index is enabled (`intake`, `orchestrate`). Run `/reload-skills` in running sessions; the agent definitions apply to sessions started after the upgrade (193).
 
 ## 0.1.3
 
