@@ -18,13 +18,13 @@
 |---|---|---|---|---|---|---|
 | 0. 오너의 고정 규칙 | 5 | 4 | 1 | 0 | 0 | 0 |
 | 1. 칸 배치 · Orca CLI · 설치 | 131 | 90 | 11 | 9 | 1 | 20 |
-| 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 79 | 17 | 2 | 6 | 11 |
+| 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 83 | 13 | 2 | 6 | 11 |
 | 3. 데이터 · MCP · CLI · GRAPH | 80 | 53 | 9 | 1 | 3 | 14 |
 | 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 32 | 7 | 4 | 6 | 8 |
 | 5. 결정이 자르거나 바꾼 것 | 45 | 0 | 0 | 0 | 13 | 32 |
-| 합계 | 433 | 258 | 45 | 16 | 29 | 85 |
+| 합계 | 433 | 262 | 41 | 16 | 29 | 85 |
 
-`partial`·`missing` 61행은 갭 36개(`G1`–`G36`)로 묶인다. 제안은 NOW 8 · LATER 24 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
+`partial`·`missing` 57행은 열린 갭 34개(`G1`–`G36` 에서 U76 이 고친 G13 G16 을 뺀 것)로 묶인다. 제안은 NOW 6 · LATER 24 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
 
 ## 0. 오너의 고정 규칙
 
@@ -255,7 +255,7 @@
 | 저장소 위생과 설치 | design-appendix 게이트와 원칙 | implemented | `test/hooks-registered.test.ts:23` | |
 | 게이트가 담은 가정 여섯 | design-appendix 게이트가 담은 가정 | implemented | `core/gates/pressure.ts:20`, `core/approve/review-verdict.ts:74` | 가정을 다시 재는 절차는 코드 밖 |
 | 패널 index 현황 | design-appendix 패널 화면 | partial | `orca-plugin/panel/view.ts:180` | G21 — "내 지시는 어디까지 갔나" 접힘 구역이 없다 |
-| 패널 group 묶음 상세 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:454`, `orca-plugin/panel/view.ts:545` | G13 고침(U76, 결정 213): SVG DAG 와 시안의 절 순서 |
+| 패널 group 묶음 상세 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:454`, `orca-plugin/panel/view.ts:545` | G13 고침(U76, 결정 213, 줄 번호는 U76 기준): SVG DAG 와 시안의 절 순서 |
 | 패널 item 항목 상세 | design-appendix 패널 화면 | changed (결정 136) | `orca-plugin/panel/view.ts:578` | 버튼은 추천대로·다른 답·완료 셋. 대화 기록 위치는 G14 |
 | 패널 zoom | design-appendix 패널 화면 | missing | `orca-plugin/panel/view.ts:600` | G15 |
 | 패널 머리 행과 탭 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:607`, `orca-plugin/panel/view.ts:626` | 결정 169 |

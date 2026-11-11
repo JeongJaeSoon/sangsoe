@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import briefCommand from "../../cli/commands/brief.ts";
+import { fileURLToPath } from "node:url";
+import briefCommand, { brief } from "../../cli/commands/brief.ts";
 import { type BriefInput, briefText, buildBrief, panelView, renderMarkdown, tableWidths } from "../../core/index.ts";
 import { renderStage } from "../../orca-plugin/panel/view.ts";
 import { groupWorld } from "./group-world.ts";
@@ -62,6 +63,13 @@ test("0 groups: the text says how a group comes to be, the panel's line without 
   assert.ok(out.indexOf(line) > out.indexOf("### 진행 중"), "under 진행 중");
 });
 
-test("sangsoe brief takes --done as a flag", () => {
+test("sangsoe brief takes --done as a flag and hands it to the text", async () => {
   assert.deepEqual(briefCommand.options.done, { type: "boolean" });
+  const fix = (f: string) => fileURLToPath(new URL(`../fixtures/brief/${f}`, import.meta.url));
+  const values = { events: fix("sample.events.jsonl"), orca: fix("sample.orca.json"), now: "2026-11-10T12:00:00.000Z" };
+  const folded = await brief({ values, positionals: [] });
+  const open = await brief({ values: { ...values, done: true }, positionals: [] });
+  assert.ok(folded.ok && open.ok);
+  assert.doesNotMatch(String(folded.value), /### ✅ 완료 최근 7일/);
+  assert.match(String(open.value), /### ✅ 완료 최근 7일 2\n/);
 });
