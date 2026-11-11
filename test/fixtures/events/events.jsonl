@@ -19,6 +19,7 @@
 {"type":"item_extra_set","source":"lead:api","payload":{"task":"task_a1","exec_by":"worker","priority":"P1","waits_on":"reviewer"}}
 {"type":"item_ready","source":"queue-monitor","dedupe_key":"ready:task_b2:3f9a","payload":{"task":"task_b2"}}
 {"type":"item_transition","source":"lead:api","payload":{"task":"task_a1","from":"ready","to":"in_progress","reason":"worker-start --task"}}
+{"type":"item_retired","source":"core:item","dedupe_key":"item_retired:task_c3","payload":{"task":"task_c3","by":"owner","reason":"PR closed without a merge"}}
 {"type":"job_drift","source":"queue-monitor","payload":{"plugin":"sangsoe","expected":"sha256:aa","actual":"sha256:bb"}}
 {"type":"land_failed","source":"worker:u1","payload":{"pr":"acme/api#12","head_sha":"a1b2c3d","reason":"evidence_missing"}}
 {"type":"land_requested","source":"worker:u1","payload":{"pr":"acme/api#12","head_sha":"a1b2c3d"}}

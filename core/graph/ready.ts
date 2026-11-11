@@ -74,8 +74,17 @@ export type Hold =
   /** onHold: ⏸️ 보류 rather than 🚧, which needs both hold and a review trigger. */
   | { readonly by: "orca"; readonly onHold: boolean };
 
+/**
+ * Decision 223: a completed item retired while its PR is closed unmerged holds nothing and reads 🗑️.
+ * A reopened PR (or one merged later) is read again as it is: the retire stands only on a closed PR.
+ */
+export function retiredOf(t: ViewTask, facts: Facts): boolean {
+  return DONE(t) && facts.items.get(t.id)?.retired === true && taskPr(t, facts).state === "closed_unmerged";
+}
+
 export function holdOf(t: ViewTask, facts: Facts, gates: readonly ViewGate[]): Hold | null {
   if (DONE(t)) {
+    if (retiredOf(t, facts)) return null;
     const p = taskPr(t, facts);
     return p.state === "none" || p.state === "merged" ? null : { by: "pr", state: p.state, prs: p.prs };
   }
@@ -104,7 +113,7 @@ function holdRows(input: ViewInput, facts: Facts, t: ViewTask, item: string, hol
       const [predState, todo] = !s.known
         ? ["모름: PR 상태를 읽지 못했다", "PR 상태를 다시 읽는다(pr-monitor)"]
         : s.closed
-          ? ["머지 없이 닫힘", "리드: PR 을 다시 열거나 항목을 취소한다"]
+          ? ["머지 없이 닫힘", "리드: PR 을 다시 열거나 item_retire 로 항목을 거둔다"]
           : ["열림", "PR 머지를 기다린다"];
       return [{ item, pred: prNode(pr), kind: "pr" as const, predState, dangling: false, todo }];
     });

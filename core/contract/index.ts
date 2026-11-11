@@ -20,6 +20,7 @@ import gate_denied from "./events/gate_denied.ts";
 import item_created from "./events/item_created.ts";
 import item_extra_set from "./events/item_extra_set.ts";
 import item_ready from "./events/item_ready.ts";
+import item_retired from "./events/item_retired.ts";
 import item_transition from "./events/item_transition.ts";
 import job_drift from "./events/job_drift.ts";
 import land_failed from "./events/land_failed.ts";
@@ -110,6 +111,7 @@ export const EVENTS = {
   item_created,
   item_extra_set,
   item_ready,
+  item_retired,
   item_transition,
   job_drift,
   land_failed,

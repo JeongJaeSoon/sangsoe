@@ -54,6 +54,7 @@ export const OWN_TYPES = [
   "item_created",
   "item_extra_set",
   "item_ready",
+  "item_retired",
   "item_transition",
   "job_drift",
   "land_failed",

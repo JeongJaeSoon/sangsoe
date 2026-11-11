@@ -168,6 +168,10 @@ const ALLOWED = new Map<string, string>([
   // The reopen row S6 needed; the appendix and glossary take it when their next edit folds 216 in.
   ["event:pr_reopened:code-only", "216"],
   ["event-glossary:pr_reopened:code-only", "216"],
+  // The retire path for S6's leftovers; the appendix and glossary take it when their next edit folds 223 in.
+  ["event:item_retired:code-only", "223"],
+  ["event-glossary:item_retired:code-only", "223"],
+  ["cli:item retire:code-only", "223"],
 ]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };
@@ -190,8 +194,13 @@ test("every category reads a non-empty name list from both sides", () => {
   }
 });
 
+/** Tools built after design.html's last edit, each with its decision; design.html counts them when it next folds that decision in. */
+const TOOLS_NOT_IN_DESIGN = new Map([["item_retire", "223"]]);
+
 test("design.html states the MCP tool count the code has", () => {
-  assert.equal(statedCount, toolCode.size, `design.html #mcp says ${statedCount}, tools/ has ${toolCode.size}`);
+  for (const t of TOOLS_NOT_IN_DESIGN.keys()) assert.ok(toolCode.has(t), `${t} is not a tool any more`);
+  const stated = statedCount + TOOLS_NOT_IN_DESIGN.size;
+  assert.equal(stated, toolCode.size, `design.html #mcp says ${statedCount} (+${TOOLS_NOT_IN_DESIGN.size} not folded in), tools/ has ${toolCode.size}`);
 });
 
 test("every design/code name difference is a recorded decision", () => {
@@ -312,5 +321,5 @@ test("the judgment-layer check catches each way a name can be missing", () => {
 
 test("every decision the allow-list cites is written in decisions.md", () => {
   const decisions = read("docs/decisions.md");
-  for (const n of new Set(ALLOWED.values())) assert.match(decisions, new RegExp(`^${n}\\. \\*\\*`, "m"), `decision ${n}`);
+  for (const n of new Set([...ALLOWED.values(), ...TOOLS_NOT_IN_DESIGN.values()])) assert.match(decisions, new RegExp(`^${n}\\. \\*\\*`, "m"), `decision ${n}`);
 });
