@@ -46,6 +46,7 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
 ## 5. PR
 
 - 본문: 왜 · 범위 · 트레이드오프 · 영향 범위 · 검증(각 확인을 VERIFIED · NOT VERIFIED · INCONCLUSIVE 로). 어떤 리뷰를 돌렸는지 한 줄(리뷰 범위 줄).
+- PR 을 열면 자기 카드에 한 번 적는다: `orca worktree set --worktree current --workspace-status in-review --comment "<PR URL>"`. 카드는 오너가 Orca 에서 보는 한 방향 표시이고 원본이 아니다. 오너가 옮긴 카드는 다시 덮지 않는다. PR 과 항목의 연결(Orca 참조)은 pr-monitor 가 붙인다(결정 193).
 - 다른 열린 PR 에 기대는 변경이면 그 PR 위에 쌓는다. 의존은 `stacked_on` 간선이다.
 - 리뷰를 사람에게 부탁했으면 `review_ask_record` 로 남긴다.
 - 필수 CI 가 초록이고, 리뷰 스레드가 모두 풀리고, 독립 리뷰의 Act-on 이 0 일 때까지 따라간다. 기다릴 때는 백그라운드 명령의 완료 알림이나 Orca 메시지가 깨우게 한다.
