@@ -12,6 +12,13 @@ export interface GraphEdge {
   readonly kind: EdgeKind;
 }
 
+export interface GraphWhyEdge extends GraphEdge {
+  readonly predState: string;
+  /** A ✅-less end the lead resolves (decision 26): cancelled, or a PR closed without merge. */
+  readonly dangling: boolean;
+  readonly todo: string;
+}
+
 const bare = (ref: string) => (ref.startsWith("item:") ? ref.slice(5) : ref);
 
 export const graphRead = {
@@ -38,10 +45,10 @@ export const graphRead = {
     const order = (t: string) => facts.items.get(t)?.createdSeq ?? 1e9 + tasks.indexOf(t);
     return longestPath([...keep], preds, (t) => weightOf(facts.items.get(t)?.est) ?? 1, order).path;
   },
-  /** The unmet edges into `task` (trigger and hold rows left out). */
-  why(input: ViewInput, task: string): GraphEdge[] {
+  /** The unmet edges into `task` (trigger and hold rows left out), with the why table's state and to-do. */
+  why(input: ViewInput, task: string): GraphWhyEdge[] {
     return why(input, task)
       .rows.filter((r) => r.kind !== "trigger" && r.kind !== "hold" && r.kind !== "orca")
-      .map((r) => ({ pred: bare(r.pred), succ: task, kind: r.kind as EdgeKind }));
+      .map((r) => ({ pred: bare(r.pred), succ: task, kind: r.kind as EdgeKind, predState: r.predState, dangling: r.dangling, todo: r.todo }));
   },
 };
