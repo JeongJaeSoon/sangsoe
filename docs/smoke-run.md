@@ -68,7 +68,7 @@ P2: 오케스트레이터가 `run-create`(run_ba31feb8f9bc) → `item_create`(ta
 ```
 start_unit(orchestrator → lead) → {"kind":"started","taskId":"task_fa401bcde518","dispatchId":"ctx_08db458f8b2d","worktreeId":"…::~/orca/workspaces/smoke-repo/emperor","launch":{…}}
 start_unit(lead → worker) → {"kind":"started","taskId":"task_1f7ca673d92e","dispatchId":"ctx_50d97ec8bc47"}(worktree basketstar)
-(launch 의 모델 · effort 는 각 역할의 행 그대로: core/models/table.ts)
+(launch 의 모델 · effort 는 각 역할의 행 그대로: 돌린 판인 v0.1.0 의 core/models/table.ts)
 SANGSOE_REAL_RUN=run_ba31feb8f9bc SANGSOE_REAL_PARENT=<p2-orch> … → units 1 · complete 1 · removed after completion 0 · broken 0 ✔
 SANGSOE_REAL_RUN=run_7d1b870451e3 SANGSOE_REAL_PARENT=<emperor> … → units 1 · complete 1 · removed after completion 0 · broken 0 ✔
 ```
