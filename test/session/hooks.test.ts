@@ -439,6 +439,14 @@ test("handoff_save checks the four fields, sends one handoff to the caller's own
   assert.equal(!none.ok && none.refusal.code, "no_run");
 });
 
+test("decision 207: a worker-list miss over every Run (an unbound terminal) walks no Runs", async () => {
+  const w = createSessionWorld({ heldRun: null, dispatched: false });
+  const full = { next: "x", waiting: "없음", open_questions: "없음", reply_to: "없음" };
+  await handoffSave(w, full, `${w.dir}/src`);
+  assert.equal(w.calls().filter((c) => c[1] === "run-list").length, 0);
+  assert.equal(w.calls().filter((c) => c[1] === "worker-list").length, 1);
+});
+
 test("handoff_save from a session holding a Dispatch goes to that Dispatch's Run under its Task, not to run:<held>", async () => {
   // Orca: a sender with an active Dispatch may write only to that Dispatch's Run (dispatch_run_mismatch,
   // test/fixtures/orca-refusals.json), so a lead's own Run mailbox is out of its reach.

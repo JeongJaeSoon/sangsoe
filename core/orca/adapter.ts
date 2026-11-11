@@ -213,7 +213,8 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
       page,
       nonLocalId && ((row: T) => nonLocalId(row as Json)),
     );
-    return { ok: true, value: nextCursor ? { ...rows, nextCursor } : rows };
+    const source = isObject(v.scope) && typeof v.scope.source === "string" ? v.scope.source : undefined;
+    return { ok: true, value: { ...rows, ...(nextCursor ? { nextCursor } : {}), ...(source ? { scopeSource: source } : {}) } };
   }
 
   const jsonArray = (xs: readonly string[] | undefined) => (xs ? JSON.stringify(xs) : undefined);

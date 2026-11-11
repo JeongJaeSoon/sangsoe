@@ -47,6 +47,8 @@ export type LocalRows<T> = {
   truncated: boolean;
   /** Pass back as `cursor` for the next page (worker-list). */
   nextCursor?: string;
+  /** worker-list's `scope.source`: `flag`, `bound` (only the caller's bound Run) or `all`. */
+  scopeSource?: string;
 };
 
 export type WorktreeRow = {
