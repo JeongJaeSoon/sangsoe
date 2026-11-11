@@ -48,11 +48,7 @@ export const realFiles: Files = {
     }
   },
   write(path, text, opts) {
-    let target = path;
-    // A link whose target does not exist yet (a dotfile manager's) is followed too, not replaced.
-    for (let hops = 0; hops < 8 && lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink(); hops++) {
-      target = resolve(dirname(target), readlinkSync(target));
-    }
+    const target = linkTarget(path);
     mkdirSync(dirname(target), { recursive: true });
     let backup: string | undefined;
     let mode = 0o644;
@@ -68,8 +64,18 @@ export const realFiles: Files = {
     renameSync(tmp, target);
     return backup;
   },
-  remove: (path) => unlinkSync(path),
+  remove: (path) => unlinkSync(linkTarget(path)),
 };
+
+// The file a symlink chain ends at, even one that does not exist yet (a dotfile manager's link):
+// writes and removals go there and the owner's link stays.
+function linkTarget(path: string): string {
+  let target = path;
+  for (let hops = 0; hops < 8 && lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink(); hops++) {
+    target = resolve(dirname(target), readlinkSync(target));
+  }
+  return target;
+}
 
 export type Scope = "user" | "project" | "local";
 export const SCOPES: readonly Scope[] = ["user", "project", "local"];

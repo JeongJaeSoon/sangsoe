@@ -288,6 +288,10 @@ test("decision 221: a dangling symlink is followed, not replaced", async () => {
   assert.equal(r.code, 0, r.lines.join("\n"));
   assert.ok(lstatSync(t.settings).isSymbolicLink());
   assert.deepEqual(JSON.parse(readFileSync(real, "utf8")).permissions.allow, SANGSOE_RULES);
+  const u = removePermissions(t.host);
+  assert.equal(u.code, 0, u.lines.join("\n"));
+  assert.ok(lstatSync(t.settings).isSymbolicLink(), "uninstall keeps the owner's link");
+  assert.ok(!existsSync(real), "and removes the file sangsoe created behind it");
 });
 
 test("decision 221: a write that fails rolls the record back; a record out of shape removes nothing and throws nothing", async () => {

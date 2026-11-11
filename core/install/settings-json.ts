@@ -142,8 +142,8 @@ export function addRules(text: string, rules: readonly string[]): { text: string
 }
 
 /**
- * `text` without the last permissions.allow entry equal to each of `rules` (one copy each: an
- * earlier copy is the owner's), then without the keys in `created` that are left empty, putting
+ * `text` without the first permissions.allow entry equal to each of `rules` (one copy each: install
+ * adds only absent rules, so a later copy is one the owner added after it), then without the keys in `created` that are left empty, putting
  * `inner` (from addRules) back between the brackets that were empty. Returns which rules it found.
  * Undefined when the text does not parse or the result would not be the expected object.
  */
@@ -160,7 +160,7 @@ export function removeRules(
   const left = new Set(rules);
   const allowOf = () => member(member(scan(out), "permissions"), "allow");
   for (let a = allowOf(); a?.kind === "array"; a = allowOf()) {
-    const k = a.items.findLastIndex((n) => n.kind === "string" && left.has(n.value));
+    const k = a.items.findIndex((n) => n.kind === "string" && left.has(n.value));
     const hit = a.items[k];
     if (hit?.kind !== "string") break;
     removed.unshift(hit.value);
