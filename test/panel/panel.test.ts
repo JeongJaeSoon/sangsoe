@@ -25,7 +25,7 @@ import * as coreNs from "../../core/index.ts";
 import type { PanelCore } from "../../orca-plugin/core-link.ts";
 import { openCommand, openHandler, panelHandlers, parseAct, STATUS_UNKNOWN } from "../../orca-plugin/panel/requests.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
-import { back, current, down, drawnRowIds, type PanelView, renderStage, trail } from "../../orca-plugin/panel/view.ts";
+import { back, current, down, drawnRowIds, ERROR_LINE, errorNote, type PanelView, renderStage, trail } from "../../orca-plugin/panel/view.ts";
 import { createWorld } from "../decision/world.ts";
 import { ownerWorld } from "../owner/world.ts";
 
@@ -242,6 +242,40 @@ test("panel.open builds the terminal command itself; panel text never reaches th
   assert.equal(((await shell({ view: "brief", group: "g", item: "i001" })) as { ok: boolean }).ok, false, "a worktree that is not Orca's id form is not passed on");
   const failing = openHandler(async () => ({ ok: false, code: 1, out: "", err: "terminal refused" }), async () => ({ ok: true, value: { worktree: WT } }));
   assert.deepEqual(await failing({ view: "brief", group: "g", item: "i001" }), { ok: false, refusal: { code: "open_failed", reason: "terminal refused", fix: "run sangsoe brief g i001 in a terminal" } });
+});
+
+test("decision 205: an item whose worktree is gone opens to a no_worktree line; Orca's selector_not_found reaches neither the text nor the title", async () => {
+  const WT = "repo-1::/work/acme/api-i001";
+  // Orca's reply shape, recorded 2026-11-11 from `orca worktree show --worktree id:<gone> --json` (stdout, exit 1).
+  const envelope = JSON.stringify({
+    id: "r1",
+    ok: false,
+    error: {
+      code: "selector_not_found",
+      message: "selector_not_found",
+      data: { selector: `id:${WT}`, nextSteps: [`No Orca workspace matched the worktree selector "id:${WT}".`] },
+    },
+  });
+  const gone = openHandler(async () => ({ ok: false, code: 1, out: envelope, err: "" }), async () => ({ ok: true, value: { worktree: WT } }));
+  const r = (await gone({ view: "brief", group: "g", item: "i001" })) as { ok: false; refusal: { code: string; reason: string; fix: string } };
+  assert.equal(r.ok, false);
+  assert.equal(r.refusal.code, "no_worktree");
+  const note = errorNote(r.refusal);
+  assert.doesNotMatch(note, /selector/, "neither the line nor its title carries Orca's code or JSON");
+  assert.ok(note.includes(ERROR_LINE.no_worktree ?? "?"));
+
+  // A reply cut short by the exec cap does not parse; its code is still read and the raw text never goes on.
+  const cut = openHandler(async () => ({ ok: false, code: 1, out: envelope.slice(0, 90), err: "" }), async () => ({ ok: true, value: { worktree: WT } }));
+  const c = (await cut({ view: "brief", group: "g", item: "i001" })) as { ok: false; refusal: { code: string; reason: string; fix: string } };
+  assert.equal(c.refusal.code, "no_worktree");
+  const garbled = openHandler(async () => ({ ok: false, code: 1, out: '{"id":"r1","ok":false,"error":{"message":"selector_not_found', err: "" }), async () => ({ ok: true, value: { worktree: WT } }));
+  const g = (await garbled({ view: "brief", group: "g", item: "i001" })) as { ok: false; refusal: { code: string; reason: string; fix: string } };
+  assert.doesNotMatch(errorNote(g.refusal), /selector/, "stdout with no readable code is dropped, not shown");
+
+  const other = JSON.stringify({ ok: false, error: { code: "terminal_limit", message: "too many", data: { secret: "x" } } });
+  const busy = openHandler(async () => ({ ok: false, code: 1, out: other, err: "" }), async () => ({ ok: true, value: { worktree: WT } }));
+  const b = (await busy({ view: "brief", group: "g", item: "i001" })) as { ok: false; refusal: { code: string; reason: string } };
+  assert.deepEqual([b.refusal.code, b.refusal.reason], ["open_failed", "orca terminal create: terminal_limit"], "an Orca envelope leaves only its code");
 });
 
 test("decision 198: the core names an item's worktree from Orca's worker-list row, and no other stage has one", async () => {

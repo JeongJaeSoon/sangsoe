@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 // The sangsoe html panel (decision 92): three stages down and back, decision and 완료 buttons. Every
 // button is a plugin.request to the worker, which calls the core; the panel changes nothing itself.
+import { panelReads } from "./refresh.ts";
 import { STYLE } from "./style.ts";
 import {
   type Act,
@@ -15,7 +16,6 @@ import {
   openTarget,
   type PanelView,
   prunePending,
-  REFRESH_MS,
   type Refusal,
   renderError,
   renderStage,
@@ -25,7 +25,13 @@ import {
   trail,
 } from "./view.ts";
 
-type Frame = { plugin: { request(name: string, input?: unknown): Promise<unknown> } };
+type Frame = {
+  plugin: {
+    request(name: string, input?: unknown): Promise<unknown>;
+    /** The worker's `panels.post`; absent on an Orca without it. */
+    on?(event: string, fn: (payload: unknown) => void): unknown;
+  };
+};
 declare const orca: Frame;
 
 type Reply<T> = { ok: true; value: T } | { ok: false; refusal: { code: string; reason: string; fix: string } };
@@ -55,13 +61,23 @@ function mount(): void {
   // Owner items this panel pressed into ⏳ 검증 대기: their 완료 stays off until a reading drops them.
   const pending = new Set<string>();
   let lastOk = false;
+  // Readings now arrive every few seconds (decision 205): a reply older than the newest asked-for
+  // reading is dropped, so it cannot paint the stage the owner just left, and an unchanged page is
+  // not rewritten, so an opened fold, the menu and focus stay.
+  let asked = 0;
+  let painted = "";
   const draw = async (auto = false) => {
+    const n = ++asked;
     const r = (await orca.plugin.request("panel.brief", { ...current(stack), ...(auto ? { auto: true } : {}) }).catch(failed)) as Reply<PanelView>;
+    if (n !== asked) return;
     lastOk = r.ok;
     if (r.ok) prunePending(pending, r.value.todo);
     // The message sits under the header row, above the tabs or the back line.
     const html = r.ok ? renderStage(r.value, trail(stack), tab, where(), pending) : renderError(r.refusal, trail(stack), where());
-    root.innerHTML = html.replace("</header>", () => `</header>${note}`);
+    const page = html.replace("</header>", () => `</header>${note}`);
+    if (page === painted) return;
+    root.innerHTML = page;
+    painted = page;
   };
   const closeMenu = () => root.querySelector("details.menu")?.removeAttribute("open");
   const open = async (o: Open) => {
@@ -72,14 +88,17 @@ function mount(): void {
     else sayRefused(r.refusal);
     if (!r.ok || stale) await draw();
   };
-  // Decision 198: the panel re-reads on the status bar's interval and when it is shown again, so its
-  // band and status bar B read the same moment; a failed reading waits for 새로 고침.
-  const tick = () => {
-    const formOpen = [...root.querySelectorAll<HTMLElement>("tr.other")].some((f) => !f.hidden);
-    if (autoRefresh({ visible: document.visibilityState === "visible", lastOk, busy, formOpen })) void draw(true);
-  };
-  setInterval(tick, REFRESH_MS);
-  document.addEventListener("visibilitychange", tick);
+  // Decisions 198, 205: the panel re-reads a few seconds after the worker's store.changed push, when
+  // it is shown again, and on the status bar's interval; a failed reading waits for 새로 고침.
+  const reads = panelReads({
+    read: () => draw(true),
+    may: () => {
+      const formOpen = [...root.querySelectorAll<HTMLElement>("tr.other")].some((f) => !f.hidden);
+      return autoRefresh({ visible: document.visibilityState === "visible", lastOk, busy, formOpen });
+    },
+  });
+  orca.plugin.on?.("store.changed", reads.changed);
+  document.addEventListener("visibilitychange", reads.changed);
   document.addEventListener("click", (ev) => {
     if (!(ev.target as Element).closest("details.menu")) closeMenu();
   });
@@ -90,6 +109,7 @@ function mount(): void {
   const act = async (a: Act) => {
     if (busy) return;
     busy = true;
+    painted = "";
     for (const b of root.querySelectorAll<HTMLButtonElement>("button")) b.disabled = true;
     try {
       const r = (await orca.plugin.request("panel.act", a).catch(failed)) as Reply<Acted>;

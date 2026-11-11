@@ -14,6 +14,7 @@ import { loadBriefInput } from "./load.ts";
 import { ownerTodoFrom } from "./owner_todo.ts";
 import { localShort, localStamp, localZone } from "./time.ts";
 import type { BriefInput, BriefModel, Overview } from "./types.ts";
+import { watchStore } from "./watch.ts";
 
 // The Orca plugin panel's entrance to the core (decision 136). The worker forwards panel requests here
 // and draws what comes back; it counts nothing and changes no state itself.
@@ -81,6 +82,8 @@ export interface PanelPorts {
   readonly now: () => string;
   /** Reads the brief input; loadBriefInput (the store file and Orca) unless a test gives its own. */
   readonly load?: (now: string) => Promise<Result<BriefInput>>;
+  /** Watches the store for new events; watchStore over the store file unless a test gives its own. */
+  readonly watch?: (onChange: (seq: number) => void) => Result<{ close(): void }>;
 }
 
 /**
@@ -108,6 +111,8 @@ export interface PanelCore {
   act(a: PanelAct): Promise<Result<PanelActed>>;
   /** The Orca worktree id a terminal for `target` opens in: the item's Dispatch worktree, or no_worktree. */
   worktree(target: PanelTarget): Promise<Result<{ readonly worktree: string }>>;
+  /** Tells each new newest store seq until closed; the worker posts it to the open panels (decision 205). */
+  watch(onChange: (seq: number) => void): Result<{ close(): void }>;
 }
 
 const NO_WORKTREE = "run the command in a terminal";
@@ -183,6 +188,7 @@ export function panelCore(ports: PanelPorts): PanelCore {
       const input = await load(ports.now());
       return input.ok ? itemWorktree(ports.orca, input.value, target.item) : input;
     },
+    watch: (onChange) => (ports.watch ?? watchStore)(onChange),
   };
 }
 

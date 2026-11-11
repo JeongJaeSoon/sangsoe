@@ -38,6 +38,8 @@ export type PanelCore = {
   act(a: unknown): Promise<Reply<unknown>>;
   /** Absent in a core older than decision 198; the open then refuses without calling Orca. */
   worktree?(target: { group?: string; item?: string }): Promise<Reply<{ worktree: string }>>;
+  /** Absent in a core older than decision 205; the panel then re-reads on its interval only. */
+  watch?(onChange: (seq: number) => void): Reply<{ close(): void }>;
 };
 
 type CoreModule = {
