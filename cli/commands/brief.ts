@@ -27,14 +27,14 @@ export async function brief({ values, positionals }: Pick<CommandArgs, "values" 
   const input = await loadBriefInput(loadOptions(values));
   if (!input.ok) return input;
   const [group, item] = positionals;
-  return briefText(input.value, { ...(group ? { group } : {}), ...(item ? { item } : {}) });
+  return briefText(input.value, { ...(group ? { group } : {}), ...(item ? { item } : {}), done: values.done === true });
 }
 
 export default {
   name: "brief",
   summary: "현황: four tables (stage 1), a group's detail (stage 2) or an item's chain (stage 3); writes nothing",
-  usage: "[<group> [<iNNN>]] [--run <run id>]... [--events <jsonl> --orca <snapshot.json> --now <iso>]",
-  options: INPUT_OPTIONS,
+  usage: "[<group> [<iNNN>]] [--done] [--run <run id>]... [--events <jsonl> --orca <snapshot.json> --now <iso>]",
+  options: { ...INPUT_OPTIONS, done: { type: "boolean" } },
   maxPositionals: 2,
   run: (a) => brief(a),
 } satisfies CommandDef;
