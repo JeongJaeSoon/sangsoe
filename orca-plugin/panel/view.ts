@@ -213,6 +213,7 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
   ].join("");
 }
 
+// The chat text says the same sentence (core/brief/render.ts NO_GROUP); test/brief/brief-text-199 holds them equal.
 const NO_GROUP =
   "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 진행 중 절에 그 행이 나온다. 패널은 리드를 띄우지 않는다.";
 
@@ -564,12 +565,12 @@ function group(m: GroupDetail): string {
   return [
     `<h1>${esc(m.lead)} <span class="pri">${esc(m.priority)}</span> <span class="dim">· ${m.items}건 · 막힘 ${m.blockedCount}</span></h1>`,
     m.figures ? figures(m, m.figures) : "",
-    ...m.sections.map((t, i) => section(`s${i}`, t, items(t))),
-    m.recent ? gtSection("recent", m.recent, gtTable(m.recent)) : "",
     `<section aria-labelledby="h-graph"><div class="sec-h"><h2 id="h-graph">의존 그래프</h2><span class="hint">위에서 아래로. 굵은 선과 번호가 크리티컬 패스</span></div>`,
     `<div class="gwrap"><div class="gl">${graph}</div><div class="side">${side}</div></div></section>`,
     gtSection("why", m.why, gtTable(m.why, { kinds: [2], idCols: [0, 1], titles, stateOf: [3, 1], labels }), "<code>sangsoe graph why</code>"),
     m.edgeList ? gtSection("edges", m.edgeList, gtTable(m.edgeList, { kinds: [0] })) : "",
+    ...m.sections.map((t, i) => section(`s${i}`, t, items(t))),
+    m.recent ? gtSection("recent", m.recent, gtTable(m.recent)) : "",
     m.done ? doneFold(m.done) : "",
     `<p class="foot">터미널: <code>sangsoe brief ${esc(m.lead)}</code></p>`,
   ].join("");
