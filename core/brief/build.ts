@@ -1,7 +1,8 @@
-import type { ItemReading, ItemState, OwnerTodoRow, WaitsOn } from "../contract/index.ts";
+import type { ItemReading, ItemState, OwnerTodoRow, RestartDueRow, WaitsOn } from "../contract/index.ts";
 import { ITEM_READINGS, READING_LABEL, STATE_LABEL } from "../contract/index.ts";
 import { isKind, localDay, POLICY, spend, spendText } from "../models/index.ts";
 import { linkedActs } from "../owner/link.ts";
+import { DEFAULT_RESTART_RULES, restart_due } from "../session/restart-due.ts";
 import { item_timeline } from "../store/views/item_timeline.ts";
 import { type Facts, foldFacts } from "../graph/facts.ts";
 import { itemRef } from "../graph/nodes.ts";
@@ -227,6 +228,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
 
   const decisions = decisionRows.length;
   const today = advisorToday(input);
+  const restart = restartDueLines(input);
   return {
     stage: 1,
     now,
@@ -241,6 +243,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     evidenceShort,
     done: doneTable(closed, foldFacts(input.events), doneDays),
     ...(today ? { advisorToday: today } : {}),
+    ...(restart.length > 0 ? { restartDue: restart } : {}),
   };
 }
 
@@ -512,6 +515,40 @@ function modelLine(input: BriefInput, task: string): string | undefined {
   const daily = p.budget_per === "day";
   const used = spend(input.events.filter((e) => e.type === "advisor_used"), { task, ...(daily ? { day: localDay(new Date(input.now)) } : {}) });
   return `모델: ${POLICY[kind].label} · ${String(p.model)} · effort ${String(p.effort)}${advisor} · 예산 ${Number(p.budget)}회/${daily ? "하루" : "단위"} · ${spendText(used)}`;
+}
+
+const RESTART_RULE: Record<RestartDueRow["rule"], string> = {
+  compactions: "자동 압축 누적",
+  first_call_half: "압축 뒤 첫 턴이 압축 전의 절반 이상",
+  compaction_interval: "압축 간격이 짧음",
+  token_ceiling: "토큰 상한",
+};
+
+/**
+ * Design N1: the orchestrator's and leads' sessions restart_due names, one line each. Only a role's
+ * latest session counts: a /clear or a new start records a newer session_started for the same Task
+ * (or, without one, the same held Run), and the old session's rows no longer say anything. A lead
+ * whose Task is closed has ended and is not listed.
+ */
+export function restartDueLines(input: BriefInput): string[] {
+  const closed = new Set(input.orca.tasks.filter((t) => t.status === "completed" || t.status === "failed").map((t) => t.id));
+  const latest = new Map<string, { session: string; who: string; task?: string }>();
+  for (const e of input.events) {
+    if (e.type !== "session_started") continue;
+    const role = String(e.payload.role);
+    if (role !== "orchestrator" && role !== "lead") continue;
+    // The Run it holds, else the Task its Dispatch runs: a lead started by start_unit has both.
+    const run = e.target ?? e.subject ?? "";
+    latest.set(`${role}\n${e.entity_id ?? e.target ?? ""}`, {
+      session: String(e.payload.session),
+      who: `${role}${run ? ` ${run}` : ""}`,
+      ...(e.entity_id ? { task: e.entity_id } : {}),
+    });
+  }
+  const live = new Map([...latest.values()].filter((s) => !(s.task && closed.has(s.task))).map((s) => [s.session, s.who]));
+  const rules = new Map<string, string[]>();
+  for (const r of restart_due(input, DEFAULT_RESTART_RULES)) if (live.has(r.session)) rules.set(r.session, [...(rules.get(r.session) ?? []), RESTART_RULE[r.rule]]);
+  return [...rules].map(([s, why]) => `♻️ 재시작 권함 · ${live.get(s)} · ${why.join(", ")} · handoff_save 뒤 /clear`);
 }
 
 /** Decision 200: today's advisor calls over every session; undefined on a day with none. */

@@ -1,5 +1,7 @@
 import type { ItemReading, ItemState, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, WaitsOn } from "../contract/index.ts";
-import { foldFacts } from "../graph/facts.ts";
+import { type Facts, foldFacts } from "../graph/facts.ts";
+import { itemRef, prNode } from "../graph/nodes.ts";
+import { mergedItemMark } from "../verify/evidence.ts";
 import { taskPr } from "../graph/task-pr.ts";
 import { waiterReading } from "../decision/held.ts";
 import { countsAsEvidence } from "../owner/marks.ts";
@@ -199,7 +201,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       alarms: state === "done" || state === "cancelled" ? [] : standing,
       unclear: (unclear.get(t.id) ?? 0) > last,
       idle: state === "in_progress" && (idle.get(t.id) ?? 0) > last,
-      evidenceShort: state === "done" && !evidence.has(t.id),
+      evidenceShort: state === "done" && (!evidence.has(t.id) || mergedMark(t.id, prFacts, input.events) === "unverified"),
       // A worker_done or a lead's task-update closes a Task with no item_transition (decision 175, S7).
       closedAt: state === "done" ? latest(closedAt.get(t.id) ?? mergedAt.get(t.id) ?? t.completedAt ?? null, verifiedAt ?? null) : null,
     });
@@ -207,7 +209,22 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
   return out;
 }
 
-export const toStatusRow = (f: ItemFacts): ItemStatusRow => ({
+/**
+ * Flow 3: the item's merged PR sets off a deploy when a deploys_after edge leaves that PR, the item,
+ * or a member of its flow (ship-change hangs it on the merge step, the PR on impl).
+ */
+function mergedMark(task: string, g: Facts, events: readonly StoredEvent[]): "done" | "unverified" {
+  const pr = [...g.prs.values()].filter((p) => p.merged && p.tasks.has(task)).at(-1)?.pr;
+  if (!pr) return "done";
+  const flow = g.items.get(task)?.flow;
+  const members = new Set([task]);
+  if (flow !== undefined) for (const x of g.items.values()) if (x.flow === flow || x.task === flow) members.add(x.task);
+  const from = new Set([prNode(pr), ...[...members].map(itemRef)]);
+  const deploysAfter = g.edges.some((e) => e.kind === "deploys_after" && from.has(e.pred));
+  return mergedItemMark({ pr, deploysAfter, events });
+}
+
+export const toStatusRow =(f: ItemFacts): ItemStatusRow => ({
   task: f.task,
   alias: f.alias,
   state: f.state,

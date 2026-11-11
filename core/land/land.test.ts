@@ -271,6 +271,40 @@ test("scenario stack_bottom: only the bottom PR can land; an upper one is refuse
   assert.ok((await land(input(), h.deps)).ok, "the bottom merged, so the upper one opens");
 });
 
+test("stack_order reads GRAPH's own node names: pr:<ref> → item:<task> (graph sync) and item:<task> → item:<task> (edge_add) (decision 212 ⑥)", async () => {
+  for (const pred of ["pr:acme/api#10", "item:task_a"]) {
+    const h = harness(routes());
+    ready(h.store);
+    opened(h.store, "acme/api#10", "task_a");
+    opened(h.store, PR, "task_c");
+    stackEdge(h.store, pred, "item:task_c");
+    const r = await land(input(), h.deps);
+    assert.equal(r.ok ? "" : r.refusal.code, "stack_order", pred);
+    assert.match(r.ok ? "" : r.refusal.fix, /land acme\/api#10 first/, pred);
+    h.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#10", merge_sha: "1".repeat(40) } });
+    assert.ok((await land(input(), h.deps)).ok, `${pred}: the predecessor merged`);
+  }
+});
+
+test("a PR with no task mapping is not refused by an item:<task> edge whose successor has its own PR (decision 212 ⑥)", async () => {
+  const h = harness(routes());
+  ready(h.store);
+  opened(h.store, "acme/api#10", "task_a");
+  opened(h.store, "acme/api#13", "task_c");
+  stackEdge(h.store, "pr:acme/api#10", "item:task_c");
+  assert.ok((await land(input(), h.deps)).ok, "the edge is acme/api#13's, not this PR's");
+});
+
+test("an edge from this PR to its own task does not make it wait on itself (decision 212 ⑥)", async () => {
+  const h = harness(routes());
+  ready(h.store);
+  opened(h.store, PR, "task_c");
+  opened(h.store, "acme/api#13", "task_c");
+  stackEdge(h.store, `pr:${PR}`, "item:task_c");
+  const r = await land(input(), h.deps);
+  assert.ok(r.ok, JSON.stringify(r));
+});
+
 test("a stacked_on predecessor task with no PR opened fails closed", async () => {
   const h = harness(routes());
   ready(h.store);

@@ -4,13 +4,19 @@ import type { Facts, OpenPr, Role } from "./types.ts";
 // R-09: false positives and false negatives measured on a collection of real commands. Each line is a
 // PreToolUse input plus `expect` (deny|pass), the `gate` expected to deny, and the facts the line assumes.
 
-type LineFacts = { role?: Role; load?: "ok" | "warn" | "danger"; openPrs?: OpenPr[]; scripts?: Record<string, string> };
+/** `blockers`: done_blockers by Task; a Task not named has none, and null is unread. */
+type LineFacts = { role?: Role; load?: "ok" | "warn" | "danger"; openPrs?: OpenPr[]; scripts?: Record<string, string>; blockers?: Record<string, string[] | null> };
 type Line = Omit<HookInput, "cwd"> & { expect: "deny" | "pass"; gate?: string; note?: string; facts?: LineFacts };
 
 export type ReplayRow = { n: number; note: string; expect: "deny" | "pass"; got: string; gates: string[]; ok: boolean };
 export type ReplayCounts = { lines: number; deny: number; pass: number; falsePositive: number; falseNegative: number; wrongGate: number };
 
 export const REPLAY_CWD = "/work/acme";
+
+export function blockersOf(f: LineFacts, task: string): string[] | undefined {
+  const b = f.blockers?.[task];
+  return b === null ? undefined : (b ?? []);
+}
 
 function factsOf(line: Line): Facts {
   const f = line.facts ?? {};
@@ -19,6 +25,7 @@ function factsOf(line: Line): Facts {
     load: () => ({ level: f.load ?? "ok", reasons: f.load && f.load !== "ok" ? [`replayed ${f.load}`] : [] }),
     ownOpenPrs: () => f.openPrs,
     readScript: (p) => f.scripts?.[p],
+    doneBlockers: (task) => blockersOf(f, task),
   };
 }
 

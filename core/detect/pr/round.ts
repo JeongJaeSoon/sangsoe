@@ -1,4 +1,6 @@
-import type { StoredEvent } from "../../contract/index.ts";
+import type { StoredEvent, ViewTask } from "../../contract/index.ts";
+import { doneBlockers } from "../../graph/flow.ts";
+import { type FullTaskRow, snapshotTasks } from "../../graph/snapshot.ts";
 import { canTransition } from "../../contract/transitions.ts";
 import { budgetLevel, type GhResponse } from "../../gh/client.ts";
 import { approvedAndGreen, mergeConfirm, type Pull, readDiff, readLabels, readPull } from "../../land/github.ts";
@@ -152,11 +154,18 @@ function closeTask(ref: string, sha: string, task: string, linked: LinkedTask | 
     what: `task-update ${task} completed (${ref} merged)`,
     run: async (d) => {
       let from = null;
+      let tasks: ViewTask[] = [];
       if (linked) {
-        const status = await taskStatus(d, linked);
+        const l = await d.orca.taskList({ run: linked.run, full: true });
+        tasks = l.ok ? snapshotTasks(l.value as FullTaskRow[], linked.run) : [];
+        // The raw status: the snapshot folds statuses it does not list (Orca's "cancelled") into blocked.
+        const status = l.ok ? (l.value.find((x) => x.id === task)?.status ?? null) : null;
         if (status && isClosedTask(status)) return { ok: true, detail: `already ${status}`, planned: [] };
         from = status ? itemStateOf(status) : null;
       }
+      // Decision 212 ④: an unread task list leaves every child unfinished, so it refuses rather than guesses.
+      const blockers = doneBlockers({ orca: { tasks, gates: [] }, events: d.events(), now: new Date(d.now()).toISOString() }, task);
+      if (blockers.length > 0) return { ok: false, detail: `done_blockers: ${blockers.join(" · ")}`, planned: [] };
       const u = await d.orca.taskUpdate({ id: task, status: "completed", result: `merged ${ref} as ${sha}`, ...(linked ? { run: linked.run } : {}) });
       if (!u.ok) return { ok: false, detail: `${u.error.code}: ${u.error.message}`, planned: [] };
       const planned: Planned[] =
@@ -226,7 +235,7 @@ async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, 
     plan(r, {
       type: "pr_opened",
       dedupe_key: task ? key("pr_opened", ref, task) : key("pr_opened", ref),
-      payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha },
+      payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha, ...(p.head.repo?.full_name?.toLowerCase() === repo.toLowerCase() ? { head: p.head.ref } : {}) },
     });
   }
   if (link && !link.linked) await addReference(r, repo, p);

@@ -1,6 +1,9 @@
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { judgeLoad, sampleLoad } from "../capacity/capacity.ts";
+import { doneBlockers } from "../graph/flow.ts";
+import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import type { Host } from "../install/host.ts";
+import { buildArgs, parseEnvelope } from "../orca/adapter.ts";
 import type { Store } from "../store/store.ts";
 import { type HookInput, roleOf } from "./index.ts";
 import type { Facts, OpenPr, Role } from "./types.ts";
@@ -125,6 +128,25 @@ export function openPrs(host: Host, cwd: string, store: () => Pick<Store, "event
   }
 }
 
+/**
+ * done_blockers for the gate (decision 212 ④): the store's events and one `task-list --full` of the
+ * Task's Run, built and parsed by the Orca adapter's own functions. Any unread part is undefined.
+ */
+export function readDoneBlockers(host: Host, store: () => Pick<Store, "events"> | undefined, task: string, run?: string): string[] | undefined {
+  try {
+    const s = store();
+    if (!s) return undefined;
+    const r = host.run("orca", buildArgs("taskList", { flags: { run, full: true } }), undefined, READ_BUDGET_MS);
+    const env = parseEnvelope({ code: r.code, stdout: r.stdout, stderr: r.stderr }, false);
+    const value = env.ok ? (env.value as { tasks?: unknown; runId?: unknown }) : undefined;
+    if (!value || !Array.isArray(value.tasks)) return undefined;
+    const tasks = snapshotTasks(value.tasks as FullTaskRow[], run ?? (typeof value.runId === "string" ? value.runId : ""));
+    return doneBlockers({ orca: { tasks, gates: [] }, events: s.events(), now: new Date().toISOString() }, task);
+  } catch {
+    return undefined;
+  }
+}
+
 /** The facts as this machine has them; each read once per hook process, and only when asked. */
 export function hostFacts(input: HookInput, host: Host, store: () => Pick<Store, "events"> | undefined): Facts {
   const once = <T>(f: () => T) => {
@@ -142,6 +164,7 @@ export function hostFacts(input: HookInput, host: Host, store: () => Pick<Store,
     role: once((): Role => roleOf(input.agent_type, () => firstPrompt(input.transcript_path))),
     load: once(() => judgeLoad(sampleLoad(host.env.HOME))),
     ownOpenPrs: once(() => openPrs(host, input.cwd, store)),
+    doneBlockers: (task, run) => readDoneBlockers(host, store, task, run),
     readScript: (named) => {
       const home = host.env.HOME;
       const path = home ? named.replace(/^(~|\$HOME|\$\{HOME\})\//, `${home}/`) : named;

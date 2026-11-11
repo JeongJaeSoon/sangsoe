@@ -163,6 +163,8 @@ const ALLOWED = new Map<string, string>([
   ["cli:graph:design-only", "160"],
   ["cli:owner-text redact:design-only", "160"],
   ["cli:priority set:design-only", "160"],
+  // The lead's own task-update close, the done_blockers close point design names no gate for.
+  ["gate:done-blockers:code-only", "212"],
 ]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };
