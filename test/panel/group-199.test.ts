@@ -57,10 +57,10 @@ test("최근 전환, 크리티컬 패스 (상태 · 단계 이름), 스택 PR �
   const html = renderStage(group);
   assert.match(sectionOf(html, "recent"), /최근 전환 <span class="count">5<\/span>/);
   assert.match(html, /<h3>크리티컬 패스<\/h3><table class="tbl gt"><thead><tr><th>단계<\/th><th>항목<\/th><th>상태<\/th><th>단계 이름<\/th>/);
-  assert.match(html, /<td data-l="단계 이름">deploy_prod, 오너 게이트<\/td>/);
-  assert.match(html, /<h3>스택 PR 체인<\/h3>.*<td data-l="층">3층<\/td>/s);
-  assert.match(html, /<h3>릴리스 묶음 ship-batch · i001<\/h3>.*<td data-l="단계" class="kind">머지<\/td>/s);
-  assert.match(html, /<h3>끊긴 선행<\/h3>.*<tr data-id="i043" class="broken"><td data-l="항목"><span class="id">i043<\/span>후속 테스트 PR/s);
+  assert.match(html, /<td data-l="단계 이름" class="tx">deploy_prod, 오너 게이트<\/td>/);
+  assert.match(html, /<h3>스택 PR 체인<\/h3>.*<td data-l="층" class="nw hd">3층<\/td>/s);
+  assert.match(html, /<h3>릴리스 묶음 ship-batch · i001<\/h3>.*<td data-l="단계" class="kind nw hd">머지<\/td>/s);
+  assert.match(html, /<h3>끊긴 선행<\/h3>.*<tr data-id="i043" class="broken"><td data-l="항목" class="it hd"><span class="id">i043<\/span>후속 테스트 PR/s);
   assert.match(sectionOf(html, "edges"), /간선 <span class="count">11<\/span>/);
 });
 
@@ -80,15 +80,18 @@ test("group detail sections follow hallmark group.html: graph, why, edges, then 
 test("왜 준비되지 않았나: 항목 is the item with its title, 막는 선행 is not drawn as the row title", () => {
   const why = sectionOf(renderStage(group), "why");
   assert.doesNotMatch(why, /class="title"/);
-  assert.match(why, /<td data-l="항목"><span class="id">i043<\/span>후속 테스트 PR<\/td><td data-l="막는 선행"><span class="id">i027<\/span>캐시 도입<\/td><td data-l="간선 종류" class="kind">blocks<\/td>/);
+  assert.match(
+    why,
+    /<td data-l="항목" class="it hd"><span class="id">i043<\/span>후속 테스트 PR<span class="hs">[^<]*<\/span><\/td><td class="brk" aria-hidden="true"><\/td><td data-l="막는 선행" class="it"><span class="id">i027<\/span>캐시 도입<\/td><td data-l="간선 종류" class="kind nw">blocks<\/td>/,
+  );
   assert.match(why, /<tr data-id="i043" class="broken">/);
-  const states = [...why.matchAll(/data-l="선행 상태">([^<]*)</g)].map((x) => x[1] ?? "");
+  const states = [...why.matchAll(/data-l="선행 상태" class="nw">([^<]*)</g)].map((x) => x[1] ?? "");
   assert.ok(states.length > 0 && states.every((s) => /\p{L}/u.test(s)), `bare marker in 선행 상태: ${states.join(" | ")}`);
 });
 
 test("legend: four kinds and the two marks, every cell labelled so a folded row keeps kind and meaning apart", () => {
   const legend = /<details class="legend">(.*?)<\/details>/s.exec(renderStage(group))?.[1] ?? "";
-  const rows = [...legend.matchAll(/<tr><td data-l="선 모양">.*?<td data-l="간선"[^>]*>([^<]*)<\/td><td data-l="뜻">/g)].map((x) => x[1]);
+  const rows = [...legend.matchAll(/<tr><td data-l="선 모양"[^>]*>.*?<td data-l="간선"[^>]*>([^<]*)<\/td><td class="brk" aria-hidden="true"><\/td><td data-l="뜻"/g)].map((x) => x[1]);
   assert.deepEqual(rows, ["blocks", "after", "stacked_on", "deploys_after", "굵은 선", "붉은 점선"]);
 });
 
