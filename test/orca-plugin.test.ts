@@ -300,7 +300,7 @@ function fakeWorker() {
     host: { call: async (m, p) => void hostCalls.push([m, p]) },
     events: { on: (e) => void subscribed.push(e) },
     commands: { register: (id, fn) => void commands.set(id, fn) },
-    panels: { handle: (n, fn) => void handlers.set(n, fn) },
+    panels: { handle: (n, fn) => void handlers.set(n, fn) } as OrcaWorker["panels"],
   };
   return { orca, handlers, commands, subscribed, hostCalls };
 }
@@ -367,6 +367,78 @@ test("decision 198: a panel reading redraws status bar B from the same reading",
     await w.handlers.get("panel.brief")?.({});
     const after = w.hostCalls.slice(before).map(([m, p]) => [m, (p as { text: string }).text]);
     assert.deepEqual(after, [["statusBar.update", status.text]], "the band's 결정 1 is the status bar's 결정 1");
+  } finally {
+    deactivate();
+  }
+});
+
+test("decision 205: a reading that leaves status bar B as it was does not push it again", async () => {
+  const w = fakeWorker();
+  const { clock } = fakeClock();
+  const status = { text: "✨ SANGSOE  🚧 0 · 결정 1 · 🔄 0", tone: "danger" as const, tooltip: "t" };
+  const core: PanelCore = {
+    brief: async () => ({ ok: true, value: { status } }),
+    statusBar: async () => ({ ok: true, value: status }),
+    act: async () => ({ ok: true, value: {} }),
+  };
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: async () => core });
+  try {
+    await settle();
+    await w.handlers.get("panel.brief")?.({ auto: true });
+    await w.handlers.get("panel.brief")?.({ auto: true });
+    assert.equal(w.hostCalls.filter(([m]) => m === "statusBar.update").length, 1, "the same item is pushed once");
+  } finally {
+    deactivate();
+  }
+});
+
+test("decision 205: the worker watches the store and posts store.changed to the open panels, and stops on deactivate", async () => {
+  const w = fakeWorker();
+  const posts: [string, unknown][] = [];
+  w.orca.panels.post = (event, payload) => void posts.push([event, payload]);
+  const { clock } = fakeClock();
+  let tell: ((seq: number) => void) | null = null;
+  let closed = 0;
+  const core: PanelCore = {
+    brief: async () => ({ ok: true, value: {} }),
+    statusBar: async () => ({ ok: true, value: { text: "s", tone: "neutral", tooltip: "t" } }),
+    act: async () => ({ ok: true, value: {} }),
+    watch: (fn) => {
+      tell = fn;
+      return {
+        ok: true,
+        value: {
+          close: () => {
+            closed += 1;
+          },
+        },
+      };
+    },
+  };
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: async () => core });
+  try {
+    await settle();
+    await settle();
+    assert.ok(tell, "the worker started the store watch");
+    (tell as (seq: number) => void)(42);
+    assert.deepEqual(posts, [["store.changed", { seq: 42 }]]);
+  } finally {
+    deactivate();
+  }
+  assert.equal(closed, 1, "deactivate closes the watch");
+
+  // An Orca without panels.post, or a core without watch, keeps the 30-second reading only.
+  const old = fakeWorker();
+  let watched = false;
+  const watchOnce: PanelCore["watch"] = () => {
+    watched = true;
+    return { ok: true, value: { close: () => {} } };
+  };
+  activate(old.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: async () => ({ ...core, watch: watchOnce }) });
+  try {
+    await settle();
+    await settle();
+    assert.equal(watched, false, "nothing to post to: no watch");
   } finally {
     deactivate();
   }
