@@ -28,7 +28,7 @@ function target(raw: unknown): { group?: string; item?: string } {
 }
 
 /** Status bar text when the core cannot answer: no number is guessed. */
-export const STATUS_UNKNOWN: StatusItem = { text: "✨ SANGSOE  ?", tone: "neutral", tooltip: "sangsoe: 현황을 읽지 못함" };
+export const STATUS_UNKNOWN: StatusItem = { text: "✨ SANGSOE | ?", tone: "neutral", tooltip: "sangsoe: 현황을 읽지 못함" };
 
 // A group name goes into a shell command line, so only a plain token passes; anything else opens 현황.
 const GROUP = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;

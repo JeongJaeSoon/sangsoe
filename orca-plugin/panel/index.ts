@@ -19,6 +19,7 @@ import {
   type Refusal,
   renderError,
   renderStage,
+  screenMemo,
   TABS,
   type Tab,
   type Target,
@@ -66,18 +67,32 @@ function mount(): void {
   // not rewritten, so an opened fold, the menu and focus stay.
   let asked = 0;
   let painted = "";
-  const draw = async (auto = false) => {
-    const n = ++asked;
-    const r = (await orca.plugin.request("panel.brief", { ...current(stack), ...(auto ? { auto: true } : {}) }).catch(failed)) as Reply<PanelView>;
-    if (n !== asked) return;
-    lastOk = r.ok;
-    if (r.ok) prunePending(pending, r.value.todo);
+  const memo = screenMemo();
+  const paint = (r: Reply<PanelView>) => {
     // The message sits under the header row, above the tabs or the back line.
-    const html = r.ok ? renderStage(r.value, trail(stack), tab, where(), pending) : renderError(r.refusal, trail(stack), where());
+    const html = r.ok ? renderStage(r.value, tab, where(), pending) : renderError(r.refusal, trail(stack), where());
     const page = html.replace("</header>", () => `</header>${note}`);
     if (page === painted) return;
     root.innerHTML = page;
     painted = page;
+  };
+  const draw = async (auto = false) => {
+    const n = ++asked;
+    const at = current(stack);
+    const r = (await orca.plugin.request("panel.brief", { ...at, ...(auto ? { auto: true } : {}) }).catch(failed)) as Reply<PanelView>;
+    if (n !== asked) return;
+    lastOk = r.ok;
+    if (r.ok) {
+      prunePending(pending, r.value.todo);
+      memo.put(at, r.value, stack);
+    }
+    paint(r);
+  };
+  // A screen read before paints from memory at once; the reading after it repaints what changed.
+  const go = () => {
+    const known = memo.get(current(stack));
+    if (known) paint({ ok: true, value: known });
+    void draw();
   };
   const closeMenu = () => root.querySelector("details.menu")?.removeAttribute("open");
   const open = async (o: Open) => {
@@ -139,7 +154,7 @@ function mount(): void {
     } else if (el.hasAttribute("data-back")) {
       stack = back(stack);
       say("");
-      void draw();
+      go();
     } else if (el.hasAttribute("data-act")) {
       void act(JSON.parse(el.getAttribute("data-act") ?? "{}") as Act);
     } else if (el.hasAttribute("data-other")) {
@@ -149,7 +164,7 @@ function mount(): void {
       const t = JSON.parse(el.getAttribute("data-nav") ?? "{}") as Target;
       stack = down(stack, t);
       say("");
-      void draw();
+      go();
     }
   });
   root.addEventListener("keydown", (ev) => {
