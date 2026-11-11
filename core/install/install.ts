@@ -56,6 +56,16 @@ function orcaStep(host: Host, root: string, lines: string[]): boolean {
 
 const tag = (p: ClaudeProfile, current: boolean) => (current ? "claude" : `claude (Orca profile ${p.dir})`);
 
+// Decision 208: no `--scope`. `marketplace add --scope user` can leave the entry only in the profile's
+// known_marketplaces.json, and a remove scoped to user then fails with "not declared in user settings".
+// A failed remove after which the list no longer has the marketplace counts as removed.
+function removeMarketplace(host: Host, env?: RunEnv): RunResult {
+  const r = host.run("claude", ["plugin", "marketplace", "remove", MARKETPLACE], env);
+  if (r.code === 0) return r;
+  const after = listMarketplaces(host, env);
+  return after && !after.some((x) => x.name === MARKETPLACE) ? { ...r, code: 0 } : r;
+}
+
 // Idempotent: each step reads current state first and picks add/update or install/update.
 function registerClaude(host: Host, root: string, profile: ClaudeProfile, current: boolean, lines: string[]): boolean {
   const who = tag(profile, current);
@@ -72,14 +82,7 @@ function registerClaude(host: Host, root: string, profile: ClaudeProfile, curren
   }
   let m = markets.find((x) => x.name === MARKETPLACE);
   if (m && m.path !== root) {
-    const removed = step(`removed marketplace ${MARKETPLACE} (pointed at ${m.path ?? m.source})`, [
-      "plugin",
-      "marketplace",
-      "remove",
-      MARKETPLACE,
-      "--scope",
-      "user",
-    ]);
+    const removed = report(`removed marketplace ${MARKETPLACE} (pointed at ${m.path ?? m.source})`, removeMarketplace(host, profile.env));
     if (!removed) return false;
     m = undefined;
   }
@@ -130,11 +133,13 @@ export async function install(host: Host, root: string, ctx: CheckContext): Prom
 export function uninstall(host: Host): Outcome {
   const lines: string[] = [];
   let code = 0;
-  const step = (who: string, label: string, args: string[], env?: RunEnv) => {
-    const r = host.run(who === "orca" ? "orca" : "claude", args, env);
+  const report = (who: string, label: string, r: RunResult) => {
     if (r.code !== 0) code = 1;
     lines.push(r.code === 0 ? `${who}: ${label}` : `${who}: ${label} failed (exit ${r.code}): ${lastLine(r)}`);
+    return r.code === 0;
   };
+  const step = (who: string, label: string, args: string[], env?: RunEnv) => report(who, label, host.run(who === "orca" ? "orca" : "claude", args, env));
+  let uninstalled = false;
 
   const unreadable = (who: string, what: string) => {
     code = 1;
@@ -153,15 +158,17 @@ export function uninstall(host: Host): Outcome {
     const plugins = listPlugins(host, profile.env);
     if (!plugins) unreadable(who, "plugin list --json");
     else if (userPlugin(plugins)) {
-      step(who, `uninstalled ${PLUGIN_ID}`, ["plugin", "uninstall", PLUGIN_ID, "--scope", "user", "--keep-data"], profile.env);
+      if (step(who, `uninstalled ${PLUGIN_ID}`, ["plugin", "uninstall", PLUGIN_ID, "--scope", "user", "--keep-data"], profile.env)) uninstalled = true;
     } else lines.push(`${who}: ${PLUGIN_ID} was not installed`);
 
     const markets = listMarketplaces(host, profile.env);
     if (!markets) unreadable(who, "plugin marketplace list --json");
     else if (markets.some((x) => x.name === MARKETPLACE)) {
-      step(who, `removed marketplace ${MARKETPLACE}`, ["plugin", "marketplace", "remove", MARKETPLACE, "--scope", "user"], profile.env);
+      report(who, `removed marketplace ${MARKETPLACE}`, removeMarketplace(host, profile.env));
     } else lines.push(`${who}: marketplace ${MARKETPLACE} was not added`);
   }
+  // A running session keeps the hooks it loaded at start, uninstalled or not (decision 208).
+  if (uninstalled) lines.push(`claude: restart every running Claude Code session that loaded ${PLUGIN_ID}; until then it keeps the plugin's hooks`);
 
   // Decided from Orca's own list, not the tree: an older tree may have loaded a plugin this one lacks.
   const orca = listOrcaPlugins(host);
