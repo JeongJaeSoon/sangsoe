@@ -38,6 +38,12 @@ export type CatalogRow = {
   maxOutput: string;
   /** "The effort parameter's default on the Claude API" (overview); Claude Code may differ. */
   apiDefaultEffort: Effort;
+  /**
+   * The efforts Orca's worker-start takes with this alias (decision 209), from its launch catalog
+   * (ORCA_LAUNCH_CATALOG). Empty: Orca refuses any `--effort`, so start_unit sends none and the
+   * session runs at Claude Code's own setting for the model.
+   */
+  orcaEfforts: readonly Effort[];
   source: Source;
   verified: string;
   /** A dated ID that must not move (e.g. for a stable release's review); doctor reports it while set. */
@@ -55,6 +61,7 @@ export const CATALOG: readonly CatalogRow[] = [
     context: "1M",
     maxOutput: "128K",
     apiDefaultEffort: "high",
+    orcaEfforts: EFFORTS,
     source: "overview",
     verified: "2026-11-10",
   },
@@ -67,6 +74,7 @@ export const CATALOG: readonly CatalogRow[] = [
     context: "1M",
     maxOutput: "128K",
     apiDefaultEffort: "medium",
+    orcaEfforts: EFFORTS,
     source: "overview",
     verified: "2026-11-10",
   },
@@ -79,6 +87,7 @@ export const CATALOG: readonly CatalogRow[] = [
     context: "1M",
     maxOutput: "128K",
     apiDefaultEffort: "high",
+    orcaEfforts: EFFORTS,
     source: "overview",
     verified: "2026-11-10",
   },
@@ -91,10 +100,22 @@ export const CATALOG: readonly CatalogRow[] = [
     context: "1M",
     maxOutput: "128K",
     apiDefaultEffort: "medium",
+    orcaEfforts: [],
     source: "overview",
     verified: "2026-11-10",
   },
 ];
+
+/**
+ * Where `orcaEfforts` comes from: Orca's own check, run read-only for every alias and effort on the
+ * installed build (decision 209). Orca has no dry-run for worker-start and its agent-context has no
+ * model list, so doctor cannot read this at run time.
+ */
+export const ORCA_LAUNCH_CATALOG = {
+  orca: "1.4.250",
+  check: "out/shared/agent-launch/choices/agent-launch-model-preferences.js",
+  catalog: "out/shared/agent-session/options/agent-session-option-catalog-claude-codex.js",
+} as const;
 
 /** The Claude Code release the catalog was checked against; doctor notices a newer one. */
 export const VERIFIED_WITH_CLAUDE_CODE = "2.1.322";

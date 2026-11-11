@@ -3,7 +3,7 @@
 
 sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정 164). 두 층이 한 파일에 있다.
 
-- **카탈로그(`CATALOG`)**: tier 마다 Claude Code alias · 지금 alias 가 가리키는 ID · 가이드가 적은 역할 · 가격 · context/output · API 기본 effort · 출처 · 확인 날짜 · 선택적 `pin`. 새 모델이 나오면 이 행만 바뀐다.
+- **카탈로그(`CATALOG`)**: tier 마다 Claude Code alias · 지금 alias 가 가리키는 ID · 가이드가 적은 역할 · 가격 · context/output · API 기본 effort · Orca 의 worker-start 가 그 alias 에 받는 effort(`orcaEfforts`, 출처는 `ORCA_LAUNCH_CATALOG`, 결정 209) · 출처 · 확인 날짜 · 선택적 `pin`. 새 모델이 나오면 이 행만 바뀐다.
 - **정책(`POLICY`)**: 일의 종류(`Kind`) → tier · effort · effort 사다리 · 다음 tier · 승격 조건 · 인용한 가이드 문장. 가이드 문구가 바뀌면 이 행만 바뀐다. 정책 행은 tier 만 적고 모델 이름이나 버전을 적지 않는다.
 - **변경 이력(`CHANGELOG`)**: 날짜 · 무엇이 바뀌었나 · 출처 · 결정 번호. git 없이 읽힌다.
 
@@ -17,7 +17,7 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 
 | 읽는 곳 | 무엇을 | 어떻게 |
 |---|---|---|
-| `core/start/start.ts` (`start_unit`) | 정책 + 카탈로그 | `resolve` → `worker-start --model <alias> --effort <level>`, 승격은 `model_changed` 로 기록 |
+| `core/start/start.ts` (`start_unit`) | 정책 + 카탈로그 | `resolve` → `worker-start --model <alias> --effort <level>`, 승격은 `model_changed` 로 기록. 그 tier 의 `orcaEfforts` 에 없는 effort 는 넘기지 않는다(결정 209) |
 | MCP resource `models` | 표 전체 | 판단 층(skill·agent)은 이 resource 로만 읽는다. 표를 본문에 옮겨 적지 않는다 |
 | `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice, advisor 가 닿는 길(기본은 route `worktree_file`, 결정 202). `.claude/settings.local.json` 을 커밋한 저장소가 있으면 오너 `advisorModel` 이 없을 때 warn, 있을 때 notice(route `owner_setting`), 이 환경에 advisor 끄는 env 가 있으면 notice, 확인 못 한 저장소는 이름만, 오늘의 advisor 호출 수와 추정 비용 |
 | `cli/commands/models.ts` (`sangsoe models`) | 표 전체 | 토큰 X 한국어 보기. `--markdown` 의 출력이 `docs/models.md` 다 |
@@ -34,6 +34,7 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
    - 새 tier, 역할·가격 변화: 카탈로그 행을 고치거나 더한다(`TIERS` 도).
    - 가이드의 권고 문구가 바뀌면: 정책 행과 그 `quote` 를 고친다.
    - 모두 `VERIFIED_WITH_CLAUDE_CODE` 를 지금 `claude --version` 으로 고친다.
+   - 새 alias 나 Orca 업데이트: `orcaEfforts` 를 설치된 Orca 의 `ORCA_LAUNCH_CATALOG` 두 파일에서 다시 읽고, `test/fake-orca` 의 미러도 같이 고친다(`test/model-orca-launch.test.ts` 가 둘을 맞춰 본다). Orca 에는 worker-start 의 dry-run 이 없다.
 3. `CHANGELOG` 맨 위에 한 줄(날짜 · 무엇 · 출처 · 결정 번호)을 더하고, `docs/decisions.md` 에 같은 번호의 결정을 날짜와 URL 과 함께 적는다.
 4. `node cli/main.ts models --markdown` 의 출력으로 `docs/models.md` 를 바꾼다(`test/models-view.test.ts` 가 어긋나면 실패한다).
 5. `npm test` — `test/model-table.test.ts` 가 역할마다 행이 있는지, 표의 사본이나 버전 번호가 다른 곳에 없는지, agent frontmatter 가 표와 같은지 본다.

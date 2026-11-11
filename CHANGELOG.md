@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Fixed
+
+- `start_unit` starts a class `mechanical` worker again. Orca's worker-start refuses any `--effort` for the fast tier's model, so `start_unit` now passes an effort only when Orca takes it for that tier's model (`orcaEfforts` in the model catalog, read from Orca 1.4.250's launch check) and says so in the start's notes. The test Orca refuses the same pairs real Orca does (209).
+
 ## 0.1.1
 
 Everything since `v0.1.0`: decisions 193–207.

@@ -412,7 +412,8 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       kind: choice.kind,
       picked_by: req.pickedBy ?? "role",
       model: plan.model,
-      effort: plan.effort,
+      // The row's effort even when Orca takes none for this model (decision 209): SessionStart's finish line keys on it.
+      effort: plan.effort ?? choice.effort,
       ...(plan.route !== "none" && choice.advisor ? { advisor: choice.advisor } : {}),
       route: plan.route,
       budget: row.budget.calls,
@@ -431,7 +432,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     worktree: { existing: `id:${tree.id}` },
     run: requester.runId,
     model: plan.model,
-    effort: plan.effort,
+    ...(plan.effort ? { effort: plan.effort } : {}),
     keepOpen: true,
     ...(plan.advisor ? { advisor: plan.advisor } : {}),
   };
@@ -475,7 +476,8 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     const ref = await orca.referenceAdd({ worktree: worktreeId, urls: req.references });
     if (!ref.ok) notes.push(`reference add 실패 (${ref.error.code}), 시작은 계속`);
   }
-  const launched = { model: plan.model, effort: plan.effort, ...(plan.advisor ? { advisor: plan.advisor } : {}), route: plan.route };
+  if (!plan.effort) notes.push(`effort ${choice.effort} 은 넘기지 않았다: Orca 가 ${plan.model} 에 effort 를 받지 않는다(결정 209)`);
+  const launched = { model: plan.model, ...(plan.effort ? { effort: plan.effort } : {}), ...(plan.advisor ? { advisor: plan.advisor } : {}), route: plan.route };
   return {
     kind: "started",
     taskId,
