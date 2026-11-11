@@ -9,6 +9,7 @@ import { createItem } from "../start/item.ts";
 import { addEdgeTo, GRAPH_SOURCE } from "./edit.ts";
 import { EDGE_KINDS, type EdgeKind, type Facts, foldFacts, type Stage } from "./facts.ts";
 import { itemRef } from "./nodes.ts";
+import { retiredOf } from "./ready.ts";
 import { readSnapshot } from "./snapshot.ts";
 import { parseToml, type TomlTable, TomlError, type TomlValue } from "./toml.ts";
 
@@ -333,9 +334,10 @@ export function doneBlockers(input: ViewInput, task: string, by: DoneBy = {}): s
     if (!p.closed) out.push(`open_pr: ${p.pr}`);
     else
       for (const t of bound) {
-        const cancelled = tasks.get(t)?.status === "failed" && tasks.get(t)?.result === "cancelled";
-        // Decision 223: a completed item cannot be cancelled in Orca; its item_retired row is that reason.
-        if (!landed.has(t) && !cancelled && !facts.items.get(t)?.retired) out.push(`closed_pr: ${p.pr} (열린 항목은 취소하고, 완료된 항목은 item_retire 로 이유와 함께 거둔다)`);
+        const task = tasks.get(t);
+        const cancelled = task?.status === "failed" && task.result === "cancelled";
+        // Decision 223: a completed item cannot be cancelled in Orca; its retire is that reason.
+        if (!landed.has(t) && !cancelled && !(task && retiredOf(task, facts))) out.push(`closed_pr: ${p.pr} (열린 항목은 취소하고, 완료된 항목은 item_retire 로 이유와 함께 거둔다)`);
       }
   }
   return out;

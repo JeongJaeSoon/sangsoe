@@ -2,6 +2,8 @@ import { dedupeKey, EVENTS } from "../contract/index.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
 import { foldFacts } from "../graph/facts.ts";
 import { holdOf } from "../graph/ready.ts";
+import { taskPr } from "../graph/task-pr.ts";
+import type { ViewTask } from "../contract/views.ts";
 import { readSnapshot } from "../graph/snapshot.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
 import type { Store } from "../store/store.ts";
@@ -35,9 +37,10 @@ export async function retireItem(ports: { readonly orca: OrcaAdapter; readonly s
   if (alias === undefined) return refuse("not_found", `no item ${a.item}`, "name an item by its iNNN or Task id");
   if (facts.items.get(task)?.retired) {
     // The row stands only while its PRs stay closed unmerged (retiredOf): a reopened or merged one is read as it is.
-    const live = [...facts.prs.values()].filter((p) => p.tasks.has(task) && (p.merged || !p.closed)).map((p) => p.pr);
-    if (live.length === 0) return done({ status: "already", task, alias });
-    return refuse("not_retirable", `${alias} was retired, but ${live.join(", ")} is no longer closed unmerged`, "the item reads by that PR again; retire it once the PR closes without a merge");
+    // Bound PRs only, so a second call reads nothing from Orca; a report-only PR is read from Orca by retiredOf.
+    const bound = taskPr({ id: task } as ViewTask, facts, { boundOnly: true });
+    if (bound.state === "none" || bound.state === "closed_unmerged") return done({ status: "already", task, alias });
+    return refuse("not_retirable", `${alias} was retired, but its PR ${bound.prs.join(", ")} is ${bound.state} now`, "the item reads by that PR again; retire it once the PR closes without a merge");
   }
 
   const created = events.find((e) => e.type === "item_created" && e.payload.task === task);

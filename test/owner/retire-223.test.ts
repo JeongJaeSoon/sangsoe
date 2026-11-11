@@ -166,6 +166,16 @@ test("a second retire is a no-op that reads nothing from Orca", async () => {
   assert.deepEqual(retired(w).map((e) => e.payload.reason), ["first"]);
 });
 
+test("a retired item with a merged PR beside its closed one stays retired, and a second retire is already", async () => {
+  const { w, a1 } = await s6Leftovers();
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#20", task: a1.task } });
+  w.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#20", merge_sha: "d".repeat(40) } });
+  assert.ok((await itemRetire({ item: a1.alias, reason: "first", by: "owner" }, ports(w))).ok);
+  assert.equal(itemFacts(await view(w)).find((x) => x.task === a1.task)?.state, "cancelled");
+  const again = await itemRetire({ item: a1.alias, reason: "second", by: "owner" }, ports(w));
+  assert.deepEqual(again, { ok: true, value: { status: "already", task: a1.task, alias: a1.alias } });
+});
+
 test("a retired item whose PR reopens reads 🚧 again: the retire stands only while the PR is closed unmerged", async () => {
   const { w, a1 } = await s6Leftovers();
   assert.ok((await itemRetire({ item: a1.alias, reason: "closed", by: "owner" }, ports(w))).ok);
