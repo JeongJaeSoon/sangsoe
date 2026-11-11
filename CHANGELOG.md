@@ -2,7 +2,9 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
-## Unreleased
+## 0.1.4-rc.4 (pre-release)
+
+Everything since `v0.1.4-rc.3`: decisions 219, 220, 221, 222 and 223. A pre-release for the S6 re-run of what failed on rc.3 and of the panel, install and retire changes since; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.3.
 
 - **An item whose PR closed without a merge can be retired.** Such an item's Task is completed, so it read 🚧 forever: Orca does not reopen or cancel a completed Task, and no sangsoe path closed it. The owner or a lead now retires it with `sangsoe item retire <iNNN> --reason <text> --by <who>` or the new MCP tool `item_retire`. One store row records who and why, and Orca is not written. A retired item reads 🗑️ and leaves the 🚧 counts, the group's open count and the critical path, and a group whose items are all done or retired closes. Any other item is refused, a second retire is a no-op, and a PR that reopens reads as it is again (223).
 - **The panel takes Orca's own panel tone.** The background is white everywhere; the summary line and a group's figures are cards with a light 1px border and rounded corners, and only hover, the chosen tab and an open menu are filled. Section heads are small spaced labels with a count and no rule. In a narrow panel every list row (decisions, to-dos, open items, holds, an item's chain) is one card: a one-line head of state, id, the title cut with `…` and a number at the right end, then one aligned meta line whose label and value sit together in one column; a long value wraps inside that column and is never cut. A group row heads its item cards instead of being one more card. Empty `—` values are hidden. A group row's cue reads `자세히 ›`. The third 현황 section and its tab are now `열린 항목` in the panel and the text brief, so its count no longer reads as the summary's `🔄 진행 중` count (222).
