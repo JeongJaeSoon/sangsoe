@@ -49,6 +49,15 @@ for (const argv of [["install", "--bogus"], ["uninstall", "now"], ["doctor", "--
   });
 }
 
+// Decision 221: the permissions flags are refused before anything is read or written.
+for (const argv of [["install", "--yes"], ["install", "--scope", "user"], ["install", "--permissions", "--scope", "global"]]) {
+  test(`${argv.join(" ")} is refused and touches nothing`, async () => {
+    const r = await run(argv, { host: touchless(), checkContext: noChecks });
+    assert.equal(r.code, 1);
+    assert.match(r.out, /\[invalid_input\]\nfix: sangsoe install --permissions --scope user$/);
+  });
+}
+
 test("doctor --offline reads the tree and builds no start-check context", async () => {
   const host = { ...touchless(), env: { SANGSOE_ROOT: "/fixture/tree" }, exists: () => false, readText: () => "" };
   const r = await run(["doctor", "--offline"], { host, checkContext: noChecks });

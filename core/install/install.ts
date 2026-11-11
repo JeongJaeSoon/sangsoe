@@ -21,6 +21,7 @@ import {
   UNREADABLE,
   userPlugin,
 } from "./host.ts";
+import { type Files, realFiles, removePermissions } from "./permissions.ts";
 
 export type Outcome = { code: number; lines: string[] };
 
@@ -130,7 +131,7 @@ export async function install(host: Host, root: string, ctx: CheckContext): Prom
   return { code: d.code, lines: [...lines, "", "sangsoe doctor:", ...d.lines] };
 }
 
-export function uninstall(host: Host): Outcome {
+export function uninstall(host: Host, files: Files = realFiles): Outcome {
   const lines: string[] = [];
   let code = 0;
   const report = (who: string, label: string, r: RunResult) => {
@@ -177,6 +178,9 @@ export function uninstall(host: Host): Outcome {
   else if (loaded?.isDev) {
     step("orca", `unloaded ${loaded.pluginKey}`, ["plugin", "dev", "unload", loaded.pluginKey, "--json"]);
   } else lines.push("orca: no sangsoe development plugin loaded");
+  const perms = removePermissions(host, files);
+  if (perms.code !== 0) code = 1;
+  lines.push(...perms.lines);
   lines.push("kept: ~/.local/share/sangsoe (data) and ~/.config/sangsoe (settings); `brew uninstall sangsoe` removes the tree");
   return { code, lines };
 }
