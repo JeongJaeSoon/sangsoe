@@ -2,6 +2,10 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+- **`start_unit` refuses on a stale MCP server.** A session's MCP server keeps the code it loaded at start, and `/reload-plugins` does not restart it. When the installed sangsoe's version differs from the server's own, or the install it started from is gone, `start_unit` returns `server_stale` with both versions before it opens the store or calls Orca. The fix it names is restarting the session. A server started under `0.1.3` or older has no such check: restart those sessions after upgrading (211).
+
 ## 0.1.3
 
 Everything since `v0.1.2`: decision 210.

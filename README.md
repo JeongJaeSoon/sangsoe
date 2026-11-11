@@ -69,6 +69,8 @@ Every `brew upgrade sangsoe` needs a new review record and a new approval. Each 
 
 A Claude Code session that was running during `brew upgrade sangsoe` keeps working: a tool call made while the plugin folder is missing goes ahead with a `PreToolUse` hook error instead of being held. Open a new session to pick up the new plugin. A session started under `0.1.1` or older still has the hook that holds such a call; restart it.
 
+Restart every session that calls `start_unit` after an upgrade: quit it and start it again. `/reload-plugins` does not restart a running MCP server, and the server keeps the code it loaded at start, so the old model table and start rules stay in force. From the release after `0.1.3`, `start_unit` refuses on such a server with `server_stale` and names both versions. A server started under an older release has no such check.
+
 Upgrading from `0.1.0` adds the `land allow` row and changes others; `CHANGELOG.md` lists them, and what upgrading from an older release adds.
 
 The approval covers the core the Orca plugin runs. A release packs a copy of `core/` into `orca-plugin/vendor/`, the plugin loads only that copy, and approve and doctor compare the whole folder, the copy included, with the reviewed source. A changed file anywhere in the installed folder turns `orca-plugin-content` into `FAIL`, with `sangsoe plugin approve` as the fix. This holds for a release only: when the plugin folder sits in a git checkout, the worker falls back to the checkout's `../core`, which the approval's dirty check does not cover.

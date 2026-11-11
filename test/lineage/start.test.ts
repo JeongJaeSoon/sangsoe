@@ -837,6 +837,25 @@ const withAdvisor = {
 };
 const unitBase = { role: "lead", worktreeId: PARENT_TREE, taskId: "task_lead", runId: RUN, childRole: "worker", spec: "brief" };
 
+test("decision 211: S5's call (orchestrator, class mechanical) starts a worker the fake's Orca launch check takes", async () => {
+  const row = MODEL_POLICY[classKind("mechanical")];
+  const h = harness();
+  const r = await handle(
+    { role: "orchestrator", worktreeId: PARENT_TREE, runId: RUN, childRole: "worker", class: "mechanical", spec: "read-only: list the open PRs" },
+    ports(h),
+  );
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const ws = h.called("worker-start")[0] ?? [];
+  assert.equal(flag(ws, "model"), aliasOf(row.tier));
+  assert.ok(!ws.includes("--effort"), "no effort for a model Orca takes none for (decision 209)");
+  // What S5 saw: the 0.1.0 row (this tier at its API default effort) is the pair Orca refuses.
+  const old = MODEL_CATALOG.find((c) => c.tier === row.tier);
+  assert.ok(old);
+  const refused = await h.orca.workerStart({ task: NEW_TASK, agent: "claude", worktree: { existing: CHILD_SELECTOR }, run: RUN, model: old.alias, effort: old.apiDefaultEffort });
+  assert.equal(refused.ok === false && refused.error.code, "invalid_argument");
+  assert.match(refused.ok ? "" : refused.error.message, new RegExp(`does not support effort ${old.apiDefaultEffort}`));
+});
+
 test("decision 187: each unit class launches its row's main model and, through Orca's option, its advisor", async () => {
   for (const cls of UNIT_CLASSES) {
     const row = MODEL_POLICY[classKind(cls)];
