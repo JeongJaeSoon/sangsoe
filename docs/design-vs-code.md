@@ -408,7 +408,7 @@
 | 흐름 4 패널·상태 표시줄 다시 읽기 | design.html §5 흐름 4 | changed (결정 205) | `orca-plugin/main.ts:91` | |
 | 경계 다섯 | design.html §5 경계마다 무엇이 오가나 | implemented | `cli/commands/hook.ts:51`, `core/orca/adapter.ts:291` | hook·MCP·worker·Orca CLI·두 plugin |
 | 실패 stack_order·review_timing·cross_lead·stack_bottom·overlap_order·unknown_is_not_ready·merge_suggests_close·precheck_blocks_send·repo_level_main | design-appendix 실패 → 방지 장치 → 회귀 시험 | implemented | `core/graph/ready.ts:133`, `test/graph/regressions.test.ts:20` | 장치와 시험이 모두 있다 |
-| 실패 retarget_approval | design-appendix 실패 → 방지 장치 → 회귀 시험 | changed (결정 215) | `core/land/land.ts:441`, `core/graph/rereview.ts:22`, `core/detect/pr/round.ts:387`, `test/land/retarget-rereview.test.ts:111` | G31 닫힘 — base 변경 뒤에 기록된 판정만 센다(patch-id 승계도 그 뒤의 판정만). 재리뷰 항목은 queue round 가 blocks 로 만든다 |
+| 실패 retarget_approval | design-appendix 실패 → 방지 장치 → 회귀 시험 | changed (결정 215) | `core/land/land.ts:441`, `core/graph/rereview.ts:22`, `core/detect/pr/round.ts:388`, `test/land/retarget-rereview.test.ts:111` | G31 닫힘 — base 변경 뒤에 기록된 판정만 센다(patch-id 승계도 그 뒤의 판정만). 재리뷰 항목은 queue round 가 blocks 로 만든다 |
 | 실패 early_done·prod_gate | design-appendix 실패 → 방지 장치 → 회귀 시험 | partial | `core/graph/flow.ts:311`, `test/graph/flow.test.ts:124` | G23 — done_blockers 가 전환을 거부하지 않는다 |
 | 분류 바로 답·읽기·범위·시각 대기 | design-appendix 지시 분류 표 | changed (결정 162) | `claude-plugin/skills/intake/SKILL.md:18`, `claude-plugin/skills/intake/SKILL.md:32` | owner_class 줄 없이, 범위는 Orca send |
 | 분류 새 일·오너 판단·열린 결정의 답 | design-appendix 지시 분류 표 | implemented | `core/start/item.ts:33`, `core/decision/open.ts:45` | |

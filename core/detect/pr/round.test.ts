@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { dedupeKey, EVENTS } from "../../contract/index.ts";
 import type { OrcaAdapter, TaskRow } from "../../contract/orca.ts";
 import type { GhClient, GhResponse, RateBudget } from "../../gh/client.ts";
 import { Store } from "../../store/store.ts";
@@ -340,6 +341,27 @@ test("pr_ready_to_merge: a merge_on_approval PR approved and green wakes its own
   assert.deepEqual(w.calls, ["send run:run_lead_c 🟢 머지 가능: acme/api#12"]);
   await w.round();
   assert.equal(w.calls.length, 1, "one wake per head");
+});
+
+test("decision 215: after a base change, pr_ready_to_merge waits for a review recorded after it, at any head land may inherit", async () => {
+  const w = world();
+  w.link(13, "task_d", "blocked", "run_lead_d");
+  const ref = "acme/api#13";
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: ref, task: "task_d", base: "feature-a", head_sha: HEAD } });
+  w.store.append({ type: "verify_tier_set", source: "pr-monitor", payload: { pr: ref, head_sha: HEAD, computed: "V1", effective: "V1", actor: "pr-monitor", accepted: true, reason: "x" } });
+  w.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: ref, from: "feature-a", to: "main" } });
+  w.store.append({ type: "land_requested", source: "land", payload: { pr: ref, head_sha: HEAD, reason: "merge_on_approval" } });
+  w.routes[OPEN] = ok([listed(13)]);
+  w.routes[`repos/${REPO}/pulls/13`] = ok({ ...listed(13), state: "open", mergeable_state: "clean" });
+  w.routes[`repos/${REPO}/pulls/13/reviews?per_page=100&page=1`] = ok([{ user: { login: "bob" }, state: "APPROVED", commit_id: HEAD, author_association: "MEMBER" }]);
+  w.routes[`repos/${REPO}/commits/${HEAD}/check-runs?per_page=100`] = ok({ total_count: 1, check_runs: [{ status: "completed", conclusion: "success" }] });
+  await w.round();
+  assert.deepEqual(w.rows("pr_ready_to_merge"), [], "approved on GitHub, but no review since the base moved");
+  // Reviewed after the change at an earlier head; the rebase to HEAD keeps the patch, which land inherits.
+  const earlier = "c".repeat(40);
+  w.store.append({ type: "review_verdict", source: "review record", actor: "codex", dedupe_key: dedupeKey(EVENTS.review_verdict, ref, earlier, "codex", "0", "1"), payload: { pr: ref, head_sha: earlier, act_on: 0, reviewer: "codex", author: "alice" } });
+  await w.round();
+  assert.equal(w.rows("pr_ready_to_merge").length, 1);
 });
 
 /** PR 30 with one changes-requested review (2001), one review comment (3001) and the author's reply (3002). */

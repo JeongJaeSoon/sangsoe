@@ -440,7 +440,7 @@ async function reviewed(gh: GhClient, a: { repo: string; pr: string; head: strin
     throw new Refused(
       "rereview_needed",
       "",
-      `${a.pr}'s base moved from ${change.from} to ${change.to} and no review was recorded after it${item ? ` (re-review item ${item.alias})` : ""}`,
+      `${a.pr}'s base moved from ${change.from} to ${change.to} and no clean review was recorded after it${item ? ` (re-review item ${item.alias})` : ""}`,
       reviewHead,
     );
   }

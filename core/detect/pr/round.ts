@@ -382,9 +382,10 @@ async function readyToMerge(r: Reads, repo: string, p: ListedPull, link: Link | 
   if (land?.payload.reason !== "merge_on_approval") return;
   if (rowsOf(r, "pr_ready_to_merge", ref).some((e) => e.dedupe_key === key("pr_ready_to_merge", ref, p.head.sha))) return;
   // Decision 215: a GitHub approval is not merge-ready while the base change waits on its re-review.
+  // No head here: a later head land accepts by patch-id must still wake the lead; land judges the head.
   const reviewRows = [...rowsOf(r, "pr_base_changed", ref), ...rowsOf(r, "review_verdict", ref)].sort((a, b) => a.seq - b.seq);
   const movedNow = r.planned.some((e) => e.type === "pr_base_changed" && (e.payload as { pr?: unknown }).pr === ref);
-  if (movedNow || pendingRereview(reviewRows, ref, p.head.sha)) return;
+  if (movedNow || pendingRereview(reviewRows, ref)) return;
   const gh = r.d.gh as NonNullable<MonitorDeps["gh"]>;
   const pull = await readPull(gh, repo, p.number);
   if (pull.kind === "rate_limited") throw new RateLimited(pull.resetAt);

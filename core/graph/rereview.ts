@@ -25,10 +25,12 @@ export async function rereviewItems(deps: CoreDeps, snapshot: OrcaSnapshot): Pro
   const events = deps.store.events();
   const facts = foldFacts(events);
   for (const pr of facts.prs.values()) {
-    if (pr.merged || pr.closed) continue;
+    // A PR bound to no item has no item to block.
+    if (pr.merged || pr.closed || pr.tasks.size === 0) continue;
     const change = pendingRereview(events, pr.pr);
     if (!change) continue;
-    const owner = [...pr.tasks].map((t) => snapshot.tasks.find((x) => x.id === t)).find((t) => t !== undefined);
+    const bound = [...pr.tasks].flatMap((t) => snapshot.tasks.filter((x) => x.id === t));
+    const owner = bound[0];
     if (!owner) {
       refused.push(`${pr.pr}: none of its items is in a Run read this round`);
       continue;
@@ -41,7 +43,8 @@ export async function rereviewItems(deps: CoreDeps, snapshot: OrcaSnapshot): Pro
         title: `re-review ${pr.pr}`,
         spec: [
           `Re-review ${pr.pr}: its base moved from ${change.from} to ${change.to}, so the review recorded before that no longer counts.`,
-          "Review the PR at its current head and record the verdict with review_record (CLI: sangsoe review record). Land and the merge-ready report hold until then.",
+          "First run `sangsoe graph why` on the PR's item: if it shows no re-review row, a review is already recorded and this item is done.",
+          "Otherwise review the PR at its current head and record the verdict with review_record (CLI: sangsoe review record). Land and the merge-ready report hold until then.",
         ].join("\n"),
         who: typeof who === "string" ? who : "lead",
         doneWhen: rereviewDoneWhen(pr.pr, change),
@@ -61,13 +64,15 @@ export async function rereviewItems(deps: CoreDeps, snapshot: OrcaSnapshot): Pro
       }
       made.push(`${pr.pr} → ${item.alias}`);
     }
-    // Added until it is written once, so a round that stopped after the item still links it; an
-    // edge the lead removed stays removed.
+    // One edge into each of the PR's items, added until it is written once, so a round that stopped
+    // after the item still links it; an edge the lead removed stays removed.
     const pred = itemRef(item.task);
-    const succ = itemRef(owner.id);
-    if (events.some((e) => e.type === "edge_added" && e.payload.pred === pred && e.payload.succ === succ)) continue;
-    const edge = addEdgeTo(deps, snapshot, { pred, succ, kind: "blocks" });
-    if (!edge.ok) refused.push(`${pr.pr}: ${edge.refusal.code} ${edge.refusal.reason}`);
+    for (const t of bound) {
+      const succ = itemRef(t.id);
+      if (events.some((e) => e.type === "edge_added" && e.payload.pred === pred && e.payload.succ === succ)) continue;
+      const edge = addEdgeTo(deps, snapshot, { pred, succ, kind: "blocks" });
+      if (!edge.ok) refused.push(`${pr.pr}: ${edge.refusal.code} ${edge.refusal.reason}`);
+    }
   }
   return { made, refused };
 }
