@@ -10,7 +10,7 @@ export const STYLE = `
   /* The one side gutter: header, tab row, breadcrumb and content line up on it (decision 219 (7)). */
   --gx: var(--s3);
   --r1: 4px; --r2: 6px; --r3: 8px; --dur: 120ms;
-  --h-paper: oklch(98.6% 0.004 255); --h-paper-2: oklch(96.2% 0.005 255); --h-paper-3: oklch(94% 0.006 255);
+  --h-paper: oklch(100% 0 0); --h-paper-2: oklch(96.2% 0.005 255); --h-paper-3: oklch(94% 0.006 255);
   --h-ink: oklch(21% 0.01 255); --h-muted: oklch(50% 0.012 255);
   --h-rule: oklch(91.5% 0.006 255); --h-rule-2: oklch(82% 0.008 255);
   --h-accent: oklch(52% 0.17 255); --h-accent-ink: oklch(99% 0.005 255);
@@ -225,7 +225,8 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl td.nil { visibility: hidden; }
   .tbl.gt td.nil { display: none; }
   .tbl tr.bare td[data-l]:not(.num), .tbl tr.bare td.brk { display: none; }
-  .tbl tr.lead { margin-top: var(--s2); border-color: var(--rule-2); }
+  /* A group row heads its item cards instead of being one more card beside them. */
+  .tbl tr.lead { margin-top: var(--s3); padding: var(--s1) 0 0; border-color: transparent; }
   .tbl tr.lead:first-child { margin-top: 0; }
   .tbl tr.lead td { border: 0; }
   .tbl tr.lead td.nil { display: none; }

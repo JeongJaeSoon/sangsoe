@@ -66,12 +66,14 @@ test("(17)(18) a narrow list row is one card: a one-line head (state, id, title,
   assert.match(rule(NARROW, ".tbl:not(.gt) td:first-child, .tbl:not(.gt) td.title, .tbl td.num, .tbl td.hd"), /order: -2;/);
   assert.match(rule(NARROW, ".tbl td.brk"), /order: -1;/);
   assert.equal(rule(NARROW, ".tbl tr.item"), "", "no indent for an item under its group");
+  assert.match(rule(NARROW, ".tbl tr.lead"), /border-color: transparent;/, "a group row heads its cards, it is not one more card");
   assert.doesNotMatch(STYLE, /tr\.item td\.title::before \{ content: "└"/);
 });
 
 test("(tone) white everywhere: a fill only for hover, the chosen tab and an open menu; the summary and figures are bordered cards", () => {
   const fills = [...STYLE.matchAll(/([^{}]*)\{[^}]*background:\s*var\(--(?:paper-2|paper-3|accent-soft)\)/g)].map((x) => (x[1] ?? "").trim());
   assert.ok(fills.length > 0);
+  assert.match(STYLE, /^:root \{[^}]*--h-paper: oklch\(100% 0 0\);/m, "outside Orca the light paper is white too");
   for (const sel of fills) assert.match(sel, /:hover|aria-selected="true"|\[open\]/, sel);
   assert.match(rule(STYLE, ".sumline"), /border: 1px solid var\(--rule\); border-radius: var\(--r3\);/);
   assert.match(rule(STYLE, ".figs"), /border: 1px solid var\(--rule\); border-radius: var\(--r3\);/);
