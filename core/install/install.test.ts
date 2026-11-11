@@ -10,6 +10,7 @@ import { createOrcaAdapter } from "../orca/adapter.ts";
 import { doctor, realCheckContext, realPluginBuild } from "./doctor.ts";
 import { type Host, type Marketplace, type RunResult, realHost, sangsoeOrca, treeRoot } from "./host.ts";
 import { install, uninstall } from "./install.ts";
+import { type Files, SANGSOE_RULES } from "./permissions.ts";
 
 const ROOT = "/opt/homebrew/opt/sangsoe/libexec";
 // A fixture tree's version, deliberately not the release's: these tests must not need a bump per release.
@@ -249,6 +250,40 @@ test("decision 198: doctor reads Orca's profile for a sangsoe land allow rule, a
   assert.ok(!calls.some((c) => /\b(config|settings)\b.*\bset\b/.test(c)), "nothing is written");
 });
 
+test("decision 221: doctor warns with the fix when sangsoe's rules are missing, and both settings rows are ok once they are present", async () => {
+  const missing = await doctor(fakeHost().host, ROOT, online());
+  const m = SANGSOE_RULES.length;
+  const warn = new RegExp(`^warn +permissions: 0 of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json \\(missing or not JSON\\).* — fix: sangsoe install --permissions$`);
+  assert.ok(missing.lines.some((l) => warn.test(l)), missing.lines.join("\n"));
+
+  const { host } = fakeHost();
+  const read = host.readText;
+  const settings = JSON.stringify({ permissions: { allow: [...SANGSOE_RULES] } });
+  host.readText = (p) => (p === join(DEFAULT_DIR, "settings.json") ? settings : read(p));
+  const r = await doctor(host, ROOT, online());
+  assert.ok(r.lines.includes(`ok       permissions: ${m} of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json`), r.lines.join("\n"));
+  assert.ok(r.lines.some((l) => /^ok +land allow: /.test(l)), r.lines.join("\n"));
+});
+
+test("decision 221: uninstall removes the rules sangsoe recorded adding, and says so", () => {
+  const record = join(HOME, ".local/share/sangsoe/permissions.json");
+  const settingsPath = join(DEFAULT_DIR, "settings.json");
+  const disk = new Map<string, string>([
+    [record, JSON.stringify({ targets: { [settingsPath]: { rules: ["mcp__plugin_sangsoe_sangsoe"], created: [] } } })],
+    [settingsPath, '{\n  "permissions": {\n    "allow": [\n      "Bash(ls:*)",\n      "mcp__plugin_sangsoe_sangsoe"\n    ]\n  }\n}\n'],
+  ]);
+  const files: Files = {
+    read: (p) => disk.get(p),
+    write: (p, t) => void disk.set(p, t),
+    remove: (p) => void disk.delete(p),
+  };
+  const r = uninstall(fakeHost().host, files);
+  assert.ok(r.lines.includes(`permissions: removed 1 rules sangsoe added from ${settingsPath}`), r.lines.join("\n"));
+  assert.equal(disk.get(settingsPath), '{\n  "permissions": {\n    "allow": [\n      "Bash(ls:*)"\n    ]\n  }\n}\n');
+  assert.ok(!disk.has(record));
+  assert.match(r.lines.at(-1) ?? "", /^kept: /);
+});
+
 test("decision 198: Orca on the checked profile still reads whether sangsoe is enabled there, and a disabled one is not green", async () => {
   const { host, calls } = fakeHost({ env: { CLAUDE_CONFIG_DIR: ORCA_DIR }, orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: [...disabledPlugin()] } } });
   const r = await doctor(host, ROOT, online());
@@ -357,6 +392,7 @@ test("uninstall removes the three registrations and keeps data", async () => {
     "claude: removed marketplace sangsoe",
     "claude: restart every running Claude Code session that loaded sangsoe@sangsoe; until then it keeps the plugin's hooks",
     "orca: unloaded local.sangsoe",
+    "permissions: sangsoe added no permission rules",
     "kept: ~/.local/share/sangsoe (data) and ~/.config/sangsoe (settings); `brew uninstall sangsoe` removes the tree",
   ]);
 });
