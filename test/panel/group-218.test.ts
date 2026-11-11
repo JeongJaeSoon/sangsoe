@@ -13,7 +13,7 @@ test.before(async () => {
   group = g.value as unknown as PanelView;
 });
 const gm = () => group.model as GroupDetail;
-const cells = (html: string) => [...html.matchAll(/<div><dt>([^<]*)<\/dt><dd>(\d+)/g)].map((m) => [m[1], Number(m[2])] as const);
+const cells = (html: string) => [...html.matchAll(/<div(?: class="[^"]*")?><dt>([^<]*)<\/dt><dd>(\d+)/g)].map((m) => [m[1], Number(m[2])] as const);
 
 test("the title counts open items, the cells before ✅ add up to it, and ✅ comes after them", () => {
   const html = renderStage(group, ["현황", "api-migration"]);

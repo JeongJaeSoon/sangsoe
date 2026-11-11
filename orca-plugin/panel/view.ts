@@ -83,7 +83,11 @@ export type PanelView = {
 
 /** Where the panel is: [] is 현황, then a group, then an item. */
 export type Target = { group?: string; item?: string };
-export const down = (stack: readonly Target[], t: Target): Target[] => [...stack, t];
+// A second click on the row that opened this screen (a double click, or one during a slow read) stays put.
+export const down = (stack: readonly Target[], t: Target): Target[] => {
+  const c = current(stack);
+  return stack.length > 0 && c.group === t.group && c.item === t.item ? [...stack] : [...stack, t];
+};
 export const back = (stack: readonly Target[]): Target[] => stack.slice(0, -1);
 export const current = (stack: readonly Target[]): Target => stack[stack.length - 1] ?? {};
 export const trail = (stack: readonly Target[]): string[] =>
@@ -526,10 +530,12 @@ const sub = (t: Table, body: string, note = "") =>
   t.rows.length === 0 ? "" : `<div><h3>${esc(t.title)}${note ? ` <span class="note">${esc(note)}</span>` : ""}</h3>${body}</div>`;
 
 function figures(m: GroupDetail, f: GroupFigures): string {
-  const fig = (dt: string, dd: string) => `<div><dt>${esc(dt)}</dt><dd>${dd}</dd></div>`;
+  const fig = (dt: string, dd: string, cls = "") => `<div${cls ? ` class="${cls}"` : ""}><dt>${esc(dt)}</dt><dd>${dd}</dd></div>`;
+  // Decision 218: the three cells that add up to the title's 열린 N건 come first; ✅ is set apart after them.
   return (
-    `<dl class="figs" aria-label="묶음 요약">${fig("우선순위", esc(m.priority))}${fig(`✅ ${f.doneDays}일`, String(f.done))}${fig("🔄 진행 중", String(f.doing))}${fig("🚧 막힘", String(f.blocked))}` +
-    `${fig("남은 것", `${f.left} <small>📅 ${f.planned}, 🟢 ${f.ready}, ⏸️ ${f.onHold}</small>`)}${fig("🙋 오너", String(f.owner))}${fig("🚨 플래그", String(f.flags))}</dl>`
+    `<dl class="figs" aria-label="묶음 요약">${fig("우선순위", esc(m.priority))}${fig("🔄 진행 중", String(f.doing))}${fig("🚧 막힘", String(f.blocked))}` +
+    `${fig("남은 것", `${f.left} <small>📅 ${f.planned}, 🟢 ${f.ready}, ⏸️ ${f.onHold}</small>`)}${fig(`✅ ${f.doneDays}일`, String(f.done), "aside")}` +
+    `${fig("🙋 오너", String(f.owner))}${fig("🚨 플래그", String(f.flags))}</dl>`
   );
 }
 
@@ -539,7 +545,7 @@ function legend(): string {
     ...Object.entries(EDGE_KINDS).map(([k, v]) => `<tr><td data-l="선 모양">${line(k)}</td><td data-l="간선" class="kind">${k}</td><td data-l="뜻">${esc(v)}</td></tr>`),
     ...MARKS.map(([cls, name, v]) => `<tr><td data-l="선 모양">${line(cls)}</td><td data-l="간선">${name}</td><td data-l="뜻">${esc(v)}</td></tr>`),
   ];
-  return `<div class="legend"><h3>간선 종류</h3><table class="tbl gt"><thead><tr><th>선 모양</th><th>간선</th><th>뜻</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+  return `<details class="legend"><summary>간선 종류</summary><table class="tbl gt"><thead><tr><th>선 모양</th><th>간선</th><th>뜻</th></tr></thead><tbody>${rows.join("")}</tbody></table></details>`;
 }
 
 function group(m: GroupDetail): string {
@@ -563,7 +569,7 @@ function group(m: GroupDetail): string {
     m.broken ? sub(m.broken, gtTable(m.broken, { idCols: [0], titles })) : "",
   ].join("");
   return [
-    `<h1>${esc(m.lead)} <span class="pri">${esc(m.priority)}</span> <span class="dim">· ${m.items}건 · 막힘 ${m.blockedCount}</span></h1>`,
+    `<h1>${esc(m.lead)} <span class="pri">${esc(m.priority)}</span> <span class="dim">· 열린 ${m.items}건 · 막힘 ${m.blockedCount}</span></h1>`,
     m.figures ? figures(m, m.figures) : "",
     `<section aria-labelledby="h-graph"><div class="sec-h"><h2 id="h-graph">의존 그래프</h2><span class="hint">위에서 아래로. 굵은 선과 번호가 크리티컬 패스</span></div>`,
     `<div class="gwrap"><div class="gl">${graph}</div><div class="side">${side}</div></div></section>`,
@@ -632,8 +638,11 @@ function tabs(m: Overview, active: Tab): string {
   return `<nav class="seg" role="tablist" aria-label="현황 보기">${one("all", "전체", null)}${one("todo", "할 일", m.todo.total)}${one("prog", "진행 중", prog)}</nav>`;
 }
 
-const backLine = (crumbs: readonly string[]) =>
-  `<p class="crumbs"><button type="button" class="link" data-back>‹ 뒤로</button> ${crumbs.map(esc).join(" › ")}</p>`;
+// The last crumb is the screen shown, once and not a link; the back button sits apart (decision 218).
+const backLine = (crumbs: readonly string[]) => {
+  const items = crumbs.map((c, i) => (i === crumbs.length - 1 ? `<li aria-current="page">${esc(c)}</li>` : `<li>${esc(c)}</li>`));
+  return `<nav class="crumbs" aria-label="위치"><button type="button" class="link back" data-back>‹ 뒤로</button><ol class="trail">${items.join("")}</ol></nav>`;
+};
 
 /** The body of one stage. `crumbs` is the way back; the entry wires data-nav, data-act, back and tabs. */
 export function renderStage(
