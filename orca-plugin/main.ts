@@ -73,11 +73,12 @@ export default function activate(
     });
   }
 
-  // Panel readings now come every few seconds (decision 205): an unchanged item is not pushed again.
+  // Panel readings now come every few seconds (decision 205): an unchanged item is not pushed again,
+  // except by the 30-second round, which also repairs an item Orca reset while this worker ran.
   let shown: string | null = null;
-  const status = async (text: string, tone: Tone, tooltip?: string) => {
+  const status = async (text: string, tone: Tone, tooltip?: string, always = false) => {
     const key = JSON.stringify([text, tone, tooltip ?? ""]);
-    if (key === shown) return;
+    if (key === shown && !always) return;
     try {
       await orca.host.call("statusBar.update", { id: STATUS_ID, text, tone, ...(tooltip ? { tooltip } : {}) });
       shown = key;
@@ -103,7 +104,7 @@ export default function activate(
     intervalMs: STATUS_INTERVAL_MS,
     run: async () => {
       const s = await panel.status();
-      await status(s.text, s.tone, s.tooltip);
+      await status(s.text, s.tone, s.tooltip, true);
     },
   };
   const rounds = startRounds([statusRound], clock);

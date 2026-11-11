@@ -264,6 +264,14 @@ test("decision 205: an item whose worktree is gone opens to a no_worktree line; 
   assert.doesNotMatch(note, /selector/, "neither the line nor its title carries Orca's code or JSON");
   assert.ok(note.includes(ERROR_LINE.no_worktree ?? "?"));
 
+  // A reply cut short by the exec cap does not parse; its code is still read and the raw text never goes on.
+  const cut = openHandler(async () => ({ ok: false, code: 1, out: envelope.slice(0, 90), err: "" }), async () => ({ ok: true, value: { worktree: WT } }));
+  const c = (await cut({ view: "brief", group: "g", item: "i001" })) as { ok: false; refusal: { code: string; reason: string; fix: string } };
+  assert.equal(c.refusal.code, "no_worktree");
+  const garbled = openHandler(async () => ({ ok: false, code: 1, out: '{"id":"r1","ok":false,"error":{"message":"selector_not_found', err: "" }), async () => ({ ok: true, value: { worktree: WT } }));
+  const g = (await garbled({ view: "brief", group: "g", item: "i001" })) as { ok: false; refusal: { code: string; reason: string; fix: string } };
+  assert.doesNotMatch(errorNote(g.refusal), /selector/, "stdout with no readable code is dropped, not shown");
+
   const other = JSON.stringify({ ok: false, error: { code: "terminal_limit", message: "too many", data: { secret: "x" } } });
   const busy = openHandler(async () => ({ ok: false, code: 1, out: other, err: "" }), async () => ({ ok: true, value: { worktree: WT } }));
   const b = (await busy({ view: "brief", group: "g", item: "i001" })) as { ok: false; refusal: { code: string; reason: string } };

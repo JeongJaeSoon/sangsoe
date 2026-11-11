@@ -71,17 +71,21 @@ export function openHandler(exec: Exec, worktreeOf: (target: { group?: string; i
     // Orca answers a failure with a JSON envelope on stdout; only its code goes on (decision 205).
     const code = orcaErrorCode(r.out);
     if (code === "selector_not_found") return refuse("no_worktree", "the worktree this item ran in is gone", fix);
-    return refuse("open_failed", code ? `orca terminal create: ${code}` : (r.err || r.out || String(r.code)).slice(0, 200), fix);
+    // Stdout never goes on: a reply cut short by the exec cap does not parse but still carries Orca's JSON.
+    return refuse("open_failed", code ? `orca terminal create: ${code}` : (r.err || String(r.code)).slice(0, 200), fix);
   };
 }
 
+const CODE = /^[a-z_]{1,64}$/;
+
 function orcaErrorCode(out: string): string | null {
+  let code: unknown;
   try {
-    const code = (JSON.parse(out) as { error?: { code?: unknown } } | null)?.error?.code;
-    return typeof code === "string" && /^[a-z_]{1,64}$/.test(code) ? code : null;
+    code = (JSON.parse(out) as { error?: { code?: unknown } } | null)?.error?.code;
   } catch {
-    return null;
+    code = /"code"\s*:\s*"([a-z_]{1,64})"/.exec(out)?.[1];
   }
+  return typeof code === "string" && CODE.test(code) ? code : null;
 }
 
 const thrown = (e: unknown): Reply => refuse("core_error", e instanceof Error ? e.message : String(e), "reopen the panel; run sangsoe doctor if it repeats");

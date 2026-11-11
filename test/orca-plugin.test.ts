@@ -374,7 +374,7 @@ test("decision 198: a panel reading redraws status bar B from the same reading",
 
 test("decision 205: a reading that leaves status bar B as it was does not push it again", async () => {
   const w = fakeWorker();
-  const { clock } = fakeClock();
+  const { clock, advance } = fakeClock();
   const status = { text: "✨ SANGSOE  🚧 0 · 결정 1 · 🔄 0", tone: "danger" as const, tooltip: "t" };
   const core: PanelCore = {
     brief: async () => ({ ok: true, value: { status } }),
@@ -387,6 +387,8 @@ test("decision 205: a reading that leaves status bar B as it was does not push i
     await w.handlers.get("panel.brief")?.({ auto: true });
     await w.handlers.get("panel.brief")?.({ auto: true });
     assert.equal(w.hostCalls.filter(([m]) => m === "statusBar.update").length, 1, "the same item is pushed once");
+    await advance(30_000);
+    assert.equal(w.hostCalls.filter(([m]) => m === "statusBar.update").length, 2, "the 30-second round pushes it anyway, repairing a reset item");
   } finally {
     deactivate();
   }
