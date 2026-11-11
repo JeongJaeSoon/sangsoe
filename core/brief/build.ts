@@ -237,7 +237,8 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     summary: { done, doing, left, blocked },
     decisions: table("결정 필요", COLS.decisions, decisionRows),
     ownerTodo: table("지금 오너가 할 일", COLS.ownerTodo, todoRows),
-    inProgress: table("진행 중", COLS.inProgress, progress),
+    // Every state of an open item in a group, so not 🔄 진행 중's word (decision 222 (19)).
+    inProgress: table("열린 항목", COLS.inProgress, progress),
     onHold: holdRows.length > 0 ? table("보류", COLS.onHold, holdRows) : null,
     doneDays,
     evidenceShort,

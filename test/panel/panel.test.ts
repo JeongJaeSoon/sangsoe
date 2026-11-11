@@ -173,7 +173,7 @@ test("decision 169: header row, stage 1 tabs with model counts, empty sections o
   assert.match(html, /role="menuitem" data-open="[^"]*models[^"]*">터미널에서 sangsoe models</, "decision 200: the catalog view");
   assert.match(html, /<main data-view="all">/, "every section shows by default");
   assert.ok(html.includes(`data-tab-to="todo">할 일 <span class="count">${m.todo.total}</span>`));
-  assert.ok(html.includes(`data-tab-to="prog">진행 중 <span class="count">${m.inProgress.count}</span>`), "the tab says the section heading's number");
+  assert.ok(html.includes(`data-tab-to="prog">${m.inProgress.title} <span class="count">${m.inProgress.count}</span>`), "the tab says the section heading's name and number");
   assert.match(renderStage(one, "prog"), /<main data-view="prog">/);
   assert.equal(html.match(/data-tab="todo"/g)?.length, 2, "결정 필요 and 지금 오너가 할 일");
 
@@ -464,11 +464,11 @@ test("a core that throws becomes a refusal and status falls back to '✨ SANGSOE
   assert.equal((await later.status()).text, "🚧0 · 결정0 · 🔄0", "a failed load is tried again");
 });
 
-test("no row is painted by its state (decision 92①): only lead rows and hover shade", () => {
+test("no row is painted by its state (decision 92①): only hover shades a row (decision 222: lead rows stay white)", () => {
   assert.doesNotMatch(STYLE, /tr\.own|--bad-soft|background:\s*var\(--bad/);
-  const shaded = [...STYLE.matchAll(/([^{}]*)\{[^}]*background:\s*var\(--paper/g)]
+  const shaded = [...STYLE.matchAll(/([^{}]*)\{[^}]*background:\s*var\(--paper-/g)]
     .map((m) => (m[1] ?? "").trim())
     .filter((sel) => /(?:^|[\s>])(?:\.\w+\s+)*(tr|td)\b[^\s]*$/.test(sel));
-  assert.ok(shaded.length >= 2, "the check sees the lead and hover rules");
-  for (const sel of shaded) assert.match(sel, /tr\.lead|tr:hover/, sel);
+  assert.ok(shaded.length >= 1, "the check sees the hover rule");
+  for (const sel of shaded) assert.match(sel, /tr:hover/, sel);
 });
