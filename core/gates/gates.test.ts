@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { evaluate, GATES, hookOutput, mergeVerdicts, parseHookInput, roleOf, START_TOOL_ID } from "./index.ts";
-import { REPLAY_CWD, replay } from "./replay.ts";
+import { blockersOf, REPLAY_CWD, replay } from "./replay.ts";
 import type { Facts, OpenPr, Role } from "./types.ts";
 
 // Raw commands live in the fixture, not in this file: the repository scan for raw starts reads code files.
@@ -17,7 +17,7 @@ const lines = FIXTURE.split("\n")
         agent_type?: string;
         tool_name: string;
         tool_input: Record<string, unknown>;
-        facts?: { role?: Role; load?: "warn" | "danger"; openPrs?: OpenPr[]; scripts?: Record<string, string> };
+        facts?: { role?: Role; load?: "warn" | "danger"; openPrs?: OpenPr[]; scripts?: Record<string, string>; blockers?: Record<string, string[] | null> };
       },
   );
 
@@ -27,6 +27,7 @@ const denyFacts = (l: (typeof lines)[number]): Facts => ({
   load: () => ({ level: l.facts?.load ?? "ok", reasons: [] }),
   ownOpenPrs: () => l.facts?.openPrs,
   readScript: (p) => l.facts?.scripts?.[p],
+  doneBlockers: (task) => blockersOf(l.facts ?? {}, task),
 });
 
 const calm: Facts = {
@@ -34,6 +35,7 @@ const calm: Facts = {
   load: () => ({ level: "ok", reasons: [] }),
   ownOpenPrs: () => undefined,
   readScript: () => undefined,
+  doneBlockers: () => [],
 };
 
 test("fixture of real commands: no false positive, no false negative, the expected gate denies", (t) => {
@@ -133,6 +135,7 @@ test("load, open PRs and scripts are read only when a gate needs them", () => {
     load: () => read({ level: "ok", reasons: [] }),
     ownOpenPrs: () => read(undefined),
     readScript: () => read(undefined),
+    doneBlockers: () => read(undefined),
   };
   for (const command of ["ls -la", "git status", "npm test", "sed -n '1,5p' a.ts | head"]) {
     evaluate({ tool: "Bash", input: { command }, cwd: REPLAY_CWD, subagent: false }, counting);
