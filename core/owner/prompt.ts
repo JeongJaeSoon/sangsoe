@@ -7,7 +7,8 @@
 const ORCA_NUDGE = [
   /^Please carry out this task from my Orca coordinator/,
   /^You are working inside Orca, a multi-agent IDE\./,
-  /^You have (\d+|new) orchestration messages?\b/,
+  // "You have 2 orchestration messages", "You have new …", and the held-delivery "You have 2 new …".
+  /^You have (?:\d+ )?(?:new )?orchestration messages?\b/,
   /^Another Claude session sent a message:/,
   /^<task-notification>/,
 ];
