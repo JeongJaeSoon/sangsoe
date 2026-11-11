@@ -64,7 +64,7 @@ const CONFIG_KEYS = { loadPerCpu: "load_per_cpu", memFreePct: "mem_free_pct", di
 
 /**
  * The optional `capacity` key of `~/.config/sangsoe/config.json` (decision 210), per metric. A missing
- * or malformed entry keeps the code default, so a typo never loosens or disables the hold.
+ * or malformed entry keeps the code default, so a shape error never loosens or disables the hold.
  */
 export function readThresholds(home: string = homedir()): LoadThresholds {
   let section: unknown;

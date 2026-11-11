@@ -6,7 +6,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ### Changes
 
-- **A machine with 20 GB or more of free disk no longer holds every start.** The disk thresholds drop from warn 50 / danger 20 GB to warn 20 / danger 10 GB, so a low-load Mac with about 38 GB free starts a worker again. A start is still held at `warn` (210).
+- **A machine with more than 20 GB of free disk no longer holds every start.** The disk thresholds drop from warn 50 / danger 20 GB to warn 20 / danger 10 GB, so a low-load Mac with about 38 GB free starts a worker again. A start is still held at `warn` (210).
 - **Load thresholds are an optional setting.** The `capacity` key of `~/.config/sangsoe/config.json` overrides `load_per_cpu`, `mem_free_pct` and `disk_free_gb` per metric, each `[warn, danger]`; a missing or malformed entry keeps the default. No sangsoe command writes the key (210).
 - **The pressure gate names what binds.** Each reason gives the metric, its value and the threshold it crossed, worst first, for example `디스크 여유 8 GB ≤ 위험 10 GB`. The resource monitor's `pressure_high` reason reads the same (210).
 
