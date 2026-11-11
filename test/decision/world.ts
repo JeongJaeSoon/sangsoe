@@ -23,6 +23,8 @@ export interface World {
   failSendTo(address: string | null): void;
   /** The next send arrives but its response is lost, with or without Orca's request id on stderr. */
   loseNextSend(withRequestId: boolean): void;
+  /** From now on task-create refuses a Run other than run-current's, as Orca does (consumer_fenced). */
+  fence(): void;
 }
 
 const ok = (result: unknown): ExecResult => ({ code: 0, stdout: JSON.stringify({ ok: true, result }), stderr: "" });
@@ -51,6 +53,7 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
   let current = o.currentRun ?? null;
   let deadAddress: string | null = null;
   let lose: boolean | null = null;
+  let fenced = false;
   const requests = new Map<string, string>();
   const runOf = (task: string) => taskMap.get(task)?.run;
   const replies: Record<string, FakeReply> = {
@@ -71,6 +74,7 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
       });
     },
     "orchestration-task-create": (args: readonly string[]) => {
+      if (fenced && flag(args, "run") !== current) return err("consumer_fenced");
       // Its own counter, so a carrier Task does not shift the gate and message ids tests name.
       const id = `task_9${String(++created).padStart(11, "0")}`;
       taskMap.set(id, { id, run: flag(args, "run") ?? "run_unbound", status: "pending", title: flag(args, "task-title") ?? id });
@@ -162,6 +166,9 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
     },
     loseNextSend: (withRequestId) => {
       lose = withRequestId;
+    },
+    fence: () => {
+      fenced = true;
     },
   };
 }

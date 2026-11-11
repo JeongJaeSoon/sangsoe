@@ -1043,11 +1043,6 @@ test("decision 197: without a worktree, only an orchestrator outside every workt
   // No repo: Orca would have nowhere to put the worktree.
   const noRepo = harness();
   assertRefused(noRepo, await startUnit(ports(noRepo, () => 1, "/"), request({ requester: plainFolder, childRole: "lead" })), "lineage_invalid");
-  // A session inside a worktree must name it: a lead could otherwise pass as the orchestrator.
-  const inside = harness();
-  const out = await startUnit(ports(inside, () => 1, CALLER_CWD), request({ requester: plainFolder, childRole: "lead", repo: TARGET }));
-  assertRefused(inside, out, "lineage_invalid");
-  assert.match(out.kind === "refused" ? out.detail : "", /그 worktree 를 밝힌다/);
   // A lead or a worker always names its worktree.
   const { worktreeId: _w, ...leadNoTree } = lead;
   for (const role of ["lead", "worker"] as const) {
@@ -1066,6 +1061,19 @@ test("decision 197: without a worktree, only an orchestrator outside every workt
   // A selector Orca would not read.
   const bad = harness();
   assertRefused(bad, await start(bad, request({ repo: "acme-web" })), "lineage_invalid");
+});
+
+test("S6 re-run NOW-B (decision 217): an orchestrator inside a worktree may leave worktreeId out; start_unit reads it from its folder", async () => {
+  const h = harness();
+  const out = await startUnit(ports(h, () => 1, CALLER_CWD), request({ requester: plainFolder, childRole: "lead" }));
+  assert.equal(out.kind, "started", JSON.stringify(out));
+  assert.equal(flag(h.named("worktree create")[0] ?? [], "parent-worktree"), `id:${PARENT_TREE}`, "the resolved worktree is the new one's parent");
+  assert.equal(h.called("worker-list").length, 2, "the resolved worktree is scanned for a live Dispatch, as a declared one is");
+  // A lead leaving its worktree out to pass as the orchestrator is still given away by its live Dispatch.
+  const lead = harness({ liveDispatchInParent: true });
+  const r = await startUnit(ports(lead, () => 1, CALLER_CWD), request({ requester: plainFolder, childRole: "lead" }));
+  assertRefused(lead, r, "lineage_invalid");
+  assert.match(r.kind === "refused" ? r.detail : "", /ctx_lead/);
 });
 
 test("decision 197: a target repo rides on the parent's child worktree, so the parent worktree is kept; an item's recorded repo is used by id", async () => {
