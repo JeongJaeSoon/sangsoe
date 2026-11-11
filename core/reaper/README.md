@@ -12,4 +12,4 @@
 - `config.ts` — `~/.config/sangsoe/config.json` 의 `reaper`(`protect` · `grace_minutes` · `min_gap_minutes`). 칸이 없거나 읽을 수 없으면 라운드는 표시만 하고 `mark_only` 로 남는다(루트 실패가 아니다, 결정 174).
 - `open.ts` — 실제 의존(Orca 어댑터 · `gh` · store)을 묶은 실행기.
 
-터미널은 닫지 않는다: 이 폴더에는 `worker-release`·`terminal` 을 부르는 코드가 없다. 새 worktree 에서 연 세션은 Orca 가 자동으로 해제하지 않으므로 시작한 쪽이 `worker-release` 로 푼다: 워커는 시작한 리드·오케스트레이터가, `--keep-open` 으로 띄운 리드는 그 리드의 `worker_done` 뒤 오케스트레이터가(결정 193 ⑥, 197).
+세션 터미널은 닫지 않는다: 이 폴더에는 `worker-release` 를 부르는 코드가 없다. 새 worktree 에서 연 세션은 Orca 가 자동으로 해제하지 않으므로 시작한 쪽이 `worker-release` 로 푼다: 워커는 시작한 리드·오케스트레이터가, `--keep-open` 으로 띄운 리드는 그 리드의 `worker_done` 뒤 오케스트레이터가(결정 193 ⑥, 197). 닫는 터미널은 하나뿐이다(결정 202): `start_unit` 이 `unit_started.shell` 로 기록한 `worktree create` 의 셸을, 기록에 `setup: none` 이 있고 그 worktree 의 Dispatch 가 모두 `terminalState: released` 이며 `terminal list` 가 그 handle 을 agent 없는 터미널로 보일 때만 `terminal close --terminal <handle>` 로(`round.ts` 의 `closeReleasedShells`, dry run·`markOnly` 제외). `--all`·기록 없는 handle·`retained`·`release_pending` 은 건드리지 않는다. 셸이 닫히면 살아 있는 터미널이 없어 그 카드는 보통의 판정을 받는다.

@@ -26,6 +26,12 @@ const DESIGN_TABLE = [
   "worktree ps",
   "worktree list",
   "worktree rm",
+  // Decision 202: start_unit makes the worktree first so its local settings exist before the session,
+  // records the setup shell (and whether a setup script may run in it), and closes only that shell.
+  "worktree create",
+  "terminal list",
+  "terminal close",
+  "repo show",
   "reference add",
   "reference find",
   "ports",

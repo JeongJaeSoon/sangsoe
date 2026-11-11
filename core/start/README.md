@@ -1,17 +1,19 @@
 <!-- layout: slot=④ layer=실행 tokens=free -->
 # core/start — 세션을 여는 유일한 길
 
-sangsoe 가 여는 모든 세션은 `startUnit` 하나를 지난다(결정 94 (가)): `task-create --deps`(새 일일 때) → lineage·깊이 점검 → Task 가 `ready` 인지와 `capacity` 확인 → 고른 정책 행을 `unit_started` 로 남김(결정 200) → `worker-start --task <id> --worktree new-child`(대상 저장소는 `--repo`, 리드는 `--keep-open`, worktree 밖의 오케스트레이터만 `new-top-level --repo`, 결정 197) → 영수증과 `dispatch-show` 로 Dispatch 확인. spec 으로 만든 Task 에는 `item_created` 별칭을 붙인다. 이것 말고 세션을 여는 코드는 없고, `test/lineage/no-other-start.test.ts` 가 저장소를 훑어 그것을 지킨다.
+sangsoe 가 여는 모든 세션은 `startUnit` 하나를 지난다(결정 94 (가)): `task-create --deps`(새 일일 때) → lineage·깊이 점검 → Task 가 `ready` 인지와 `capacity` 확인 → `worktree create`(요청자 worktree 를 `--parent-worktree` 로, worktree 밖의 오케스트레이터만 `--no-parent`, 대상 저장소는 `--repo`, 결정 197) → 그 worktree 의 setup 셸 기록과 `.claude/settings.local.json` 에 행의 advisor 쓰기 → 고른 정책 행을 `unit_started` 로 남김(결정 200·202) → `worker-start --task <id> --worktree id:<새것> --keep-open` → 영수증과 `dispatch-show` 로 Dispatch 확인. spec 으로 만든 Task 에는 `item_created` 별칭을 붙인다. 이것 말고 세션을 여는 코드는 없고, `test/lineage/no-other-start.test.ts` 가 저장소를 훑어 그것을 지킨다.
 
 | 결과 | 언제 | 남기는 것 |
 |---|---|---|
 | `started` | Dispatch 가 있는 워커가 떴다 | 없음(Orca 가 원본) |
 | `waiting` | Task 가 `ready` 가 아니거나 `capacity` 가 모자람 | 없음(거부가 아니다) |
-| `refused` | 여섯 사유 중 하나(아래 순서로 판정) | `signal`{`start_refused`, reason} 한 줄 + 부모에게 escalation 한 통 |
+| `refused` | 여섯 사유 중 하나(아래 순서로 판정) | `signal`{`start_refused`, reason} 한 줄 + 부모에게 escalation 한 통. `worker-start` 가 분명히 실패하고 만든 worktree 의 터미널이 기록한 셸뿐이면 그 셸을 닫고 `worktree rm` 한다. 응답을 잃었거나 Dispatch 가 있거나 다른 터미널이 있으면 아무것도 닫지 않고 detail 에 적는다(결정 202) |
+
+setup 셸(결정 202): `worktree create` 는 agent 없이도 셸 하나를 연다. create 직후 그 worktree 의 터미널이 `agentIdentity` 없는 하나일 때만 그 handle 을 `unit_started.shell` 로 남긴다. `setup` 은 `repo show` 의 setup 스크립트가 비고 `orca.yaml` 이 없으면 `none`, 아니면 `script`, 읽지 못하면 `unknown` 이다. Orca 는 setup 이 끝났는지 알리지 않으므로 `none` 일 때만 REAPER 가 풀린 뒤 그 handle 을 닫고(`core/reaper/README.md`), 나머지는 남겨 시작 결과의 notes 에 handle 을 적는다.
 
 거부 사유: `capability_missing` → `lineage_invalid` → `depth_exceeded` → `model_invalid` → `orca_error` → `no_dispatch`. `model_invalid` 은 advisor tier 가 본 tier 보다 낮거나 fast tier 인 선택이다(결정 187): Claude Code 는 그런 advisor 를 말없이 떼므로 거부하는 곳은 여기 하나다.
 
-모델(결정 187): `worker-start` 는 `--model`·`--effort` 를 받고, `--advisor` 는 Orca 의 `agent-context` 가 `orchestration worker-start` 의 flag 로 `advisor` 를 보일 때만 넘긴다(`orcaTakesAdvisor`, `ORCA_COMMANDS.workerStart.optional`; 지금 Orca 에는 없다). 없으면 advisor 는 오너 설정 `advisorModel`(키가 있는지만 읽는다)에서 오고, 그것도 없으면 `withoutAdvisor` 가 있는 행(구현 워커)은 그 tier 로 시작하고 `model_changed` 를 남긴다. 어느 쪽이었는지는 `started.notes` 와 `started.launch` 가 말한다. 오케스트레이터가 거부되면 위가 없으므로 Orca 메시지 대신 `escalation`{to `owner`} 한 줄을 쓴다(오너 할 일의 재료).
+모델(결정 187): `worker-start` 는 `--model`·`--effort` 를 받고, `--advisor` 는 Orca 의 `agent-context` 가 `orchestration worker-start` 의 flag 로 `advisor` 를 보일 때만 넘긴다(`orcaTakesAdvisor`, `ORCA_COMMANDS.workerStart.optional`; 지금 Orca 에는 없다). 없으면 새 worktree 의 `.claude/settings.local.json` 에 행의 `advisorModel` 을 쓴다(결정 202, route `worktree_file`; 오너 설정보다 이긴다). advisor 가 없는 행과 행의 예산을 다 쓴 Task 의 다음 시작은 그 파일 `env` 에 `CLAUDE_CODE_DISABLE_ADVISOR_TOOL` 을 쓴다. 파일을 쓰지 못하면 advisor 는 오너 설정 `advisorModel`(키가 있는지만 읽는다)에서 오고, 그것도 없으면 `withoutAdvisor` 가 있는 행(구현 워커)은 그 tier 로 시작하고 `model_changed` 를 남긴다. 어느 쪽이었는지는 `started.notes` 와 `started.launch` 가 말한다. 오케스트레이터가 거부되면 위가 없으므로 Orca 메시지 대신 `escalation`{to `owner`} 한 줄을 쓴다(오너 할 일의 재료).
 
 역할 규칙: 오케스트레이터(깊이 0) > 리드(오케스트레이터의 자식) > 워커. 워커는 시작하지 않고, 리드는 리드를 시작하지 않으며, 부모 worktree 나 요청자의 Dispatch 를 읽지 못하면 시작하지 않는다. 역할은 부르는 쪽(MCP tool·CLI)이 밝히고, 코어가 Orca 로 대조한다: 부르는 세션이 그 Run 을 쥐었는지(`run-current`), 리드·워커의 Dispatch 가 밝힌 worktree 의 것이고 시작하려는 Run 밖에 있는지, 리드의 깊이가 1 인지, 오케스트레이터의 worktree 에 끝나지 않은 Dispatch 가 없는지(`worker-list` 전 페이지), 밝힌 worktree 의 경로가 부르는 세션의 작업 폴더를 품는지(모든 역할; 코어는 그 세션의 자식 프로세스다). 앞의 둘을 함께 보아야 시작 함수가 연 리드가 오케스트레이터라고 밝혀도 거부된다. Dispatch 없이 손으로 연 리드는 Orca 로는 오케스트레이터와 같아 가르지 못한다(docs/test-outcomes.md). MCP `start_unit` 은 정해진 값이 아닌 `role`·`childRole` 과 기존 Task 에 붙은 `lateAnswers` 를 Orca 를 부르기 전에 `invalid_input` 으로 거부한다.
 

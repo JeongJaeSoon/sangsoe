@@ -294,6 +294,26 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     worktreePs: (a) =>
       local("worktreePs", "worktrees", "hostId", "worktreeId", { flags: { limit: a.limit, "agent-wait": a.agentWait } }),
     worktreeRm: (a) => run("worktreeRm", { flags: { worktree: a.worktree, "run-hooks": true, "delete-branch": true } }),
+    worktreeCreate: async (a) => {
+      const r = await run<unknown>("worktreeCreate", {
+        // Orca infers a parent from the caller's folder context; a top-level start forces none.
+        flags: { name: a.name, ...(a.parent ? { "parent-worktree": a.parent } : { "no-parent": true }), repo: a.repo, setup: "run" },
+      });
+      if (!r.ok) return r;
+      const w = isObject(r.value) && isObject(r.value.worktree) ? r.value.worktree : undefined;
+      if (typeof w?.id !== "string" || typeof w.path !== "string") return unexpected("orca worktree create: no worktree id and path", r.value);
+      return { ok: true, value: { id: w.id, path: w.path, ...(typeof w.repoId === "string" ? { repoId: w.repoId } : {}) } };
+    },
+    terminalList: (a) => local("terminalList", "terminals", "executionHostId", "handle", { flags: { worktree: a.worktree } }),
+    terminalClose: (a) => run("terminalClose", { flags: { terminal: a.terminal } }),
+    repoShow: async (a) => {
+      const r = await shaped<Json>("repoShow", has("repo", isObject), { flags: { repo: a.repo } });
+      if (!r.ok) return r;
+      const hooks = (r.value.repo as Json).hookSettings;
+      const setup = isObject(hooks) && isObject(hooks.scripts) ? hooks.scripts.setup : undefined;
+      if (typeof setup !== "string") return unexpected("orca repo show: no hookSettings.scripts.setup", r.value);
+      return { ok: true, value: { setup } };
+    },
     ports: async (a) => {
       const r = await shaped<Json>("ports", has("ports", rowsWith({ id: "string", port: "number" })), { flags: { worktree: a.worktree } });
       if (!r.ok) return r;

@@ -1,5 +1,5 @@
 import type { OrcaAdapter } from "../contract/orca.ts";
-import type { AdvisorRoute, Choice } from "../models/index.ts";
+import type { AdvisorRoute, Choice, WorktreeSettings } from "../models/index.ts";
 import type { Store } from "../store/store.ts";
 
 export type Role = "orchestrator" | "lead" | "worker";
@@ -80,6 +80,8 @@ export type StartOutcome =
       alias?: string;
       dispatchId: string;
       worktreeId?: string;
+      /** The setup shell recorded on `unit_started` (decision 202); REAPER closes it after release. */
+      shell?: string;
       launch: { model: string; effort: string; advisor?: string; route: AdvisorRoute };
       notes: string[];
     }
@@ -103,4 +105,8 @@ export type StartPorts = {
   cwd?: () => string;
   /** Whether the owner's settings name an advisor (key presence only). Default reads the user settings. */
   advisorSetting?: () => boolean;
+  /** Writes the new worktree's local settings before its session starts (decision 202); throws when it cannot. */
+  writeSettings?: (worktreePath: string, s: WorktreeSettings) => void;
+  /** Whether the new worktree has its own repo hook file (`orca.yaml`); default reads the disk. */
+  hookFile?: (worktreePath: string) => boolean;
 };

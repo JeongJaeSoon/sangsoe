@@ -12,10 +12,13 @@ import { branchOf, type Finished, judgeFinished, repoOf, withRemoteCase } from "
 import { composeRunning, listening, readStacks, type Stacks } from "./live.ts";
 import { blockedKey, dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
 
-/** The only Orca calls REAPER has: reads and the one removal. No terminal call exists here. */
+/**
+ * The only Orca calls REAPER has: reads, the one removal, and closing a setup shell start_unit
+ * recorded (decision 202). No other terminal is ever closed here.
+ */
 export type ReaperOrca = Pick<
   OrcaAdapter,
-  "worktreeList" | "worktreePs" | "workerList" | "workerShow" | "taskList" | "ports" | "worktreeRm"
+  "worktreeList" | "worktreePs" | "workerList" | "workerShow" | "taskList" | "ports" | "worktreeRm" | "terminalList" | "terminalClose"
 >;
 
 export type ReaperDeps = {
@@ -59,6 +62,8 @@ export type ReapReport = {
   docker_skipped: boolean;
   /** Timer slots that never ran before this round (Orca was closed); 0 when the round is on time. */
   missed: number;
+  /** Setup shells start_unit recorded and this round closed after their units were released (decision 202). */
+  shells_closed: string[];
   planned: Planned[];
 };
 
@@ -112,6 +117,30 @@ async function openPrHeads(gh: GhClient, repo: string): Promise<Set<string> | nu
   return null;
 }
 
+/**
+ * Decision 202: `worker-release` never closes the plain shell `worktree create` opened, and a live
+ * terminal keeps a card from the reaper. Close that one recorded handle once every Dispatch in its
+ * worktree is released, only with no setup script that could still run there, and only while Orca
+ * still lists it with no agent in it. Unreadable means not now.
+ */
+async function closeReleasedShells(d: ReaperDeps, scope: readonly WorktreeRow[], workers: readonly WorkerRow[]): Promise<string[]> {
+  const inScope = new Set(scope.map((c) => c.id));
+  const closed: string[] = [];
+  for (const e of d.events({ type: "unit_started" })) {
+    const p = e.payload as { worktree?: string; shell?: string; setup?: string };
+    if (!p.worktree || !p.shell || p.setup !== "none" || !inScope.has(p.worktree)) continue;
+    const own = workers.filter((w) => w.workspace === p.worktree);
+    if (own.length === 0 || !own.every((w) => w.terminalState === "released")) continue;
+    const list = await d.orca.terminalList({ worktree: `id:${p.worktree}` });
+    if (!list.ok || list.value.truncated || list.value.nonLocal.rows > 0) continue;
+    const row = list.value.rows.find((t) => t.handle === p.shell);
+    if (!row || row.agentIdentity) continue;
+    const r = await d.orca.terminalClose({ terminal: p.shell });
+    if (r.ok) closed.push(p.shell);
+  }
+  return closed;
+}
+
 type Sighting = { state: "seen" | "cleared"; round: number; at: number };
 
 function lastSightings(events: readonly StoredEvent[]): Map<string, Sighting> {
@@ -126,7 +155,8 @@ function lastSightings(events: readonly StoredEvent[]): Map<string, Sighting> {
 /**
  * One REAPER round (decisions 82, 83, 86, 88): adopt unrecorded cards, read the roots, mark, record
  * candidates, then sweep only targets that pass every gate. A root that cannot be read ends the
- * round before any candidate row or removal. Terminals are never closed here.
+ * round before any candidate row or removal. The only terminal closed here is a released unit's
+ * recorded setup shell (decision 202).
  */
 export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<ReapReport> {
   const trigger = o.trigger ?? "timer";
@@ -150,6 +180,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     unknown: [],
     docker_skipped: false,
     missed: missedSlots(rounds, now, d.intervalMs),
+    shells_closed: [],
     planned: [],
   };
   const write = (e: Planned) => {
@@ -232,6 +263,8 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   const workers = await allWorkers(d.orca);
   if (typeof workers === "string") rootFailed(workers);
   else for (const w of workers) if (!settled(w) && w.workspace && byId.has(w.workspace)) marked.add(w.workspace);
+
+  if (typeof workers !== "string" && d.append && !o.markOnly) r.shells_closed = await closeReleasedShells(d, scope, workers);
 
   const ps = await d.orca.worktreePs({});
   if (!ps.ok) rootFailed(`worktree ps: ${ps.error.code}`);
