@@ -89,7 +89,7 @@ test("an owner item the panel pressed into ⏳ 검증 대기 keeps its 완료 of
   assert.ok(owner, "the fixture has an owner item");
   const done = `data-act="${JSON.stringify({ kind: "done", item: owner.ref }).replace(/"/g, "&quot;")}"`;
   assert.ok(renderStage(v).includes(done));
-  const pressed = renderStage(v, [], "all", {}, new Set([owner.ref]));
+  const pressed = renderStage(v, "all", {}, new Set([owner.ref]));
   assert.ok(!pressed.includes(done), "no 완료 act on the pressed row");
   assert.match(pressed, /<button type="button" class="btn" disabled>⏳ 검증 대기<\/button>/);
 
@@ -102,5 +102,5 @@ test("an item opened straight from 현황 still names itself to the terminal but
   assert.deepEqual(openTarget([]), {});
   assert.deepEqual(openTarget([{ item: "i026" }]), { item: "i026" });
   assert.deepEqual(openTarget([{ group: "acme" }, { item: "i026" }]), { group: "acme", item: "i026" });
-  assert.ok(renderStage(view({ item: "i026" }) as unknown as PanelView, ["i026"], "all", openTarget([{ item: "i026" }])).includes("&quot;item&quot;:&quot;i026&quot;"));
+  assert.ok(renderStage(view({ item: "i026" }) as unknown as PanelView, "all", openTarget([{ item: "i026" }])).includes("&quot;item&quot;:&quot;i026&quot;"));
 });

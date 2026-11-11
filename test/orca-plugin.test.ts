@@ -466,7 +466,7 @@ test("panel requests reach the core unchanged; a malformed act and a missing cor
     const r = (await w2.handlers.get("panel.brief")?.({})) as { ok: boolean; refusal: { code: string } };
     assert.deepEqual([r.ok, r.refusal.code], [false, "core_unavailable"]);
     await new Promise((r) => setImmediate(r));
-    assert.equal((w2.hostCalls[0]?.[1] as { text?: string } | undefined)?.text, "✨ SANGSOE  ?", "no number is guessed");
+    assert.equal((w2.hostCalls[0]?.[1] as { text?: string } | undefined)?.text, "✨ SANGSOE | ?", "no number is guessed");
   } finally {
     deactivate();
   }

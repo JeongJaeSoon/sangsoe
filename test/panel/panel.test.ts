@@ -98,7 +98,7 @@ test("PN2: a lead row goes down to its group, an item row to its item; back retu
   assert.deepEqual(trail(stack), ["현황", "api-migration", "i033"]);
   stack = back(back(stack));
   assert.deepEqual([current(stack), trail(stack)], [{}, []]);
-  assert.match(renderStage(view({ group: "api-migration" }), ["현황", "api-migration"]), /data-back/);
+  assert.match(renderStage(view({ group: "api-migration" })), /data-back/);
 });
 
 test("buttons follow owner_todo's kind: decisions answer, owner items take 완료, the rest none", () => {
@@ -127,15 +127,17 @@ test("PN3: status bar B reads the same numbers as sangsoe todo and the brief's t
   assert.ok(r.ok);
   const m = r.value.model as Overview;
   const s = statusBarItem(m);
-  assert.equal(s.text, `✨ SANGSOE  🚧 ${m.summary.blocked} · 결정 ${m.todo.decisions} · 🔄 ${m.summary.doing}`);
-  assert.equal(s.tone, m.todo.total > 0 ? "danger" : "neutral");
+  assert.equal(s.text, `✨ SANGSOE | 🚧 ${m.summary.blocked} | 결정 ${m.todo.decisions} | 🔄 ${m.summary.doing}`);
+  assert.equal(s.tone, m.todo.total > 0 || m.summary.blocked > 0 ? "danger" : "neutral");
+  assert.doesNotMatch(s.text, / {2}/, "one space between words (S6 LATER: double space)");
+  const calm = { ...m, todo: { total: 0, decisions: 0, other: 0 }, restartDue: [] };
+  assert.equal(statusBarItem({ ...calm, summary: { ...m.summary, blocked: 0 } }).tone, "neutral");
+  assert.equal(statusBarItem({ ...calm, summary: { ...m.summary, blocked: 1 } }).tone, "danger", "a 🚧 alone turns it red");
   const md = renderMarkdown(m, { maxWidth: 78 });
   assert.ok(md.includes(`🚧 막힌 것 ${m.summary.blocked}건`) && md.includes(`🔄 진행 중 ${m.summary.doing}건`));
   assert.ok(renderTodo(m).includes(`결정 ${m.todo.decisions}`));
   assert.ok(renderStage(view({})).includes(`내가 할 일 <span>${m.todo.total}</span>`));
 
-  const quiet = statusBarItem({ ...m, todo: { total: 0, decisions: 0, other: 0 } });
-  assert.equal(quiet.tone, "neutral");
   const huge = statusBarItem({ ...m, summary: { ...m.summary, blocked: 99999, doing: 99999 }, todo: { ...m.todo, decisions: 99999 } });
   assert.ok(huge.text.length <= STATUS_TEXT_MAX, huge.text);
 });
@@ -144,18 +146,18 @@ test("PN3: status bar B reads the same numbers as sangsoe todo and the brief's t
 test("preview pages for the screenshots (only with PANEL_PREVIEW_DIR)", { skip: !process.env.PANEL_PREVIEW_DIR }, () => {
   const dir = process.env.PANEL_PREVIEW_DIR ?? "";
   mkdirSync(dir, { recursive: true });
-  const stages: [string, PanelView, string[]][] = [
-    ["stage1", view({}), []],
-    ["stage1-empty", emptyOverview(), []],
-    ["stage2", view({ group: "api-migration" }), ["현황", "api-migration"]],
-    ["stage3", view({ item: "i031" }), ["현황", "api-migration", "i031"]],
+  const stages: [string, PanelView][] = [
+    ["stage1", view({})],
+    ["stage1-empty", emptyOverview()],
+    ["stage2", view({ group: "api-migration" })],
+    ["stage3", view({ item: "i031" })],
   ];
-  for (const [name, v, crumbs] of stages) {
+  for (const [name, v] of stages) {
     for (const theme of ["light", "dark"]) {
       for (const [w, width] of [["360", "360px"], ["sidebar", "665px"], ["wide", "1280px"]]) {
         // The script writes the drawn row heights into the page, so `--dump-dom` carries the measurement.
         const measure = `<script>addEventListener("load",()=>{const h=[...document.querySelectorAll("tr[data-id]")].map(r=>Math.round(r.getBoundingClientRect().height));const c={};for(const x of h)c[x]=(c[x]||0)+1;const p=document.createElement("pre");p.id="measure";p.textContent=JSON.stringify({rows:h.length,heights:c,svg:document.querySelectorAll("svg.dag").length});document.body.append(p);});</script>`;
-        const page = `<!doctype html><html lang="ko" class="${theme}" data-theme="${theme}"><head><meta charset="utf-8"><style>${STYLE}</style></head><body><div id="root" style="width:${width}">${renderStage(v, crumbs)}</div>${measure}</body></html>`;
+        const page = `<!doctype html><html lang="ko" class="${theme}" data-theme="${theme}"><head><meta charset="utf-8"><style>${STYLE}</style></head><body><div id="root" style="width:${width}">${renderStage(v)}</div>${measure}</body></html>`;
         writeFileSync(join(dir, `${name}-${w}-${theme}.html`), page);
       }
     }
@@ -172,7 +174,7 @@ test("decision 169: header row, stage 1 tabs with model counts, empty sections o
   assert.match(html, /<main data-view="all">/, "every section shows by default");
   assert.ok(html.includes(`data-tab-to="todo">할 일 <span class="count">${m.todo.total}</span>`));
   assert.ok(html.includes(`data-tab-to="prog">진행 중 <span class="count">${m.inProgress.count}</span>`), "the tab says the section heading's number");
-  assert.match(renderStage(one, [], "prog"), /<main data-view="prog">/);
+  assert.match(renderStage(one, "prog"), /<main data-view="prog">/);
   assert.equal(html.match(/data-tab="todo"/g)?.length, 2, "결정 필요 and 지금 오너가 할 일");
 
   const empty: PanelView = { ...one, model: { ...m, decisions: { ...m.decisions, rows: [], count: 0 } } };
@@ -181,7 +183,7 @@ test("decision 169: header row, stage 1 tabs with model counts, empty sections o
   assert.match(sec, /결정 필요 <span class="count">0<\/span><\/h2><span class="none">없음<\/span>/);
   assert.doesNotMatch(sec, /<table/);
 
-  const two = renderStage(view({ group: "api-migration" }), ["현황", "api-migration"]);
+  const two = renderStage(view({ group: "api-migration" }));
   assert.match(two, /data-back/);
   assert.doesNotMatch(two, /role="tablist"/, "tabs are stage 1's; stages 2 and 3 keep the way back");
 });
@@ -445,7 +447,7 @@ test("다른 답 is masked before it is stored or handed to the Run", async () =
   assert.match(String(w.store.events({ type: "decision_answered" })[0]?.payload.answer), /^use /);
 });
 
-test("a core that throws becomes a refusal and status falls back to '✨ SANGSOE  ?'", async () => {
+test("a core that throws becomes a refusal and status falls back to '✨ SANGSOE | ?'", async () => {
   const boom = async () => {
     throw new Error("disk gone");
   };
