@@ -210,10 +210,10 @@
 | N7 감시 범위 필터 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/detect/pr/config.ts:30`, `core/detect/pr/round.ts:494` | |
 | N8 보고 주소 규칙 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/gates/report-address.ts:20` | |
 | 현황 1단계 | design.html §3 오너가 보는 것 | implemented | `core/brief/build.ts:133`, `core/brief/render.ts:35` | |
-| 묶음 상세 2단계 | design.html §3 오너가 보는 것 | changed (결정 218) | `core/brief/build.ts:300`, `orca-plugin/panel/view.ts:551` | G13 고침(U76, 결정 213): 패널은 시안 순서대로 요약 수치 → 의존 그래프 → 왜 준비되지 않았나 → 간선 → 상태별 절 → 최근 전환 → 접힌 완료. 글은 지금 꼴을 지킨다(결정 213 ④). 결정 218: 머리는 "열린 N건 · 막힘 M"(🔄 + 🚧 + 남은 것, ✅ 는 따로), 🚧 항목마다 왜 행, 묶음 안 항목의 PR 마디는 그 항목(`core/brief/build.ts:310`) |
+| 묶음 상세 2단계 | design.html §3 오너가 보는 것 | changed (결정 218·219) | `core/brief/build.ts:310`, `core/brief/build.ts:369`, `orca-plugin/panel/view.ts:124`, `orca-plugin/panel/view.ts:100` | G13 고침(U76, 결정 213): 패널은 시안 순서대로 요약 수치 → 의존 그래프 → 왜 준비되지 않았나 → 간선 → 상태별 절 → 최근 전환 → 접힌 완료. 글은 지금 꼴을 지킨다(결정 213 ④). 결정 218: 머리는 "열린 N건 · 막힘 M"(🔄 + 🚧 + 남은 것, ✅ 는 따로), 🚧 항목마다 왜 행, 묶음 안 항목의 PR 마디는 그 항목. 결정 219: 크리티컬 패스·왜 행이 이름 대는 항목은 모두 마디, 경로는 화면의 자리(현황 › 묶음 › 항목)이고 뒤로는 그 줄 끝, 스택의 화면은 메모리에서 먼저 그린다, 좁은 패널의 요약 칸은 4+3, 게이트 없는 결정은 버튼 없는 깨진 행(`core/brief/build.ts:277`) |
 | 항목 상세 3단계 | design.html §3 오너가 보는 것 | partial | `core/brief/build.ts:541`, `orca-plugin/panel/view.ts:578` | G14 — 대화 기록 위치(세션 id·메시지 uuid)가 없다 |
 | 줌 보조 화면 | design.html §3 오너가 보는 것 | missing | `orca-plugin/panel/view.ts:600` | G15 — 결정 92 ③ 의 별도 보기가 없다 |
-| 상태 표시줄 항목 | design.html §3 오너가 보는 것 | implemented | `core/brief/panel.ts:57`, `orca-plugin/main.ts:83` | 결정 170 |
+| 상태 표시줄 항목 | design.html §3 오너가 보는 것 | changed (결정 219) | `core/brief/panel.ts:57`, `orca-plugin/main.ts:83` | 결정 170. 결정 219: 항목 사이 세로 막대, 🚧 나 오너의 할 일이 있으면 `danger`. 붉은 배경은 host API 가 tone 만 받아 정할 수 없다 |
 | owner_todo 한 곳 셈 | design.html §3 오너가 보는 것 | implemented | `core/brief/build.ts:138`, `core/brief/panel.ts:66` | |
 | 우선순위 P0–P3 | design.html §3 오너가 보는 것 | cut (결정 160) | `core/brief/item_status.ts:188` | 읽기·정렬은 있고 `priority_set` 을 쓰는 입구는 짓지 않았다. LATER — 오너가 우선순위를 바꾸려 한 첫 경우 |
 | 표 결정 필요 | design.html §3 현황 보고는 표 네 절이다 | implemented | `core/brief/build.ts:50`, `core/brief/build.ts:213` | |
@@ -325,7 +325,7 @@
 | CLI recover·verify-tier·monitor run·migrate | design.html 배치표 | implemented | `cli/commands/recover.ts:15`, `cli/commands/monitor.ts:29` | |
 | CLI decision·item new | design-appendix 결정 루프 | implemented | `cli/commands/decision.ts:26`, `cli/commands/item-new.ts:70` | |
 | CLI graph add·remove·ready·why·expand·critical·impact | design-appendix GRAPH: 모듈과 CLI | implemented | `cli/commands/graph-add.ts:11`, `cli/commands/graph-why.ts:15` | |
-| CLI graph sync | design-appendix GRAPH: 모듈과 CLI | changed (결정 215·217) | `cli/commands/graph-sync.ts:19`, `core/graph/sync.ts:58`, `core/detect/queue/round.ts:191`, `test/land/retarget-rereview.test.ts:212`, `test/detect/lead-run-s6.test.ts:79` | G22 닫힘 — queue-monitor 는 `pr_opened` 의 head·base 로 `stacked_on` 을 스스로 더하고(결정 212 ③), base 가 선행 PR 의 head 를 떠난 PR 에서는 그 간선을 뺀다. land 재요청 event 대신 재리뷰(결정 215 ②)가 문이고, 재리뷰 항목 spec 이 land 를 다시 부르라고 한다. 결정 217: CLI 도 재리뷰 항목을 만든다. 타이머가 `consumer_fenced` 로 막힌 Run 의 세션이 깨움을 받고 이것을 돌린다 |
+| CLI graph sync | design-appendix GRAPH: 모듈과 CLI | changed (결정 215·217·219) | `cli/commands/graph-sync.ts:19`, `core/graph/sync.ts:58`, `core/graph/own-run.ts:39`, `core/session/record.ts:40`, `test/land/retarget-rereview.test.ts:212`, `test/detect/lead-run-s6.test.ts:95` | G22 닫힘 — queue-monitor 는 `pr_opened` 의 head·base 로 `stacked_on` 을 스스로 더하고(결정 212 ③), base 가 선행 PR 의 head 를 떠난 PR 에서는 그 간선을 뺀다. land 재요청 event 대신 재리뷰(결정 215 ②)가 문이고, 재리뷰 항목 spec 이 land 를 다시 부르라고 한다. 결정 217: CLI 도 재리뷰 항목을 만든다. 결정 219: 타이머는 그 Run 을 깨우지 않는다(실제 Orca 가 보내기를 거부한다). 그 Run 에 묶인 세션의 `UserPromptSubmit`·`Stop` hook 이 같은 호출(`syncOwnRun`)을 한다 |
 | CLI graph skip | design-appendix 신호 흐름 | changed (결정 195) | `cli/commands/graph-skip.ts:11` | |
 | CLI graph(인자 없음)·priority set·owner-text redact | design.html 의존 관리, design-appendix sqlite 스키마 | cut (결정 160) | `core/store/store.ts:420` | LATER — 오너가 우선순위나 원문 지우기를 요청한 첫 경우 |
 | CLI hook·reap run·resource record·models·version | design-appendix 신호 흐름 | implemented | `cli/commands/hook.ts:29`, `cli/commands/reap.ts:27` | 설계 본문에 이름이 없는 셸 입구 |
