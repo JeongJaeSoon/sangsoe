@@ -1,4 +1,4 @@
-import { defineEvent, int, oneOf, opt, str } from "../define.ts";
+import { defineEvent, int, oneOf, opt, orcaId, str } from "../define.ts";
 
 // Decision 200: the policy row start_unit picked for a start and why, written before worker-start
 // so the new session's SessionStart reads it. Orca owns the Dispatch; this row keeps only sangsoe's
@@ -24,4 +24,6 @@ export default defineEvent("unit_started", {
   shell: opt(str),
   /** Whether a repo setup script may still run in `shell`: Orca gives no setup-done signal. */
   setup: opt(oneOf("none", "script", "unknown")),
+  /** The Task's Run, which briefRuns reads (decision 216). */
+  run: opt(orcaId),
 });

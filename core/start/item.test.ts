@@ -5,7 +5,7 @@ import { createOrcaAdapter } from "../orca/adapter.ts";
 import { Store } from "../store/store.ts";
 import { createItem, runSlots } from "./item.ts";
 
-test("createItem: task-create --deps on the Run, then one item_created row with Orca's id only", async () => {
+test("createItem: task-create --deps on the Run, then one item_created row with Orca's ids only (decision 216: its Run)", async () => {
   const fake = createFakeOrca({ replies: { "orchestration-task-create": { ok: true, result: { task: { id: "task_9" } } } } });
   const store = Store.open({ path: ":memory:" });
   const r = await createItem(createOrcaAdapter(fake.exec), store, {
@@ -20,7 +20,7 @@ test("createItem: task-create --deps on the Run, then one item_created row with 
   assert.equal(call[call.indexOf("--deps") + 1], '["task_1"]');
   const rows = store.events({ type: "item_created" });
   assert.equal(rows.length, 1);
-  assert.deepEqual(rows[0]?.payload, { task: "task_9", alias: "i001", who: "lead:api", done_when: "PR merged", owner_action: 0 });
+  assert.deepEqual(rows[0]?.payload, { task: "task_9", alias: "i001", who: "lead:api", done_when: "PR merged", owner_action: 0, run: "run_1" });
 });
 
 test("createItem: a refused task-create writes nothing", async () => {

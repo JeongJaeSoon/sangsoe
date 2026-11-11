@@ -8,6 +8,7 @@ const FIX = {
   invalid_role: "role is lead or worker: the session start_unit opens for this item",
   invalid_class: "class is default, hard, design or mechanical, and only for a worker item",
   invalid_repo: "repo is an Orca repo selector: id:<id>, name:<name> or path:<path>",
+  invalid_lead: "lead is the lead group's name, not empty",
   invalid_verify: "verify is one of pr_merged{pr} · orca_field{target,field,value} · plugin_approved{key} · run_ok{repo} · pr_found{repo,search}; cmdHint a non-empty command prefix",
 } as const;
 
@@ -44,6 +45,8 @@ export async function itemNew(values: CommandArgs["values"], ports: { orca?: Orc
   if (repo !== undefined && !REPO_SELECTOR.test(repo)) {
     return { ok: false, refusal: { code: "invalid_input", reason: `repo "${repo}" is not an Orca repo selector`, fix: FIX.invalid_repo } };
   }
+  const lead = values.lead === undefined ? undefined : str("lead");
+  if (lead === "") return { ok: false, refusal: { code: "invalid_input", reason: "lead is empty", fix: FIX.invalid_lead } };
   const store = ports.store ?? Store.open();
   try {
     const r = await createItem(ports.orca ?? createOrcaAdapter(nodeExec()), store, {
@@ -56,8 +59,8 @@ export async function itemNew(values: CommandArgs["values"], ports: { orca?: Orc
       ...(role ? { role } : {}),
     });
     if (r.ok) recordOwnerExtra(store, r.task, extra.value);
-    if (r.ok && (unitClass || repo)) {
-      const payload = { task: r.task, ...(unitClass ? { unit_class: unitClass } : {}), ...(repo ? { repo } : {}) };
+    if (r.ok && (unitClass || repo || lead)) {
+      const payload = { task: r.task, ...(unitClass ? { unit_class: unitClass } : {}), ...(repo ? { repo } : {}), ...(lead ? { lead } : {}) };
       store.append({ type: "item_extra_set", source: "core:item", payload, entity: "task", entity_id: r.task });
     }
     return r.ok ? { ok: true, value: { task: r.task, alias: r.alias } } : { ok: false, refusal: { code: r.code, reason: r.error, fix: FIX[r.code] } };
@@ -69,7 +72,7 @@ export async function itemNew(values: CommandArgs["values"], ports: { orca?: Orc
 export default {
   name: "item new",
   summary: "create an item's Orca Task (task-create --deps) and its iNNN alias; starting it is start_unit's",
-  usage: "--run <run id> --spec <text> --who <owner> --done-when <text> [--title <t>] [--deps <task,task>] [--role lead|worker] [--class default|hard|design|mechanical] [--repo id:<id>|name:<name>|path:<path>] [--verify <json>] [--cmd-hint <text>]",
+  usage: "--run <run id> --spec <text> --who <owner> --done-when <text> [--title <t>] [--deps <task,task>] [--role lead|worker] [--class default|hard|design|mechanical] [--repo id:<id>|name:<name>|path:<path>] [--lead <lead>] [--verify <json>] [--cmd-hint <text>]",
   options: {
     run: { type: "string" },
     spec: { type: "string" },
@@ -78,6 +81,7 @@ export default {
     role: { type: "string" },
     class: { type: "string" },
     repo: { type: "string" },
+    lead: { type: "string" },
     who: { type: "string" },
     "done-when": { type: "string" },
     verify: { type: "string" },

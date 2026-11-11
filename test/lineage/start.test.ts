@@ -483,6 +483,7 @@ test("decision 200: unit_started records the picked row before worker-start, for
       worktree: CHILD_TREE,
       shell: SHELL,
       setup: "none",
+      run: RUN,
     },
   );
   // A row with no advisor records none, and picked_by comes from the caller.
