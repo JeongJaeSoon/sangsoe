@@ -264,7 +264,8 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   if (typeof workers === "string") rootFailed(workers);
   else for (const w of workers) if (!settled(w) && w.workspace && byId.has(w.workspace)) marked.add(w.workspace);
 
-  if (typeof workers !== "string" && d.append && !o.markOnly) r.shells_closed = await closeReleasedShells(d, scope, workers);
+  // Not a card removal, so mark-only rounds (by flag or by no config) close it too; a dry run does not.
+  if (typeof workers !== "string" && d.append) r.shells_closed = await closeReleasedShells(d, scope, workers);
 
   const ps = await d.orca.worktreePs({});
   if (!ps.ok) rootFailed(`worktree ps: ${ps.error.code}`);

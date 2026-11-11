@@ -70,7 +70,21 @@ test("decision 202: nothing is closed before release, with a setup script, besid
   await reused.round();
   assert.deepEqual(closes(reused), []);
   const dry = world();
+  dry.dryRun = true;
   unit(dry, "dry");
-  await dry.round({ markOnly: true });
-  assert.deepEqual(closes(dry), [], "a mark-only round acts on nothing");
+  await dry.round();
+  assert.deepEqual(closes(dry), [], "a dry run acts on nothing");
+});
+
+test("decision 202: a mark-only round, and one with no reaper config, still closes the shell but removes no card", async () => {
+  const marking = world();
+  unit(marking, "marking");
+  assert.deepEqual((await marking.round({ markOnly: true })).shells_closed, [SHELL]);
+  const unset = world();
+  unset.config = null;
+  unit(unset, "unset");
+  await rounds(unset, 3, 30);
+  assert.deepEqual(closes(unset), [`terminalClose ${SHELL}`]);
+  assert.deepEqual(rms(unset), []);
+  assertNeverForbidden(unset);
 });

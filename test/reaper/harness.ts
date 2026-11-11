@@ -13,6 +13,7 @@ import {
   type LoadSample,
   type LocalRows,
   type OrcaResult,
+  type Planned,
   type PortRow,
   type ReaperConfig,
   type ReaperDeps,
@@ -289,6 +290,8 @@ export type World = {
   load: LoadSample;
   /** The timer period the round judges a pause by; unset in the scenarios that predate decision 182. */
   intervalMs?: number;
+  /** `sangsoe reap run --dry-run`: the round gets no `append`. */
+  dryRun?: boolean;
   round(o?: ReapOptions): Promise<ReapReport>;
   types(type: string): Record<string, unknown>[];
 };
@@ -310,7 +313,7 @@ export function world(): World {
         gh: w.gh,
         exec: w.docker.exec,
         events: (f) => store.events(f),
-        append: (e) => store.append(e),
+        ...(w.dryRun ? {} : { append: (e: Planned) => store.append(e) }),
         now: () => clock.now,
         config: w.config,
         sample: () => w.load,
