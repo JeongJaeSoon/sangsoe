@@ -14,6 +14,7 @@ export default defineEvent(
       "evidence_in_worktree",
       "listener",
       "compose_running",
+      "docker_unreachable",
       "in_use",
       "archive_hook_failed",
       "remote_host",

@@ -202,7 +202,12 @@ export class FakeGh implements GhClient {
 
 /** Docker as REAPER may run it; any other form fails the test. */
 export class FakeDocker {
-  daemon = true;
+  /**
+   * How `docker version` answers. `absent` is nodeExec's shape for a missing binary (measured:
+   * `failure: "spawn"`, stderr `spawn docker ENOENT`); every other non-`up` state is a Docker that is
+   * installed but does not answer.
+   */
+  state: "up" | "absent" | "down" | "timeout" | "empty" | "denied" = "up";
   /** inspect fails with an error that is not "No such ...". */
   inspectError = false;
   /** id → running (containers) or present (others). */
@@ -219,8 +224,14 @@ export class FakeDocker {
     this.calls.push(line);
     if (/\bprune\b|\bdown\b|(^| )-f( |$)|--force|--filter|label=/.test(line)) throw new Error(`forbidden docker call: ${line}`);
     const [kind, verb, ...rest] = args;
-    if (kind === "version") return this.daemon ? r(0, "27.0.0") : r(1);
-    if (!this.daemon) return r(1);
+    const spawn = (stderr: string): ExecResult => ({ code: null, stdout: "", stderr, failure: "spawn" });
+    if (this.state === "absent") return spawn("spawn docker ENOENT");
+    if (this.state === "denied") return spawn("spawn docker EACCES");
+    if (kind === "version") {
+      if (this.state === "timeout") return { code: null, stdout: "", stderr: "", failure: "timeout" };
+      return this.state === "up" ? r(0, "27.0.0") : this.state === "empty" ? r(0, "") : r(1);
+    }
+    if (this.state !== "up") return r(1);
     if (kind === "compose" && line === "compose ls --all --format json") {
       return this.composeError ? r(1) : r(0, JSON.stringify(this.stacks));
     }

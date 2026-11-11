@@ -263,11 +263,19 @@ test("reap_docker_order: recorded ids only, stopped containers → volumes → n
   const off = world();
   finishedCard(off, "no-daemon");
   recordResource(off.store, { kind: "volume", ref: "v1", owner: "inst-no-daemon" });
-  off.docker.daemon = false;
+  off.docker.state = "absent";
   const r = await rounds(off, 3);
   assert.equal(r.docker_skipped, true);
   assert.deepEqual(off.docker.calls, ["version --format {{.Server.Version}}"]);
   assert.equal(off.types("reap_round").at(-1)?.docker_skipped, true);
+
+  // Decision 201: once Docker is installed but does not answer, the hold is unknown, not skipped.
+  off.docker.state = "down";
+  off.docker.calls.length = 0;
+  const down = await rounds(off, 1);
+  assert.equal(down.docker_skipped, false);
+  assert.deepEqual(down.unknown, ["docker: docker version: exit 1"]);
+  assert.deepEqual(off.docker.calls, ["version --format {{.Server.Version}}"], "no id is inspected or removed");
   assertNeverForbidden(w);
   assertNeverForbidden(off);
 });

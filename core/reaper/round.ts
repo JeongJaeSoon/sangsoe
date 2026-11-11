@@ -7,7 +7,7 @@ import { settled } from "../recover/recover.ts";
 import type { Appended, EventFilter } from "../store/store.ts";
 import { type Check, type BlockReason as CheckReason, evidenceInWorktree, openWork, preDelete } from "./checks.ts";
 import type { ReaperConfig } from "./config.ts";
-import { dockerUp, sweepDocker } from "./docker.ts";
+import { type DockerState, dockerState, sweepDocker } from "./docker.ts";
 import { branchOf, type Finished, judgeFinished, repoOf, withRemoteCase } from "./finished.ts";
 import { composeRunning, listening, readStacks, type Stacks } from "./live.ts";
 import { blockedKey, dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
@@ -347,8 +347,8 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     r.reaped.push(`${kind}:${ref}`);
     write({ type: "reap_done", source: SOURCE, payload: { kind, ref }, dedupe_key: key("reap_done", kind, ref) });
   };
-  let up: Promise<boolean> | undefined;
-  const daemon = () => (up ??= dockerUp(d.exec));
+  let up: Promise<DockerState> | undefined;
+  const docker = () => (up ??= dockerState(d.exec));
   let stacks: Promise<Stacks> | undefined;
   const evidence = d.events({ type: "evidence" });
   // Decision 194: a hit skips the removal; nothing is stopped or killed. The Orca reads and `ports` are
@@ -358,9 +358,9 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     (card, f) => evidenceInWorktree(card, f, evidence),
     (card) => listening(card, d.orca),
     async (card) => {
-      stacks ??= readStacks(d.exec, daemon);
+      stacks ??= readStacks(d.exec, docker);
       const s = await stacks;
-      if (s.kind === "no_daemon") r.docker_skipped = true;
+      if (s.kind === "no_docker") r.docker_skipped = true;
       return composeRunning(card, s);
     },
     (card, f) => preDelete(card, f, d.exec, d.gh),
@@ -396,11 +396,14 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     if (c && !taskCard.has(w.taskId)) taskCard.set(w.taskId, c.instanceId);
   }
   const holds = dockerHolds(holdEvents(d.events));
-  const docker = [...holds.values()].filter((h) => h.held && reapedCards.has(taskCard.get(h.owner) ?? h.owner));
-  if (docker.length > 0 && !signal.aborted) {
-    if (!(await daemon())) r.docker_skipped = true;
+  const owned = [...holds.values()].filter((h) => h.held && reapedCards.has(taskCard.get(h.owner) ?? h.owner));
+  if (owned.length > 0 && !signal.aborted) {
+    const s = await docker();
+    // A Docker that does not answer keeps every hold for the next round.
+    if (s.kind === "absent") r.docker_skipped = true;
+    else if (s.kind === "unanswered") r.unknown.push(`docker: ${s.why}`);
     else {
-      for (const x of await sweepDocker(d.exec, docker)) {
+      for (const x of await sweepDocker(d.exec, owned)) {
         const h = holds.get(`${x.kind}\n${x.ref}`) as Hold;
         const gen = `g${h.gen}`;
         if (x.result === "removed") {
