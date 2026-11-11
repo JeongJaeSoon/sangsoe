@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import briefCommand from "../../cli/commands/brief.ts";
-import { type BriefInput, briefText, buildBrief, panelView, renderMarkdown } from "../../core/index.ts";
+import { type BriefInput, briefText, buildBrief, panelView, renderMarkdown, tableWidths } from "../../core/index.ts";
 import { renderStage } from "../../orca-plugin/panel/view.ts";
 import { groupWorld } from "./group-world.ts";
 
@@ -36,9 +36,17 @@ test("묶음 상세 text: --done opens the same list under the state sections", 
   const open = text({ group: "api-migration", done: true });
   assert.match(open, /### ✅ 완료 최근 7일 2\n\n\| 항목 \| PR \| 닫힘 \|/);
   assert.match(open, /i024 인덱스 추가/);
+  assert.match(text({ group: "api-migration" }), /^✅ 완료 최근 7일 2건 \(접힘\) · 항목:/m);
+  assert.doesNotMatch(open, /\(접힘\)/);
 });
 
-test("0 groups: the text says how a group comes to be, the same sentence as the panel; with groups it is gone", () => {
+test("the opened list keeps the text's table limits: 78 cells, 5 columns", () => {
+  for (const out of [text({ done: true }), text({ group: "api-migration", done: true })]) {
+    for (const w of tableWidths(out)) assert.ok(w.width <= 78 && w.cols <= 5, `line ${w.line}`);
+  }
+});
+
+test("0 groups: the text says how a group comes to be, the panel's line without its panel note; with groups it is gone", () => {
   const m = buildBrief(input, {});
   assert.ok(m.groups > 0);
   assert.doesNotMatch(renderMarkdown(m), /묶음이 아직 없다/);
@@ -49,7 +57,7 @@ test("0 groups: the text says how a group comes to be, the same sentence as the 
   assert.ok(view.ok);
   const stage = { ...view.value, model: zero } as unknown as Parameters<typeof renderStage>[0];
   const panel = /<p class="hint0"[^>]*>([^<]*)<\/p>/.exec(renderStage(stage))?.[1];
-  assert.equal(line, panel);
+  assert.equal(panel, `${line} 패널은 리드를 띄우지 않는다.`);
   const out = renderMarkdown(zero);
   assert.ok(out.indexOf(line) > out.indexOf("### 진행 중"), "under 진행 중");
 });

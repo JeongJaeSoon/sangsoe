@@ -8,9 +8,8 @@ export interface RenderOptions {
   readonly done?: boolean;
 }
 
-// The panel draws the same sentence (orca-plugin/panel/view.ts); test/brief/brief-text-199 holds them equal.
-export const NO_GROUP =
-  "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 진행 중 절에 그 행이 나온다. 패널은 리드를 띄우지 않는다.";
+// The panel's line (orca-plugin/panel/view.ts) starts with this and adds its own note; test/brief/brief-text-199 holds the prefix.
+export const NO_GROUP = "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 진행 중 절에 그 행이 나온다.";
 
 // Cuts and escapes only: every number below is read from the model, none is counted here.
 
@@ -73,7 +72,8 @@ function group(m: GroupDetail, open: boolean): string[] {
     ...section(m.why, "없음"),
     ...m.sections.flatMap((t) => section(t, null)),
     ...doneList(m.done, open),
-    `✅ 완료 ${m.doneFolded}건${open ? "" : " (접힘)"} · 항목: \`sangsoe brief ${m.lead} <항목>\``,
+    // The fold is the window's rows (decision 199 ③), not doneFolded's every ✅ of the group.
+    `${open ? "" : `${m.done.title} ${m.done.count}건 (접힘) · `}항목: \`sangsoe brief ${m.lead} <항목>\``,
   ];
 }
 

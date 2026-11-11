@@ -213,7 +213,7 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
   ].join("");
 }
 
-// The chat text says the same sentence (core/brief/render.ts NO_GROUP); test/brief/brief-text-199 holds them equal.
+// The chat text says the first two sentences (core/brief/render.ts NO_GROUP); test/brief/brief-text-199 holds the prefix.
 const NO_GROUP =
   "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 진행 중 절에 그 행이 나온다. 패널은 리드를 띄우지 않는다.";
 
