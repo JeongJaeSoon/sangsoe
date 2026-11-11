@@ -19,10 +19,11 @@ const text = (target: Parameters<typeof briefText>[1]) => {
   return r.value;
 };
 
-test("현황 text: folded by default, the count line says how to open it; --done lists every done row", () => {
+test("현황 text: folded by default to the summary count, the bottom line as decision 89 fixed it; --done lists every done row", () => {
   const folded = text({});
   assert.doesNotMatch(folded, /### ✅ 완료 최근 7일/);
-  assert.match(folded, /완료는 최근 7일 2건 \(목록: `--done`\)/);
+  assert.match(folded, /^✅ 완료 2건 · /m);
+  assert.match(folded, /^완료는 최근 7일 · 🔍/m);
   const open = text({ done: true });
   const list = open.slice(open.indexOf("### ✅ 완료 최근 7일 2"));
   assert.match(list, /^### ✅ 완료 최근 7일 2\n\n\| 항목 \| PR \| 닫힘 \|/);

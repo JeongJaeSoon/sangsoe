@@ -38,7 +38,7 @@ function section(t: Table, emptyText: string | null): string[] {
 
 const stamp = localStamp;
 
-// Folded, 완료 is the count in the line under the tables; `--done` opens it into its own table.
+// Folded, 완료 is only the summary line's count (decision 89 keeps it off the bottom line); `--done` opens the rows.
 const doneList = (t: Table, open: boolean): string[] => (open ? section(t, "없음") : []);
 
 function overview(m: Overview, open: boolean): string[] {
@@ -54,7 +54,7 @@ function overview(m: Overview, open: boolean): string[] {
     ...(m.groups === 0 ? [NO_GROUP, ""] : []),
     ...(m.onHold ? section(m.onHold, null) : []),
     ...doneList(m.done, open),
-    `완료는 최근 ${m.doneDays}일 ${m.done.count}건${open ? "" : " (목록: `--done`)"} · 🔍 근거 부족 ${m.evidenceShort} · 상세: \`sangsoe brief <묶음>\``,
+    `완료는 최근 ${m.doneDays}일 · 🔍 근거 부족 ${m.evidenceShort} · 상세: \`sangsoe brief <묶음>\``,
     ...(m.advisorToday ? [m.advisorToday] : []),
   ];
 }
@@ -73,7 +73,7 @@ function group(m: GroupDetail, open: boolean): string[] {
     ...section(m.why, "없음"),
     ...m.sections.flatMap((t) => section(t, null)),
     ...doneList(m.done, open),
-    `✅ 완료 ${m.doneFolded}건${open ? "" : " (접힘, 목록: `--done`)"} · 항목: \`sangsoe brief ${m.lead} <항목>\``,
+    `✅ 완료 ${m.doneFolded}건${open ? "" : " (접힘)"} · 항목: \`sangsoe brief ${m.lead} <항목>\``,
   ];
 }
 
