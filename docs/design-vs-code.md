@@ -18,13 +18,13 @@
 |---|---|---|---|---|---|---|
 | 0. 오너의 고정 규칙 | 5 | 4 | 1 | 0 | 0 | 0 |
 | 1. 칸 배치 · Orca CLI · 설치 | 131 | 93 | 8 | 9 | 1 | 20 |
-| 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 79 | 17 | 2 | 6 | 11 |
+| 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 83 | 13 | 2 | 6 | 11 |
 | 3. 데이터 · MCP · CLI · GRAPH | 80 | 53 | 9 | 1 | 3 | 14 |
 | 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 32 | 6 | 4 | 6 | 9 |
 | 5. 결정이 자르거나 바꾼 것 | 45 | 0 | 0 | 0 | 13 | 32 |
-| 합계 | 433 | 261 | 41 | 16 | 29 | 86 |
+| 합계 | 433 | 265 | 37 | 16 | 29 | 86 |
 
-`partial`·`missing` 57행은 갭 34개(`G1`–`G36`, U77 이 고친 `G2` 와 결정 215 로 닫힌 `G31` 을 뺀 것)로 묶인다. 제안은 NOW 8 · LATER 23 · DROP 4 이고, NOW 가운데 `G2` 는 U77 이 고쳤다. 집계는 표의 상태 칸을 세어 냈다.
+`partial`·`missing` 53행은 갭 32개(`G1`–`G36`, U77 이 고친 `G2`, U76 이 고친 `G13` `G16`, 결정 215 로 닫힌 `G31` 을 뺀 것)로 묶인다. 제안은 NOW 6 · LATER 23 · DROP 4 이고(`G13` `G16` 은 `고침(U76)`), NOW 가운데 `G2` 는 U77 이 고쳤다. 집계는 표의 상태 칸을 세어 냈다.
 
 ## 0. 오너의 고정 규칙
 
@@ -210,7 +210,7 @@
 | N7 감시 범위 필터 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/detect/pr/config.ts:30`, `core/detect/pr/round.ts:494` | |
 | N8 보고 주소 규칙 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/gates/report-address.ts:20` | |
 | 현황 1단계 | design.html §3 오너가 보는 것 | implemented | `core/brief/build.ts:133`, `core/brief/render.ts:35` | |
-| 묶음 상세 2단계 | design.html §3 오너가 보는 것 | partial | `core/brief/build.ts:297`, `orca-plugin/panel/view.ts:544` | G13 — 상태별 절이 그래프 위에 온다. 시안 순서로 옮기기는 결정 199 ⑥ 이 남겼다 |
+| 묶음 상세 2단계 | design.html §3 오너가 보는 것 | implemented | `core/brief/build.ts:297`, `orca-plugin/panel/view.ts:545` | G13 고침(U76, 결정 213, 줄 번호는 U76 기준): 패널은 시안 순서대로 요약 수치 → 의존 그래프 → 왜 준비되지 않았나 → 간선 → 상태별 절 → 최근 전환 → 접힌 완료. 글은 지금 꼴을 지킨다(결정 213 ④) |
 | 항목 상세 3단계 | design.html §3 오너가 보는 것 | partial | `core/brief/build.ts:541`, `orca-plugin/panel/view.ts:578` | G14 — 대화 기록 위치(세션 id·메시지 uuid)가 없다 |
 | 줌 보조 화면 | design.html §3 오너가 보는 것 | missing | `orca-plugin/panel/view.ts:600` | G15 — 결정 92 ③ 의 별도 보기가 없다 |
 | 상태 표시줄 항목 | design.html §3 오너가 보는 것 | implemented | `core/brief/panel.ts:57`, `orca-plugin/main.ts:83` | 결정 170 |
@@ -220,8 +220,8 @@
 | 표 지금 오너가 할 일 | design.html §3 현황 보고는 표 네 절이다 | implemented | `core/brief/build.ts:51`, `core/brief/build.ts:277` | |
 | 표 진행 중 | design.html §3 현황 보고는 표 네 절이다 | implemented | `core/brief/build.ts:52`, `core/brief/build.ts:189` | |
 | 표 보류 | design.html §3 현황 보고는 표 네 절이다 | implemented | `core/brief/build.ts:53`, `core/brief/build.ts:239` | |
-| 완료 최근 7일 접힌 목록 | design.html §3 현황 보고는 표 네 절이다 | partial | `orca-plugin/panel/view.ts:220`, `core/brief/render.ts:46` | G16 — 패널에는 있고 채팅 글에는 창 길이 줄뿐이며 `--done` 옵션이 없다. 글에 새 부분을 더하는 일은 결정 199 ⑥ 이 다음 패널 단위로 남겼다 |
-| 묶음 0개 안내 줄 | design.html §3 현황 보고는 표 네 절이다 | partial | `orca-plugin/panel/view.ts:209` | G16 — 패널에만 있고 글 렌더러에는 없다 |
+| 완료 최근 7일 접힌 목록 | design.html §3 현황 보고는 표 네 절이다 | implemented | `orca-plugin/panel/view.ts:221`, `core/brief/render.ts:41`, `cli/commands/brief.ts:37` | G16 고침(U76, 결정 213, 줄 번호는 U76 기준): 글은 건수 줄로 접고 `sangsoe brief [<묶음>] --done` 이 같은 행을 표로 편다 |
+| 묶음 0개 안내 줄 | design.html §3 현황 보고는 표 네 절이다 | implemented | `orca-plugin/panel/view.ts:209`, `core/brief/render.ts:53` | G16 고침(U76, 결정 213, 줄 번호는 U76 기준): 글도 진행 중 절 아래에 패널 문장의 앞 두 문장을 둔다 |
 | 상태 일곱과 읽기 상태 | design.html §3 상태와 용어 | implemented | `core/contract/transitions.ts:10`, `core/brief/item_status.ts:75` | 예정·준비됨·진행 중·막힘·보류·완료·취소, 검증 대기(결정 181), PR 모름·닫힘(결정 178) |
 | 플래그 넷 | design.html §3 상태와 용어 | implemented | `core/brief/build.ts:555`, `core/brief/item_status.ts:202` | 결정 필요·오류·확인 필요·근거 부족 |
 | 역할 표 GRAPH | design-appendix 역할과 완료 판정 표 | implemented | `core/graph/edit.ts:113`, `core/detect/queue/round.ts:66` | |
@@ -255,7 +255,7 @@
 | 저장소 위생과 설치 | design-appendix 게이트와 원칙 | implemented | `test/hooks-registered.test.ts:23` | |
 | 게이트가 담은 가정 여섯 | design-appendix 게이트가 담은 가정 | implemented | `core/gates/pressure.ts:20`, `core/approve/review-verdict.ts:74` | 가정을 다시 재는 절차는 코드 밖 |
 | 패널 index 현황 | design-appendix 패널 화면 | partial | `orca-plugin/panel/view.ts:180` | G21 — "내 지시는 어디까지 갔나" 접힘 구역이 없다 |
-| 패널 group 묶음 상세 | design-appendix 패널 화면 | partial | `orca-plugin/panel/view.ts:454`, `orca-plugin/panel/view.ts:544` | G13 — SVG DAG 는 있고 절 순서는 결정 199 ⑥ 이 남겼다 |
+| 패널 group 묶음 상세 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:454`, `orca-plugin/panel/view.ts:545` | G13 고침(U76, 결정 213, 줄 번호는 U76 기준): SVG DAG 와 시안의 절 순서 |
 | 패널 item 항목 상세 | design-appendix 패널 화면 | changed (결정 136) | `orca-plugin/panel/view.ts:578` | 버튼은 추천대로·다른 답·완료 셋. 대화 기록 위치는 G14 |
 | 패널 zoom | design-appendix 패널 화면 | missing | `orca-plugin/panel/view.ts:600` | G15 |
 | 패널 머리 행과 탭 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:607`, `orca-plugin/panel/view.ts:626` | 결정 169 |
@@ -513,10 +513,10 @@
 | G10 | `restart_due` 를 부르는 쪽이 없다(N1) | NOW | 설계가 지어졌다고 적은 복구 규칙이고, 오케스트레이터 글이 이 신호를 기다린다. 재현: 시험 밖 호출자 0 |
 | G11 | `wake_unconfirmed` 를 한 단계 위로 올리지 않는다(N3) | NOW | 설계가 지어졌다고 적은 복구 규칙이다. 깨움이 실패하면 아무도 모른다 |
 | G12 | resource-monitor 의 누수 검사가 Docker 만 본다 | LATER | Docker 밖의 누수(프로세스·compose·worktree)가 처음 관측되면 |
-| G13 | 묶음 상세의 절 순서가 시안과 다르다 | NOW | 결정 199 ⑥ 이 "다음 패널 단위의 일" 로 남겼다. 다시 볼 조건이 아니라 예정된 일이라 G16 과 한 단위로 |
+| G13 | 묶음 상세의 절 순서가 시안과 다르다 | 고침(U76) | 결정 199 ⑥ 이 "다음 패널 단위의 일" 로 남겼다. 그래프 · 왜 · 간선 뒤에 상태별 절과 최근 전환이 온다(`test/panel/group-199.test.ts`) |
 | G14 | 항목 상세에 대화 기록 위치가 없다 | LATER | reflect 나 오너가 항목에서 대화로 가야 하는 첫 경우 |
 | G15 | 줌 보조 화면이 없다 | DROP | 결정 92 가 기본이 아닌 별도 보기로 낮췄고 시안 파일도 저장소에 없다. 오너가 다시 원하면 새 결정으로 |
-| G16 | 채팅 글 현황에 완료 7일 목록·묶음 0개 안내가 없다 | NOW | 결정 199 ⑥ 이 `sangsoe brief` 글에 새 부분을 더하는 일을 다음 패널 단위로 남겼다. G13 과 한 단위로 |
+| G16 | 채팅 글 현황에 완료 7일 목록·묶음 0개 안내가 없다 | 고침(U76) | 결정 199 ⑥ 이 `sangsoe brief` 글에 새 부분을 더하는 일을 다음 패널 단위로 남겼다. 글은 `--done` 으로 목록을 펴고 묶음 0개면 패널과 같은 안내 줄을 둔다(`test/brief/brief-text-199.test.ts`) |
 | G17 | 압박 게이트가 기다릴 순서를 알려 주지 않고 맞추는 무거운 작업이 셋뿐이다 | LATER | 압박 거부 뒤 같은 명령이 되풀이된 것이 관측되면 |
 | G18 | 스킬 크기 상한 시험과 hook 호출당 비용 측정이 없다 | LATER | 스킬이 상한을 넘은 첫 PR, 또는 hook 지연이 체감되면 |
 | G19 | 화면 언어 설정이 없다 | DROP | 오너가 한 사람이고 한국어를 쓴다. 다른 언어 사용자가 생기면 새 결정으로 |

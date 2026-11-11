@@ -32,17 +32,18 @@ export { storeSeq, watchStore } from "./watch.ts";
 export type * from "./types.ts";
 export { fit, prLabel, tableWidths, textWidth } from "./width.ts";
 
-/** `sangsoe brief` · `sangsoe brief <group>` · `sangsoe brief <group> <item>` as text. */
-export function briefText(input: BriefInput, target: { group?: string; item?: string }, opts: BuildOptions = {}): Result<string> {
+/** `sangsoe brief` · `sangsoe brief <group>` · `sangsoe brief <group> <item>` as text; `done` is `--done`. */
+export function briefText(input: BriefInput, target: { group?: string; item?: string; done?: boolean }, opts: BuildOptions = {}): Result<string> {
+  const render = { maxWidth: 78, done: target.done === true };
   if (target.item) {
     const m = buildItem(input, target.item, opts);
-    return m ? done(renderMarkdown(m)) : refuse("not_found", `no item ${target.item}`, "sangsoe brief <group> <iNNN>");
+    return m ? done(renderMarkdown(m, render)) : refuse("not_found", `no item ${target.item}`, "sangsoe brief <group> <iNNN>");
   }
   if (target.group) {
     const m = buildGroup(input, target.group, opts);
-    return m ? done(renderMarkdown(m)) : refuse("not_found", `no open group ${target.group}`, "sangsoe brief");
+    return m ? done(renderMarkdown(m, render)) : refuse("not_found", `no open group ${target.group}`, "sangsoe brief");
   }
-  return done(renderMarkdown(buildBrief(input, opts)));
+  return done(renderMarkdown(buildBrief(input, opts), render));
 }
 
 /** `sangsoe todo`: the same model's to-do count and owner sections. */
