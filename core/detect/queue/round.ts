@@ -188,28 +188,9 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
       }),
     });
   }
-  // Decision 217: Orca lets only the session bound to a Run write to it, so a re-review item fenced
-  // out of the lead's Run becomes one wake per base change, asking that session to make it.
-  for (const f of fenced) {
-    const key = `notify:${dedupeSegment(f.task)}:rereview_fenced:${dedupeSegment(f.pr)}:${f.seq}`;
-    if (have.has(key)) continue;
-    acts.push({
-      what: `wake run:${f.run} to make the re-review item of ${f.pr}`,
-      wake: true,
-      run: async (dd) => ({
-        ...(await sendNotice(dd, {
-          key: { target: f.task, dedupe_key: key },
-          to: "lead",
-          chain: { leadRun: f.run },
-          subject: `🔁 rereview_item: ${f.pr}`,
-          body: `The base of ${f.pr} changed, and its re-review item can only be made from this Run's session. Run: sangsoe graph sync --run ${f.run}`,
-          msgType: "status",
-          source: QUEUE_SOURCE,
-        })),
-        planned: [],
-      }),
-    });
-  }
+  // Decision 219: Orca fences this worker out of a lead's Run and refuses its sends (no terminal), so a
+  // fenced re-review item is left to that Run's own session, whose Stop and UserPromptSubmit hooks make it.
+  for (const f of fenced) calls.push(`re-review item of ${f.pr}: left to run:${f.run}'s own hook (consumer_fenced)`);
   return { planned: fresh, unseen, calls, acts };
 }
 

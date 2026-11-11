@@ -11,7 +11,8 @@ import type { MonitorDeps } from "./monitor.ts";
 export async function sendNotice(d: Pick<MonitorDeps, "core">, input: NotifyInput): Promise<{ ok: boolean; detail: string }> {
   if (!d.core) return { ok: false, detail: "dry run: not sent" };
   const r = await notify(d.core, input);
-  return r.ok ? { ok: true, detail: r.value.status } : { ok: false, detail: r.refusal.code };
+  // A refusal keeps Orca's code and message (in the reason), so probe.report shows why a wake failed (decision 219).
+  return r.ok ? { ok: true, detail: r.value.status } : { ok: false, detail: `${r.refusal.code}: ${r.refusal.reason}` };
 }
 
 /** Worker-list pages read at most to find the Dispatch running a Run's coordinator. */
