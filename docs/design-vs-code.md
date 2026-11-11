@@ -19,12 +19,12 @@
 | 0. 오너의 고정 규칙 | 5 | 4 | 1 | 0 | 0 | 0 |
 | 1. 칸 배치 · Orca CLI · 설치 | 131 | 93 | 8 | 9 | 1 | 20 |
 | 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 84 | 11 | 2 | 6 | 12 |
-| 3. 데이터 · MCP · CLI · GRAPH | 80 | 55 | 7 | 1 | 3 | 14 |
+| 3. 데이터 · MCP · CLI · GRAPH | 80 | 55 | 6 | 1 | 3 | 15 |
 | 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 34 | 4 | 4 | 6 | 9 |
 | 5. 결정이 자르거나 바꾼 것 | 45 | 0 | 0 | 0 | 13 | 32 |
-| 합계 | 433 | 270 | 31 | 16 | 29 | 87 |
+| 합계 | 433 | 270 | 30 | 16 | 29 | 88 |
 
-`partial`·`missing` 47행은 갭 28개(`G1`–`G36` 에서 U77 이 고친 `G2`, U76 이 고친 `G13` `G16`, 결정 212 가 닫은 `G10`·`G11`·`G23`·`G29`, 결정 215 가 닫은 `G31` 을 뺀 것)로 묶인다. 제안은 NOW 1 · LATER 23 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
+`partial`·`missing` 46행은 갭 27개(`G1`–`G36` 에서 U77 이 고친 `G2`, U76 이 고친 `G13` `G16`, 결정 212 가 닫은 `G10`·`G11`·`G23`·`G29`, 결정 215 가 닫은 `G22`·`G31` 을 뺀 것)로 묶인다. 제안은 NOW 0 · LATER 23 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
 
 ## 0. 오너의 고정 규칙
 
@@ -325,7 +325,7 @@
 | CLI recover·verify-tier·monitor run·migrate | design.html 배치표 | implemented | `cli/commands/recover.ts:15`, `cli/commands/monitor.ts:29` | |
 | CLI decision·item new | design-appendix 결정 루프 | implemented | `cli/commands/decision.ts:26`, `cli/commands/item-new.ts:70` | |
 | CLI graph add·remove·ready·why·expand·critical·impact | design-appendix GRAPH: 모듈과 CLI | implemented | `cli/commands/graph-add.ts:11`, `cli/commands/graph-why.ts:15` | |
-| CLI graph sync | design-appendix GRAPH: 모듈과 CLI | partial | `cli/commands/graph-sync.ts:22`, `core/graph/sync.ts:28` | G22 — queue-monitor 는 `pr_opened` 의 head·base 로 `stacked_on` 을 스스로 더한다(`core/graph/sync.ts:35`, `core/detect/queue/round.ts:66`, 결정 212 ③). 남은 것: base 가 바뀐 PR 은 목록만 내고 land 재요청을 하지 않는다 |
+| CLI graph sync | design-appendix GRAPH: 모듈과 CLI | changed (결정 215) | `cli/commands/graph-sync.ts:22`, `core/graph/sync.ts:58`, `core/detect/queue/round.ts:68`, `test/land/retarget-rereview.test.ts:212` | G22 닫힘 — queue-monitor 는 `pr_opened` 의 head·base 로 `stacked_on` 을 스스로 더하고(결정 212 ③), base 가 선행 PR 의 head 를 떠난 PR 에서는 그 간선을 뺀다. land 재요청 event 대신 재리뷰(결정 215 ②)가 문이고, 재리뷰 항목 spec 이 land 를 다시 부르라고 한다 |
 | CLI graph skip | design-appendix 신호 흐름 | changed (결정 195) | `cli/commands/graph-skip.ts:11` | |
 | CLI graph(인자 없음)·priority set·owner-text redact | design.html 의존 관리, design-appendix sqlite 스키마 | cut (결정 160) | `core/store/store.ts:420` | LATER — 오너가 우선순위나 원문 지우기를 요청한 첫 경우 |
 | CLI hook·reap run·resource record·models·version | design-appendix 신호 흐름 | implemented | `cli/commands/hook.ts:29`, `cli/commands/reap.ts:27` | 설계 본문에 이름이 없는 셸 입구 |
@@ -522,7 +522,7 @@
 | G19 | 화면 언어 설정이 없다 | DROP | 오너가 한 사람이고 한국어를 쓴다. 다른 언어 사용자가 생기면 새 결정으로 |
 | G20 | 패널에 그래프 들여쓰기 대체와 Markdown 저장 버튼이 없다 | LATER | SVG 가 그려지지 않는 환경이 관측되거나 오너가 저장을 요청하면 |
 | G21 | 현황에 "내 지시는 어디까지 갔나" 접힘 구역이 없다 | LATER | 오너 지시를 항목으로 따라가야 하는 첫 경우(owner_class 와 함께, G28) |
-| G22 | `stacked_on` 간선이 자동으로 생기지 않고 base 변경 PR 의 land 재요청이 없다 | NOW | 흐름 3 과 실패 표의 stack_order 가 기대는 길이다. 재현: queue-monitor 가 `syncGraph` 를 stack 없이 부르고(`core/detect/queue/round.ts:66`) `relandPrs` 는 세기만 한다. 손으로 가는 길은 있다: `deliver-ticket` skill 이 `stacked_on` 간선을 걸라고 하고 land 가 간선으로 순서를 지킨다(`core/land/land.ts:385`). 그래서 빠지는 것은 세션이 간선을 잊은 경우의 자동 보정이다. 결정 212 ③ 이 자동 `stacked_on` 을 지었고, ⑥ 이 land 가 GRAPH 의 `pr:`·`item:` 노드 이름을 읽게 고쳤다(그 전에는 간선이 순서를 지키지 않았다). land 재요청이 남았다 |
+| G22 | `stacked_on` 간선이 자동으로 생기지 않고 base 변경 PR 의 land 재요청이 없다 | 닫힘(결정 215 ⑦) | 흐름 3 과 실패 표의 stack_order 가 기대는 길이다. 재현: queue-monitor 가 `syncGraph` 를 stack 없이 부르고(`core/detect/queue/round.ts:66`) `relandPrs` 는 세기만 한다. 손으로 가는 길은 있다: `deliver-ticket` skill 이 `stacked_on` 간선을 걸라고 하고 land 가 간선으로 순서를 지킨다(`core/land/land.ts:385`). 그래서 빠지는 것은 세션이 간선을 잊은 경우의 자동 보정이다. 결정 212 ③ 이 자동 `stacked_on` 을 지었고, ⑥ 이 land 가 GRAPH 의 `pr:`·`item:` 노드 이름을 읽게 고쳤다(그 전에는 간선이 순서를 지키지 않았다). 남은 반은 결정 215 ⑦ 이 닫았다(U78): base 가 바뀌면 낡은 간선을 빼고, 재리뷰 뒤 land 를 다시 부른다 |
 | G23 | `done_blockers` 가 완료 전환을 거부하지 않는다 | 닫힘(결정 212 ④) | 실패 표의 early_done·prod_gate 방지 장치이고 설계가 지어졌다고 적었다. 재현: 시험 밖 호출자 0. 설계가 거부할 자리로 둔 `item_transition` 입구는 결정 160 이 짓지 않았으므로, 고치는 단위는 Task 를 닫는 자리(pr-monitor 의 `closeTask`, `core/owner/done.ts`, 리드가 직접 부르는 Orca `task-update`) 가운데 어디서 막을지부터 정한다 |
 | G24 | `orphan_extra`(고아 부가 정보의 🚨 와 REAPER 거둠)가 없다 | LATER | Orca 에 Run 을 지우는 명령이 없어 고아가 생기기 어렵다. Orca 가 Run 삭제를 갖거나 Task 가 사라진 첫 경우 |
 | G25 | 닫힌 결정을 다시 묻는 길(`:r<n>`)이 없다 | LATER | 오너가 닫힌 결정을 다시 열어 달라고 한 첫 경우 |
@@ -531,7 +531,7 @@
 | G28 | `owner_class` 계약과 표시를 지우는 길이 쓰이지 않은 채 남았다 | LATER | 결정 162 의 조건: 오너 발언 hook 이 seq 를 맥락에 붙이는 단위 |
 | G29 | dev 증거 없이 머지된 deploys_after 항목에 🔍 를 달지 않는다 | 닫힘(결정 212 ⑤) | 흐름 3 이 적은 표시이고, 배포 단계가 남은 항목이 이것으로 오너에게 보인다. 재현: `mergedItemMark` 의 시험 밖 호출자 0(G23 과 같은 꼴: 함수는 있고 연결이 없다). 지금의 🔍 (`core/brief/item_status.ts:202`)는 증거가 있는지만 보고 dev 단계는 보지 않으므로 이것을 덮지 않는다 |
 | G30 | 깨울지를 event 의 `needs` 칸이 아니라 판정마다 정한다 | LATER | 깨움이 빠지거나 넘친 첫 경우에 `needs` 로 모은다 |
-| G31 | retarget 뒤 재리뷰 항목을 blocks 로 만들지 않는다 | 닫힘 (결정 215) | 오너가 NOW 로 옮겼고 U78 이 고쳤다 |
+| G31 | retarget 뒤 재리뷰 항목을 blocks 로 만들지 않는다 | 닫힘(결정 215) | 오너가 NOW 로 옮겼고 U78 이 고쳤다 |
 | G32 | 재개 뒤 대기를 다시 붙이라는 안내가 없다 | LATER | Orca 가 깨움을 밀어 주므로 지금은 필요가 없다. 재시작 뒤 메시지를 놓친 첫 경우 |
 | G33 | 깨움을 모아 보내지 않는다 | LATER | 한 세션에 짧은 시간 안에 깨움이 몰린 첫 경우 |
 | G34 | 거부 수집 뷰와 설정 차이 뷰가 없다 | LATER | reflect 가 거부를 묶어 세야 하는 첫 회고 |

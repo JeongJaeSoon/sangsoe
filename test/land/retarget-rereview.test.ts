@@ -32,13 +32,18 @@ const ITEM = "task_000000000001";
 const NOW = Date.parse("2026-11-10T12:00:00Z");
 const ok = (data: unknown): GhResponse<unknown> => ({ kind: "ok", status: 200, data });
 
-function retargetWorld(also: string[] = []) {
+/** The open PR #12 was stacked on: its head branch is feature-a. */
+const BELOW = "acme/api#11";
+const BELOW_ITEM = "task_000000000011";
+
+function retargetWorld(also: string[] = [], o: { below?: boolean } = {}) {
   const w = createWorld(
-    [ITEM, ...also].map((id) => ({ id, run: RUN, status: "completed" as const, title: "api retry" })),
+    [ITEM, ...also, ...(o.below ? [BELOW_ITEM] : [])].map((id) => ({ id, run: RUN, status: "completed" as const, title: "api retry" })),
     { currentRun: RUN },
   );
   const { store, orca } = w;
   const pull = (base: string) => ({ number: 12, merged_at: null, state: "open", mergeable_state: "clean", user: { login: "alice" }, head: { sha: HEAD, ref: "feature-b", repo: { full_name: REPO } }, base: { ref: base }, labels: [] });
+  const below = { number: 11, merged_at: null, state: "open", mergeable_state: "clean", user: { login: "alice" }, head: { sha: "b".repeat(40), ref: "feature-a", repo: { full_name: REPO } }, base: { ref: "main" }, labels: [] };
   const approval = (state: string) => [{ id: 501, user: { login: "bob" }, state, commit_id: HEAD, author_association: "MEMBER", submitted_at: "2026-11-10T09:00:00Z" }];
   const routes: Record<string, GhResponse<unknown>> = {
     [`repos/${REPO}/pulls?state=closed&sort=updated&direction=desc&per_page=30`]: ok([]),
@@ -51,7 +56,7 @@ function retargetWorld(also: string[] = []) {
   };
   /** GitHub's side of the PR: its base and its one review, which a retarget dismisses. */
   const github = (base: string, review: string) => {
-    routes[`repos/${REPO}/pulls?state=open&per_page=100`] = ok([pull(base)]);
+    routes[`repos/${REPO}/pulls?state=open&per_page=100`] = ok([pull(base), ...(o.below ? [below] : [])]);
     routes[`repos/${REPO}/pulls/12`] = ok(pull(base));
     routes[`repos/${REPO}/pulls/12/reviews?per_page=100`] = ok(approval(review));
     routes[`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`] = ok(approval(review));
@@ -87,7 +92,10 @@ function retargetWorld(also: string[] = []) {
   store.append({ type: "item_created", source: "core:item", payload: { task: ITEM, alias: "i001", who: "lead:api", done_when: "PR merged", owner_action: 0 }, entity: "task", entity_id: ITEM });
   store.append({ type: "item_extra_set", source: "core:item", payload: { task: ITEM, lead: "api" }, entity: "task", entity_id: ITEM });
   for (const task of [ITEM, ...also]) {
-    store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR, task, base: "feature-a", head_sha: HEAD } });
+    store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR, task, base: "feature-a", head_sha: HEAD, head: "feature-b" } });
+  }
+  if (o.below) {
+    store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: BELOW, task: BELOW_ITEM, base: "main", head_sha: "b".repeat(40), head: "feature-a" } });
   }
   store.append({ type: "verify_tier_set", source: "pr-monitor", payload: { pr: PR, head_sha: HEAD, computed: "V2", effective: "V2", actor: "pr-monitor", accepted: true, reason: "x" } });
   store.append({ type: "review_verdict", source: "review record", actor: "codex", dedupe_key: dedupeKey(EVENTS.review_verdict, PR, HEAD, "codex", "0"), payload: { pr: PR, head_sha: HEAD, act_on: 0, reviewer: "codex", author: "alice" } });
@@ -199,4 +207,33 @@ test("G31: a PR bound to two items gets one re-review item with a blocks edge in
   for (const task of [ITEM, ITEM2]) {
     assert.deepEqual(graphRead.why(await x.view(), task).map((e) => e.pred), [rereview], task);
   }
+});
+
+test("G22: retargeted off an open PR's head, the inferred stacked_on edge goes, and land passes after a review recorded after the change", async () => {
+  const x = retargetWorld([], { below: true });
+  const edge = { pred: `pr:${BELOW}`, succ: `item:${ITEM}`, kind: "stacked_on" };
+  await runMonitor("queue", x.monitor);
+  assert.deepEqual(x.store.events({ type: "edge_added" }).map((e) => e.payload), [edge], "queue-monitor infers the stack");
+  const stacked = await landPr(x.landDeps);
+  assert.equal(stacked.ok ? "ok" : stacked.refusal.code, "stack_order");
+
+  x.github("main", "DISMISSED");
+  await runMonitor("pr", x.monitor);
+  await runMonitor("queue", x.monitor);
+  assert.deepEqual(
+    x.store.events({ type: "edge_removed" }).map((e) => [e.payload.pred, e.payload.succ, e.payload.kind]),
+    [[edge.pred, edge.succ, edge.kind]],
+    "the base change removes the stack edge",
+  );
+  await runMonitor("queue", x.monitor);
+  assert.equal(x.store.events({ type: "edge_added" }).filter((e) => e.payload.kind === "stacked_on").length, 1, "a later round does not infer it again");
+
+  const held = await landPr(x.landDeps);
+  assert.equal(held.ok ? "ok" : held.refusal.code, "rereview_needed", "the stack no longer holds it; the re-review does");
+  assert.deepEqual(graphRead.why(await x.view(), ITEM).map((e) => e.kind), ["blocks"]);
+
+  assert.ok((await x.record()).inserted);
+  const landed = await landPr(x.landDeps);
+  assert.ok(landed.ok, JSON.stringify(landed));
+  assert.equal(x.merges.length, 1);
 });

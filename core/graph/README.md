@@ -25,7 +25,7 @@
 | `critical.ts` | `criticalPath` · `impact` |
 | `toml.ts` | 흐름 틀이 쓰는 TOML 부분집합 파서(런타임 의존 없음) |
 | `flow.ts` | 흐름 틀 읽기 · 검사 · `planFlow`(`--dry-run`) · `expandFlow` · `flowGap` · `doneBlockers` |
-| `sync.ts` | 부르는 쪽이 준 쌓인 PR(`--stack <pr>=<base>`)로 `stacked_on` 을 더하고, 머지·닫힌 선행과 dangling 을 알린다 |
+| `sync.ts` | 부르는 쪽이 준 쌓인 PR(`--stack <pr>=<base>`)로 `stacked_on` 을 더하고, 머지·닫힌 선행과 dangling 을 알린다. queue round 가 `infer` 로 부르면 `pr_opened` 의 head·base 로 스택을 추론해 더하고(결정 212 ③), base 가 바뀐 PR 의 낡은 `stacked_on` 을 뺀다(결정 215 ⑦) |
 | `rereview.ts` | base 가 바뀌고 그 뒤 리뷰가 없는 열린 PR 마다 재리뷰 항목 하나와 PR 항목으로의 `blocks` 간선을 만든다(결정 215). queue round 가 부른다 |
 | `notify-ready.ts` | 새로 준비됨이 된 항목의 소유 리드에게 `notify` 한 번 |
 | `flows/` | 기본 흐름 틀 `ship-change.toml` · `ship-batch.toml` |

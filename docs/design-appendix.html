@@ -570,7 +570,7 @@ done_when = "prod 배포가 stage_recorded 에 기록된다"</pre>
 <tr><td><code>sangsoe graph ready</code> · <code>sangsoe graph why</code></td><td><code>ready</code> 계산과 "왜 준비됨·막힘인가" 설명. 리드·오케스트레이터와 queue-monitor 가 부른다.</td></tr>
 <tr><td><code>sangsoe graph expand</code></td><td>흐름 틀을 펼친다(<code>--dry-run</code> 미리보기).</td></tr>
 <tr><td><code>sangsoe graph critical</code> · <code>sangsoe graph impact</code></td><td>크리티컬 패스와 영향 범위. brief·패널이 같은 함수를 읽는다.</td></tr>
-<tr><td><code>sangsoe graph sync</code></td><td>감지기가 알린 외부 사실을 간선에 맞춘다: <code>pr_opened</code> 로 항목에 PR 이 붙고 그 PR 이 다른 PR 위에 쌓였으면 <code>stacked_on</code> 을 더하고, <code>pr_base_changed</code> 는 그 PR 을 쥔 리드의 land 재요청(판정 재확인)을 부르고, <code>pr_closed</code> 는 그 PR 이 선행인 간선을 "끊긴 선행"으로 보이게 한다. 감지기는 간선을 직접 쓰지 못하고 신호만 쓴다.</td></tr>
+<tr><td><code>sangsoe graph sync</code></td><td>감지기가 알린 외부 사실을 간선에 맞춘다: <code>pr_opened</code> 로 항목에 PR 이 붙고 그 PR 이 다른 PR 위에 쌓였으면 <code>stacked_on</code> 을 더하고, <code>pr_base_changed</code> 가 있는 PR 에서는 선행 PR 의 head 가 더는 base 가 아닌 <code>stacked_on</code> 을 빼고(판정 재확인은 결정 215 의 재리뷰 항목이 맡는다), <code>pr_closed</code> 는 그 PR 이 선행인 간선을 "끊긴 선행"으로 보이게 한다. 감지기는 간선을 직접 쓰지 못하고 신호만 쓴다.</td></tr>
 </tbody></table>
 <p class="note">GRAPH 는 상주하지 않는 모듈이고 호출될 때마다 <code>event</code> 와 뷰만 읽고 쓴다(결정적 코드, 토큰 0). 쓰는 쪽은 리드·오케스트레이터(흐름 틀 펼치기 포함)와 queue-monitor 가 부르는 <code>sangsoe graph sync</code>, 읽는 쪽은 <code>ready</code> 뷰·brief·패널이다. 간선의 정본은 만들 때의 <code>blocks</code> 는 Orca Task 의 <code>--deps</code>, 나머지는 sangsoe sqlite 이며 한 간선이 두 곳에 있지 않다. beads 같은 외부 도구를 쓰더라도 세 번째 원본으로 두지 않고 구현 참고나 읽기 전용 내보내기로만 쓴다.</p>
 

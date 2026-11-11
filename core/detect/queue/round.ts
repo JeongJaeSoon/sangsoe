@@ -66,7 +66,7 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
 
   if (core) {
     const s = syncGraph(core, input.orca, [], { infer: true });
-    calls.push(`graph sync: added ${s.added.length}, reland ${s.relandPrs.length}, dangling ${s.dangling.length}, refused ${s.refused.length}`);
+    calls.push(`graph sync: added ${s.added.length}, unstacked ${s.unstacked.length}, reland ${s.relandPrs.length}, dangling ${s.dangling.length}, refused ${s.refused.length}`);
     if (!signal.aborted) {
       const rr = await rereviewItems(core, input.orca);
       calls.push(`rereview items: made ${rr.made.length}${rr.made.length ? ` (${rr.made.join(", ")})` : ""}, refused ${rr.refused.length}`);
