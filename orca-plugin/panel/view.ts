@@ -718,7 +718,7 @@ function tabs(m: Overview, active: Tab): string {
   const prog = m.inProgress.count;
   const one = (t: Tab, label: string, n: number | null) =>
     `<button type="button" role="tab" aria-selected="${t === active}" data-tab-to="${t}">${label}${n === null ? "" : ` <span class="count">${n}</span>`}</button>`;
-  return `<nav class="seg" role="tablist" aria-label="현황 보기">${one("all", "전체", null)}${one("todo", "할 일", m.todo.total)}${one("prog", m.inProgress.title, prog)}</nav>`;
+  return `<nav class="seg" role="tablist" aria-label="현황 보기">${one("all", "전체", null)}${one("todo", "할 일", m.todo.total)}${one("prog", esc(m.inProgress.title), prog)}</nav>`;
 }
 
 // The last crumb is the screen shown, once and not a link; the back button sits apart (decision 218).

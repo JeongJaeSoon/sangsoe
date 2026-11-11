@@ -59,7 +59,10 @@ test("(17)(18) a narrow list row is one card: a one-line head (state, id, title,
   const title = rule(NARROW, ".tbl td.title");
   for (const d of ["white-space: nowrap;", "overflow: hidden;", "text-overflow: ellipsis;", "min-width: 0;"]) assert.ok(title.includes(d), d);
   const meta = rule(NARROW, ".tbl:not(.gt) td[data-l]");
-  for (const d of ["flex: 1 1 0;", "white-space: nowrap;", "overflow: hidden;", "text-overflow: ellipsis;"]) assert.ok(meta.includes(d), d);
+  assert.ok(meta.includes("flex: 1 1 0;"), "meta cells share the line evenly so cards line up");
+  // A meta value is never cut: nothing else shows it in full (a decision's recommendation is what its button sends).
+  for (const d of ["nowrap", "ellipsis"]) assert.ok(!meta.includes(d), d);
+  assert.match(meta, /overflow-wrap: anywhere;/);
   assert.match(rowOf(html, "i033"), /<td class="title" title="i033 스테이징 키 발급">/, "the cut title keeps its full text");
   // The group's count rides the head line: its cell keeps its wide column and moves up in a card.
   assert.match(rowOf(html, "lead:api-migration"), /<td data-l="다음" class="num">10건·막힘 2<\/td>/);

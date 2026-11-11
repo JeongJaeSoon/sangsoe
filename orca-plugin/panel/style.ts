@@ -218,7 +218,9 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl:not(.gt) td:first-child { flex: none; width: auto; }
   .tbl td.title { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-base); line-height: 20px; color: var(--ink); font-weight: 600; }
   .tbl td.brk { order: -1; display: block; flex: 0 0 100%; height: 0; margin-top: var(--s1); }
-  .tbl:not(.gt) td[data-l] { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* A value wraps inside its own column with its label, never cut: a decision's recommendation is
+     what its answer button sends, and a meta value has no other place to be read in full. */
+  .tbl:not(.gt) td[data-l] { flex: 1 1 0; overflow-wrap: anywhere; }
   .tbl td[data-l]::before { content: attr(data-l); color: var(--muted); margin-right: var(--s1); font-size: var(--text-xs); }
   .tbl:not(.gt) td.num { flex: none; color: var(--muted); }
   .tbl td.num::before { content: none; }
