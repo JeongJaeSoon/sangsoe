@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, openSync, readSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readFileSync, readSync } from "node:fs";
 
 // Claude Code's transcript is JSONL whose record shapes are not documented (P13). Every reader here
 // returns nothing for a shape it does not know, so a format change costs a missed record, never a wrong one.
@@ -36,6 +36,31 @@ export function tail(path: string | undefined, bytes = TAIL_BYTES): Rec[] {
   const out: Rec[] = [];
   for (const line of text.split("\n")) {
     if (line.trim() === "") continue;
+    try {
+      const r = JSON.parse(line) as unknown;
+      if (r && typeof r === "object" && !Array.isArray(r)) out.push(r as Rec);
+    } catch {
+      // A partial last line is skipped.
+    }
+  }
+  return out;
+}
+
+/**
+ * The records anywhere in the file whose line contains `marker`: one long autonomous turn can push
+ * a record far past the tail, and only marked lines are parsed.
+ */
+export function marked(path: string | undefined, marker: string): Rec[] {
+  if (!path) return [];
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    return [];
+  }
+  const out: Rec[] = [];
+  for (const line of text.split("\n")) {
+    if (!line.includes(marker)) continue;
     try {
       const r = JSON.parse(line) as unknown;
       if (r && typeof r === "object" && !Array.isArray(r)) out.push(r as Rec);

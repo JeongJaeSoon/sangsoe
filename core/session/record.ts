@@ -9,7 +9,7 @@ import { hashOf, mask, summarize } from "./mask.ts";
 import { type SessionHookInput, type SessionRow, sessionOf } from "./session.ts";
 import { sessionStart, type SessionStartOptions } from "./session-start.ts";
 import { recordShellInputs } from "./shell.ts";
-import { lastContextTokens, lastPreTokens, tail } from "./transcript.ts";
+import { lastContextTokens, lastPreTokens, marked, tail } from "./transcript.ts";
 
 export const SESSION_HOOKS = [
   "session-start",
@@ -121,12 +121,12 @@ async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
 }
 
 /**
- * Decision 200: each advisor call in the transcript's tail, once. The tail overlaps between turns,
+ * Decision 200: each advisor call in the whole transcript, once. Every Stop reads the calls again,
  * so the call's own key is the dedupe key, without the session: a resumed session under a new id
- * carries the same records. A turn longer than the tail can miss a call (undercount).
+ * carries the same records. Subagents' own transcripts are not read (undercount).
  */
 function advisorUsed(store: Store, row: SessionRow, input: SessionHookInput): void {
-  for (const c of advisorCalls(tail(input.transcript_path))) {
+  for (const c of advisorCalls(marked(input.transcript_path, "advisor_message"))) {
     store.append({
       type: "advisor_used",
       source: "Stop",

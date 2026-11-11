@@ -89,7 +89,9 @@ test("the Stop hook records each advisor call once per session, and spend sums b
   const dir = mkdtempSync(join(tmpdir(), "sangsoe-spend-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const transcript = join(dir, "t.jsonl");
-  writeFileSync(transcript, `${records.map((r) => JSON.stringify(r)).join("\n")}\n`);
+  // One long autonomous turn: the call sits far before the transcript's last 256KB.
+  const filler = JSON.stringify({ type: "user", message: { content: "x".repeat(64 * 1024) } });
+  writeFileSync(transcript, `${records.map((r) => JSON.stringify(r)).join("\n")}\n${`${filler}\n`.repeat(8)}`);
   const store = Store.open({ path: ":memory:" });
   store.append({
     type: "session_started",

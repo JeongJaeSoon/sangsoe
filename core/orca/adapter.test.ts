@@ -28,6 +28,8 @@ const DESIGN_TABLE = [
   "worktree rm",
   // Decision 200: start_unit makes the worktree first so its local settings exist before the session.
   "worktree create",
+  // ...and closes the plain shell create opens, so only the agent's terminal holds the worktree.
+  "terminal close",
   "reference add",
   "reference find",
   "ports",
