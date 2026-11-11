@@ -20,8 +20,8 @@ import {
 import type { CommandDef, Report } from "../contract.ts";
 
 // One process per hook event (R-09). The blocking PreToolUse hook reads Claude Code's input on stdin, runs
-// every gate, prints deny or ask (never allow) and records each deny; a failure exits non-zero, and the
-// hook's onFailure "block" turns that into a refusal: it fails closed. The recording hooks fail open.
+// every gate, prints deny or ask (never allow) and records each deny; a failure exits non-zero, which
+// pre-tool-use.sh turns into exit 2, a refusal: it fails closed (decision 208). The recording hooks fail open.
 
 const EVENTS = ["pre-tool-use", ...SESSION_HOOKS];
 
@@ -86,13 +86,16 @@ function pluginVersion(host: Host): string | undefined {
   }
 }
 
+const GATE_STORE_BUSY_MS = 500;
+
 function gate(host: Host): Report {
   const parsed = parseHookInput(readFileSync(0, "utf8"));
   if (!parsed.ok) return { code: 2, lines: [`sangsoe hook: ${parsed.reason}`] };
   const home = host.env.HOME ?? homedir();
   let store: Store | undefined;
+  // Decision 208: the reads take up to 12s of the hook's 15s, and a timed-out hook lets the call through.
   const openStore = () => {
-    store ??= Store.open({ home });
+    store ??= Store.open({ home, busyTimeoutMs: GATE_STORE_BUSY_MS });
     return store;
   };
   try {

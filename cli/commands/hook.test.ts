@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import { DatabaseSync } from "node:sqlite";
 import { Store } from "../../core/index.ts";
 
 // The hook as Claude Code runs it: a process with the call on stdin. Raw commands come from the fixture
@@ -54,6 +55,25 @@ test("a raw start is denied on stdout and recorded as gate_denied with the comma
   }
 });
 
+// Decision 208: Claude Code lets a timed-out hook's call through, so a locked store must not hold the hook
+// near its 15 seconds. The deny stands unrecorded.
+test("a locked store still denies, well inside the hook's timeout", () => {
+  const home = mkdtempSync(join(tmpdir(), "sangsoe-hook-"));
+  Store.open({ home }).close();
+  const lock = new DatabaseSync(join(home, ".local", "share", "sangsoe", "sangsoe.db"));
+  lock.exec("BEGIN EXCLUSIVE");
+  try {
+    const started = Date.now();
+    const r = hook(home, call("fallback start"));
+    assert.ok(Date.now() - started < 3_000, `took ${Date.now() - started}ms`);
+    assert.equal(r.code, 0, r.stderr);
+    assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, "deny");
+  } finally {
+    lock.exec("ROLLBACK");
+    lock.close();
+  }
+});
+
 test("a normal call prints nothing and records nothing", () => {
   const home = mkdtempSync(join(tmpdir(), "sangsoe-hook-"));
   const r = hook(home, call("test suite"));
@@ -61,7 +81,7 @@ test("a normal call prints nothing and records nothing", () => {
   assert.deepEqual(readdirSync(home), []);
 });
 
-test("unreadable input exits non-zero, which onFailure block turns into a refusal", () => {
+test("unreadable input exits 2, a refusal", () => {
   const home = mkdtempSync(join(tmpdir(), "sangsoe-hook-"));
   const r = hook(home, "not json");
   assert.equal(r.code, 2);

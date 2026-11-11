@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -33,14 +33,61 @@ test("every path a hook command names exists in the plugin, and one run directly
   }
 });
 
-test("the PreToolUse hook is one blocking command hook over every tool", () => {
+// Decision 208: a hook that cannot start (sangsoe removed or swapped by brew) lets the call go ahead, so a
+// running session is not frozen; the script itself holds the call with exit 2 when its check fails.
+test("the PreToolUse hook is one command hook over every tool whose failure to start does not block", () => {
   const pre = hooks.hooks.PreToolUse ?? [];
   assert.equal(pre.length, 1);
   assert.equal(pre[0]?.matcher, "*");
   assert.deepEqual(
     pre[0]?.hooks.map((h) => [h.type, h.onFailure]),
-    [["command", "block"]],
+    [["command", "continue"]],
   );
+});
+
+const preCommand = hooks.hooks.PreToolUse?.[0]?.hooks[0]?.command ?? "";
+const NODE_DIR = dirname(process.execPath);
+
+/** The hooks.json command as Claude Code runs it, in a scratch tree whose dist/cli/main.js is `cli`. */
+function runPreHook(o: { cli?: string; pluginRoot?: string; path?: string }) {
+  const tree = mkdtempSync(join(tmpdir(), "sangsoe-pre-"));
+  mkdirSync(join(tree, "claude-plugin", "hooks"), { recursive: true });
+  writeFileSync(join(tree, "claude-plugin", "hooks", "pre-tool-use.sh"), readFileSync(at("hooks/pre-tool-use.sh")));
+  if (o.cli !== undefined) {
+    mkdirSync(join(tree, "dist", "cli"), { recursive: true });
+    writeFileSync(join(tree, "dist", "cli", "main.js"), o.cli);
+  }
+  return spawnSync("sh", ["-c", preCommand], {
+    input: "{}",
+    encoding: "utf8",
+    env: { PATH: o.path ?? `${NODE_DIR}:/usr/bin:/bin`, CLAUDE_PLUGIN_ROOT: o.pluginRoot ?? join(tree, "claude-plugin") },
+  });
+}
+
+test("a check that prints a deny exits 0 and passes the deny through", () => {
+  const deny = JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny" } });
+  const r = runPreHook({ cli: `console.log(${JSON.stringify(deny)});` });
+  assert.deepEqual([r.status, r.stdout], [0, `${deny}\n`], r.stderr);
+});
+
+test("a check that fails in any way holds the call with exit 2", () => {
+  for (const cli of ["process.exit(1);", "process.exit(2);", "throw new Error('broken install');"]) {
+    const r = runPreHook({ cli });
+    assert.equal(r.status, 2, `${cli}: ${r.stderr}`);
+    assert.match(r.stderr, /this call is held/);
+  }
+});
+
+test("no sangsoe CLI at all is a non-blocking error, never exit 2", () => {
+  const r = runPreHook({ path: "/usr/bin:/bin" });
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /gates are off for this call/);
+});
+
+test("a plugin directory that is gone is a non-blocking error, never exit 2", { skip: process.platform !== "darwin" && "dash exits 2 on a missing script; sangsoe ships for macOS" }, () => {
+  const r = runPreHook({ pluginRoot: join(tmpdir(), "sangsoe-pre-gone", "claude-plugin") });
+  assert.notEqual(r.status, 2, r.stderr);
+  assert.notEqual(r.status, 0, r.stderr);
 });
 
 test("the seven recording hooks run record.sh with their event and never block", () => {

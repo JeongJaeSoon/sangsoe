@@ -17,4 +17,4 @@ PreToolUse hook 한 번(이벤트당 프로세스 하나)이 여기 함수를 �
 | `record.ts` | 거부마다 `gate_denied` 한 줄, 명령 글은 파일로 |
 | `replay.ts` | 실제 명령 모음(`test/fixtures/hook-commands.jsonl`)으로 오탐·미탐을 잰다(R-09) |
 
-hook 출력은 deny 와 ask 뿐이다. allow 를 쓰면 사람의 권한 규칙을 건너뛰어 승인되므로 쓰지 않는다(결정 119). 입력을 못 읽으면 0 이 아닌 종료로 끝나고 `onFailure: "block"` 이 막는다.
+hook 출력은 deny 와 ask 뿐이다. allow 를 쓰면 사람의 권한 규칙을 건너뛰어 승인되므로 쓰지 않는다(결정 119). 입력을 못 읽으면 0 이 아닌 종료로 끝나고 `claude-plugin/hooks/pre-tool-use.sh` 가 그것을 종료 코드 2 로 바꿔 막는다(결정 208).

@@ -54,6 +54,8 @@ function fakeHost(
     orcaHome?: string | null;
     env?: Record<string, string>;
     profiles?: Record<string, Partial<Profile>>;
+    /** The marketplace disappears under the remove (another remover got there first), which then fails. */
+    removeGoneAlready?: boolean;
   } = {},
 ) {
   const state: State = { markets: [], plugins: [], orca: false, ...opts.state };
@@ -99,7 +101,17 @@ function fakeHost(
         if (a === "plugin marketplace list --json") return ok(JSON.stringify(p.markets));
         if (a === "plugin list --json") return ok(JSON.stringify(p.plugins));
         if (a.startsWith("plugin marketplace add ")) p.markets.push({ name: "sangsoe", source: "directory", path: args[3] ?? "" });
-        if (a.startsWith("plugin marketplace remove ")) p.markets = p.markets.filter((m) => m.name !== "sangsoe");
+        if (a.startsWith("plugin marketplace remove ")) {
+          // As recorded in T6 0.1.1: the marketplace lives in known_marketplaces.json, not in user settings.
+          if (args.includes("--scope")) {
+            return { code: 1, stdout: "", stderr: "✘ Failed to remove marketplace: Marketplace 'sangsoe' is not declared in user settings. Omit --scope to remove it from all scopes." };
+          }
+          if (opts.removeGoneAlready) {
+            p.markets = p.markets.filter((m) => m.name !== "sangsoe");
+            return { code: 1, stdout: "", stderr: "✘ Marketplace 'sangsoe' not found" };
+          }
+          p.markets = p.markets.filter((m) => m.name !== "sangsoe");
+        }
         if (a.startsWith("plugin install ")) p.plugins.push({ id: "sangsoe@sangsoe", version: V, scope: "user", enabled: true });
         if (a.startsWith("plugin uninstall ")) p.plugins = [];
         if (a.startsWith("plugin enable ")) {
@@ -296,9 +308,9 @@ test("uninstall also unregisters Orca's selected profile", async () => {
   assert.equal(r.code, 0, r.lines.join("\n"));
   assert.deepEqual(writes(calls), [
     "claude plugin uninstall sangsoe@sangsoe --scope user --keep-data",
-    "claude plugin marketplace remove sangsoe --scope user",
+    "claude plugin marketplace remove sangsoe",
     `CLAUDE_CONFIG_DIR=${ORCA_DIR} claude plugin uninstall sangsoe@sangsoe --scope user --keep-data`,
-    `CLAUDE_CONFIG_DIR=${ORCA_DIR} claude plugin marketplace remove sangsoe --scope user`,
+    `CLAUDE_CONFIG_DIR=${ORCA_DIR} claude plugin marketplace remove sangsoe`,
   ]);
   assert.deepEqual(profiles.get(ORCA_DIR), { markets: [], plugins: [] });
 });
@@ -307,7 +319,7 @@ test("a marketplace named sangsoe pointing elsewhere is replaced", async () => {
   const { host, calls } = fakeHost({ state: { markets: [{ name: "sangsoe", source: "directory", path: "/elsewhere" }] } });
   await install(host, ROOT, online().ctx);
   assert.deepEqual(writes(calls).slice(0, 2), [
-    "claude plugin marketplace remove sangsoe --scope user",
+    "claude plugin marketplace remove sangsoe",
     `claude plugin marketplace add ${ROOT} --scope user`,
   ]);
 });
@@ -335,11 +347,35 @@ test("uninstall removes the three registrations and keeps data", async () => {
   assert.equal(r.code, 0, r.lines.join("\n"));
   assert.deepEqual(writes(calls), [
     "claude plugin uninstall sangsoe@sangsoe --scope user --keep-data",
-    "claude plugin marketplace remove sangsoe --scope user",
+    "claude plugin marketplace remove sangsoe",
     "orca plugin dev unload local.sangsoe --json",
   ]);
   assert.deepEqual(state.markets, []);
-  assert.match(r.lines.join("\n"), /kept: ~\/\.local\/share\/sangsoe/);
+  // README's Uninstall section quotes these lines.
+  assert.deepEqual(r.lines, [
+    "claude: uninstalled sangsoe@sangsoe",
+    "claude: removed marketplace sangsoe",
+    "claude: restart every running Claude Code session that loaded sangsoe@sangsoe; until then it keeps the plugin's hooks",
+    "orca: unloaded local.sangsoe",
+    "kept: ~/.local/share/sangsoe (data) and ~/.config/sangsoe (settings); `brew uninstall sangsoe` removes the tree",
+  ]);
+});
+
+test("decision 208: a marketplace remove that fails but leaves no marketplace counts as removed", async () => {
+  const { host, profiles } = fakeHost({ removeGoneAlready: true });
+  await install(host, ROOT, online().ctx);
+  const r = uninstall(host);
+  assert.equal(r.code, 0, r.lines.join("\n"));
+  assert.ok(r.lines.includes("claude: removed marketplace sangsoe"), r.lines.join("\n"));
+  assert.deepEqual(profiles.get(DEFAULT_DIR)?.markets, []);
+});
+
+test("a marketplace remove that fails and leaves the marketplace fails uninstall", async () => {
+  const { host } = fakeHost({ fail: "claude plugin marketplace remove" });
+  await install(host, ROOT, online().ctx);
+  const r = uninstall(host);
+  assert.equal(r.code, 1);
+  assert.ok(r.lines.some((l) => /^claude: removed marketplace sangsoe failed \(exit 1\): boom$/.test(l)), r.lines.join("\n"));
 });
 
 test("uninstall with nothing registered changes nothing", () => {
@@ -347,6 +383,7 @@ test("uninstall with nothing registered changes nothing", () => {
   const r = uninstall(host);
   assert.equal(r.code, 0);
   assert.deepEqual(writes(calls), []);
+  assert.ok(!r.lines.some((l) => /restart/.test(l)), "nothing was uninstalled, so no session needs a restart");
 });
 
 test("doctor --offline reads only the tree", async () => {
