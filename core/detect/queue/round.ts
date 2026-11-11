@@ -30,8 +30,9 @@ const NO_GH: GhClient = { get: async () => ({ kind: "error", status: null, messa
 
 /**
  * One queue-monitor round (decision 91, design #monitors): reads the Runs events name, judges, then
- * calls the core functions that own each rule. It writes signals and suggestions only: no Task is
- * closed or updated here, and a gate is resolved only by a function's own rules (decision 76 rule 6).
+ * calls the core functions that own each rule. It writes signals and suggestions, and the one Task
+ * kind GRAPH makes on its own, a re-review item (decision 215): no Task is closed or updated here,
+ * and a gate is resolved only by a function's own rules (decision 76 rule 6).
  * Without `d.core` (a dry run) it reads everything and names each call it would make.
  */
 export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<Reading> {

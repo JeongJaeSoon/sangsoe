@@ -1,5 +1,5 @@
 import type { OrcaSnapshot } from "../contract/views.ts";
-import { pendingRereview, rereviewItem } from "../land/rereview.ts";
+import { pendingRereview, rereviewDoneWhen, rereviewItem } from "../land/rereview.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { createItem } from "../start/item.ts";
 import { addEdgeTo } from "./edit.ts";
@@ -16,6 +16,9 @@ export interface RereviewResult {
   readonly refused: readonly string[];
 }
 
+/** The PR item's extras the re-review item takes, so it sits in the same group and repo. */
+const CARRIED = ["lead", "priority", "repo"] as const;
+
 export async function rereviewItems(deps: CoreDeps, snapshot: OrcaSnapshot): Promise<RereviewResult> {
   const made: string[] = [];
   const refused: string[] = [];
@@ -24,30 +27,47 @@ export async function rereviewItems(deps: CoreDeps, snapshot: OrcaSnapshot): Pro
   for (const pr of facts.prs.values()) {
     if (pr.merged || pr.closed) continue;
     const change = pendingRereview(events, pr.pr);
-    if (!change || rereviewItem(events, pr.pr, change.seq)) continue;
+    if (!change) continue;
     const owner = [...pr.tasks].map((t) => snapshot.tasks.find((x) => x.id === t)).find((t) => t !== undefined);
     if (!owner) {
       refused.push(`${pr.pr}: none of its items is in a Run read this round`);
       continue;
     }
-    const who = events.find((e) => e.type === "item_created" && e.payload.task === owner.id)?.payload.who;
-    const item = await createItem(deps.orca, deps.store, {
-      run: owner.runId,
-      title: `re-review ${pr.pr}`,
-      spec: [
-        `Re-review ${pr.pr}: its base moved from ${change.from} to ${change.to}, so the review recorded before that no longer counts.`,
-        "Review the PR at its current head and record the verdict with review_record (CLI: sangsoe review record). Land and the merge-ready report hold until then.",
-      ].join("\n"),
-      who: typeof who === "string" ? who : "lead",
-      doneWhen: `a review of ${pr.pr} recorded after its base moved to ${change.to}`,
-    });
-    if (!item.ok) {
-      refused.push(`${pr.pr}: ${item.code} ${item.error}`);
-      continue;
+    let item = rereviewItem(events, pr.pr, change);
+    if (!item) {
+      const who = events.find((e) => e.type === "item_created" && e.payload.task === owner.id)?.payload.who;
+      const created = await createItem(deps.orca, deps.store, {
+        run: owner.runId,
+        title: `re-review ${pr.pr}`,
+        spec: [
+          `Re-review ${pr.pr}: its base moved from ${change.from} to ${change.to}, so the review recorded before that no longer counts.`,
+          "Review the PR at its current head and record the verdict with review_record (CLI: sangsoe review record). Land and the merge-ready report hold until then.",
+        ].join("\n"),
+        who: typeof who === "string" ? who : "lead",
+        doneWhen: rereviewDoneWhen(pr.pr, change),
+      });
+      if (!created.ok) {
+        refused.push(`${pr.pr}: ${created.code} ${created.error}`);
+        continue;
+      }
+      item = created;
+      const extras: Record<string, unknown> = {};
+      for (const e of events) {
+        if (e.type !== "item_extra_set" || e.payload.task !== owner.id) continue;
+        for (const k of CARRIED) if (e.payload[k] !== undefined) extras[k] = e.payload[k];
+      }
+      if (Object.keys(extras).length > 0) {
+        deps.store.append({ type: "item_extra_set", source: "core:item", payload: { task: item.task, ...extras }, entity: "task", entity_id: item.task });
+      }
+      made.push(`${pr.pr} → ${item.alias}`);
     }
-    const edge = addEdgeTo(deps, snapshot, { pred: itemRef(item.task), succ: itemRef(owner.id), kind: "blocks" });
+    // Added until it is written once, so a round that stopped after the item still links it; an
+    // edge the lead removed stays removed.
+    const pred = itemRef(item.task);
+    const succ = itemRef(owner.id);
+    if (events.some((e) => e.type === "edge_added" && e.payload.pred === pred && e.payload.succ === succ)) continue;
+    const edge = addEdgeTo(deps, snapshot, { pred, succ, kind: "blocks" });
     if (!edge.ok) refused.push(`${pr.pr}: ${edge.refusal.code} ${edge.refusal.reason}`);
-    else made.push(`${pr.pr} → ${item.alias}`);
   }
   return { made, refused };
 }

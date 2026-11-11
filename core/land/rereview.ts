@@ -18,15 +18,14 @@ export function verdictsSinceBase(events: readonly StoredEvent[], pr: string): S
   return events.filter((e) => e.type === "review_verdict" && e.payload.pr === pr && e.seq > since);
 }
 
-/**
- * The re-review item made for the base change at `since`: an item created after it whose blocks
- * edge ends at one of the PR's items. Returns its alias, or null when none was made yet.
- */
-export function rereviewItem(events: readonly StoredEvent[], pr: string, since: number): string | null {
-  const prItems = new Set(events.filter((e) => e.type === "pr_opened" && e.payload.pr === pr && typeof e.payload.task === "string").map((e) => `item:${String(e.payload.task)}`));
-  const made = new Map(events.filter((e) => e.type === "item_created" && e.seq > since).map((e) => [`item:${String(e.payload.task)}`, String(e.payload.alias)]));
-  const edge = events.find((e) => e.type === "edge_added" && e.payload.kind === "blocks" && prItems.has(String(e.payload.succ)) && made.has(String(e.payload.pred)));
-  return edge ? (made.get(String(edge.payload.pred)) ?? null) : null;
+/** The re-review item's done_when: written in the same row as its alias, so the item is found by it. */
+export const rereviewDoneWhen = (pr: string, change: BaseChange) => `a review of ${pr} recorded after its base moved from ${change.from} to ${change.to}`;
+
+/** The re-review item made for `change`: its alias and Task, or null when none was made yet. */
+export function rereviewItem(events: readonly StoredEvent[], pr: string, change: BaseChange): { alias: string; task: string } | null {
+  const want = rereviewDoneWhen(pr, change);
+  const e = events.find((x) => x.type === "item_created" && x.seq > change.seq && x.payload.done_when === want);
+  return e ? { alias: String(e.payload.alias), task: String(e.payload.task) } : null;
 }
 
 /**

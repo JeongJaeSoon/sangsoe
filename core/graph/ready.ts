@@ -196,8 +196,8 @@ function rereviewRows(input: ViewInput, facts: Facts, t: ViewTask, item: string)
     const f = facts.prs.get(pr);
     const change = f && !f.merged && !f.closed ? pendingRereview(input.events, pr) : null;
     if (!change) return [];
-    const alias = rereviewItem(input.events, pr, change.seq);
-    const pred = alias ? itemRef(facts.aliases.get(alias) ?? alias) : `pr:${pr}`;
+    const made = rereviewItem(input.events, pr, change);
+    const pred = made ? itemRef(made.task) : `pr:${pr}`;
     return [{ item, pred, kind: "blocks" as const, predState: `재리뷰 전: base ${change.from} → ${change.to}`, dangling: false, todo: "PR 의 지금 head 를 리뷰하고 review_record 로 기록한다" }];
   });
 }

@@ -18,10 +18,10 @@ const storeAt = () => {
   return () => Store.open({ path, clock: fixedClock("2026-11-10T00:00:00.000Z", 1000), fsProbe: () => "apfs" });
 };
 const ghAuthor =
-  (login: string, code = 0, head = HEAD, base = "main"): Exec =>
+  (login: string, code = 0, head = HEAD): Exec =>
   async (cmd, args) => {
-    assert.deepEqual([cmd, ...args], ["gh", "api", "repos/acme/api/pulls/7", "--jq", "[.user.login, .head.sha, .base.ref] | @tsv"]);
-    return { code, stdout: code === 0 ? `${login}\t${head}\t${base}\n` : "", stderr: code === 0 ? "" : "not found" };
+    assert.deepEqual([cmd, ...args], ["gh", "api", "repos/acme/api/pulls/7", "--jq", "[.user.login, .head.sha] | @tsv"]);
+    return { code, stdout: code === 0 ? `${login}\t${head}\n` : "", stderr: code === 0 ? "" : "not found" };
   };
 const input = { repo: "acme/api", pr: 7, head: HEAD, actOn: 0, reviewer: "codex" };
 
@@ -38,16 +38,24 @@ test("review record writes one review_verdict with the author read from GitHub",
   s.close();
   assert.equal(rows.length, 2);
   assert.deepEqual(rows[0]?.payload, { pr: "acme/api#7", head_sha: HEAD, act_on: 0, reviewer: "codex", author: "alice" });
-  assert.equal(rows[0]?.dedupe_key, `review_verdict:acme%2Fapi%237:${HEAD}:codex:0:main`);
+  assert.equal(rows[0]?.dedupe_key, `review_verdict:acme%2Fapi%237:${HEAD}:codex:0`);
   assert.equal(reviewEvidenceFrom(rows, "acme/api", 7, HEAD)?.actOn, 3, "the row with findings is the one read");
 });
 
-test("decision 215: the same verdict at the same head after a retarget is a new row", async () => {
+test("decision 215: the same verdict at the same head after each base change is a new row", async () => {
   const openStore = storeAt();
-  const before = await recordReviewVerdict(input, { exec: ghAuthor("alice", 0, HEAD, "feature-a"), openStore });
-  const after = await recordReviewVerdict(input, { exec: ghAuthor("alice", 0, HEAD, "main"), openStore });
-  assert.deepEqual([before.inserted, after.inserted], [true, true]);
-  assert.ok((after.seq ?? 0) > (before.seq ?? 0));
+  const record = () => recordReviewVerdict(input, { exec: ghAuthor("alice"), openStore });
+  const move = (from: string, to: string) => {
+    const s = openStore();
+    s.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: "acme/api#7", from, to } });
+    s.close();
+  };
+  const first = await record();
+  move("feature-a", "main");
+  const second = await record();
+  assert.deepEqual([first.inserted, second.inserted, (await record()).inserted], [true, true, false]);
+  move("main", "feature-a");
+  assert.ok((await record()).inserted, "a base that comes back is another change");
 });
 
 test("review record refuses the PR's author as reviewer, an unreadable PR and a short head; nothing is written", async () => {

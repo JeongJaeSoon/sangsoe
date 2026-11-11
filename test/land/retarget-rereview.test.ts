@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  buildGroup,
   DEFAULT_MONITOR_CONFIG,
   dedupeKey,
   EVENTS,
@@ -81,6 +82,7 @@ function retargetWorld() {
   };
   // The PR as it stood stacked on feature-a: opened, reviewed clean at HEAD, evidence in, waiting on approval.
   store.append({ type: "item_created", source: "core:item", payload: { task: ITEM, alias: "i001", who: "lead:api", done_when: "PR merged", owner_action: 0 }, entity: "task", entity_id: ITEM });
+  store.append({ type: "item_extra_set", source: "core:item", payload: { task: ITEM, lead: "api" }, entity: "task", entity_id: ITEM });
   store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR, task: ITEM, base: "feature-a", head_sha: HEAD } });
   store.append({ type: "verify_tier_set", source: "pr-monitor", payload: { pr: PR, head_sha: HEAD, computed: "V2", effective: "V2", actor: "pr-monitor", accepted: true, reason: "x" } });
   store.append({ type: "review_verdict", source: "review record", actor: "codex", dedupe_key: dedupeKey(EVENTS.review_verdict, PR, HEAD, "codex", "0"), payload: { pr: PR, head_sha: HEAD, act_on: 0, reviewer: "codex", author: "alice" } });
@@ -93,13 +95,15 @@ function retargetWorld() {
     const tasks = listed.ok ? listed.value.map((t): ViewTask => ({ id: t.id, runId: RUN, status: t.status as ViewTask["status"], deps: [] })) : [];
     return { events: store.events(), orca: { tasks, gates: [] }, now: new Date(NOW).toISOString() };
   };
-  // review record reads the PR's author, head and base from GitHub through gh api.
-  const reviewExec = async (_cmd: string, args: readonly string[]) => {
-    const jq = String(args.at(-1));
-    const base = (routes[`repos/${REPO}/pulls/12`] as { data: { base: { ref: string } } }).data.base.ref;
-    return { code: 0, stdout: jq.includes(".base.ref") ? `alice\t${HEAD}\t${base}\n` : `alice\t${HEAD}\n`, stderr: "" };
-  };
-  return { w, store, github, monitor, landDeps, merges, view, reviewExec };
+  // review record reads the PR's author and head from GitHub through gh api.
+  const reviewExec = async () => ({ code: 0, stdout: `alice\t${HEAD}\n`, stderr: "" });
+  const record = () =>
+    recordReviewVerdict(
+      { repo: REPO, pr: 12, head: HEAD, actOn: 0, reviewer: "codex" },
+      // The shared in-memory store stays open after review record closes its handle.
+      { exec: reviewExec, openStore: () => ({ events: (f: never) => store.events(f), append: (e: never) => store.append(e), close: () => {} }) as never },
+    );
+  return { w, store, github, monitor, landDeps, merges, view, record };
 }
 
 const landPr = (deps: LandDeps) => land({ repo: REPO, pr: 12 }, deps);
@@ -140,23 +144,37 @@ test("G31: a retarget that dismisses the approval makes a re-review item, and la
     [[rereview, "blocks"]],
     "the PR item's why-not-ready row names the re-review item",
   );
+  const alias = String(items[0]?.payload.alias);
+  assert.deepEqual(
+    buildGroup(await x.view(), "api")?.why.rows.map((r) => r.cells.slice(0, 3).map((c) => c.text)),
+    [["i001", alias, "blocks"]],
+    "the panel's 왜 준비되지 않았나 table shows the same row, and the re-review item sits in the PR item's group",
+  );
 
   // A reviewer approves again on GitHub at the same head: still no merge-ready report.
   x.github("main", "APPROVED");
   await runMonitor("pr", x.monitor);
   assert.deepEqual(x.store.events({ type: "pr_ready_to_merge" }), []);
 
-  const recorded = await recordReviewVerdict({ repo: REPO, pr: 12, head: HEAD, actOn: 0, reviewer: "codex" }, {
-    exec: x.reviewExec,
-    // The shared in-memory store stays open after review record closes its handle.
-    openStore: () => ({ append: (e: never) => x.store.append(e), close: () => {} }) as never,
-  });
+  const recorded = await x.record();
   assert.ok(recorded.inserted, recorded.note);
 
   assert.deepEqual(graphRead.why(await x.view(), ITEM), [], "the review clears the row");
+  assert.deepEqual(buildGroup(await x.view(), "api")?.why.rows, []);
   await runMonitor("pr", x.monitor);
   assert.equal(x.store.events({ type: "pr_ready_to_merge" }).length, 1);
   const landed = await landPr(x.landDeps);
   assert.ok(landed.ok, JSON.stringify(landed));
   assert.equal(x.merges.length, 1);
+});
+
+test("G31: a review recorded after the retarget but before pr-monitor saw it is recorded again and then counts", async () => {
+  const x = retargetWorld();
+  x.github("main", "DISMISSED");
+  assert.equal((await x.record()).inserted, false, "reviewed against main, but no base change is recorded yet: the old row stands");
+  await runMonitor("pr", x.monitor);
+  const late = await landPr(x.landDeps);
+  assert.equal(late.ok ? "ok" : late.refusal.code, "rereview_needed", "the change row came later, so that review cannot be told apart");
+  assert.equal((await x.record()).inserted, true, "recording again is a new row, not a repeat");
+  assert.ok((await landPr(x.landDeps)).ok);
 });
