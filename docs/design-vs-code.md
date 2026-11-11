@@ -20,11 +20,11 @@
 | 1. 칸 배치 · Orca CLI · 설치 | 131 | 90 | 11 | 9 | 1 | 20 |
 | 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 79 | 17 | 2 | 6 | 11 |
 | 3. 데이터 · MCP · CLI · GRAPH | 80 | 53 | 9 | 1 | 3 | 14 |
-| 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 32 | 7 | 4 | 6 | 8 |
+| 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 32 | 6 | 4 | 6 | 9 |
 | 5. 결정이 자르거나 바꾼 것 | 45 | 0 | 0 | 0 | 13 | 32 |
-| 합계 | 433 | 258 | 45 | 16 | 29 | 85 |
+| 합계 | 433 | 258 | 44 | 16 | 29 | 86 |
 
-`partial`·`missing` 61행은 갭 36개(`G1`–`G36`)로 묶인다. 제안은 NOW 8 · LATER 24 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
+`partial`·`missing` 60행은 열린 갭 35개(`G1`–`G36` 에서 닫힌 G31 을 뺀 것)로 묶인다. 제안은 NOW 8 · LATER 23 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
 
 ## 0. 오너의 고정 규칙
 
@@ -408,7 +408,7 @@
 | 흐름 4 패널·상태 표시줄 다시 읽기 | design.html §5 흐름 4 | changed (결정 205) | `orca-plugin/main.ts:91` | |
 | 경계 다섯 | design.html §5 경계마다 무엇이 오가나 | implemented | `cli/commands/hook.ts:51`, `core/orca/adapter.ts:291` | hook·MCP·worker·Orca CLI·두 plugin |
 | 실패 stack_order·review_timing·cross_lead·stack_bottom·overlap_order·unknown_is_not_ready·merge_suggests_close·precheck_blocks_send·repo_level_main | design-appendix 실패 → 방지 장치 → 회귀 시험 | implemented | `core/graph/ready.ts:133`, `test/graph/regressions.test.ts:20` | 장치와 시험이 모두 있다 |
-| 실패 retarget_approval | design-appendix 실패 → 방지 장치 → 회귀 시험 | partial | `core/land/land.ts:440`, `core/land/land.test.ts:322` | G31 — head 가 다르면 거부·patch-id 승계는 있고 재리뷰 항목을 blocks 로 만드는 코드가 없다 |
+| 실패 retarget_approval | design-appendix 실패 → 방지 장치 → 회귀 시험 | changed (결정 215) | `core/land/land.ts:441`, `core/graph/rereview.ts:19`, `core/detect/pr/round.ts:387`, `test/land/retarget-rereview.test.ts:107` | G31 닫힘 — base 변경 뒤에 기록된 판정만 센다(patch-id 승계도 그 뒤의 판정만). 재리뷰 항목은 queue round 가 blocks 로 만든다 |
 | 실패 early_done·prod_gate | design-appendix 실패 → 방지 장치 → 회귀 시험 | partial | `core/graph/flow.ts:311`, `test/graph/flow.test.ts:124` | G23 — done_blockers 가 전환을 거부하지 않는다 |
 | 분류 바로 답·읽기·범위·시각 대기 | design-appendix 지시 분류 표 | changed (결정 162) | `claude-plugin/skills/intake/SKILL.md:18`, `claude-plugin/skills/intake/SKILL.md:32` | owner_class 줄 없이, 범위는 Orca send |
 | 분류 새 일·오너 판단·열린 결정의 답 | design-appendix 지시 분류 표 | implemented | `core/start/item.ts:33`, `core/decision/open.ts:45` | |
@@ -531,7 +531,7 @@
 | G28 | `owner_class` 계약과 표시를 지우는 길이 쓰이지 않은 채 남았다 | LATER | 결정 162 의 조건: 오너 발언 hook 이 seq 를 맥락에 붙이는 단위 |
 | G29 | dev 증거 없이 머지된 deploys_after 항목에 🔍 를 달지 않는다 | NOW | 흐름 3 이 적은 표시이고, 배포 단계가 남은 항목이 이것으로 오너에게 보인다. 재현: `mergedItemMark` 의 시험 밖 호출자 0(G23 과 같은 꼴: 함수는 있고 연결이 없다). 지금의 🔍 (`core/brief/item_status.ts:202`)는 증거가 있는지만 보고 dev 단계는 보지 않으므로 이것을 덮지 않는다 |
 | G30 | 깨울지를 event 의 `needs` 칸이 아니라 판정마다 정한다 | LATER | 깨움이 빠지거나 넘친 첫 경우에 `needs` 로 모은다 |
-| G31 | retarget 뒤 재리뷰 항목을 blocks 로 만들지 않는다 | LATER | base 를 바꾼 PR 이 리뷰 없이 머지 대기에 오른 첫 경우 |
+| G31 | retarget 뒤 재리뷰 항목을 blocks 로 만들지 않는다 | 닫힘 (결정 215) | 오너가 NOW 로 옮겼고 U78 이 고쳤다 |
 | G32 | 재개 뒤 대기를 다시 붙이라는 안내가 없다 | LATER | Orca 가 깨움을 밀어 주므로 지금은 필요가 없다. 재시작 뒤 메시지를 놓친 첫 경우 |
 | G33 | 깨움을 모아 보내지 않는다 | LATER | 한 세션에 짧은 시간 안에 깨움이 몰린 첫 경우 |
 | G34 | 거부 수집 뷰와 설정 차이 뷰가 없다 | LATER | reflect 가 거부를 묶어 세야 하는 첫 회고 |

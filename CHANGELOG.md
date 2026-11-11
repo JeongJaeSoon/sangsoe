@@ -5,6 +5,7 @@ Decision numbers refer to `docs/decisions.md`.
 ## Unreleased
 
 - **`start_unit` refuses on a stale MCP server.** A session's MCP server keeps the code it loaded at start, and `/reload-plugins` does not restart it. When the installed sangsoe's version differs from the server's own, or the install it started from is gone, `start_unit` returns `server_stale` with both versions before it opens the store or calls Orca. The fix it names is restarting the session. A server started under `0.1.3` or older has no such check: restart those sessions after upgrading (211).
+- **A stacked PR whose base changed needs a new review before it lands.** After the base PR merges and the child is retargeted to `main`, only a review verdict recorded after that base change counts, even at the same head. `land` refuses with `rereview_needed`, pr-monitor sends no merge-ready wake on a GitHub approval alone, and the queue round makes one re-review item that `blocks` the PR's item and shows in its "왜 준비되지 않았나" row. `sangsoe review record` puts the PR's base in its key, so the same reviewer can record the same head again after the change. The Orca plugin's content changed (the vendored core), so it needs re-approval (215).
 
 ## 0.1.3
 
