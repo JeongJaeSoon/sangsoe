@@ -268,8 +268,9 @@ function reviewWake(r: Reads, ref: string, link: Link | null): void {
   const linked = link?.tasks.find((t) => t.task === task);
   if (!task || !linked) return void r.unseen.push(`review wake of ${ref}: no linked Task`);
   const prefix = `${key("notify", task, "review")}:`;
+  r.notified ??= r.d.events({ type: "notified" }).map((e) => e.dedupe_key ?? "");
   const told = new Set(
-    (r.notified ??= r.d.events({ type: "notified" }).map((e) => e.dedupe_key ?? ""))
+    r.notified
       .filter((k) => k.startsWith(prefix))
       .flatMap((k) => k.slice(prefix.length).split(":")),
   );
