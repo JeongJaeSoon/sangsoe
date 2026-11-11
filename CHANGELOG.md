@@ -2,11 +2,20 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
-## Unreleased
+## 0.1.2
+
+Everything since `v0.1.1`: decisions 208–209.
+
+### Upgrading from 0.1.1
+
+- **Re-approve.** `brew upgrade sangsoe` installs to a new Cellar folder and the Orca plugin's content changed (the vendored core: `start_unit`, the model catalog, install), so the Orca plugin waits for approval again. Record the review of the 0.1.2 build with `sangsoe review record`, then run `sangsoe plugin approve`, as the README's Update section says.
+- **Open new Claude Code sessions.** A session keeps the hooks it loaded at start: one that was running during the upgrade still runs the 0.1.1 `PreToolUse` hook with `onFailure: "block"` until it is restarted.
+- No doctor row changes.
+
+### Changes
 
 - **Removing or upgrading no longer freezes running sessions.** The `PreToolUse` hook no longer sets `onFailure: "block"`. A hook that cannot start because `brew uninstall` or `brew upgrade` removed the plugin folder, or that finds no `sangsoe` at all, lets the call go ahead with a hook error. A gate check that runs and fails still holds the call: the hook script turns any failure of the CLI it found into exit 2. A hook that runs past its 15-second timeout now lets the call go ahead too, so the gate waits at most 500 ms for a locked store instead of 5 seconds (208).
 - **`sangsoe uninstall` removes the marketplace.** It no longer passes `--scope user`, which failed when Claude Code kept the marketplace only in the profile's known marketplaces, and a removal that leaves no marketplace counts as done. Uninstall now prints that running Claude Code sessions need a restart (208).
-- **Re-approve.** The plugin's hook files changed. As with every upgrade, record the new build's review and run `sangsoe plugin approve`; open new Claude Code sessions to load the new hooks.
 - **`start_unit` starts a class `mechanical` worker again.** Orca's worker-start refuses any `--effort` for the fast tier's model, so `start_unit` now passes an effort only when Orca takes it for that tier's model (`orcaEfforts` in the model catalog, read from Orca 1.4.250's launch check) and says so in the start's notes. The test Orca refuses the same pairs real Orca does (209).
 
 ## 0.1.1
