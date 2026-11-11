@@ -597,7 +597,7 @@ export const icon = (name: string): string =>
   `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] ?? ""}</svg>`;
 
 /** What a header button asks the worker to open in an Orca terminal; the worker builds the command. */
-export type Open = { view: "brief"; group?: string; item?: string } | { view: "doctor" } | { view: "todo" };
+export type Open = { view: "brief"; group?: string; item?: string } | { view: "doctor" } | { view: "todo" } | { view: "models" };
 
 const iconBtn = (name: string, label: string, data: string) =>
   `<button type="button" class="ibtn" ${data} aria-label="${esc(label)}" title="${esc(label)}">${icon(name)}</button>`;
@@ -610,6 +610,7 @@ function header(fresh: { short: string; full: string } | null, at: Target): stri
   const menu =
     `<details class="menu"><summary class="ibtn" aria-label="더 보기" title="더 보기">${icon("more")}</summary><div class="pop" role="menu">` +
     `<button type="button" role="menuitem" data-open="${attr({ view: "todo" })}">터미널에서 sangsoe todo</button>` +
+    `<button type="button" role="menuitem" data-open="${attr({ view: "models" })}">터미널에서 sangsoe models</button>` +
     `<button type="button" role="menuitem" data-open="${attr({ view: "doctor" })}">터미널에서 sangsoe doctor</button></div></details>`;
   return (
     `<header class="top"><span class="brand">${icon("layers")}상쇠<small>sangsoe</small></span>` +

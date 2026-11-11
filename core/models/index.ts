@@ -1,6 +1,8 @@
 import { CATALOG, type CatalogRow, CLASS_KIND, EFFORTS, type Effort, KINDS, type Kind, POLICY, TIERS, type Tier, UNIT_CLASSES, type UnitClass } from "./table.ts";
 
+export * from "./spend.ts";
 export * from "./table.ts";
+export * from "./view.ts";
 
 /** Days after `verified` when doctor asks for the guide pages to be read again (decision 165). */
 export const STALE_DAYS = 60;
@@ -86,14 +88,20 @@ export function resolve(kind: Kind, raise: Raise = {}): Resolved {
   return { ok: true, value };
 }
 
-/** How an advisor can reach a new session: Orca's launch option, or the owner's own setting. */
+/**
+ * How an advisor can reach a new session: Orca's launch option, or the owner's own setting
+ * (decision 187). Delivery through the new worktree's local settings is a follow-up (decision 200).
+ */
 export type AdvisorPath = { orcaFlag: boolean; ownerSetting: boolean };
+
+export type AdvisorRoute = "orca_flag" | "owner_setting" | "none";
 
 export type Launch = {
   model: string;
   effort: Effort;
   /** Passed as `--advisor` only when Orca's worker-start takes it. */
   advisor?: string;
+  route: AdvisorRoute;
   /** What the start tells its caller about the advisor. */
   note?: string;
   /** Set when the main model moved because no advisor could be attached; recorded as `model_changed`. */
@@ -103,24 +111,44 @@ export type Launch = {
 export const ADVISOR_FROM_SETTING =
   "advisor from the owner's advisorModel setting: sangsoe does not know its tier, and Claude Code drops one ranked below the main model";
 export const ADVISOR_NOT_APPLIED = "advisor not applied: Orca worker-start has no advisor flag and no advisorModel setting";
-
 /**
  * The launch for one choice (decision 187). A row with `withoutAdvisor` never runs its main tier
- * without an advisor: with neither path it runs on that tier at its starting effort instead.
+ * without an advisor: with neither path it runs on that tier instead, at its API default effort but
+ * never below an effort the lead already raised to.
  */
 export function launch(choice: Choice, path: AdvisorPath): Launch {
-  const out: Launch = { model: choice.model, effort: choice.effort };
+  const out: Launch = { model: choice.model, effort: choice.effort, route: "none" };
   if (!choice.advisor) return out;
-  if (path.orcaFlag) return { ...out, advisor: choice.advisor };
-  if (path.ownerSetting) return { ...out, note: ADVISOR_FROM_SETTING };
+  if (path.orcaFlag) return { ...out, advisor: choice.advisor, route: "orca_flag" };
+  if (path.ownerSetting) return { ...out, route: "owner_setting", note: ADVISOR_FROM_SETTING };
   const floor = POLICY[choice.kind].withoutAdvisor;
   if (!floor || TIERS.indexOf(choice.tier) <= TIERS.indexOf(floor)) return { ...out, note: ADVISOR_NOT_APPLIED };
+  const base = catalogRow(floor).apiDefaultEffort;
   return {
     model: aliasOf(floor),
-    effort: catalogRow(floor).apiDefaultEffort,
+    effort: EFFORTS.indexOf(choice.effort) > EFFORTS.indexOf(base) ? choice.effort : base,
+    route: "none",
     note: ADVISOR_NOT_APPLIED,
     fallback: { from: `${choice.model}/${choice.effort}`, reason: ADVISOR_NOT_APPLIED },
   };
+}
+
+/**
+ * The first lines a session of this row reads (decision 200): the advisor budget and, below high
+ * effort, the guide's finish-the-whole-task advice. SessionStart prints them; nothing stores them.
+ */
+export function rowLines(started: { effort: Effort; route: AdvisorRoute; budget: number; budget_per: "unit" | "day" }): string[] {
+  const lines: string[] = [];
+  if (started.budget > 0 && started.route !== "none") {
+    const per = started.budget_per === "day" ? "하루" : "이 단위에서";
+    lines.push(
+      `advisor 는 ${per} 약 ${started.budget}회: 접근을 정하기 전, 끝났다고 말하기 전, 막혔을 때. sangsoe 가 transcript 에서 세어 brief·doctor 에 보인다.`,
+    );
+  }
+  if (EFFORTS.indexOf(started.effort) < EFFORTS.indexOf("high")) {
+    lines.push("일 전체를 끝까지 한다: 남은 일 목록이나 계속할지 묻는 말로 턴을 닫지 않고, 평범한 장애는 진단해 넘어간다. 답이 필요한 결정만 묻고 나머지는 계속한다.");
+  }
+  return lines;
 }
 
 /** Days from `verified` to `now`; the oldest row counts. */

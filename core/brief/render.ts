@@ -44,6 +44,7 @@ function overview(m: Overview): string[] {
     ...section(m.inProgress, "없음"),
     ...(m.onHold ? section(m.onHold, null) : []),
     `완료는 최근 ${m.doneDays}일 · 🔍 근거 부족 ${m.evidenceShort} · 상세: \`sangsoe brief <묶음>\``,
+    ...(m.advisorToday ? [m.advisorToday] : []),
   ];
 }
 
@@ -65,7 +66,12 @@ function group(m: GroupDetail): string[] {
 }
 
 function item(m: ItemDetail): string[] {
-  return [`항목 상세 · ${m.id} ${m.title} · ${m.state}${m.flags} · ${m.who} · ${m.priority}`, "", ...section(m.chain, "없음")];
+  return [
+    `항목 상세 · ${m.id} ${m.title} · ${m.state}${m.flags} · ${m.who} · ${m.priority}`,
+    ...(m.model ? [m.model] : []),
+    "",
+    ...section(m.chain, "없음"),
+  ];
 }
 
 /** The text every surface sends: chat, `sangsoe brief`, the MCP resource `brief`. */

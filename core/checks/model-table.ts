@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -7,10 +7,14 @@ import {
   CATALOG,
   catalogAgeDays,
   compareVersions,
+  localDay,
   PIN_KEYS,
   STALE_DAYS,
+  spend,
+  spendText,
   VERIFIED_WITH_CLAUDE_CODE,
 } from "../models/index.ts";
+import { defaultDbPath, Store } from "../store/store.ts";
 import type { Check, CheckStatus } from "./check.ts";
 
 const id = "model-table";
@@ -59,6 +63,23 @@ const ADVISOR_FIX =
 
 const RANK: Record<CheckStatus, number> = { ok: 0, notice: 1, warn: 2, fail: 3 };
 
+/** Decision 200: today's advisor calls and estimated cost, read from the store; nothing without one. */
+export function spendToday(home: string, now: Date): string | undefined {
+  const path = defaultDbPath(home);
+  if (!existsSync(path)) return undefined;
+  // A spend line is extra: an unreadable or locked store must not fail the model-table row.
+  try {
+    const store = Store.open({ path });
+    try {
+      return `오늘 ${spendText(spend(store.events({ type: "advisor_used" }), { day: localDay(now) }))}`;
+    } finally {
+      store.close();
+    }
+  } catch (err) {
+    return `오늘 advisor 사용을 읽지 못함 (${(err as Error).message})`;
+  }
+}
+
 // Decision 165: the table goes stale by date, by a newer Claude Code, and by pins it cannot see.
 export const modelTable: Check = {
   id,
@@ -80,11 +101,13 @@ export const modelTable: Check = {
     }
     const advisor = advisorSetting(env, ctx.home ?? homedir());
     if (!advisor) findings.push({ status: "notice", text: ADVISOR_NOT_APPLIED });
-    if (findings.length === 0) return { id, status: "ok", summary: `모델 표 확인 ${age}일 전, 고정 없음, ${ADVISOR_FROM_SETTING}` };
+    const used = spendToday(ctx.home ?? homedir(), now);
+    const tail = used ? `; ${used}` : "";
+    if (findings.length === 0) return { id, status: "ok", summary: `모델 표 확인 ${age}일 전, 고정 없음, ${ADVISOR_FROM_SETTING}${tail}` };
     const status = findings.reduce<CheckStatus>((s, f) => (RANK[f.status] > RANK[s] ? f.status : s), "ok");
     // Each finding's own fix: pins and the advisor key are the owner's settings, not a table update.
     const stale = findings.length > (pins.length > 0 ? 1 : 0) + (advisor ? 0 : 1);
     const fix = [...(stale ? [FIX] : []), ...(pins.length > 0 ? [PIN_FIX] : []), ...(advisor ? [] : [ADVISOR_FIX])].join("; ");
-    return { id, status, summary: findings.map((f) => f.text).join("; "), fix };
+    return { id, status, summary: `${findings.map((f) => f.text).join("; ")}${tail}`, fix };
   },
 };

@@ -9,7 +9,9 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 
 정책 행은 advisor tier(`advisor`, 다음 tier 로 옮긴 뒤는 `thenAdvisor`)와, advisor 를 붙일 수 없을 때의 본 tier(`withoutAdvisor`)도 적는다(결정 187). `pairing` 이 짝을 본다: advisor tier 는 본 tier 와 같거나 위이고, fast tier 는 advisor 가 되지 않는다. 워커 단위의 class(`UNIT_CLASSES`)는 `CLASS_KIND` 로 행 하나를 가리키고, 서브에이전트가 쓸 tier 는 `SUBAGENTS` 다(결정 188).
 
-`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort`·advisor 로 풀고, `launch` 가 그 advisor 가 닿는 길(Orca 의 옵션, 오너 설정 `advisorModel`, 없음)에 맞춰 시작 인자를 정한다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다. 옮긴 tier 는 카탈로그의 API 기본 effort 에서 시작한다(frontier 는 `high`, 결정 172).
+정책 행은 한국어 이름(`label`), 한 줄 이유(`why`), advisor 호출 예산(`budget`, 단위마다 또는 하루)도 적는다(결정 200).
+
+`index.ts` 의 `resolve(kind, raise?)` 가 표를 `--model`·`--effort`·advisor 로 풀고, `launch` 가 그 advisor 가 닿는 길(Orca 의 옵션, 오너 설정 `advisorModel`, 없음)에 맞춰 시작 인자를 정한다. `rowLines` 가 SessionStart 에 넣을 예산 줄과 "일 전체를 끝까지 한다" 줄을 만든다. `spend.ts` 가 transcript 의 advisor 호출을 세고(`advisor_used`) 카탈로그 가격으로 비용을 계산하고, `view.ts` 가 `sangsoe models` 보기와 `docs/models.md` 를 만든다. effort 를 사다리대로 먼저 올리고, 사다리 끝에서도 모자랄 때만 이유를 적고 다음 tier 로 간다. 옮긴 tier 는 카탈로그의 API 기본 effort 에서 시작한다(frontier 는 `high`, 결정 172).
 
 ## 읽는 곳
 
@@ -17,7 +19,9 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 |---|---|---|
 | `core/start/start.ts` (`start_unit`) | 정책 + 카탈로그 | `resolve` → `worker-start --model <alias> --effort <level>`, 승격은 `model_changed` 로 기록 |
 | MCP resource `models` | 표 전체 | 판단 층(skill·agent)은 이 resource 로만 읽는다. 표를 본문에 옮겨 적지 않는다 |
-| `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice, `advisorModel` 키가 없거나 advisor 가 꺼져 있으면 notice(정하는 것은 오너) |
+| `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice, `advisorModel` 키가 없거나 advisor 가 꺼져 있으면 notice(정하는 것은 오너), 오늘의 advisor 호출 수와 추정 비용 |
+| `cli/commands/models.ts` (`sangsoe models`) | 표 전체 | 토큰 X 한국어 보기. `--markdown` 의 출력이 `docs/models.md` 다 |
+| `core/brief/build.ts` | 정책 + `unit_started`·`advisor_used` | 항목 상세의 "모델:" 줄, 현황의 오늘 advisor 사용 |
 | `claude-plugin/agents/*.md` frontmatter `model:`·`effort:` | 정책의 역할 행 | `test/model-table.test.ts` 가 표의 alias·effort 와 같은지 본다 |
 
 ## 갱신 절차
@@ -31,7 +35,8 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
    - 가이드의 권고 문구가 바뀌면: 정책 행과 그 `quote` 를 고친다.
    - 모두 `VERIFIED_WITH_CLAUDE_CODE` 를 지금 `claude --version` 으로 고친다.
 3. `CHANGELOG` 맨 위에 한 줄(날짜 · 무엇 · 출처 · 결정 번호)을 더하고, `docs/decisions.md` 에 같은 번호의 결정을 날짜와 URL 과 함께 적는다.
-4. `npm test` — `test/model-table.test.ts` 가 역할마다 행이 있는지, 표의 사본이나 버전 번호가 다른 곳에 없는지, agent frontmatter 가 표와 같은지 본다.
+4. `node cli/main.ts models --markdown` 의 출력으로 `docs/models.md` 를 바꾼다(`test/models-view.test.ts` 가 어긋나면 실패한다).
+5. `npm test` — `test/model-table.test.ts` 가 역할마다 행이 있는지, 표의 사본이나 버전 번호가 다른 곳에 없는지, agent frontmatter 가 표와 같은지 본다.
 
 ## 고정(pin)
 

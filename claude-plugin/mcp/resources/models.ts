@@ -14,7 +14,7 @@ export default {
   name: "models",
   uri: "sangsoe://models",
   description:
-    "sangsoe's one model-selection table (decision 164): the catalog (tier, alias, current ID, role, price, source, verified date, pin) and the policy (kind of work -> tier, effort, effort ladder, next tier, trigger, cited guide line). start_unit's class/kind/effort/tier/reason pick from it. Policy rows name an advisor tier (decision 187); subagents gives the alias every subagent spawn names (decision 188).",
+    "sangsoe's one model-selection table (decision 164): the catalog (tier, alias, current ID, role, price, source, verified date, pin) and the policy (kind of work -> tier, effort, effort ladder, next tier, trigger, cited guide line). start_unit's class/kind/effort/tier/reason pick from it. Policy rows name an advisor tier (decision 187) and an advisor call budget per unit or day, with a label and a one-line why (decision 200); subagents gives the alias every subagent spawn names (decision 188).",
   mimeType: "application/json",
   read: async () =>
     JSON.stringify(

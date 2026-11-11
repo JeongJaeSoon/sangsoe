@@ -1,5 +1,6 @@
 import { dedupeKey, EVENTS } from "../contract/index.ts";
 import { decisionAnswer } from "../decision/answer.ts";
+import { advisorCalls } from "../models/spend.ts";
 import { readDecision } from "../decision/waiters.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
@@ -8,7 +9,7 @@ import { hashOf, mask, summarize } from "./mask.ts";
 import { type SessionHookInput, type SessionRow, sessionOf } from "./session.ts";
 import { sessionStart, type SessionStartOptions } from "./session-start.ts";
 import { recordShellInputs } from "./shell.ts";
-import { lastContextTokens, lastPreTokens, tail } from "./transcript.ts";
+import { lastContextTokens, lastPreTokens, marked, tail } from "./transcript.ts";
 
 export const SESSION_HOOKS = [
   "session-start",
@@ -37,6 +38,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
       break;
     case "stop":
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
+      advisorUsed(deps.store, row, input);
       turnEnded(deps.store, row, input);
       released(deps.store, { kind: "turn_ended", session: input.session_id }, "Stop");
       await workerIdle(deps, row, input);
@@ -52,6 +54,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
       break;
     case "session-end":
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
+      advisorUsed(deps.store, row, input);
       released(deps.store, { kind: "session_ended", session: input.session_id, evidence: "session_ended" }, "SessionEnd");
       break;
   }
@@ -115,6 +118,23 @@ async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
   const callerRun = current.ok && typeof current.value.runId === "string" ? current.value.runId : "";
   // A refusal (an owner_action already used, a moot close) is the record's answer; the hook stays silent.
   await decisionAnswer(deps, { decision: d, answer: masked, ownerAction: action.seq, linkedBy: "hook", callerRun });
+}
+
+/**
+ * Decision 200: each advisor call in the whole transcript, once. Every Stop reads the calls again,
+ * so the call's own key is the dedupe key, without the session: a resumed session under a new id
+ * carries the same records. Subagents' own transcripts are not read (undercount).
+ */
+function advisorUsed(store: Store, row: SessionRow, input: SessionHookInput): void {
+  for (const c of advisorCalls(marked(input.transcript_path, "advisor_message"))) {
+    store.append({
+      type: "advisor_used",
+      source: "Stop",
+      ...(row.task ? { entity: "task", entity_id: row.task } : {}),
+      dedupe_key: dedupeKey(EVENTS.advisor_used, c.key),
+      payload: { session: input.session_id, msg: c.key, model: c.model, input_tokens: c.input, output_tokens: c.output },
+    });
+  }
 }
 
 function turnEnded(store: Store, row: SessionRow, input: SessionHookInput): void {

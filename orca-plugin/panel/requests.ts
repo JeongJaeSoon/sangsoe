@@ -38,6 +38,7 @@ export function openCommand(raw: unknown): string | null {
   const o = (raw ?? {}) as Record<string, unknown>;
   if (o.view === "doctor") return "sangsoe doctor";
   if (o.view === "todo") return "sangsoe todo";
+  if (o.view === "models") return "sangsoe models";
   if (o.view !== "brief") return null;
   const group = typeof o.group === "string" && GROUP.test(o.group) ? o.group : null;
   const item = group && typeof o.item === "string" && ITEM.test(o.item) ? o.item : null;
@@ -59,7 +60,9 @@ export function openHandler(exec: Exec, worktreeOf: (target: { group?: string; i
     if (!command) return refuse("bad_input", "not a panel view", "press a header button on the panel");
     const fix = `run ${command} in a terminal`;
     const o = (input ?? {}) as Record<string, unknown>;
-    const w = o.view === "brief" ? await worktreeOf(target(input)) : refuse("no_worktree", "this view has no worktree of its own", fix);
+    // The catalog belongs to no group, so it opens where the overview's brief opens (decision 200).
+    const w =
+      o.view === "brief" ? await worktreeOf(target(input)) : o.view === "models" ? await worktreeOf({}) : refuse("no_worktree", "this view has no worktree of its own", fix);
     if (!w.ok) return refuse(w.refusal.code, w.refusal.reason, fix);
     const id = (w.value as { worktree?: unknown }).worktree;
     if (typeof id !== "string" || !WORKTREE.test(id)) return refuse("no_worktree", "the core named no worktree", fix);

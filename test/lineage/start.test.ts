@@ -346,10 +346,10 @@ test("worker_start_dispatched (2): enough depth → a Dispatch and no event", as
     alias: "i001",
     dispatchId: "ctx_new",
     worktreeId: CHILD_TREE,
-    launch: { model: MODEL_CATALOG.find((c) => c.tier === worker.tier)?.alias, effort: worker.effort },
+    launch: { model: MODEL_CATALOG.find((c) => c.tier === worker.tier)?.alias, effort: worker.effort, route: "owner_setting" },
     notes: [ADVISOR_FROM_SETTING],
   });
-  assert.deepEqual(h.store.events().map((e) => e.type), ["item_created"], "only the new Task's alias row");
+  assert.deepEqual(h.store.events().map((e) => e.type), ["item_created", "unit_started"], "the alias row and the row it started on");
   const ws = h.called("worker-start")[0] ?? [];
   assert.equal(flag(ws, "worktree"), "new-child");
   assert.equal(flag(ws, "task"), NEW_TASK);
@@ -415,10 +415,70 @@ test("a failed start that reports a Dispatch writes worker_dead{start_failed}", 
   const h = harness({
     workerStart: () => ({ code: 1, stdout: JSON.stringify({ ok: false, error: { code: "start_failed", message: "x", data: { dispatchId: "ctx_dead" } } }), stderr: "" }),
   });
-  await start(h);
+  const r = await start(h);
   const dead = h.store.events({ type: "worker_dead" });
   assert.equal(dead.length, 1);
   assert.equal(dead[0]?.entity_id, "ctx_dead");
+  // Decision 201: the alarm names the Task, or the brief has no item to raise it on.
+  assert.ok("taskId" in r && r.taskId);
+  assert.equal(dead[0]?.target, r.taskId);
+});
+
+test("decision 200: unit_started records the picked row before worker-start, for the new session's SessionStart", async () => {
+  let seenAtStart = -1;
+  const h = harness({
+    workerStart: () => {
+      seenAtStart = h.store.events({ type: "unit_started" }).length;
+      return ok({ dispatchId: "ctx_new", worktreeId: CHILD_TREE });
+    },
+  });
+  assert.equal((await start(h)).kind, "started");
+  assert.equal(seenAtStart, 1, "the row is recorded before the session starts");
+  const started = h.store.events({ type: "unit_started" });
+  assert.equal(started[0]?.entity_id, NEW_TASK);
+  assert.deepEqual(
+    { ...started[0]?.payload },
+    {
+      kind: "worker",
+      picked_by: "role",
+      model: MODEL_CATALOG.find((c) => c.tier === MODEL_POLICY.worker.tier)?.alias,
+      effort: MODEL_POLICY.worker.effort,
+      advisor: MODEL_CATALOG.find((c) => c.tier === MODEL_POLICY.worker.advisor)?.alias,
+      route: "owner_setting",
+      budget: MODEL_POLICY.worker.budget.calls,
+      budget_per: "unit",
+      used: 0,
+    },
+  );
+  // The calls already counted ride on the row, and a spent budget is shown, not enforced: the
+  // restart keeps the advisor's route and the row's model.
+  const s = harness();
+  const spent = MODEL_POLICY.worker.budget.calls;
+  for (let i = 0; i < spent; i++) {
+    s.store.append({
+      type: "advisor_used",
+      source: "Stop",
+      entity: "task",
+      entity_id: NEW_TASK,
+      dedupe_key: dedupeKey(EVENTS.advisor_used, `m${i}`),
+      payload: { session: "sess-0", msg: `m${i}`, model: "x", input_tokens: 1, output_tokens: 1 },
+    });
+  }
+  await start(s, request({ task: { id: NEW_TASK } }));
+  const again = s.store.events({ type: "unit_started" })[0]?.payload;
+  assert.ok(spent > 0);
+  assert.equal(again?.used, spent);
+  assert.equal(again?.route, "owner_setting");
+  assert.equal(again?.model, started[0]?.payload.model);
+  // A row with no advisor records none, and picked_by comes from the caller.
+  const review = resolveModel("review");
+  assert.ok(review.ok);
+  const r = harness();
+  await start(r, request({ model: review.value, pickedBy: "kind" }));
+  const p = r.store.events({ type: "unit_started" })[0]?.payload;
+  assert.equal(p?.route, "none");
+  assert.equal(p?.advisor, undefined);
+  assert.equal(p?.picked_by, "kind");
 });
 
 test("decision 178: a Task Orca released at its predecessor's worker_done waits while that PR is open, starts once it merges", async () => {

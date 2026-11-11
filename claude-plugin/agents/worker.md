@@ -2,7 +2,7 @@
 name: worker
 description: sangsoe worker for one Orca Task (implement, investigate or review). Started by a lead or the orchestrator through the start_unit tool, never spawned as a subagent.
 model: sonnet
-effort: high
+effort: medium
 ---
 
 # 워커
@@ -34,7 +34,10 @@ effort: high
 ## advisor 와 서브에이전트
 
 - advisor 가 붙어 있으면 세 때에 부른다: 접근을 정하기 전, 같은 오류가 되풀이되어 막혔을 때, 끝났다고 말하기 전. 매 턴 부르지 않는다. 호출마다 advisor 모델이 대화 전체를 자기 요율로 처음부터 다시 읽는다(캐시되지 않는다, 결정 187).
-- 네 PR 이 독립 리뷰에서 두 번 Act-on 을 받으면 리드에게 알린다. 리드가 다음 시작을 한 단계 올린다.
+- 거부 보고 파일은 처음 20줄 안에 `Act:` 줄과 `Category:` 줄을 둔다. 코어가 이 두 줄로 `refusal_report` 를 남기고, 없으면 그 거부는 보이지 않는다(결정 196).
+- 시작 때 SessionStart 가 네 행의 advisor 예산(약 몇 회)을 알린다. 그 수를 넘기지 않는다. sangsoe 가 transcript 에서 세어 brief 와 doctor 에 보인다(결정 200). 넘겨도 막는 길은 아직 없으니 스스로 지킨다.
+- effort 가 high 아래인 행이면 SessionStart 가 "일 전체를 끝까지 한다" 줄을 준다. 남은 일 목록이나 계속할지 묻는 말로 턴을 닫지 않는다.
+- 네 PR 이 독립 리뷰에서 Act-on 을 받으면 리드에게 알린다. 리드가 다음 시작의 effort 를, 두 번째면 tier 를 올린다.
 - 서브에이전트를 띄울 때는 `model` 을 늘 적고, 세션 모델을 물려받게 두지 않는다(결정 188). 찾기·목록·수집은 resource `models` 의 `subagents.collect` alias, 읽고 판단하는 일은 `subagents.judge` alias 다. PR 의 독립 리뷰는 그 resource 의 `review` 행이다.
 - 서브에이전트도 같은 advisor 를 물려받는다. 끄는 길은 실행 환경의 `CLAUDE_CODE_DISABLE_ADVISOR_TOOL` 하나이고, sangsoe 는 그것을 넘기지 않는다. 훑기가 대부분인 일은 리드가 `mechanical` 로 표시한다.
 

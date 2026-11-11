@@ -79,6 +79,8 @@ export interface Overview {
   readonly evidenceShort: number;
   /** ✅ closed in the last `doneDays`, newest first: summary.done rows (decision 199). */
   readonly done: Table;
+  /** Today's advisor calls and estimated cost (decision 200); absent on a day with none. */
+  readonly advisorToday?: string;
 }
 
 export interface GraphEdgeRow {
@@ -171,6 +173,8 @@ export interface ItemDetail {
   readonly flags: string;
   readonly who: string;
   readonly priority: string;
+  /** The row start_unit picked and the unit's advisor spend (decision 200); absent before a start. */
+  readonly model?: string;
   readonly chain: Table;
 }
 

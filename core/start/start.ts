@@ -8,7 +8,7 @@ import { foldFacts } from "../graph/facts.ts";
 import { itemRef } from "../graph/nodes.ts";
 import { whyFrom } from "../graph/ready.ts";
 import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
-import { type Choice, launch, pairing, resolve } from "../models/index.ts";
+import { type Choice, launch, localDay, POLICY, pairing, resolve, spend } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
 import { type NewTask, REPO_SELECTOR, type RefusalReason, type Role, type StartOutcome, type StartPorts, type StartRefusal, type StartRequest } from "./types.ts";
@@ -128,7 +128,8 @@ function firstPrompt(role: Role, t: NewTask): string {
 
 /**
  * The one path that opens a session (decision 94): lineage and depth → task-create --deps →
- * ready and capacity → worker-start --task <id> --worktree new-child → Dispatch read back.
+ * ready and capacity → `unit_started` (decision 200) → worker-start --task <id> --worktree new-child
+ * → Dispatch read back.
  * A refusal writes one `signal{start_refused}` and escalates to whoever handed the requester its work.
  */
 export async function startUnit(ports: StartPorts, req: StartRequest): Promise<StartOutcome> {
@@ -359,9 +360,34 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
 
   // ④ orca_error
   const orcaFlag = choice.advisor ? await orcaTakesAdvisor(orca) : false;
+  const row = POLICY[choice.kind];
+  const used = spend(store.events({ type: "advisor_used" }), {
+    task: taskId,
+    ...(row.budget.per === "day" ? { day: localDay(new Date()) } : {}),
+  }).calls;
+  // Decision 200: the budget is counted and shown, not enforced here. Turning the advisor off at the
+  // next start needs the worktree-local route, a follow-up unit.
   const plan = launch(choice, {
     orcaFlag,
     ownerSetting: choice.advisor && !orcaFlag ? (ports.advisorSetting ?? (() => advisorSetting(process.env, homedir())))() : false,
+  });
+  // Before worker-start: the new session's SessionStart reads this row for its budget and finish lines.
+  store.append({
+    type: "unit_started",
+    source,
+    entity: "task",
+    entity_id: taskId,
+    payload: {
+      kind: choice.kind,
+      picked_by: req.pickedBy ?? "role",
+      model: plan.model,
+      effort: plan.effort,
+      ...(plan.route !== "none" && choice.advisor ? { advisor: choice.advisor } : {}),
+      route: plan.route,
+      budget: row.budget.calls,
+      budget_per: row.budget.per,
+      used,
+    },
   });
   // new-child keeps parentWorktreeId; without a worktree the lineage is the Run alone (decision 197).
   // A lead's terminal is the one the owner watches: kept open until the orchestrator releases it.
@@ -379,7 +405,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   const started = await write(orca, orca.workerStart(startArgs), (o) => orca.workerStart(startArgs, o));
   if (!started.ok) {
     const dead = findKey(started.error.data, DISPATCH_KEYS);
-    if (dead) store.append({ type: "worker_dead", source, payload: { reason: "start_failed" }, entity: "dispatch", entity_id: dead });
+    if (dead) store.append({ type: "worker_dead", source, payload: { reason: "start_failed" }, entity: "dispatch", entity_id: dead, target: taskId });
     return failedAttempt("orca_error", `worker-start 실패 (${started.error.code}: ${started.error.message})`);
   }
 
@@ -409,7 +435,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       if (!ref.ok) notes.push(`reference add 실패 (${ref.error.code}), 시작은 계속`);
     }
   }
-  const launched = { model: plan.model, effort: plan.effort, ...(plan.advisor ? { advisor: plan.advisor } : {}) };
+  const launched = { model: plan.model, effort: plan.effort, ...(plan.advisor ? { advisor: plan.advisor } : {}), route: plan.route };
   return { kind: "started", taskId, ...(alias ? { alias } : {}), dispatchId, ...(worktreeId ? { worktreeId } : {}), launch: launched, notes };
 }
 
