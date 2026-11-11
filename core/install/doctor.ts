@@ -27,6 +27,7 @@ import {
   UNREADABLE,
   userPlugin,
 } from "./host.ts";
+import { PERMISSIONS_FIX, permissionsRow } from "./permissions.ts";
 import { stageCore } from "./stage.ts";
 
 // `warn` and `notice` print their fix but leave the exit code alone, as at the start.
@@ -114,25 +115,31 @@ function orcaProfileCheck(host: Host, root: string, current: ClaudeProfile): Che
   return { state: "ok", name, detail: `Orca starts sessions with ${where}: ${PLUGIN_ID} ${p.version}, sangsoe enabled` };
 }
 
-// Decision 198: read-only, never `fail`. The profile Orca starts workers with is the one that matters.
-function landAllowedCheck(host: Host, current: ClaudeProfile): Check {
-  const name = "land allow";
+// Decisions 198 and 221: read-only, never `fail`. The profile Orca starts workers with is the one that matters.
+function settingsChecks(host: Host, current: ClaudeProfile): Check[] {
   const dir = orcaProfile(host)?.dir ?? current.dir;
+  const path = join(dir, "settings.json");
   let settings: unknown;
   try {
-    settings = JSON.parse(host.readText(join(dir, "settings.json")));
+    settings = JSON.parse(host.readText(path));
   } catch {
     settings = undefined;
   }
-  const { found, detail } = landAllowDetail(dir, settings === undefined ? undefined : landAllowRules(settings));
-  return found
-    ? { state: "ok", name, detail }
-    : {
-        state: "notice",
-        name,
-        detail: `${detail}: auto mode may refuse a worker's land`,
-        fix: `the owner adds an allow rule (e.g. "Bash(sangsoe land:*)" in permissions.allow); doctor writes no settings`,
-      };
+  const perms = permissionsRow(path, settings);
+  const land = landAllowDetail(dir, settings === undefined ? undefined : landAllowRules(settings));
+  return [
+    perms.all
+      ? { state: "ok", name: "permissions", detail: perms.detail }
+      : { state: "warn", name: "permissions", detail: `${perms.detail}: sangsoe's sessions may stop on permission prompts`, fix: PERMISSIONS_FIX },
+    land.found
+      ? { state: "ok", name: "land allow", detail: land.detail }
+      : {
+          state: "notice",
+          name: "land allow",
+          detail: `${land.detail}: auto mode may refuse a worker's land`,
+          fix: `${PERMISSIONS_FIX} adds the rule for sangsoe's MCP tools; doctor writes no settings`,
+        },
+  ];
 }
 
 // The plugin row itself is the start check `claude-plugin-version`.
@@ -150,7 +157,7 @@ function claudeChecks(host: Host, root: string): Check[] {
       detail: `checked ${current.dir} (${host.env.CLAUDE_CONFIG_DIR ? "CLAUDE_CONFIG_DIR" : "CLAUDE_CONFIG_DIR unset"})`,
     },
     orcaProfileCheck(host, root, current),
-    landAllowedCheck(host, current),
+    ...settingsChecks(host, current),
   ];
 
   const markets = listMarketplaces(host);
