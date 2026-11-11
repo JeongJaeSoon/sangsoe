@@ -5,6 +5,11 @@ Decision numbers refer to `docs/decisions.md`.
 ## Unreleased
 
 - **`start_unit` refuses on a stale MCP server.** A session's MCP server keeps the code it loaded at start, and `/reload-plugins` does not restart it. When the installed sangsoe's version differs from the server's own, or the install it started from is gone, `start_unit` returns `server_stale` with both versions before it opens the store or calls Orca. The fix it names is restarting the session. A server started under `0.1.3` or older has no such check: restart those sessions after upgrading (211).
+- **The brief and status bar B name a lead or orchestrator session due for a restart.** `restart_due` now has callers: the brief's first stage shows one `♻️ 재시작 권함` line per such session with the rules that hold, and status bar B adds `♻️ N` and turns danger. Only a role's latest session counts, so a `/clear` drops the old one (212).
+- **An unread wake goes one tier up.** When a message sangsoe sent stays unread past `wakeMinutes`, the orca-monitor raises it to the next tier of the receiving order through notify, once per tier, as a `status` message: a worker's goes to its lead, a lead's to the Run above. The orchestrator's stays a `wake_unconfirmed` row (212).
+- **`stacked_on` is added without `--stack`.** pr-monitor records a PR's head branch when it lives in the same repository, and queue-monitor's graph sync stacks an open PR on the one other open PR whose head is its base. A shared head name, a fork head or a merged base adds nothing, and an edge a session removed stays removed. PRs first seen before this version carry no head (212).
+- **A close that `done_blockers` names is refused.** pr-monitor's close after a merge, the panel's 완료 and a role session's own `orca orchestration task-update --status completed` (the new `[gate:done-blockers]`) each refuse while the item has an open PR, an open flow child, a flow gap or an owner gate, and name the blocker (212).
+- **A merged item whose merge sets off a deploy reads 🔍.** An item with a `deploys_after` edge from its PR or its flow shows 🔍 until the dev stage is recorded and a passing `dev` evidence row exists (212).
 
 ## 0.1.3
 
