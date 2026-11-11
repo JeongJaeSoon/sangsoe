@@ -23,7 +23,7 @@ type ListedPull = {
 };
 
 /** A Task Orca links to the PR: a local workspace whose agent's mailbox is a Dispatch. */
-export type LinkedTask = { task: string; run: string; dispatch: string };
+export type LinkedTask = { task: string; run: string; dispatch: string; live: boolean };
 type Link = { linked: boolean; tasks: LinkedTask[] };
 
 class RateLimited extends Error {
@@ -47,6 +47,8 @@ type Reads = {
    * the ETags outlive the rows they were judged into (decision 195).
    */
   conditional: boolean;
+  /** `notified` dedupe keys, read once per round when a review wake is weighed. */
+  notified?: string[];
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
@@ -118,7 +120,9 @@ export async function linkOf(d: MonitorDeps, url: string, workers: () => Promise
   for (const dispatch of dispatches) {
     const show = await d.orca.workerShow({ dispatch });
     if (show.ok && show.value.taskId && show.value.runId) {
-      tasks.set(show.value.taskId, { task: show.value.taskId, run: show.value.runId, dispatch });
+      const live = show.value.liveness === "live";
+      // A Task's live Dispatch wins over its ended ones, whatever order Orca listed them in.
+      if (!tasks.get(show.value.taskId)?.live) tasks.set(show.value.taskId, { task: show.value.taskId, run: show.value.runId, dispatch, live });
     }
   }
   return { linked: local.length > 0, tasks: [...tasks.values()] };
@@ -239,6 +243,55 @@ async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, 
   if (level === "normal") await tier(r, repo, p);
   await readyToMerge(r, repo, p, link);
   await reviews(r, repo, p);
+  reviewWake(r, ref, link);
+}
+
+const WAKE_TYPES: Readonly<Record<string, { label: string; kind: string }>> = {
+  pr_changes_requested: { label: "변경 요청", kind: "review" },
+  review_commented: { label: "리뷰 코멘트", kind: "review comment" },
+};
+
+/**
+ * Decision 201: a review that asks for action wakes the PR's worker, once per GitHub id: the Task's
+ * live Dispatch, else its lead's Run. Read from the rows, not from this round's writes, so a wake
+ * that could not be sent (link unread, send failed) goes out on a later round. Ids only, no text.
+ */
+function reviewWake(r: Reads, ref: string, link: Link | null): void {
+  const rows = Object.keys(WAKE_TYPES).flatMap((type) => [
+    ...rowsOf(r, type, ref),
+    ...r.planned.filter((e) => e.type === type && (e.payload as { pr?: unknown }).pr === ref),
+  ]);
+  if (rows.length === 0) return;
+  const task = itemTask(r, ref, link);
+  const linked = link?.tasks.find((t) => t.task === task);
+  if (!task || !linked) return void r.unseen.push(`review wake of ${ref}: no linked Task`);
+  // notify's own once-per-key rows; an escalated one carries a `:<tier>` suffix.
+  const told = (r.notified ??= r.d.events({ type: "notified" }).map((e) => e.dedupe_key ?? ""));
+  const seen = new Set<string>();
+  for (const e of rows) {
+    const id = (e.dedupe_key ?? "").split(":").at(-1) ?? "";
+    const w = WAKE_TYPES[e.type];
+    const base = key("notify", task, e.type, id);
+    if (!w || !id || seen.has(base) || told.some((k) => k === base || k.startsWith(`${base}:`))) continue;
+    seen.add(base);
+    const to = linked.live ? "worker" : "lead";
+    r.acts.push({
+      what: `notify ${linked.live ? `dispatch:${linked.dispatch}` : `run:${linked.run}`} ${ref} ${e.type} ${id}`,
+      wake: true,
+      run: async (d) => ({
+        ...(await sendNotice(d, {
+          key: { target: task, dedupe_key: base },
+          to,
+          chain: linked.live ? { dispatch: linked.dispatch, leadRun: linked.run } : { leadRun: linked.run },
+          subject: `🔁 ${w.label}: ${ref}`,
+          body: `${ref} 에 새 ${w.label}이 왔다(${e.type}, GitHub ${w.kind} id ${id}). GitHub 에서 읽고 대응한다.`,
+          msgType: "status",
+          source: SOURCE,
+        })),
+        planned: [],
+      }),
+    });
+  }
 }
 
 /** Decision 195: review requests, changes requested, comments and the author's replies, by GitHub id. */
