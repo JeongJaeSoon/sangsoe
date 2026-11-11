@@ -401,7 +401,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   const started = await write(orca, orca.workerStart(startArgs), (o) => orca.workerStart(startArgs, o));
   if (!started.ok) {
     const dead = findKey(started.error.data, DISPATCH_KEYS);
-    if (dead) store.append({ type: "worker_dead", source, payload: { reason: "start_failed" }, entity: "dispatch", entity_id: dead });
+    if (dead) store.append({ type: "worker_dead", source, payload: { reason: "start_failed" }, entity: "dispatch", entity_id: dead, target: taskId });
     // The empty worktree this attempt made goes with it; a failed removal is left for the reaper.
     await orca.worktreeRm({ worktree: `id:${tree.value.id}` });
     return failedAttempt("orca_error", `worker-start 실패 (${started.error.code}: ${started.error.message})`);

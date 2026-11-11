@@ -428,10 +428,13 @@ test("a failed start that reports a Dispatch writes worker_dead{start_failed}", 
   const h = harness({
     workerStart: () => ({ code: 1, stdout: JSON.stringify({ ok: false, error: { code: "start_failed", message: "x", data: { dispatchId: "ctx_dead" } } }), stderr: "" }),
   });
-  await start(h);
+  const r = await start(h);
   const dead = h.store.events({ type: "worker_dead" });
   assert.equal(dead.length, 1);
   assert.equal(dead[0]?.entity_id, "ctx_dead");
+  // Decision 201: the alarm names the Task, or the brief has no item to raise it on.
+  assert.ok("taskId" in r && r.taskId);
+  assert.equal(dead[0]?.target, r.taskId);
 });
 
 test("decision 178: a Task Orca released at its predecessor's worker_done waits while that PR is open, starts once it merges", async () => {
