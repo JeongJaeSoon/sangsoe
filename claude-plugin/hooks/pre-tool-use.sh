@@ -12,7 +12,7 @@ if [ -f "$cli" ]; then
 elif command -v sangsoe >/dev/null 2>&1; then
   sangsoe hook pre-tool-use
 else
-  echo "sangsoe hook: no $cli and no sangsoe on PATH, so the sangsoe gates are off for this call. If sangsoe was removed, restart this session; to reinstall, run sangsoe install." >&2
+  echo "sangsoe hook: no $cli and no sangsoe on PATH, so the sangsoe gates are off for this call. If sangsoe was removed, restart this session; to reinstall, run brew install JeongJaeSoon/tap/sangsoe, then sangsoe install." >&2
   exit 1
 fi
 status=$?

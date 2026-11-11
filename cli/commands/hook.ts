@@ -86,13 +86,16 @@ function pluginVersion(host: Host): string | undefined {
   }
 }
 
+const GATE_STORE_BUSY_MS = 500;
+
 function gate(host: Host): Report {
   const parsed = parseHookInput(readFileSync(0, "utf8"));
   if (!parsed.ok) return { code: 2, lines: [`sangsoe hook: ${parsed.reason}`] };
   const home = host.env.HOME ?? homedir();
   let store: Store | undefined;
+  // Decision 208: the reads take up to 12s of the hook's 15s, and a timed-out hook lets the call through.
   const openStore = () => {
-    store ??= Store.open({ home });
+    store ??= Store.open({ home, busyTimeoutMs: GATE_STORE_BUSY_MS });
     return store;
   };
   try {
