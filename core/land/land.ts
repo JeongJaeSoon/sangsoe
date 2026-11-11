@@ -1,5 +1,6 @@
 import type { StoredEvent } from "../contract/index.ts";
 import type { GhClient } from "../gh/client.ts";
+import { type Facts, foldFacts } from "../graph/facts.ts";
 import { type MergeCondition, readMergeConditions } from "../gh/merge-conditions.ts";
 import type { NewEvent } from "../store/store.ts";
 import { evidenceGaps } from "../verify/evidence.ts";
@@ -186,6 +187,21 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
       `${pr} is stacked on task ${bottom.id}, which has no pr_opened, so its PR cannot be checked`,
       `open and land the PR of task ${bottom.id} first, or remove the stacked_on edge`,
     );
+  }
+  const facts = foldFacts(events);
+  const dead = mergedBase(pr, pull.base.ref, events, facts);
+  if (dead) {
+    throw new Refused(
+      "base_merged",
+      dead.pr,
+      `${pr}'s base ${pull.base.ref} is the head branch of ${dead.pr}, which merged; GitHub keeps that branch and does not retarget ${pr}`,
+      `gh pr edit ${input.pr} --repo ${repo} --base ${dead.base ?? `<${dead.pr}'s base>`}, then land again after pr-monitor records the base change (sangsoe monitor run pr); the PR is re-reviewed at its new base`,
+    );
+  }
+  // pr_base_changed is what makes a review before a retarget stale (decision 215); judged before it exists, the old review would pass.
+  const recorded = facts.prs.get(pr)?.base;
+  if (recorded !== undefined && recorded !== pull.base.ref) {
+    throw new Refused("base_unrecorded", "", `${pr}'s base is ${pull.base.ref} on GitHub, but pr-monitor last recorded ${recorded}`, "run sangsoe monitor run pr, then land again");
   }
 
   const note: string[] = [];
@@ -376,7 +392,7 @@ const bareNode = (n: string): string => n.replace(/^(pr|item):/, "");
  * so PRs and tasks are joined through `pr_opened{pr, task}`; a predecessor task with no PR is
  * returned as itself, because an unknown PR cannot be shown merged.
  */
-function unmergedBelow(pr: string, events: readonly StoredEvent[]): StackNode | null {
+function stackOf(events: readonly StoredEvent[]) {
   const edges = new Map<string, boolean>();
   const tasksOf = new Map<string, Set<string>>();
   const prOf = new Map<string, string>();
@@ -401,6 +417,27 @@ function unmergedBelow(pr: string, events: readonly StoredEvent[]): StackNode | 
       })
       .filter((n) => n.id !== ref);
   };
+  return { edges, tasksOf, prOf, merged, preds };
+}
+
+/**
+ * Decision 216: the merged PR this one is stacked on whose head branch is still this PR's base.
+ * land merges with the branch kept, and GitHub retargets only when it deletes the branch, so such a
+ * PR would merge into a branch nothing reads. A branch an open PR still uses as its head is live.
+ */
+function mergedBase(pr: string, base: string, events: readonly StoredEvent[], facts: Facts): { pr: string; base: string | undefined } | null {
+  const { preds, merged } = stackOf(events);
+  const live = [...facts.prs.values()].some((p) => p.pr !== pr && !p.merged && !p.closed && p.head === base && p.pr.split("#")[0] === pr.split("#")[0]);
+  if (live) return null;
+  for (const p of preds(pr)) {
+    const f = p.kind === "pr" && merged.has(p.id) ? facts.prs.get(p.id) : undefined;
+    if (f?.head === base) return { pr: f.pr, base: f.base };
+  }
+  return null;
+}
+
+function unmergedBelow(pr: string, events: readonly StoredEvent[]): StackNode | null {
+  const { edges, tasksOf, prOf, merged, preds } = stackOf(events);
   if (!tasksOf.has(pr)) {
     // Without this PR's task the edges ending at it cannot be found, so any edge whose
     // successor task has no PR might be this one.
