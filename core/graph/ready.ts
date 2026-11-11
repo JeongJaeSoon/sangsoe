@@ -1,4 +1,5 @@
 import type { ReadyRow, ViewInput, ViewTask } from "../contract/views.ts";
+import { pendingRereview, rereviewItem } from "../land/rereview.ts";
 import { type EdgeKind, type Facts, foldFacts, type Stage } from "./facts.ts";
 import { itemRef, parseNode } from "./nodes.ts";
 import { taskPr } from "./task-pr.ts";
@@ -183,6 +184,24 @@ export function triggerOk(trigger: string | undefined, facts: Facts, now: string
   return { ok: null, predState: `모름: trigger ${JSON.stringify(trigger)} 는 날짜도 PR 도 아니다`, dangling: false, todo: "trigger 를 날짜나 owner/repo#N 으로 고친다" };
 }
 
+/**
+ * Decision 215: an item whose Task is done but whose PR is open waits on the merge; while that PR's
+ * base change has no review recorded after it, the re-review item (or the PR, before the queue round
+ * makes it) is the row that blocks.
+ */
+function rereviewRows(input: ViewInput, facts: Facts, t: ViewTask, item: string): WhyRow[] {
+  const p = taskPr(t, facts, { boundOnly: true });
+  if (p.state !== "open") return [];
+  return p.prs.flatMap((pr) => {
+    const f = facts.prs.get(pr);
+    const change = f && !f.merged && !f.closed ? pendingRereview(input.events, pr) : null;
+    if (!change) return [];
+    const made = rereviewItem(input.events, pr, change);
+    const pred = made ? itemRef(made.task) : `pr:${pr}`;
+    return [{ item, pred, kind: "blocks" as const, predState: `재리뷰 전: base ${change.from} → ${change.to}`, dangling: false, todo: "PR 의 지금 head 를 리뷰하고 review_record 로 기록한다" }];
+  });
+}
+
 export function whyFrom(input: ViewInput, facts: Facts, task: string): WhyReport {
   const tasks = tasksById(input);
   const t = tasks.get(task);
@@ -190,6 +209,10 @@ export function whyFrom(input: ViewInput, facts: Facts, task: string): WhyReport
   const item = x?.alias ?? task;
   if (!t) {
     return { task, item, readiness: "unknown", rows: [{ item, pred: itemRef(task), kind: "orca", predState: taskState(undefined), dangling: false, todo: "이 Task 의 Run 을 읽는다" }] };
+  }
+  if (DONE(t)) {
+    const rows = rereviewRows(input, facts, t, item);
+    return { task, item, readiness: rows.length > 0 ? "waiting" : "not_waiting", rows };
   }
   if (t.status !== "pending" && t.status !== "ready") return { task, item, readiness: "not_waiting", rows: [] };
   const rows: WhyRow[] = [];

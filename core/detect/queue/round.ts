@@ -6,6 +6,7 @@ import { decisionMoot } from "../../decision/moot.ts";
 import { isOpenGate } from "../../decision/waiters.ts";
 import type { GhClient } from "../../gh/client.ts";
 import { notifyReady } from "../../graph/notify-ready.ts";
+import { rereviewItems } from "../../graph/rereview.ts";
 import { readSnapshot } from "../../graph/snapshot.ts";
 import { syncGraph } from "../../graph/sync.ts";
 import { probeRound } from "../../owner/probe.ts";
@@ -29,8 +30,9 @@ const NO_GH: GhClient = { get: async () => ({ kind: "error", status: null, messa
 
 /**
  * One queue-monitor round (decision 91, design #monitors): reads the Runs events name, judges, then
- * calls the core functions that own each rule. It writes signals and suggestions only: no Task is
- * closed or updated here, and a gate is resolved only by a function's own rules (decision 76 rule 6).
+ * calls the core functions that own each rule. It writes signals and suggestions, and the one Task
+ * kind GRAPH makes on its own, a re-review item (decision 215): no Task is closed or updated here,
+ * and a gate is resolved only by a function's own rules (decision 76 rule 6).
  * Without `d.core` (a dry run) it reads everything and names each call it would make.
  */
 export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<Reading> {
@@ -64,8 +66,13 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
 
   if (core) {
     const s = syncGraph(core, input.orca, [], { infer: true });
-    calls.push(`graph sync: added ${s.added.length}, reland ${s.relandPrs.length}, dangling ${s.dangling.length}, refused ${s.refused.length}`);
-  } else calls.push("would call graph sync");
+    calls.push(`graph sync: added ${s.added.length}, unstacked ${s.unstacked.length}, reland ${s.relandPrs.length}, dangling ${s.dangling.length}, refused ${s.refused.length}`);
+    if (!signal.aborted) {
+      const rr = await rereviewItems(core, input.orca);
+      calls.push(`rereview items: made ${rr.made.length}${rr.made.length ? ` (${rr.made.join(", ")})` : ""}, refused ${rr.refused.length}`);
+      unseen.push(...rr.refused.map((x) => `re-review item ${x}`));
+    }
+  } else calls.push("would call graph sync", "would call rereview items");
 
   if (j.ready.length > 0) {
     const runOf = new Map(input.orca.tasks.map((t) => [t.id, t.runId]));

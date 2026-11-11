@@ -42,6 +42,22 @@ test("review record writes one review_verdict with the author read from GitHub",
   assert.equal(reviewEvidenceFrom(rows, "acme/api", 7, HEAD)?.actOn, 3, "the row with findings is the one read");
 });
 
+test("decision 215: the same verdict at the same head after each base change is a new row", async () => {
+  const openStore = storeAt();
+  const record = () => recordReviewVerdict(input, { exec: ghAuthor("alice"), openStore });
+  const move = (from: string, to: string) => {
+    const s = openStore();
+    s.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: "acme/api#7", from, to } });
+    s.close();
+  };
+  const first = await record();
+  move("feature-a", "main");
+  const second = await record();
+  assert.deepEqual([first.inserted, second.inserted, (await record()).inserted], [true, true, false]);
+  move("main", "feature-a");
+  assert.ok((await record()).inserted, "a base that comes back is another change");
+});
+
 test("review record refuses the PR's author as reviewer, an unreadable PR and a short head; nothing is written", async () => {
   const openStore = storeAt();
   const self = await recordReviewVerdict({ ...input, reviewer: "Alice" }, { exec: ghAuthor("alice"), openStore });

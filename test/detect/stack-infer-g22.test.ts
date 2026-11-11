@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_MONITOR_CONFIG, foldFacts, type MonitorDeps, nullChatProvider, removeEdgeFrom, runMonitor, type Store, VERSION } from "../../core/index.ts";
+import { addEdgeTo, DEFAULT_MONITOR_CONFIG, foldFacts, type MonitorDeps, nullChatProvider, removeEdgeFrom, runMonitor, type Store, VERSION } from "../../core/index.ts";
 import { createWorld, type World } from "../decision/world.ts";
 
 // G22 (decision 212 ③): the queue round adds stacked_on from pr-monitor's own rows: an open PR whose
@@ -86,4 +86,24 @@ test("two stacked PRs of one task add no edge, so the lower one is not made to w
   opened(w, "acme/api#11", T1, "part1", "part2");
   await runMonitor("queue", deps(w.store, w));
   assert.deepEqual(stacked(w), []);
+});
+
+test("decision 215 ⑦: a base that left a PR's head drops that stack edge; an ordering edge to a PR never its base stays", async () => {
+  const w = world();
+  opened(w, "acme/api#1", T1, "main", "feat-a");
+  opened(w, "acme/api#2", T2, "feat-a", "feat-b");
+  opened(w, "acme/api#3", T3, "main", "feat-c");
+  await runMonitor("queue", deps(w.store, w));
+  const snap = { tasks: [...w.tasks.values()].map((t) => ({ id: t.id, runId: RUN, status: t.status, deps: [] })), gates: [] };
+  assert.ok(addEdgeTo(w, snap as never, { pred: "pr:acme/api#3", succ: `item:${T2}`, kind: "stacked_on" }).ok);
+  assert.deepEqual(stacked(w), [`pr:acme/api#1 → item:${T2}`, `pr:acme/api#3 → item:${T2}`]);
+
+  opened(w, "acme/api#4", T2, "feat-a", "feat-d");
+  w.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: "acme/api#2", from: "feat-a", to: "main" } });
+  await runMonitor("queue", deps(w.store, w));
+  assert.deepEqual(stacked(w), [`pr:acme/api#1 → item:${T2}`, `pr:acme/api#3 → item:${T2}`], "#4 of the same item still sits on feat-a");
+
+  w.store.append({ type: "pr_closed", source: "pr-monitor", payload: { pr: "acme/api#4" } });
+  await runMonitor("queue", deps(w.store, w));
+  assert.deepEqual(stacked(w), [`pr:acme/api#3 → item:${T2}`]);
 });

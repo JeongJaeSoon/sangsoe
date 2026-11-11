@@ -1,6 +1,6 @@
 import type { OrcaSnapshot } from "../contract/views.ts";
 import type { CoreDeps } from "../notify/result.ts";
-import { addEdgeTo } from "./edit.ts";
+import { addEdgeTo, removeEdgeFrom } from "./edit.ts";
 import { edgeId, type Facts, foldFacts, type PrFact } from "./facts.ts";
 import { itemRef, prNode } from "./nodes.ts";
 
@@ -16,7 +16,9 @@ export interface StackFact {
 export interface SyncResult {
   /** stacked_on edges added (pred PR → item the stacked PR belongs to). */
   readonly added: readonly string[];
-  /** PRs whose base changed: their lead re-requests land so the verdict is re-checked at the new head. */
+  /** stacked_on edges removed because the stacked PR's base no longer is the pred PR's head. */
+  readonly unstacked: readonly string[];
+  /** PRs whose base changed, for the round's log; decision 215's re-review item re-checks their verdict. */
   readonly relandPrs: readonly string[];
   /** Edges whose predecessor PR closed unmerged: shown as dangling by why until the lead decides. */
   readonly dangling: readonly string[];
@@ -49,13 +51,45 @@ export function inferStacks(facts: Facts): StackFact[] {
 }
 
 /**
+ * Decision 215: a PR whose base moved off another PR's head branch is no longer stacked on it. Its
+ * stacked_on edge from that PR is removed, so land stops refusing stack_order on it. An edge to a PR
+ * whose head was never this PR's base is an ordering a session chose, and stays.
+ */
+function unstack(deps: Pick<CoreDeps, "store">, snapshot: OrcaSnapshot, facts: Facts, refused: string[]): string[] {
+  const left = new Map<string, Set<string>>();
+  for (const e of deps.store.events({ type: "pr_base_changed" })) {
+    const pr = String(e.payload.pr);
+    left.set(pr, (left.get(pr) ?? new Set()).add(String(e.payload.from)));
+  }
+  const out: string[] = [];
+  for (const e of facts.edges) {
+    if (e.kind !== "stacked_on" || !e.pred.startsWith("pr:")) continue;
+    const below = facts.prs.get(e.pred.slice(3));
+    if (below?.head === undefined) continue;
+    for (const p of facts.prs.values()) {
+      if (!isOpen(p) || repoOf(p.pr) !== repoOf(below.pr) || !p.tasks.has(e.succ.replace(/^item:/, ""))) continue;
+      if (!left.get(p.pr)?.has(below.head) || p.base === below.head) continue;
+      // The edge is the item's: another open PR of it still on that head keeps it.
+      const task = e.succ.replace(/^item:/, "");
+      if ([...facts.prs.values()].some((q) => isOpen(q) && q.tasks.has(task) && repoOf(q.pr) === repoOf(below.pr) && q.base === below.head)) break;
+      const r = removeEdgeFrom(deps, snapshot, { pred: e.pred, succ: e.succ, kind: "stacked_on", reason: `${p.pr}'s base is ${p.base}, not ${below.pr}'s head ${below.head}` });
+      if (r.ok) out.push(`${e.pred} → ${e.succ}`);
+      else refused.push(`${p.pr}: ${r.refusal.code} ${r.refusal.reason}`);
+      break;
+    }
+  }
+  return out;
+}
+
+/**
  * `infer` adds the stacks inferStacks reads, except an edge a session removed: removing it is the
  * session's call, and the next round must not put it back. Stacks the caller names are added as given.
  */
 export function syncGraph(deps: Pick<CoreDeps, "store">, snapshot: OrcaSnapshot, stacks: readonly StackFact[] = [], o: { infer?: boolean } = {}): SyncResult {
-  const facts = foldFacts(deps.store.events());
   const added: string[] = [];
   const refused: string[] = [];
+  const unstacked = o.infer ? unstack(deps, snapshot, foldFacts(deps.store.events()), refused) : [];
+  const facts = foldFacts(deps.store.events());
   const inferred = o.infer ? inferStacks(facts).map((s) => ({ ...s, inferred: true })) : [];
   for (const s of [...stacks.map((x) => ({ ...x, inferred: false })), ...inferred]) {
     const pr = facts.prs.get(s.pr);
@@ -79,5 +113,5 @@ export function syncGraph(deps: Pick<CoreDeps, "store">, snapshot: OrcaSnapshot,
     if (prs.some((p) => after.prs.get(p)?.closed && !after.prs.get(p)?.merged) && e.kind !== "after") dangling.push(`${e.pred} → ${e.succ} (${e.kind})`);
     else if (prs.length > 0 && prs.every((p) => after.prs.get(p)?.merged)) met.push(`${e.pred} → ${e.succ} (${e.kind})`);
   }
-  return { added, relandPrs, dangling, met, refused };
+  return { added, unstacked, relandPrs, dangling, met, refused };
 }

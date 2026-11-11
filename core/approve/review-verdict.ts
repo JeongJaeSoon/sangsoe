@@ -25,7 +25,7 @@ export async function recordReviewVerdict(
 
   // Author and head come from GitHub, never from the caller: a caller can name neither someone
   // else's PR as its own nor a head nobody has pushed yet.
-  const pr = await deps.exec("gh", ["api", `repos/${input.repo}/pulls/${input.pr}`, "--jq", '[.user.login, .head.sha] | @tsv']);
+  const pr = await deps.exec("gh", ["api", `repos/${input.repo}/pulls/${input.pr}`, "--jq", "[.user.login, .head.sha] | @tsv"]);
   const [login = "", head = ""] = pr.stdout.trim().split("\t");
   const author = login.toLowerCase();
   if (pr.code !== 0 || !IDENTITY.test(author)) {
@@ -42,12 +42,15 @@ export async function recordReviewVerdict(
     return fail(`cannot open the store: ${e instanceof Error ? e.message : String(e)}`, author);
   }
   try {
+    // Decision 215: how many base changes the PR has had goes in the key, so the same verdict at the
+    // same head recorded again after a retarget is a new row that counts.
+    const moves = store.events({ type: "pr_base_changed" }).filter((e) => e.payload.pr === ref).length;
     const out = store.append({
       type: "review_verdict",
       source: "review record",
       actor: reviewer,
       // The count is in the key: a worse verdict at the same head is stored, never dropped (S2).
-      dedupe_key: dedupeKey(EVENTS.review_verdict, ref, input.head, reviewer, String(input.actOn)),
+      dedupe_key: dedupeKey(EVENTS.review_verdict, ref, input.head, reviewer, String(input.actOn), ...(moves > 0 ? [String(moves)] : [])),
       payload: { pr: ref, head_sha: input.head, act_on: input.actOn, reviewer, author },
     });
     const note = out.inserted

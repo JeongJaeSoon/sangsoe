@@ -181,10 +181,10 @@ test("the dry run takes the same path and writes nothing", async () => {
 
 test("fail closed: a verdict inherited by patch-id from an older head does not count here", async () => {
   const h = harness();
+  h.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from: "feature-a", to: "main" } });
   verdict(h.store, { head: OLD });
   evidence(h.store, "test");
   evidence(h.store, "run");
-  h.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from: "feature-a", to: "main" } });
   const same = ok({ status: "ahead", files: [{ filename: "core/a.ts", patch: "@@ -1 +1 @@\n-a\n+b" }] });
   const gh = h.deps.gh;
   h.deps.gh = { get: async <T>(p: string) => (p.includes("/compare/") ? (same as GhResponse<T>) : gh.get<T>(p)) };
