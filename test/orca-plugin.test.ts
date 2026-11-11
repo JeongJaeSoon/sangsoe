@@ -424,6 +424,36 @@ test("U86 audit: the status round reads the core only when no panel reading came
   }
 });
 
+test("U86 audit: a failed panel reading does not let the status round re-push the last good item", async () => {
+  const w = fakeWorker();
+  const { clock, advance } = fakeClock();
+  const status = { text: "✨ SANGSOE | 🚧 0 | 결정 0 | 🔄 0", tone: "neutral" as const, tooltip: "t" };
+  let good = true;
+  let reads = 0;
+  const core: PanelCore = {
+    brief: async () => (good ? { ok: true, value: { status } } : { ok: false, refusal: { code: "orca_error", reason: "down", fix: "" } }),
+    statusBar: async () => {
+      reads += 1;
+      return { ok: false, refusal: { code: "orca_error", reason: "down", fix: "" } };
+    },
+    act: async () => ({ ok: true, value: {} }),
+  };
+  activate(w.orca, { clock, exec: async (cmd) => ok(cmd, ""), panel: async () => core });
+  try {
+    await settle();
+    await advance(20_000);
+    await w.handlers.get("panel.brief")?.({ auto: true });
+    good = false;
+    await w.handlers.get("panel.brief")?.({ auto: true });
+    const before = reads;
+    await advance(10_000);
+    assert.equal(reads, before + 1, "the round reads for itself once a panel reading failed");
+    assert.match(String((w.hostCalls.at(-1)?.[1] as { text?: string } | undefined)?.text), /\?/, "and shows it does not know");
+  } finally {
+    deactivate();
+  }
+});
+
 test("decision 205: the worker watches the store and posts store.changed to the open panels, and stops on deactivate", async () => {
   const w = fakeWorker();
   const posts: [string, unknown][] = [];

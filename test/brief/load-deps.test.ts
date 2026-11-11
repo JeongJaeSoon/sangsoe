@@ -53,7 +53,7 @@ function slowOrca(current: string) {
   return { orca, peak: () => peak, calls };
 }
 
-test("U86 audit: the brief's Orca reads run side by side, run-current among them, in the Runs' order", async () => {
+test("U86 audit: the brief's Orca reads run side by side in the Runs' order, the named Runs' before run-current answers", async () => {
   const o = slowOrca("run_a");
   const snap = await readSnapshot(o.orca, ["run_a", "run_b", "run_c"]);
   assert.ok(snap.ok);
@@ -72,6 +72,15 @@ test("U86 audit: the brief's Orca reads run side by side, run-current among them
   } finally {
     rmSync(dir, { recursive: true });
   }
+});
+
+test("U86 audit: a store naming many Runs reads at most four Runs at once, in the Runs' order", async () => {
+  const runs = Array.from({ length: 10 }, (_, i) => `run_${i}`);
+  const o = slowOrca("run_0");
+  const snap = await readSnapshot(o.orca, runs);
+  assert.ok(snap.ok);
+  assert.equal(o.peak(), 8, "four Runs' task-list and gate-list");
+  assert.deepEqual(snap.value.tasks.map((t) => t.runId), runs);
 });
 
 test("an unreadable deps value does not fail the brief; that Task reads as having none", async () => {
