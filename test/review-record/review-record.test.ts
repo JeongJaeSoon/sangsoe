@@ -30,6 +30,7 @@ function landDeps(merged: unknown[]): LandDeps {
     [`repos/${REPO}/pulls/12/files?per_page=100&page=1`]: ok([{ filename: "core/a.ts", patch: "@@ -1 +1 @@\n-a\n+b" }]),
     [`repos/${REPO}/rules/branches/main`]: ok([]),
     [`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`]: ok([]),
+    [`repos/${REPO}/compare/main...${HEAD}`]: ok({ status: "ahead" }),
   };
   const gh: GhClient = { get: async <T>(path: string) => (routes[path] ?? { kind: "error", status: 404, message: "Not Found" }) as GhResponse<T> };
   return {

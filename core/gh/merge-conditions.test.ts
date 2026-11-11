@@ -67,7 +67,7 @@ test("a merge queue stands in for the up-to-date rule", async () => {
   const rules = [STRICT_RULES[0], { type: "required_status_checks", parameters: { required_status_checks: [{ context: "unit" }] } }, { type: "merge_queue" }];
   const r = await readMergeConditions(fakeGh({ [RULES]: ok(rules), [files(1)]: ok([]) }), A);
   assert.ok(r.kind === "read");
-  assert.deepEqual(r.conditions[1], { id: "up_to_date_or_queue", ok: true, reason: "merge queue" });
+  assert.deepEqual(r.conditions[1], { id: "up_to_date_or_queue", ok: true, reason: "merge queue", source: "protection" });
 });
 
 test("a PR touching a protected path, on any page or by rename, is not auto-merged", async () => {
@@ -79,7 +79,7 @@ test("a PR touching a protected path, on any page or by rename, is not auto-merg
   });
   const r = await readMergeConditions(gh, A);
   assert.ok(r.kind === "read");
-  assert.deepEqual(r.conditions[3], { id: "no_protected_paths", ok: false, reason: "touches protected path infra/main.ts" });
+  assert.deepEqual(r.conditions[3], { id: "no_protected_paths", ok: false, reason: "touches protected path infra/main.ts", source: "own" });
   assert.equal(r.autoMerge, false);
 });
 
@@ -87,7 +87,7 @@ test("an unreadable protected_paths setting is false without reading the PR", as
   const gh = fakeGh({ [RULES]: ok(STRICT_RULES) });
   const r = await readMergeConditions(gh, { ...A, protectedPaths: null });
   assert.ok(r.kind === "read" && !r.autoMerge);
-  assert.deepEqual(r.conditions[3], { id: "no_protected_paths", ok: false, reason: "protected_paths unreadable" });
+  assert.deepEqual(r.conditions[3], { id: "no_protected_paths", ok: false, reason: "protected_paths unreadable", source: "own" });
   assert.ok(!gh.paths.some((p) => p.includes("/files")));
 });
 

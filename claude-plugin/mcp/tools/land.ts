@@ -5,7 +5,7 @@ export function landTool(deps: () => LandDeps): ToolDef {
   return {
     name: "land",
     description:
-      "Land a PR: checks main, stack order, the review verdict and the verify tier's evidence at the head, then the four merge conditions; asks GitHub to merge or records merge_on_approval. On a repo in config verdict_merge_repos, a verdict recorded at the exact head by a non-author, green checks and no unresolved thread merge at once instead (not V3, not protected paths). Every refusal is recorded as land_failed.",
+      "Land a PR: checks main, stack order, the review verdict and the verify tier's evidence at the head, then the four merge conditions; asks GitHub to merge or records merge_on_approval. On a repo in config verdict_merge_repos, a verdict recorded at the exact head by a non-author, green checks and no unresolved thread merge at once instead (not V3, not protected paths). A condition branch protection does not satisfy (unreadable, absent or not required) is checked by land itself (source own: every check green and a verdict at the head, the head contains the base tip), and a path that merges refuses when that check fails or cannot be read. Every refusal is recorded as land_failed.",
     inputSchema: {
       type: "object",
       properties: {

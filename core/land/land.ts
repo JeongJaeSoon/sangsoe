@@ -6,6 +6,7 @@ import { evidenceGaps } from "../verify/evidence.ts";
 import { requiredEvidence, type Tier, type TierConfig, verifyTier } from "../verify/verify-tier.ts";
 import {
   approvedAndGreen,
+  containsBase,
   type MergeMethod,
   type PrGate,
   type Pull,
@@ -62,7 +63,7 @@ export type MergePort = (a: { repo: string; pr: number; head: string }) => Promi
 /** Merges now with `method`, pinned to `head` (decision 158). */
 export type MergeNowPort = (a: { repo: string; pr: number; head: string; method: MergeMethod }) => Promise<{ ok: boolean; message: string }>;
 export type PrGatePort = (a: { repo: string; pr: number }) => Promise<Read<PrGate>>;
-/** `mergeNow` and `prGate` serve decision 158 only; without them that path refuses. */
+/** `mergeNow` serves decision 158; `prGate` also feeds decision 204's own checks. Without them those paths refuse. */
 export type LandDeps = {
   gh: GhClient;
   openStore: () => LandStore;
@@ -78,6 +79,7 @@ const short = (sha: string) => sha.slice(0, 7);
 
 class Refused extends Error {
   readonly code: string;
+  readonly detail: string;
   readonly why: string;
   readonly fix: string;
   /** What land_failed.reason carries: the code, or code:detail. */
@@ -85,6 +87,7 @@ class Refused extends Error {
   constructor(code: string, detail: string, why: string, fix: string) {
     super(why);
     this.code = code;
+    this.detail = detail;
     this.why = why;
     this.fix = fix;
     this.token = detail ? `${code}:${detail}` : code;
@@ -208,11 +211,27 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
 
   const read = await readMergeConditions(gh, { repo, base: pull.base.ref, pr: input.pr, protectedPaths: config.protectedPaths });
   stopIfLimited(read);
-  const conditions = read.kind === "read" ? read.conditions : [];
+  const protection = read.kind === "read" ? read.conditions : [];
+  if (read.kind === "read" && read.autoMerge) {
+    const base = { pr, head_sha: head, tier: tier.effective, dry_run: input.dryRun === true, conditions: protection };
+    return { ...base, action: "auto_merge", note: [...note, "all four conditions hold"].join("; ") };
+  }
+  let gateRead: Promise<Read<PrGate>> | undefined;
+  const readGate = (): Promise<Read<PrGate>> =>
+    (gateRead ??= deps.prGate ? deps.prGate({ repo, pr: input.pr }) : Promise.resolve({ kind: "unreadable", why: "no PR gate reader" }));
+  const gateFix = deps.prGate ? "call land again" : "run land from the sangsoe CLI or MCP tool";
+  const own = await ownConditions(gh, protection, { repo, pr, head, base: pull.base.ref, pull, events, reviewedNote: note[0] ?? "", readGate, gateFix });
+  const conditions = own.conditions;
+  // Decision 204: whatever path merges, the three conditions hold from protection or from sangsoe's own check.
+  const mergeable = () => {
+    if (own.blocked) throw own.blocked;
+  };
   const base = { pr, head_sha: head, tier: tier.effective, dry_run: input.dryRun === true, conditions };
-  if (read.kind === "read" && read.autoMerge) return { ...base, action: "auto_merge", note: [...note, "all four conditions hold"].join("; ") };
   const approved = must(await approvedAndGreen(gh, repo, input.pr, pull, config.tier?.owners ?? []), "pr_unreadable", "call land again");
-  if (approved) return { ...base, action: "merge_approved", note: [...note, "approved and green at the head"].join("; ") };
+  if (approved) {
+    mergeable();
+    return { ...base, action: "merge_approved", note: [...note, "approved and green at the head"].join("; ") };
+  }
   const waitApproval = (why: string): LandValue => ({ ...base, action: "merge_on_approval", note: [...note, why].join("; ") });
   if (!(config.verdictMergeRepos ?? []).includes(repo.toLowerCase())) return waitApproval("merge once approved; the lead calls land again");
 
@@ -222,7 +241,8 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   const paths = conditions.find((c) => c.id === "no_protected_paths");
   if (!paths?.ok) return waitApproval(`${paths?.reason ?? "protected paths unread"}; merge once the owner approves`);
   const by = verdictApproval(events, pr, head, pull);
-  const method = await verdictGate(deps, { repo, number: input.pr, pr, head, pull });
+  mergeable();
+  const method = await verdictGate({ repo, pr, head, pull, readGate, gateFix });
   return { ...base, action: "merge_verdict", merge_method: method, note: [...note, `verdict by ${by} at ${short(head)}, checks green, ${method} now`].join("; ") };
 }
 
@@ -230,6 +250,59 @@ async function mergeNow(deps: LandDeps, a: { repo: string; pr: number; head: str
   if (!deps.mergeNow || !a.method) return { ok: false, message: "no merge-now port or method" };
   return deps.mergeNow({ repo: a.repo, pr: a.pr, head: a.head, method: a.method });
 }
+
+type OwnInput = GateReader & { repo: string; pr: string; head: string; base: string; pull: Pull; events: readonly StoredEvent[]; reviewedNote: string };
+
+/**
+ * Decision 204: a protection condition that is not ok (unreadable, absent or not required) is
+ * replaced by sangsoe's own check. `blocked` is the first own check that failed or could not be
+ * read; any path that merges throws it.
+ */
+async function ownConditions(gh: GhClient, protection: readonly MergeCondition[], a: OwnInput): Promise<{ conditions: MergeCondition[]; blocked: Refused | null }> {
+  let blocked: Refused | null = null;
+  const conditions: MergeCondition[] = [];
+  for (const c of protection) {
+    const check = c.ok ? undefined : OWN_CHECKS[c.id];
+    if (!check) {
+      conditions.push(c);
+      continue;
+    }
+    try {
+      conditions.push({ id: c.id, ok: true, reason: await check(gh, a), source: "own" });
+    } catch (e) {
+      if (!(e instanceof Refused)) throw e;
+      if (e.code === "rate_limited") throw e;
+      const under = new Refused(e.code, e.detail, `${c.id} (own): ${e.why}; protection: ${c.reason}`, e.fix);
+      blocked ??= under;
+      conditions.push({ id: c.id, ok: false, reason: under.why, source: "own" });
+    }
+  }
+  return { conditions, blocked };
+}
+
+const OWN_CHECKS: Partial<Record<MergeCondition["id"], (gh: GhClient, a: OwnInput) => Promise<string>>> = {
+  required_review_and_ci: async (_gh, a) => {
+    const by = verdictApproval(a.events, a.pr, a.head, a.pull);
+    const gate = await gateAt(a);
+    greenChecks(gate.checks, a.head);
+    return `all ${gate.checks.length} checks in the rollup passed at ${short(a.head)}; verdict by ${by} at ${short(a.head)}`;
+  },
+  up_to_date_or_queue: async (gh, a) => {
+    const r = await containsBase(gh, a.repo, a.base, a.head);
+    stopIfLimited(r);
+    if (r.kind !== "ok") throw new Refused("base_unreadable", "", r.kind === "unreadable" ? r.why : "unreadable", "call land again");
+    if (!r.data) {
+      throw new Refused(
+        "behind_base",
+        a.base,
+        `${short(a.head)} does not contain the tip of ${a.base}`,
+        `merge ${a.base} into the branch and push (a conflicted merge needs a delta review of git show --remerge-diff <new head>), have the new head reviewed, then land again`,
+      );
+    }
+    return `${short(a.head)} contains the tip of ${a.base}`;
+  },
+  stale_approvals_dismissed: async (_gh, a) => `the verdict is bound to ${short(a.head)}, not to an approval a push keeps (${a.reviewedNote})`,
+};
 
 /** The reviewers whose verdict at exactly `head` decision 158 counts; refuses when there is none. */
 function verdictApproval(events: readonly StoredEvent[], pr: string, head: string, pull: Pull): string {
@@ -254,28 +327,39 @@ function verdictApproval(events: readonly StoredEvent[], pr: string, head: strin
   return counted.map((e) => String(e.payload.reviewer)).join(", ");
 }
 
+type GateReader = { readGate: () => Promise<Read<PrGate>>; gateFix: string };
+
+/** The PR gate read at `head`; refuses when it is unreadable or GitHub's head moved. */
+async function gateAt(a: GateReader & { pr: string; head: string }): Promise<PrGate> {
+  const gate: PrGate = must(await a.readGate(), "gate_unreadable", a.gateFix);
+  if (gate.headSha !== a.head) {
+    throw new Refused("head_moved", "", `${a.pr}'s head is now ${short(gate.headSha)}, not ${short(a.head)}`, `review ${short(gate.headSha)}, record its verdict, then land again`);
+  }
+  return gate;
+}
+
+/** Refuses unless `checks` is non-empty and every one finished as success, neutral or skipped. */
+function greenChecks(checks: PrGate["checks"], head: string): void {
+  if (checks.length === 0) throw new Refused("checks_missing", "", `no check has reported on ${short(head)}`, "wait for CI to start, then land again");
+  const red = checks.find((c) => c.state === "fail");
+  if (red) throw new Refused("checks_red", red.name, `${red.name} failed at ${short(head)}`, "fix it, push, and have the new head reviewed");
+  const pending = checks.find((c) => c.state === "pending");
+  if (pending) throw new Refused("checks_pending", pending.name, `${pending.name} has not finished at ${short(head)}`, "wait for it, then land again");
+}
+
 /** Decision 158's GitHub side: mergeable, the same head, no open thread, checks green, a merge method. */
-async function verdictGate(deps: LandDeps, a: { repo: string; number: number; pr: string; head: string; pull: Pull }): Promise<MergeMethod> {
+async function verdictGate(a: GateReader & { repo: string; pr: string; head: string; pull: Pull }): Promise<MergeMethod> {
   const state = a.pull.mergeable_state ?? "unknown";
   if (state !== "clean" && state !== "has_hooks") {
     throw new Refused("not_mergeable", state, `GitHub calls ${a.pr} ${state}, not clean`, "fix what the merge box shows (or wait while GitHub computes it), then land again");
   }
-  if (!deps.prGate) throw new Refused("gate_unreadable", "", "no PR gate reader", "run land from the sangsoe CLI or MCP tool");
-  const gate: PrGate = must(await deps.prGate({ repo: a.repo, pr: a.number }), "gate_unreadable", "call land again");
-  if (gate.headSha !== a.head) {
-    throw new Refused("head_moved", "", `${a.pr}'s head is now ${short(gate.headSha)}, not ${short(a.head)}`, `review ${short(gate.headSha)}, record its verdict, then land again`);
-  }
+  const gate = await gateAt(a);
   if (gate.unresolvedThreads > 0) {
     throw new Refused("threads_unresolved", String(gate.unresolvedThreads), `${gate.unresolvedThreads} review thread(s) unresolved`, "answer and resolve them, then land again");
   }
   // GitHub naming no required check is read as every check being required.
   const required = gate.checks.filter((c) => c.required);
-  const counted = required.length > 0 ? required : gate.checks;
-  if (counted.length === 0) throw new Refused("checks_missing", "", `no check has reported on ${short(a.head)}`, "wait for CI to start, then land again");
-  const red = counted.find((c) => c.state === "fail");
-  if (red) throw new Refused("checks_red", red.name, `${red.name} failed at ${short(a.head)}`, "fix it, push, and have the new head reviewed");
-  const pending = counted.find((c) => c.state === "pending");
-  if (pending) throw new Refused("checks_pending", pending.name, `${pending.name} has not finished at ${short(a.head)}`, "wait for it, then land again");
+  greenChecks(required.length > 0 ? required : gate.checks, a.head);
   const method = gate.methods[0];
   if (!method) throw new Refused("merge_method_unreadable", "", `${a.repo} allows no merge method`, "allow a merge method in the repo's settings");
   return method;
