@@ -85,7 +85,7 @@ test("S6 re-run NOW-A: a round fenced out of the lead's Run wakes that Run once,
   x.w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR, task: x.task, base: "s6/a", head_sha: "a".repeat(40), head: "s6/b" } });
   x.w.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from: "s6/a", to: "main" } });
   const others = () => x.w.store.events({ type: "item_created" }).filter((e) => e.payload.task !== x.task);
-  const wakes = () => x.w.sends.filter((s) => s.to === `run:${LEAD_RUN}`);
+  const wakes = () => x.w.sends.filter((s) => s.to === `run:${LEAD_RUN}` && s.subject.startsWith("🔁 rereview_item"));
 
   await runMonitor("queue", x.monitor);
   assert.equal(others().length, 0, "Orca fences the timer out of the lead's Run");
@@ -103,4 +103,10 @@ test("S6 re-run NOW-A: a round fenced out of the lead's Run wakes that Run once,
   assert.equal(others().length, 1);
   assert.equal(others()[0]?.payload.run, LEAD_RUN);
   assert.deepEqual(graphRead.why(await x.view(), x.task).map((r) => r.kind), ["blocks"]);
+
+  // The next base change of the same PR needs its own item, so it wakes the Run again.
+  x.w.useRun("run_000000000orc");
+  x.w.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from: "main", to: "release" } });
+  await runMonitor("queue", x.monitor);
+  assert.equal(wakes().length, 2);
 });
