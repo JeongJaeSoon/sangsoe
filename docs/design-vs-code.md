@@ -296,7 +296,7 @@
 
 | 요소 | 설계 자리 | 상태 | 코드 | 비고 |
 |---|---|---|---|---|
-| MCP tool item_create | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/item_create.ts:62`, `core/start/item.ts:29` | trigger·hold·exec_by 입력(결정 162) |
+| MCP tool item_create | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/item_create.ts:62`, `core/start/item.ts:29` | trigger·hold·exec_by 입력(결정 162). `lead` 입력과 `item_created.run`(결정 216, `core/start/item.ts:41`, `test/detect/lead-run-s6.test.ts:53`) |
 | MCP tool edge_add | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/edge_add.ts:12`, `core/graph/edit.ts:104` | |
 | MCP tool edge_remove | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/edge_remove.ts:12`, `core/graph/edit.ts:136` | |
 | MCP tool flow_expand | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/flow_expand.ts:21`, `core/graph/flow.ts:213` | |
@@ -343,7 +343,7 @@
 | event 이름 78 대 파일 78 | design-appendix event 이름 전체 | implemented | `core/contract/index.ts:36` | 빠진 이름도 남는 이름도 없다(`test/spec-names.test.ts`) |
 | event 묶음 hook·chat·queue·resource·land·REAPER·타이머·리뷰 의뢰·셸·notify·GRAPH·결정·자원 | design-appendix event 이름 전체 | implemented | `core/session/record.ts:121`, `core/detect/queue/judge.ts:52` | |
 | event 묶음 orca-monitor | design-appendix event 이름 전체 | changed (결정 196) | `core/detect/orca/judge.ts:1`, `core/detect/orca/mail.ts:1` | |
-| event 묶음 pr-monitor | design-appendix event 이름 전체 | changed (결정 195) | `core/detect/pr/round.ts:1`, `core/detect/pr/reviews.ts:1` | |
+| event 묶음 pr-monitor | design-appendix event 이름 전체 | changed (결정 195·216) | `core/detect/pr/round.ts:1`, `core/detect/pr/reviews.ts:1` | 결정 216 이 `pr_reopened` 를 더했다(`core/detect/pr/round.ts:254`, `test/land/retarget-rereview.test.ts:248`). 부록 표에는 아직 없다 |
 | event 묶음 에이전트 명령 | design-appendix event 이름 전체 | partial | `core/start/start.ts:151`, `core/brief/item_status.ts:113` | G27 — `signal` 의 loss·wait·orchestrator_correction·main_flake 종류를 쓰는 곳이 없다(`priority_set` 은 결정 160) |
 | event 묶음 오너 | design-appendix event 이름 전체 | partial | `core/owner/marks.ts:87`, `core/contract/events/owner_class.ts:4` | G28 — `owner_class` 계약과 표시를 지우는 길이 쓰는 쪽 없이 남았다(결정 162) |
 | event schema_v | design-appendix event 이름 전체 | implemented | `core/store/store.ts:140` | |
@@ -408,7 +408,7 @@
 | 흐름 4 패널·상태 표시줄 다시 읽기 | design.html §5 흐름 4 | changed (결정 205) | `orca-plugin/main.ts:91` | |
 | 경계 다섯 | design.html §5 경계마다 무엇이 오가나 | implemented | `cli/commands/hook.ts:51`, `core/orca/adapter.ts:291` | hook·MCP·worker·Orca CLI·두 plugin |
 | 실패 stack_order·review_timing·cross_lead·stack_bottom·overlap_order·unknown_is_not_ready·merge_suggests_close·precheck_blocks_send·repo_level_main | design-appendix 실패 → 방지 장치 → 회귀 시험 | implemented | `core/graph/ready.ts:133`, `test/graph/regressions.test.ts:20` | 장치와 시험이 모두 있다 |
-| 실패 retarget_approval | design-appendix 실패 → 방지 장치 → 회귀 시험 | changed (결정 215) | `core/land/land.ts:445`, `core/graph/rereview.ts:22`, `core/detect/pr/round.ts:397`, `test/land/retarget-rereview.test.ts:116` | G31 닫힘 — base 변경 뒤에 기록된 판정만 센다(patch-id 승계도 그 뒤의 판정만). 재리뷰 항목은 queue round 가 blocks 로 만든다 |
+| 실패 retarget_approval | design-appendix 실패 → 방지 장치 → 회귀 시험 | changed (결정 215) | `core/land/land.ts:445`, `core/graph/rereview.ts:22`, `core/detect/pr/round.ts:397`, `test/land/retarget-rereview.test.ts:116` | G31 닫힘 — base 변경 뒤에 기록된 판정만 센다(patch-id 승계도 그 뒤의 판정만). 재리뷰 항목은 queue round 가 blocks 로 만든다. 결정 216: 머지된 아래 PR 의 head 브랜치를 base 로 둔 PR 은 `base_merged`, retarget 을 pr-monitor 가 아직 기록하지 않았으면 `base_unrecorded` 로 거부한다(`core/land/land.ts:195`, `core/land/land.ts:204`, `test/land/retarget-rereview.test.ts:286`) |
 | 실패 early_done·prod_gate | design-appendix 실패 → 방지 장치 → 회귀 시험 | implemented | `core/graph/flow.ts:311`, `test/graph/flow.test.ts:124`, `test/graph/done-close-g23.test.ts` | 닫는 세 자리가 done_blockers 로 거부한다(결정 212 ④) |
 | 분류 바로 답·읽기·범위·시각 대기 | design-appendix 지시 분류 표 | changed (결정 162) | `claude-plugin/skills/intake/SKILL.md:18`, `claude-plugin/skills/intake/SKILL.md:32` | owner_class 줄 없이, 범위는 Orca send |
 | 분류 새 일·오너 판단·열린 결정의 답 | design-appendix 지시 분류 표 | implemented | `core/start/item.ts:33`, `core/decision/open.ts:45` | |
