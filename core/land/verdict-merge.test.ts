@@ -48,6 +48,11 @@ type World = {
   mergeNowOk?: boolean;
   owners?: string[];
   labelEvents?: unknown[];
+  /** GitHub's compare status for base...head; "unreadable" answers 502. */
+  compare?: string | "unreadable";
+  rules?: unknown[];
+  reviews?: unknown[];
+  checkRuns?: unknown;
 };
 
 function harness(w: World = {}) {
@@ -64,11 +69,14 @@ function harness(w: World = {}) {
       ...w.pull,
     }),
     [`repos/${REPO}/pulls/12/files?per_page=100&page=1`]: ok(w.files ?? [{ filename: "core/a.ts", patch: "@@ -1 +1 @@\n-a\n+b" }]),
-    [`repos/${REPO}/rules/branches/main`]: ok(NO_RULES),
+    [`repos/${REPO}/rules/branches/main`]: ok(w.rules ?? NO_RULES),
     [`repos/${REPO}/branches/main/protection`]: { kind: "error", status: 403, message: "Resource not accessible by integration" },
-    [`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`]: ok([]),
+    [`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`]: ok(w.reviews ?? []),
     [`repos/${REPO}/issues/12/events?per_page=100&page=1`]: ok(w.labelEvents ?? []),
+    [`repos/${REPO}/compare/main...${HEAD}`]:
+      w.compare === "unreadable" ? { kind: "error", status: 502, message: "Bad Gateway" } : ok({ status: w.compare ?? "ahead", ahead_by: 1, behind_by: 0 }),
   };
+  if (w.checkRuns) routes[`repos/${REPO}/commits/${HEAD}/check-runs?per_page=100`] = ok(w.checkRuns);
   const paths: string[] = [];
   const gh: GhClient = {
     async get<T>(path: string) {
@@ -153,12 +161,12 @@ test("opted in: a verdict at the head by a non-author, green checks and evidence
   assert.deepEqual(landRows(h.store), ["land_requested:verdict_approved"]);
 });
 
-test("opted out: the same PR is merge_on_approval as today, and the gate is never read", async () => {
+test("opted out: the same PR is merge_on_approval as today; the gate is read once for the own conditions (204)", async () => {
   const h = harness({ optIn: false });
   ready(h.store);
   const r = await land(input(), h.deps);
   assert.equal(refusal(r), "ok:merge_on_approval");
-  assert.deepEqual([h.mergesNow, h.merges, h.gateReads], [[], [], []]);
+  assert.deepEqual([h.mergesNow, h.merges, h.gateReads], [[], [], [{ repo: REPO, pr: 12 }]]);
   assert.deepEqual(landRows(h.store), ["land_requested:merge_on_approval"]);
 });
 
@@ -243,12 +251,18 @@ test("fail closed: red or pending required checks, and no checks at all", async 
   }
 });
 
-test("when GitHub names required checks, only those must pass", async () => {
-  const h = harness({
-    gate: { ...GREEN, checks: [{ name: "unit", required: true, state: "pass" }, { name: "bot", required: false, state: "fail" }] },
-  });
-  ready(h.store);
-  assert.equal(refusal(await land(input(), h.deps)), "ok:merge_verdict");
+test("when GitHub names required checks, only those must pass the gate; with protection unreadable the own check counts every check (204)", async () => {
+  const gate: PrGate = { ...GREEN, checks: [{ name: "unit", required: true, state: "pass" }, { name: "bot", required: false, state: "fail" }] };
+  const rules = [
+    { type: "pull_request", parameters: { required_approving_review_count: 1 } },
+    { type: "required_status_checks", parameters: { required_status_checks: [{ context: "unit" }], strict_required_status_checks_policy: true } },
+  ];
+  const readable = harness({ gate, rules });
+  ready(readable.store);
+  assert.equal(refusal(await land(input(), readable.deps)), "ok:merge_verdict");
+  const unreadable = harness({ gate });
+  ready(unreadable.store);
+  assert.equal(refusal(await land(input(), unreadable.deps)), "checks_red:bot");
 });
 
 test("fail closed: GitHub does not call the PR mergeable", async () => {
@@ -272,7 +286,7 @@ test("protected paths and V3 stay the owner's: merge_on_approval, as today", asy
   const r2 = await land(input(), v3.deps);
   assert.equal(refusal(r2), "ok:merge_on_approval");
   assert.match(r2.ok ? r2.value.note : "", /V3/);
-  assert.deepEqual([prot.mergesNow, v3.mergesNow, prot.gateReads, v3.gateReads], [[], [], [], []]);
+  assert.deepEqual([prot.mergesNow, v3.mergesNow], [[], []]);
 });
 
 test("a V3 PR lowered by an owner's label still waits for the owner on this path (decision 172)", async () => {
@@ -286,7 +300,7 @@ test("a V3 PR lowered by an owner's label still waits for the owner on this path
   const r = await land(input(), lowered.deps);
   assert.equal(refusal(r), "ok:merge_on_approval");
   assert.equal(r.ok ? r.value.tier : "", "V2", "the label lowered the tier for evidence");
-  assert.deepEqual([lowered.mergesNow, lowered.gateReads], [[], []]);
+  assert.deepEqual(lowered.mergesNow, []);
 });
 
 test("the merge method is the repo's first allowed of squash, merge, rebase; none refuses", async () => {
@@ -314,6 +328,95 @@ test("missing evidence still refuses before anything on this path is read", asyn
   evidence(h.store, "test");
   assert.equal(refusal(await land(input(), h.deps)), "evidence_missing:run");
   assert.deepEqual(h.gateReads, []);
+});
+
+// Decision 204: unreadable or absent branch protection is not a pass. Each of the three
+// protection conditions falls back to sangsoe's own check, and a merge needs every one ok.
+const sources = (r: Awaited<ReturnType<typeof land>>) => (r.ok ? r.value.conditions.map((c) => `${c.id}:${c.source}:${c.ok}`) : []);
+
+test("204: unreadable protection, green rollup and a head verdict merge, each condition sourced own", async () => {
+  const h = harness();
+  ready(h.store);
+  const r = await land(input(), h.deps);
+  assert.equal(refusal(r), "ok:merge_verdict");
+  assert.deepEqual(sources(r), [
+    "required_review_and_ci:own:true",
+    "up_to_date_or_queue:own:true",
+    "stale_approvals_dismissed:own:true",
+    "no_protected_paths:own:true",
+  ]);
+  assert.match(r.ok ? (r.value.conditions.find((c) => c.id === "stale_approvals_dismissed")?.reason ?? "") : "", /bound to aaaaaaa/);
+  assert.equal(h.mergesNow.length, 1);
+});
+
+test("204: unreadable protection and a pending or failed check anywhere in the rollup refuse", async () => {
+  const cases: [PrGate["checks"], string][] = [
+    [[{ name: "unit", required: true, state: "pass" }, { name: "bot", required: false, state: "pending" }], "checks_pending:bot"],
+    [[{ name: "unit", required: true, state: "pass" }, { name: "bot", required: false, state: "fail" }], "checks_red:bot"],
+  ];
+  for (const [checks, want] of cases) {
+    const h = harness({ gate: { ...GREEN, checks } });
+    ready(h.store);
+    const r = await land(input(), h.deps);
+    assert.equal(refusal(r), want);
+    assert.match(r.ok ? "" : r.refusal.reason, /required_review_and_ci \(own\)/);
+    assert.deepEqual(h.mergesNow, []);
+  }
+});
+
+test("204: a head that does not contain the base tip refuses with the fix; an unreadable compare refuses", async () => {
+  for (const status of ["behind", "diverged", "mystery"]) {
+    const h = harness({ compare: status });
+    ready(h.store);
+    const r = await land(input(), h.deps);
+    assert.equal(refusal(r), status === "mystery" ? "base_unreadable" : "behind_base:main", status);
+    if (status === "diverged") assert.match(r.ok ? "" : r.refusal.fix, /merge main into the branch.*remerge-diff/);
+    assert.deepEqual(h.mergesNow, []);
+  }
+  const h = harness({ compare: "unreadable" });
+  ready(h.store);
+  assert.equal(refusal(await land(input(), h.deps)), "base_unreadable");
+  assert.deepEqual(h.mergesNow, []);
+});
+
+test("204: a merge queue rule satisfies up_to_date_or_queue from protection", async () => {
+  const h = harness({ rules: [{ type: "merge_queue" }], compare: "diverged" });
+  ready(h.store);
+  const r = await land(input(), h.deps);
+  assert.equal(refusal(r), "ok:merge_verdict");
+  assert.ok(sources(r).includes("up_to_date_or_queue:protection:true"));
+});
+
+test("204: an unreadable rollup refuses", async () => {
+  for (const gate of ["unreadable", "absent"] as const) {
+    const h = harness({ gate });
+    ready(h.store);
+    const r = await land(input(), h.deps);
+    assert.equal(refusal(r), "gate_unreadable", gate);
+    assert.match(r.ok ? "" : r.refusal.reason, /required_review_and_ci \(own\)/);
+    assert.deepEqual(h.mergesNow, []);
+  }
+});
+
+test("204: a GitHub approval does not merge past an own check that fails", async () => {
+  const h = harness({
+    optIn: false,
+    compare: "diverged",
+    pull: { mergeable_state: "clean" },
+    reviews: [{ user: { login: "bob" }, state: "APPROVED", commit_id: HEAD, author_association: "MEMBER" }],
+    checkRuns: { total_count: 1, check_runs: [{ status: "completed", conclusion: "success" }] },
+  });
+  ready(h.store);
+  assert.equal(refusal(await land(input(), h.deps)), "behind_base:main");
+  assert.deepEqual(h.merges, []);
+});
+
+test("204: waiting for approval does not refuse; it shows the own conditions as read", async () => {
+  const h = harness({ optIn: false, compare: "diverged" });
+  ready(h.store);
+  const r = await land(input(), h.deps);
+  assert.equal(refusal(r), "ok:merge_on_approval");
+  assert.ok(sources(r).includes("up_to_date_or_queue:own:false"));
 });
 
 function fakeExec(stdout: string, code = 0) {
