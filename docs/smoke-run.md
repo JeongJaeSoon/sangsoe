@@ -135,7 +135,18 @@ written [('pr_opened', 41951), ('verify_tier_set', 41952)]  unseen []  calls [] 
 
 리허설의 소문자 404 는 사라졌다(`unseen []`). scratch 설정에 `verify_tier` 가 없던 첫 dry run 은 `verify_tier_set` 을 V3("config unreadable")로 쓰려 했다. pr-monitor 와 land 가 같은 PR 의 등급을 서로 다른 설정에서 읽을 수 있다.
 
-판정: NOT VERIFIED (land 가 auto mode 분류기에 막혀 머지 · `pr_merged` · `task-update completed` · T5 를 아직 못 잼. pr-monitor 의 private 저장소 읽기와 V1 증거 기록은 PASS)
+머지(오너가 워커 터미널에서 `!` 줄을 친 뒤, 11-11 03:27Z):
+
+```
+land_requested (seq 60860): {"pr":"jeongjaesoon/sangsoe-smoke#2","head_sha":"aab80096…","reason":"verdict_approved"}
+land 출력: "action":"merge_verdict","merge_method":"squash" — 점검 중 required_review_and_ci · up_to_date_or_queue · stale_approvals_dismissed 가 ok:false("unreadable: branch protection")
+gh pr view 2 → MERGED, merge commit 49cee191, merged_at 03:27:16Z
+sangsoe monitor run pr --home <scratch> → written pr_merged (seq 61149), acts: task-update task_1f7ca673d92e completed → ok, "already completed"
+```
+
+land 는 branch protection 을 읽지 못한 세 점검을 막지 않고 verdict 로 머지했다(smoke 저장소에는 보호 규칙이 없다). `task-update completed` 는 워커의 `worker_done` 이 먼저 Task 를 닫아 "already completed" 로 끝났다. T5(끝난 Task 를 리드가 다시 `start_unit`)는 리드 Task id 를 넘기지 않아 `lineage_invalid`("lead 의 Task id 가 없어 Dispatch 를 읽을 수 없다")로 먼저 거부됐고, `dispatched` 거르기까지 가지 않았다.
+
+판정: PASS (머지 · `pr_merged` · `task-update` 길과 pr-monitor 의 private 저장소 실제 라운드. T5 는 NOT VERIFIED: 리드 Task id 누락으로 앞 단계에서 거부)
 
 ### 리허설(rc.4)
 
@@ -185,9 +196,10 @@ P2:
 - `review_ask_record`: 워커가 불렀다(`review_ask_sent` seq 41648). reviewer 로 리드의 터미널 handle 을 넘겨 `unmapped_reviewer` 도 함께 쓰였다(seq 41649).
 - `handoff_save`: 리드가 두 번 불렀고 두 번 다 `send: dispatch_run_mismatch` 였다. 리드의 Dispatch 는 오케스트레이터의 Run(run_ba31feb8f9bc)에 있고 리드는 자기 Run(run_7d1b870451e3)을 쥐고 있다.
 - 오너가 아닌 입력이 `owner_action{origin: chat}` 으로 쓰였다: 디스패치된 리드·워커 세션에 Orca 가 넣은 "You have 1 orchestration message. Run `orca orchestration check …`" 줄(seq 41926 · 41933 · 41939 · 41941)과 하네스가 보낸 줄. 워커의 `waiting_human` 은 `waiting_released{by: owner}`(seq 41943)로 닫혔는데, 실제로 답한 것은 리드의 메시지다.
-- 오너의 `!` 줄과 "Run 밖 세션은 `!` 입력을 쓰지 않는다"는 오너가 쳐야 잴 수 있다(오너의 아침 목록).
+- 오너의 `!` 줄: 워커 터미널에서 친 land 가 `owner_action{origin: shell}`(seq 61131, "sangsoe land --repo JeongJaeSoon/sangsoe-smoke --pr 2 --json")으로 쓰였다.
+- Orca 재시작 뒤에도 같다: `orca terminal send` 로 넣은 줄(seq 60844 · 60854)과 Orca 가 쉬던 세션에 넣은 "You have 1 orchestration message …" 줄(seq 60855 · 61134)이 모두 `owner_action{origin: chat}` 이고, 그 뒤 `waiting_released{by: owner}`(ref 42231 · 41953 · 60849)가 따랐다.
 
-판정: NOT VERIFIED (`!` 줄은 오너 몫이라 아직. review_ask_record 는 PASS, handoff_save 는 dispatch_run_mismatch 로 FAIL, Orca 가 넣은 줄이 오너 입력으로 기록됨은 finding)
+판정: FAIL (`!` 줄 기록 · review_ask_record 는 PASS. handoff_save 는 dispatch_run_mismatch 로 FAIL, Orca 가 넣은 줄이 오너 입력으로 기록되고 오너 대기를 닫음은 finding)
 
 ## 6. queue 라운드 non-dry (U17)
 
@@ -198,7 +210,7 @@ sangsoe monitor run queue
 {"monitor":"queue","planned":[],"written":[],"unseen":[],"calls":["graph sync: added 0, reland 0, dangling 0, refused 0","probeRound: read 0, passed 0, skipped 0"],"aborted":false,"acts":[]}
 ```
 
-`item_ready` · `todo_due` 를 만들 항목이 없었다. 0.1.0 의 REAPER 타이머 라운드는 `roots_ok: true`, `mark_only: true` 로 10분마다 돌고(round 82–84), `timer_stalled{reaper, roots_ok=false}` 는 08:48Z 의 한 줄 뒤로 다시 나오지 않았다.
+`item_ready` · `todo_due` 를 만들 항목이 없었다. 0.1.0 의 REAPER 타이머 라운드는 `roots_ok: true`, `mark_only: true` 로 10분마다 돌고(round 82–84), `timer_stalled{reaper, roots_ok=false}` 는 08:48Z 의 한 줄 뒤로 한동안 나오지 않다가 11-11 02:34:29Z(seq 58377, "roots_ok=false 3 rounds running")에 다시 나왔다. 원인은 토큰이 읽지 못하는 다른 소유자의 저장소다(아래 "P2 추가 확인").
 
 판정: NOT VERIFIED (non-dry 라운드는 돌았으나 item_ready · todo_due 를 만들 상황이 없었고, 살아 있는 worker 안의 timer_stalled 도 일어나지 않음)
 
@@ -266,6 +278,65 @@ U21 의 경계 경우: WAL `-shm`/`-wal` 파일 — 위처럼 `.backup` 사본�
 
 리허설 판정(rc.4): NOT VERIFIED (apply 건너뜀)
 
+## P2 추가 확인 (오너 요청분)
+
+격리는 11-11 03:31:58Z(12:31:58 JST)에 끝났다: 오너가 `CLAUDE_CODE_PLUGIN_DIRS` 를 되돌렸다. 아래 B1 · 재시작 · 교차 저장소 · cancelled 는 그 전에, REAPER 라운드와 항목 10 의 닫기는 그 뒤에 이미 떠 있던 세션으로 쟀다.
+
+### Orca 재시작 (03:22:27Z, 앱 pid 8428 → 24511)
+
+```
+저장소: seq 1(2026-11-09T17:26:39Z)부터 남아 있고 재시작 뒤 첫 쓰기 03:23:30Z(seq 60844)
+Claude 세션: 오케스트레이터 6c9c86a7 · 리드 4448b082 가 같은 id 로 재시작 뒤 프롬프트에 답함
+터미널 handle: term_08521b12 · term_c6ce191d · term_9a39179c · term_d5b240e9 그대로
+plugin: local.sangsoe "sangsoe worker started" 03:22:32Z · 03:22:33Z, running
+REAPER 타이머: round 124(03:18:20Z) → round 125(03:32:38Z), 재시작 뒤 10분에 다시 돎
+패널(plugin shot, 03:22 갱신): 할 일 4 에 w42231 이 남음. w42231 은 03:23:33Z 에 풀렸고 `sangsoe todo` 는 3
+```
+
+`timer_stalled{reaper, "roots_ok=false 3 rounds running"}` 가 02:34:29Z(seq 58377)에 다시 나왔다. 그 뒤 모든 라운드가 `roots_ok: false`. 표시 전용 dry run 의 `unseen` 은 토큰이 읽지 못하는 다른 소유자의 저장소 3개의 열린 PR 이다. smoke 저장소는 더 이상 `unseen` 에 없다.
+
+판정: PASS (저장소 · 세션 · 터미널 · plugin · 타이머가 재시작을 넘김. 패널 갱신은 항목 7 의 FAIL 과 같음)
+
+### `task-list --full` 의 cancelled 와 failed
+
+Orca 에는 `cancelled` 상태가 없다(`invalid status 'cancelled', expected one of: pending, ready, dispatched, completed, failed, blocked`). 취소는 `--status failed --result cancelled` 다:
+
+```
+task_045a19b16212 "smoke cancel probe": status failed, result "cancelled"
+```
+
+판정: PASS (취소와 실패는 `status` 가 아니라 `result` 로만 갈린다)
+
+### 교차 저장소 `start_unit`
+
+sangsoe 저장소의 worktree(p2-xrepo)에 앉은 오케스트레이터가 smoke 저장소 일을 `item_create` → `start_unit` 으로 시작했다. 두 도구 모두 대상 저장소 칸이 없다.
+
+```
+부모 worktreeId: 44d00700-…::~/orca/workspaces/sangsoe/p2-xrepo
+자식 worktreeId: 44d00700-…::~/orca/workspaces/sangsoe/sockeye (task_a249e0d9cb50, ctx_f79bec28bc5f)
+자식 워커의 git remote get-url origin: https://github.com/JeongJaeSoon/sangsoe.git
+```
+
+자식은 부모의 저장소에 열린다. 다른 저장소의 일을 시작할 길이 없다. 정리: `worker-release` → released, `worktree rm --delete-branch` → removed(브랜치에 main 밖 커밋 0).
+
+판정: PASS (탐침이 끝까지 돌았다. 결과는 finding: `start_unit` 에 대상 저장소 입력이 없다)
+
+### `agent.prompt.before` 의 세 미지수 (B1)
+
+탐침 plugin(관찰만, 늘 통과)을 오너가 승인해 띄우고 `orca plugin logs` 로 읽었다.
+
+```
+03:23:28.228Z agent.prompt.before term_08521b12… inputKind driving keys [agent, terminalId, prompt, inputKind] "U23 probe A (terminal send)…"
+03:27:02.365Z agent.prompt.before term_c6ce191d… inputKind driving "U23 probe C…"
+terminal.send: 0줄
+```
+
+1. orchestration 메시지는 이 hook 을 지나지 않는다. 쉬던 오케스트레이터가 메시지로 깨며 받은 "You have 1 orchestration message. Run `orca orchestration check --run run_ba31feb8f9bc`."(transcript 03:27:08Z, `promptSource: typed`, `origin: human`)에 두 hook 모두 줄이 없다. 일하던 세션에 온 메시지 두 통도 같다. 줄이 남은 것은 `orca terminal send` 뿐이다.
+2. 터미널 id 는 이을 수 있다. 이벤트의 `terminalId` 는 `term_` handle 이고, 세션 안에서 `orca terminal show --json`(인자 없음, 0.15초)이 자기 handle 을 돌려준다.
+3. hook 줄이 `UserPromptSubmit` 보다 먼저다. probe A: hook 03:23:28.228Z → transcript 03:23:29.793Z → `owner_action` 03:23:30.044Z. probe C: 03:27:02.365Z → 03:27:04.038Z.
+
+판정: PASS (셋 다 잼. 1 이 "아니오" 라 B1 의 바꿈은 메시지 알림 줄을 가리지 못한다. 그 줄은 고정된 꼴이라 M2 의 꼴 규칙이 맡는다)
+
 ## 전환 조건 집계 (`docs/switch-conditions.md` 46행, P2 시점 main 4a77a43 이후)
 
 46행 모두 증거 칸이 찼다. 그중 칸이 스스로 미달·연기라고 적은 행:
@@ -278,9 +349,9 @@ U21 의 경계 경우: WAL `-shm`/`-wal` 파일 — 위처럼 `.backup` 사본�
 | I2 | U4 | 실제 `brew upgrade` 연기 | 없음 |
 | I3 | U4·U24 | 연기(uninstall → 재설치) | 없음 |
 | M1 | U21 | 미달(19/23 · 8/23) | 없음 |
-| M3 | U21·U23 | 쓰는 가져오기와 smoke 종단은 전환 때 | 종단은 land 앞까지(항목 3), 쓰는 가져오기는 제외(항목 9) |
+| M3 | U21·U23 | 쓰는 가져오기와 smoke 종단은 전환 때 | 종단은 머지 · `pr_merged` 까지 돌았고 닫기는 손 release(항목 3 · 10), 쓰는 가져오기는 제외(항목 9) |
 
-그래서 충족 39 · 미충족 7(B1 · B4 · M1 미달, I1 · I2 · I3 연기, M3 smoke 대기). 실제 Orca 에서 이 smoke 가 칸의 주장과 어긋난 것을 본 행: PN3(패널 숫자 ≠ 상태 표시줄 · todo, 항목 7), D4(실제 `task-update` 미실행, 항목 3 의 머지 대기), C11(Orca 가 넣은 줄이 `owner_action` 으로 기록, 항목 5).
+그래서 충족 39 · 미충족 7(B1 · B4 · M1 미달, I1 · I2 · I3 연기, M3 쓰는 가져오기 미실행). 실제 Orca 에서 이 smoke 가 칸의 주장과 어긋난 것을 본 행: PN3(패널 숫자 ≠ 상태 표시줄 · todo, 항목 7, 재시작 뒤에도), C11(Orca 가 넣은 줄이 `owner_action` 으로 기록되고 오너 대기를 닫음, 항목 5). D4 의 `task-update completed` 길은 실제 Orca 에서 돌았다("already completed", 항목 3).
 
 ### 리허설 시점 집계
 
@@ -385,9 +456,27 @@ U21 의 경계 경우: WAL `-shm`/`-wal` 파일 — 위처럼 `.backup` 사본�
 
 ## 10. 닫기: worker_done → release → 카드 닫힘, REAPER 표시
 
-P2: 머지 구간이 오너의 `!` land 줄을 기다리고 있어 아직 닫지 않았다. 닫기는 smoke 오케스트레이터를 거쳐 worker_done → 자동 release 를 본다.
+P2: 머지 뒤 워커가 `worker_done` succeeded 를 보냈고, 리드도 오케스트레이터에게 `worker_done` 을 보냈다(msg_a0a98161c867). 두 Dispatch 는 `succeeded · settled` 가 됐지만 터미널은 `retained` 로 남았다. 자동 release 는 없다: core 에 `workerRelease` 를 부르는 곳이 없고, 리드는 "닫으라" 는 요청에 sangsoe:orchestrate 표를 따라 아무 도구도 부르지 않았다("its table entry lists no tool to call").
 
-판정: NOT VERIFIED (머지 대기 중이라 아직 닫지 않음)
+닫힌 Dispatch 를 쥔 채 쉬는 세션이 입력을 기다리면 sangsoe 알림이 Orca 에 거부된다:
+
+```
+Rejected escalation: task_fa401bcde518: 사람 입력 대기
+Orca rejected this escalation: No active Dispatch belongs to this message sender. (sender_not_assignee)
+```
+
+격리가 끝난 뒤(03:31:58Z) 하네스의 요청으로 손으로 닫았다:
+
+```
+리드: worker-release --dispatch ctx_50d97ec8bc47 → terminalState released, liveness exited
+오케스트레이터: worker-release --dispatch ctx_08db458f8b2d → terminalState released
+terminal close: 오케스트레이터 · 빈 셸 · 교차 저장소 오케스트레이터 · 빈 셸 → ptyKilled true ×4
+worktree rm --delete-branch: basketstar · emperor · p2-orch · p2-xrepo → removed true ×4(지우기 전 넷 다 미커밋 0, main 밖 커밋 0)
+```
+
+REAPER 표시 라운드: 재시작 뒤 타이머 round 125(03:32:38Z) `roots_ok: false · mark_only · cards 20 · marked 11 · reaped 0`. 표시 전용 dry run 의 `unseen` 에 smoke 저장소는 없다(리허설의 소문자 결함이 사라짐). 남은 `unseen` 은 다른 소유자의 저장소 3개다.
+
+판정: FAIL (worker_done 뒤 자동 release 가 없고 닫기 길도 정해져 있지 않아 손으로 닫음. REAPER 의 smoke 저장소 읽기는 PASS)
 
 ### 리허설(rc.4)
 
