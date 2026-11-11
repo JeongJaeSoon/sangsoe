@@ -22,6 +22,7 @@ export { item_timeline } from "./store/views/item_timeline.ts";
 export { doctor, realCheckContext } from "./install/doctor.ts";
 export { type Host, realHost, treeRoot } from "./install/host.ts";
 export { install, type Outcome, uninstall } from "./install/install.ts";
+export { installPermissions, type Scope, SCOPES } from "./install/permissions.ts";
 export { stageCore, unstageCore } from "./install/stage.ts";
 export { VERSION } from "./version.ts";
 export {
