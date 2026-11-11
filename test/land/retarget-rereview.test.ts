@@ -42,7 +42,7 @@ function retargetWorld(also: string[] = [], o: { below?: boolean } = {}) {
     { currentRun: RUN },
   );
   const { store, orca } = w;
-  const pull = (base: string, state = "open") => ({ number: 12, merged_at: null, state, mergeable_state: "clean", user: { login: "alice" }, head: { sha: HEAD, ref: "feature-b", repo: { full_name: REPO } }, base: { ref: base }, labels: [] });
+  const pull = (base: string, state = "open") => ({ number: 12, merged_at: null, state, mergeable_state: "clean", user: { login: "alice" }, head: { sha: HEAD, ref: "feature-b", repo: { full_name: REPO } }, base: { ref: base, repo: { default_branch: "main" } }, labels: [] });
   const below = { number: 11, merged_at: null, state: "open", mergeable_state: "clean", user: { login: "alice" }, head: { sha: "b".repeat(40), ref: "feature-a", repo: { full_name: REPO } }, base: { ref: "main" }, labels: [] };
   const approval = (state: string) => [{ id: 501, user: { login: "bob" }, state, commit_id: HEAD, author_association: "MEMBER", submitted_at: "2026-11-10T09:00:00Z" }];
   const routes: Record<string, GhResponse<unknown>> = {
@@ -69,6 +69,10 @@ function retargetWorld(also: string[] = [], o: { below?: boolean } = {}) {
     routes[`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`] = ok(approval(review));
   };
   github("feature-a", "APPROVED");
+  /** GitHub's PRs whose head is `branch` (land's dead-base read); without it the read fails and land uses the store. */
+  const fromBranch = (branch: string, rows: unknown[]) => {
+    routes[`repos/${REPO}/pulls?head=acme:${branch}&state=all&per_page=100`] = ok(rows);
+  };
   const gh: GhClient = { get: async <T>(path: string) => (routes[path] ?? { kind: "error", status: 404, message: "Not Found" }) as GhResponse<T> };
   const monitor: MonitorDeps = {
     orca,
@@ -123,7 +127,7 @@ function retargetWorld(also: string[] = [], o: { below?: boolean } = {}) {
       // The shared in-memory store stays open after review record closes its handle.
       { exec: reviewExec, openStore: () => ({ events: (f: never) => store.events(f), append: (e: never) => store.append(e), close: () => {} }) as never },
     );
-  return { w, store, github, monitor, landDeps, merges, view, record };
+  return { w, store, github, fromBranch, monitor, landDeps, merges, view, record };
 }
 
 const landPr = (deps: LandDeps) => land({ repo: REPO, pr: 12 }, deps);
@@ -326,6 +330,31 @@ test("S6 NOW-2: with no stacked_on edge (the PR below merged before a queue roun
   const r = await landPr(x.landDeps);
   assert.equal(r.ok ? "ok" : r.refusal.code, "base_merged");
   assert.deepEqual(x.merges, []);
+});
+
+test("S6 NOW-2: GitHub's list names a merged PR below that pr-monitor never recorded", async () => {
+  const x = retargetWorld();
+  x.github("feature-a", "APPROVED");
+  x.fromBranch("feature-a", [{ number: 11, state: "closed", merged_at: "2026-11-10T10:00:00Z", base: { ref: "main" } }]);
+  const r = await landPr(x.landDeps);
+  assert.equal(r.ok ? "ok" : r.refusal.code, "base_merged");
+  assert.match(r.ok ? "" : r.refusal.fix, /--base main/);
+  assert.deepEqual(x.merges, []);
+
+  x.fromBranch("feature-a", [{ number: 11, state: "open", merged_at: null, base: { ref: "main" } }]);
+  const below = await landPr(x.landDeps);
+  assert.equal(below.ok ? "ok" : below.refusal.code, "stack_order", "an open PR below holds it, so no auto-merge is armed onto its branch");
+});
+
+test("S6 NOW-2: the default branch is never a dead base, even when a merged PR used it as its head", async () => {
+  const x = retargetWorld();
+  x.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#9", base: "develop", head_sha: "e".repeat(40), head: "main" } });
+  x.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#9", merge_sha: "f".repeat(40) } });
+  x.fromBranch("main", [{ number: 9, state: "closed", merged_at: "2026-11-10T10:00:00Z", base: { ref: "develop" } }]);
+  x.github("main", "DISMISSED");
+  await runMonitor("pr", x.monitor);
+  const r = await landPr(x.landDeps);
+  assert.equal(r.ok ? "ok" : r.refusal.code, "rereview_needed");
 });
 
 test("S6 NOW-2: retargeted back and forth at the same head, each move is recorded, so base_unrecorded clears", async () => {
