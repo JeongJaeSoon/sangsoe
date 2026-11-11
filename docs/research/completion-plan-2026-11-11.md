@@ -31,8 +31,8 @@
 | 15 | 결정 186: `worker_done` 쓰는 쪽 | NOW(오너) | S | U3b |
 | 16 | 아홉 event 를 brief·패널에 보이기 | NOW(오너) | M | U6b |
 | 17 | 결정 173: `agent.prompt.before` 로 prompt 출처 표시 | NOW | M | U3b |
-| 18 | 결정 125: "주석만" diff 파서 | DROP(결정 203, 오너 2026-11-11). 그 전: 잘라내기 제안(§11) | L | — |
-| 19 | 결정 88: 다른 PC | DROP(결정 203, 오너 2026-11-11: P11 닫음). 그 전: 잘라내기 제안(§11). 코드는 지어졌고 남은 것은 오너가 돌릴 P11 | S | — |
+| 18 | 결정 125: "주석만" diff 파서 | (2026-11-11 오너가 잘랐다, 결정 203) 잘라내기 제안(§11) | L | — |
+| 19 | 결정 88: 다른 PC | (2026-11-11 오너가 잘랐다, 결정 203) 잘라내기 제안(§11). 코드는 지어졌고 남은 것은 오너가 돌릴 P11 | S | — |
 | 20 | U45 F7 의 N3·N5·N9·N10·S14 | 이미 끝남(U48, e18c1b4): 아래 §1.1 | — | — |
 | 21 | 묶음 상세 화면의 빠진 부분(결정 92) | NOW | L | U6a |
 | 22 | 묶음 0개일 때 보이는 것(안내 줄) | NOW | S | U6a |
@@ -47,7 +47,7 @@
 | 31 | 정책 행마다 effort, 오르는 trigger 에서 effort 한 단계 먼저(오너 추가 A1) | NOW | S | U5 |
 | 32 | 일의 종류별 정책 행 여덟(오너 추가) | NOW | M | U5 |
 | 33 | advisor 호출 상한과 비용 줄(오너 추가 A2) | NOW | M | U5 |
-| 34 | ask/reply 를 코어 어댑터로(B2) | DROP(결정 203, 오너 2026-11-11). 그 전: DROP 제안(§11) | — | — |
+| 34 | ask/reply 를 코어 어댑터로(B2) | (2026-11-11 오너가 잘랐다, 결정 203) DROP 제안(§11) | — | — |
 | 35 | 오너가 지켜보는 리드 터미널의 `--keep-open` 과 해제(B4) | NOW | S | U1(flag) · U4(시작) |
 | 36 | 부르는 곳 없는 어댑터 행 아홉(B5) | NOW: 지운다 | S | U1 |
 | 37 | U51 화면 대조 목록이 올 자리 | 자리만 | — | U6a |
@@ -59,7 +59,7 @@
 | 43 | P2 실측: 결정 subject 는 `item:iNNN` 인데 `start_unit` 의 spec Task 에 별칭이 없음 | NOW | S | U4 |
 | 44 | P2 실측: 자기 Run 을 쥔 리드의 `handoff_save` 가 `dispatch_run_mismatch`, Dispatch 없는 escalation 이 `sender_not_assignee` | NOW | S | U4 |
 | 45 | P2 실측: 취소한 Task 가 `failed` + 결과 `cancelled` 로 보임 | NOW | S | U6b |
-| 46 | P2 실측: 비공개 저장소의 `gh repo clone` GraphQL 실패(`git clone` 은 됨) | DROP(결정 203, 오너 2026-11-11). 그 전: DROP 제안(§11): sangsoe 코드에 `gh repo clone` 을 부르는 곳이 없다 | — | — |
+| 46 | P2 실측: 비공개 저장소의 `gh repo clone` GraphQL 실패(`git clone` 은 됨) | (2026-11-11 오너가 잘랐다, 결정 203) DROP 제안(§11): sangsoe 코드에 `gh repo clone` 을 부르는 곳이 없다 | — | — |
 
 ### 1.1 F7 의 다섯 줄은 main 에 있다
 
@@ -317,12 +317,10 @@ effort 가 high 아래에서 시작하는 행의 브리프에는 "일 전체를 
 
 ## 11. 오너가 자를지 정할 것
 
-(닫힘: 오너가 2026-11-11 에 아래 넷을 모두 잘랐다. 결정 203.)
-
-- **결정 125 "주석만" 파서: DROP 제안.** 언어마다 tokenizer 가 있어야 하고 설치된 것은 개발 의존인 `typescript` 뿐이라, 의존이 없는 배포 패키지에 첫 실행 의존이 생긴다. 얻는 것은 주석만 바꾼 PR 이 V2 대신 V0 이 되는 것(시험 한 번 덜 돌림)뿐이다. 다시 볼 때: 주석만 바뀐 PR 이 자주 V2 증거를 기다릴 때.
-- **결정 88 다른 PC: 단위 없음 제안.** 비로컬 행 거르기는 지었고 시험이 있다(`core/orca/host-filter.ts:6`). 남은 것은 relay 를 켠 둘째 PC 에서의 P11(`docs/test-outcomes.md:30`)이고, 오너가 그 PC 를 붙일 때 돌린다.
-- **B2 ask/reply 를 코어 어댑터로: DROP 제안.** 메시지의 원본은 Orca 이므로 sqlite 에 옮기면 이중 저장이고, 중복은 Orca 의 `--retry-request` 가 막는다. 답 없는 질문은 orca-monitor 가 이미 Orca 에서 읽는다. 어댑터의 `ask`·`reply` 행은 U1 이 지운다.
-- **P2 의 `gh repo clone` 실패: DROP 제안.** sangsoe 코드는 `gh repo clone` 을 부르지 않는다(core·cli·claude-plugin 을 찾아 봄). 세션이 직접 부른 명령이라 sangsoe 의 고칠 거리가 아니다. 다시 볼 때: sangsoe 가 저장소를 받아 오는 명령을 가질 때.
+- (2026-11-11 오너가 잘랐다, 결정 203) **결정 125 "주석만" 파서: DROP 제안.** 언어마다 tokenizer 가 있어야 하고 설치된 것은 개발 의존인 `typescript` 뿐이라, 의존이 없는 배포 패키지에 첫 실행 의존이 생긴다. 얻는 것은 주석만 바꾼 PR 이 V2 대신 V0 이 되는 것(시험 한 번 덜 돌림)뿐이다. 다시 볼 때: 주석만 바뀐 PR 이 자주 V2 증거를 기다릴 때.
+- (2026-11-11 오너가 잘랐다, 결정 203) **결정 88 다른 PC: 단위 없음 제안.** 비로컬 행 거르기는 지었고 시험이 있다(`core/orca/host-filter.ts:6`). 남은 것은 relay 를 켠 둘째 PC 에서의 P11(`docs/test-outcomes.md:30`)이고, 오너가 그 PC 를 붙일 때 돌린다.
+- (2026-11-11 오너가 잘랐다, 결정 203) **B2 ask/reply 를 코어 어댑터로: DROP 제안.** 메시지의 원본은 Orca 이므로 sqlite 에 옮기면 이중 저장이고, 중복은 Orca 의 `--retry-request` 가 막는다. 답 없는 질문은 orca-monitor 가 이미 Orca 에서 읽는다. 어댑터의 `ask`·`reply` 행은 U1 이 지운다.
+- (2026-11-11 오너가 잘랐다, 결정 203) **P2 의 `gh repo clone` 실패: DROP 제안.** sangsoe 코드는 `gh repo clone` 을 부르지 않는다(core·cli·claude-plugin 을 찾아 봄). 세션이 직접 부른 명령이라 sangsoe 의 고칠 거리가 아니다. 다시 볼 때: sangsoe 가 저장소를 받아 오는 명령을 가질 때.
 
 보류 목록(`sangsoe isolate on|status|off`, 상태 표시줄 글 꼴, 패널 위 빈 띠)은 계획하지 않았고, U6a·U6b 는 그 자리를 만지지 않는다.
 
