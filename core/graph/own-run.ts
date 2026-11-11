@@ -33,10 +33,11 @@ export type OwnRunSync = { run: string; synced: SyncResult; rereview: RereviewRe
 /**
  * Decision 219: Orca lets only the session bound to a Run create Tasks on it, so that session's own
  * hook makes the Run's re-review items, the same calls `sangsoe graph sync --run <its Run>` makes. No
- * Orca call unless the store names a pending item; then one run-current, and the sync only when this
- * session is bound to a Run the item belongs in.
+ * Orca call from a worker (bound to no Run) or unless the store names a pending item; then one
+ * run-current, and the sync only when this session is bound to a Run the item belongs in.
  */
-export async function syncOwnRun(deps: CoreDeps, now: string): Promise<OwnRunSync> {
+export async function syncOwnRun(deps: CoreDeps, role: string, now: string): Promise<OwnRunSync> {
+  if (role === "worker") return { skipped: "a worker holds no Run" };
   const runs = rereviewRuns(deps.store);
   if (runs.size === 0) return { skipped: "nothing pending" };
   const current = await deps.orca.runCurrent();

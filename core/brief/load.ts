@@ -31,15 +31,21 @@ function readableDeps(t: FullTaskRow): string[] {
   }
 }
 
-/** One Orca snapshot through the adapter: task-list --full and gate-list per Run, nothing cached. */
-export async function readSnapshot(orca: OrcaAdapter, runs: readonly string[]): Promise<Result<BriefSnapshot>> {
+type RunRead = Promise<readonly [Awaited<ReturnType<OrcaAdapter["taskList"]>>, Awaited<ReturnType<OrcaAdapter["gateList"]>>]>;
+const readRun = (orca: OrcaAdapter, run: string): RunRead => Promise.all([orca.taskList({ run, full: true }), orca.gateList({ run })]);
+
+/**
+ * One Orca snapshot through the adapter: task-list --full and gate-list per Run, nothing cached. The
+ * reads run side by side (each is a CLI process, about 0.14s); `started` holds reads already begun.
+ */
+export async function readSnapshot(orca: OrcaAdapter, runs: readonly string[], started: ReadonlyMap<string, RunRead> = new Map()): Promise<Result<BriefSnapshot>> {
   const tasks: BriefTask[] = [];
   const gates: BriefGate[] = [];
-  for (const run of runs) {
-    const tl = await orca.taskList({ run, full: true });
-    if (!tl.ok) return refuse("orca_error", `task-list ${run}: ${tl.error.code} ${tl.error.message}`, "run sangsoe brief again once Orca answers");
-    const gl = await orca.gateList({ run });
-    if (!gl.ok) return refuse("orca_error", `gate-list ${run}: ${gl.error.code} ${gl.error.message}`, "run sangsoe brief again once Orca answers");
+  const reads = await Promise.all(runs.map((run) => started.get(run) ?? readRun(orca, run)));
+  for (const [i, run] of runs.entries()) {
+    const [tl, gl] = reads[i] ?? [];
+    if (!tl?.ok) return refuse("orca_error", `task-list ${run}: ${tl?.error.code} ${tl?.error.message}`, "run sangsoe brief again once Orca answers");
+    if (!gl?.ok) return refuse("orca_error", `gate-list ${run}: ${gl?.error.code} ${gl?.error.message}`, "run sangsoe brief again once Orca answers");
     for (const t of tl.value) {
       const status = (STATUSES as readonly string[]).includes(t.status) ? (t.status as ViewTaskStatus) : "pending";
       tasks.push({
@@ -93,8 +99,10 @@ export async function loadBriefInput(o: LoadOptions): Promise<Result<BriefInput>
   }
   if (o.orcaFile) return done({ events, orca: JSON.parse(readFileSync(o.orcaFile, "utf8")) as BriefSnapshot, now: o.now });
   const orca = o.orca ?? createOrcaAdapter(nodeExec());
+  const named = briefRuns(events, null, o.runs);
+  const started = new Map(named.map((run) => [run, readRun(orca, run)]));
   const current = await orca.runCurrent();
   const runs = briefRuns(events, current.ok ? current.value.runId : null, o.runs);
-  const snap = await readSnapshot(orca, runs);
+  const snap = await readSnapshot(orca, runs, started);
   return snap.ok ? done({ events, orca: snap.value, now: o.now }) : snap;
 }

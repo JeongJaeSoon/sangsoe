@@ -98,11 +98,18 @@ export default function activate(
       else closeWatch = close;
     });
   }
-  // Status bar item B (decision 92⑤): the core's summary line, redrawn each round.
+  // Status bar item B (decision 92⑤): the core's summary line, redrawn each round. A panel reading in
+  // the last interval already carried it, as fresh as this round's own would be (the U86 audit: one
+  // brief read, about 0.35s of Orca calls, instead of two per interval while the panel is shown).
+  let fromPanel: { at: number; s: { text: string; tone: Tone; tooltip: string } } | null = null;
   const statusRound: Round = {
     id: "status",
     intervalMs: STATUS_INTERVAL_MS,
     run: async () => {
+      if (fromPanel && clock.now() - fromPanel.at < STATUS_INTERVAL_MS) {
+        await status(fromPanel.s.text, fromPanel.s.tone, fromPanel.s.tooltip, true);
+        return;
+      }
       const s = await panel.status();
       await status(s.text, s.tone, s.tooltip, true);
     },
@@ -115,7 +122,10 @@ export default function activate(
     if ((input as { auto?: unknown } | null)?.auto !== true) stall?.poke();
     const r = await panel["panel.brief"](input);
     const s = r.ok ? (r.value as { status?: { text: string; tone: Tone; tooltip: string } }).status : undefined;
-    if (s) await status(s.text, s.tone, s.tooltip);
+    if (s) {
+      fromPanel = { at: clock.now(), s };
+      await status(s.text, s.tone, s.tooltip);
+    }
     return r;
   });
   orca.panels.handle("panel.act", panel["panel.act"]);

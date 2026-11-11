@@ -37,7 +37,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
     case "user-prompt-submit":
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
       await ownerSaid(deps, row, input);
-      await syncOwnRun(deps, new Date().toISOString());
+      await syncOwnRun(deps, row.role, new Date().toISOString());
       break;
     case "stop":
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
@@ -45,7 +45,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
       turnEnded(deps.store, row, input);
       released(deps.store, { kind: "turn_ended", session: input.session_id }, "Stop");
       await workerIdle(deps, row, input);
-      await syncOwnRun(deps, new Date().toISOString());
+      await syncOwnRun(deps, row.role, new Date().toISOString());
       break;
     case "notification":
       await waitingHuman(deps, row, input);
