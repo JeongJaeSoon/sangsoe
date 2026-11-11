@@ -845,7 +845,9 @@ test("decision 187: each unit class launches its row's main model and, through O
     assert.equal(r.ok, true, cls);
     const ws = h.called("worker-start")[0] ?? [];
     assert.equal(flag(ws, "model"), aliasOf(row.tier), `${cls} model`);
-    assert.equal(flag(ws, "effort"), row.effort, `${cls} effort`);
+    // Decision 209: a model whose Orca catalog row lists no effort gets no --effort.
+    const takes = MODEL_CATALOG.find((c) => c.tier === row.tier)?.orcaEfforts.includes(row.effort);
+    assert.equal(ws.includes("--effort") ? flag(ws, "effort") : undefined, takes ? row.effort : undefined, `${cls} effort`);
     assert.equal(ws.includes("--advisor") ? flag(ws, "advisor") : undefined, aliasOf(row.advisor), `${cls} advisor`);
   }
 });

@@ -19,6 +19,26 @@ const UNTRACKED_WRITES = new Set(["worktree-rm", "reference-add", "worktree-crea
 /** `orchestration send --help`: "Valid --type values". Real Orca refuses any other. */
 export const SEND_TYPES: ReadonlySet<string> = new Set(["status", "dispatch", "worker_done", "merge_ready", "escalation", "handoff", "decision_gate", "question", "heartbeat"]);
 
+/**
+ * Orca 1.4.250's launch check for `--agent claude` (shared/agent-launch/choices/agent-launch-model-preferences.js
+ * over shared/agent-session/options/agent-session-option-catalog-claude-codex.js): the aliases whose
+ * catalog row lists no effort option. Every other alias, and any id the catalog does not list, takes
+ * all five levels. Kept apart from core/models/table.ts so a wrong table fails against it (decision 209).
+ */
+export const CLAUDE_ALIASES_WITHOUT_EFFORT: ReadonlySet<string> = new Set(["haiku"]);
+const ORCA_EFFORTS: ReadonlySet<string> = new Set(["low", "medium", "high", "xhigh", "max"]);
+
+/** Orca's own refusal of a worker-start's model and effort, or null when it would take them. */
+export function launchRefusal(args: readonly string[]): string | null {
+  const at = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
+  const [agent, model, effort] = [at("agent"), at("model"), at("effort")];
+  if (effort === undefined) return null;
+  if (model === undefined) return "--effort requires --model.";
+  if (agent !== "claude") return null;
+  if (CLAUDE_ALIASES_WITHOUT_EFFORT.has(model) || !ORCA_EFFORTS.has(effort)) return `Agent ${agent} model ${model} does not support effort ${effort}.`;
+  return null;
+}
+
 /** The adapter row whose path starts argv; the longest path wins. */
 function specFor(args: readonly string[]): [string, CommandSpec] | undefined {
   let best: [string, CommandSpec] | undefined;
@@ -69,6 +89,8 @@ export function createFakeOrca(o: { scenario?: string; replies?: Record<string, 
     if (key === "orchestration-send" && args.includes("--type") && !SEND_TYPES.has(type ?? "")) {
       return reply({ ok: false, error: { code: "invalid_argument", message: `--type ${type} is not a message type` } }, args);
     }
+    const refused = key === "orchestration-worker-start" ? launchRefusal(args) : null;
+    if (refused) return reply({ ok: false, error: { code: "invalid_argument", message: refused } }, args);
     const known: readonly string[] = [...spec.flags, ...("optional" in spec ? spec.optional : [])];
     const unlisted = args.filter((a) => a.startsWith("--") && !known.includes(a.slice(2)));
     if (unlisted.length > 0) throw new Error(`fake orca: ${unlisted.join(" ")} is not in ORCA_COMMANDS for ${key}`);
