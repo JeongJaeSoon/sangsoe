@@ -331,14 +331,29 @@ export function world(): World {
   return w;
 }
 
-/** A card whose PR merged with this HEAD: finished, clean, pushed. */
-export function finishedCard(w: World, name: string): WorktreeRow {
+/**
+ * A card whose PR merged with this HEAD: finished, clean, pushed. start_unit made it unless `foreign`
+ * (decision 207: only then is its repository sangsoe's, and an unreadable one fails the round).
+ */
+export function finishedCard(w: World, name: string, o: { foreign?: boolean; projectId?: string } = {}): WorktreeRow {
   const repo = makeRepo(name);
-  const c = card(name, repo);
+  const c = card(name, repo, o.projectId ? { projectId: o.projectId } : {});
   w.orca.cards.push(c);
+  if (!o.foreign) startedBySangsoe(w, c);
   w.gh.prs.push({ number: w.gh.prs.length + 1, state: "closed", merged_at: "2026-11-09T00:00:00Z", head: { sha: repo.head, ref: name } });
   w.gh.known.add(repo.head);
   return c;
+}
+
+/** The `unit_started` row start_unit writes for the worktree it made (decision 202). */
+export function startedBySangsoe(w: World, c: WorktreeRow): void {
+  w.store.append({
+    type: "unit_started",
+    source: "start_unit",
+    entity: "task",
+    entity_id: `task_${c.id.replace(/\W/g, "")}`,
+    payload: { kind: "default", picked_by: "role", model: "row", effort: "medium", route: "none", budget: 0, budget_per: "unit", used: 0, worktree: c.id },
+  });
 }
 
 /** Runs rounds `gap` minutes apart until `n` have run; returns the last report. */

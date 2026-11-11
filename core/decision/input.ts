@@ -19,7 +19,9 @@ const LINKED_BY = ["orchestrator", "observed"] as const;
 const DECISION = /^d\d{3,}$/;
 
 export function parseDecisionOpen(raw: Raw): Result<Omit<DecisionOpenInput, "callerRun">> {
-  if (!text(raw.subject) || !/^(item:i\d{3,}|scope:\S+)$/.test(raw.subject)) return bad("subject", "item:iNNN or scope:<group>");
+  if (!text(raw.subject) || !/^(item:(i\d{3,}|task_[0-9a-z]+)|scope:\S+)$/.test(raw.subject)) {
+    return bad("subject", "item:iNNN, item:<task id> or scope:<group>");
+  }
   if (!text(raw.question)) return bad("question", "a non-empty string");
   const options = raw.options ?? [];
   if (!Array.isArray(options) || !options.every(text)) return bad("options", "an array of strings");

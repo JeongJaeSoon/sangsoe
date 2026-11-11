@@ -19,6 +19,8 @@ export default defineEvent(
       "archive_hook_failed",
       "remote_host",
       "config_unreadable",
+      // Decision 207: kind `repo`, ref owner/repo: another owner's repository whose open PRs the token cannot read.
+      "repo_unreadable",
     ),
   },
   { refine: refOrcaIdForWorktree },

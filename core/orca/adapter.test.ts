@@ -14,6 +14,8 @@ const DESIGN_TABLE = [
   "orchestration task-update",
   "orchestration run-current",
   "orchestration run-show",
+  // Decision 207: worker-list is scoped to the bound Run, so finding one's own Dispatch walks the Runs.
+  "orchestration run-list",
   "orchestration gate-create",
   "orchestration gate-resolve",
   "orchestration gate-list",
@@ -131,6 +133,29 @@ test("recoverWrite replays only after request-show, and never on absent", async 
   const send = done.calls[1] ?? [];
   assert.equal(send[2], "send");
   assert.equal(send[send.indexOf("--retry-request") + 1], "req_9");
+});
+
+test("task-list --full rows (Orca's stored names) read as the plain list's title, dispatchId and assignee", async () => {
+  // Shape read from a live `orca orchestration task-list --full --json`, 2026-11-11.
+  const full = createFakeOrca({
+    replies: {
+      "orchestration-task-list": {
+        ok: true,
+        result: {
+          tasks: [
+            { id: "task_1", run_id: "run_1", task_title: "d001", status: "ready", result: null, dispatch_id: "ctx_1", assignee_handle: "term_1" },
+            { id: "task_2", run_id: "run_1", task_title: "plain", status: "pending", result: null },
+          ],
+        },
+      },
+    },
+  });
+  const r = await createOrcaAdapter(full.exec).taskList({ run: "run_1", full: true });
+  assert.ok(r.ok);
+  assert.deepEqual(
+    r.value.map((t) => [t.id, t.title, t.dispatchId, t.assignee]),
+    [["task_1", "d001", "ctx_1", "term_1"], ["task_2", "plain", undefined, undefined]],
+  );
 });
 
 test("recoverWrite does not replay on a state it does not know", async () => {

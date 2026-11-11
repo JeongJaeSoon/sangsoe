@@ -142,6 +142,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   const { requester } = req;
   let parentHandle: string | null = null;
   let requesterDispatch: string | undefined;
+  let requesterActive = false;
 
   const refuse = async (reason: RefusalReason, detail: string, taskId?: string, attempt = false): Promise<StartRefusal> => {
     store.append({
@@ -166,13 +167,14 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       });
       escalatedTo = "owner";
     } else if (parentHandle) {
+      // Orca takes an escalation only from a sender whose Dispatch is still active (sender_not_assignee).
       const sent = await orca.send({
         to: parentHandle,
-        type: "escalation",
+        type: requesterActive ? "escalation" : "status",
         subject: `start_refused: ${reason}`,
         body: `시작 거부(${reason}): ${detail}. Task 는 열린 채 남는다. 부모는 같은 일을 자기 Run 에서 다시 시작하지 않는다(결정 94 (라)).`,
         ...(requester.taskId ? { taskId: requester.taskId } : {}),
-        ...(requesterDispatch ? { dispatchId: requesterDispatch } : {}),
+        ...(requesterDispatch && requesterActive ? { dispatchId: requesterDispatch } : {}),
       });
       escalatedTo = sent.ok ? parentHandle : null;
     }
@@ -190,6 +192,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       else {
         const row = d.value as unknown as Json;
         requesterDispatch = typeof row.id === "string" ? row.id : undefined;
+        requesterActive = row.status === "dispatched" && (row.completed_at ?? null) === null;
         parentHandle = typeof row.creator_handle === "string" ? row.creator_handle : null;
         requesterDepth = typeof row.depth === "number" ? row.depth : Number.NaN;
         if (!requesterDispatch || Number.isNaN(requesterDepth)) lineageProblem = "요청자의 Dispatch 에 id·depth 가 없다";

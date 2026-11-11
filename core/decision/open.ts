@@ -4,7 +4,7 @@ import { decisionKey } from "./key.ts";
 import { type DecisionState, isClosedTask, isOpenGate, orcaReads, readDecision, readDecisionByKey } from "./waiters.ts";
 
 export interface DecisionOpenInput {
-  /** `item:iNNN`, else `scope:<group>`. */
+  /** `item:iNNN`, `item:<task id>` for a Task with no alias, else `scope:<group>`. */
   readonly subject: string;
   readonly options: readonly string[];
   /** Goes into the Orca gate only; never into an event (decision 74). */
@@ -28,6 +28,14 @@ export type DecisionOpened =
 
 const SOURCE = "decision_open";
 
+/** `item:<task id>` of a Task that has an iNNN alias keys as `item:iNNN`, so one item never yields two decisions. */
+function aliasSubject(store: CoreDeps["store"], subject: string): string {
+  const task = /^item:(task_[0-9a-z]+)$/.exec(subject)?.[1];
+  if (!task) return subject;
+  const alias = store.events({ type: "item_created" }).find((e) => e.payload.task === task)?.payload.alias;
+  return typeof alias === "string" ? `item:${alias}` : subject;
+}
+
 /**
  * The re-ask gate (appendix #decision-loop-detail). A decision key already answered or mooted is not
  * asked again: its dNNN and answer come back. One still open gains the new waiters. Otherwise a new
@@ -45,7 +53,7 @@ export async function decisionOpen(deps: CoreDeps, input: DecisionOpenInput): Pr
   if (foreign) {
     return refuse("cross_run_waiter", `${foreign} is not this session's Run ${input.callerRun}`, "open the decision from each waiter's own Run");
   }
-  const key = decisionKey(input.subject, input.options);
+  const key = decisionKey(aliasSubject(store, input.subject), input.options);
   let state = readDecisionByKey(store, key);
   let opened = false;
   if (!state) {

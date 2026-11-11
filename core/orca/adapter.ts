@@ -9,6 +9,7 @@ import type {
   OrcaAdapter,
   OrcaResult,
   PortRow,
+  TaskRow,
   WorkerPlacement,
   WriteOptions,
 } from "../contract/orca.ts";
@@ -110,6 +111,16 @@ function gateRow(row: Json): GateRow {
   return { ...(rest as GateRow), ...(valid ? { options: parsed as string[] } : {}) };
 }
 
+/** `task-list --full` names the fields `task_title`·`dispatch_id`·`assignee_handle`; the plain list, `title`·`dispatchId`·`assignee`. */
+function taskRow(row: Json): TaskRow {
+  const { task_title, dispatch_id, assignee_handle, ...rest } = row;
+  const str = (v: unknown) => (typeof v === "string" && v !== "" ? v : undefined);
+  const title = str(rest.title) ?? str(task_title);
+  const dispatchId = str(rest.dispatchId) ?? str(dispatch_id);
+  const assignee = str(rest.assignee) ?? str(assignee_handle);
+  return { ...(rest as TaskRow), ...(title ? { title } : {}), ...(dispatchId ? { dispatchId } : {}), ...(assignee ? { assignee } : {}) };
+}
+
 const PAYLOAD_IDS = ["taskId", "dispatchId", "stopReason"] as const;
 
 /** `inbox --full` rows: `from_handle`·`to_handle`·`read` (0 or 1) and `payload` as JSON text. */
@@ -202,7 +213,8 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
       page,
       nonLocalId && ((row: T) => nonLocalId(row as Json)),
     );
-    return { ok: true, value: nextCursor ? { ...rows, nextCursor } : rows };
+    const source = isObject(v.scope) && typeof v.scope.source === "string" ? v.scope.source : undefined;
+    return { ok: true, value: { ...rows, ...(nextCursor ? { nextCursor } : {}), ...(source ? { scopeSource: source } : {}) } };
   }
 
   const jsonArray = (xs: readonly string[] | undefined) => (xs ? JSON.stringify(xs) : undefined);
@@ -220,7 +232,10 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
         { flags: { spec: a.spec, "task-title": a.title, deps: jsonArray(a.deps), parent: a.parent, run: a.run } },
         o,
       ),
-    taskList: (a) => field("taskList", "tasks", rowsWith({ id: "string", status: "string" }), { flags: { run: a.run, status: a.status, ready: a.ready, full: a.full } }),
+    taskList: async (a) => {
+      const r = await field<Json[]>("taskList", "tasks", rowsWith({ id: "string", status: "string" }), { flags: { run: a.run, status: a.status, ready: a.ready, full: a.full } });
+      return r.ok ? { ok: true, value: r.value.map(taskRow) } : r;
+    },
     taskUpdate: (a, o) => run("taskUpdate", { flags: { id: a.id, status: a.status, result: a.result, run: a.run } }, o),
 
     runCurrent: () => shaped("runCurrent", isObject),
@@ -233,6 +248,14 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
         ok: true,
         value: { runId: run.id as string, objective: String(run.objective ?? ""), ...(typeof handle === "string" && handle ? { coordinatorHandle: handle } : {}) },
       };
+    },
+
+    runList: async (a) => {
+      const r = await shaped<Json>("runList", has("runs", rowsWith({ id: "string" })), { flags: { limit: a.limit, cursor: a.cursor } });
+      if (!r.ok) return r;
+      const runs = (r.value.runs as Json[]).map((x) => ({ id: x.id as string }));
+      const next = r.value.nextCursor;
+      return { ok: true, value: { runs, ...(typeof next === "string" && next !== "" ? { nextCursor: next } : {}) } };
     },
 
     gateCreate: (a, o) =>

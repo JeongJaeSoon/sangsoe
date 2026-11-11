@@ -8,7 +8,7 @@ export default {
   inputSchema: {
     type: "object",
     properties: {
-      subject: { type: "string", description: "item:iNNN, or scope:<group> when no item" },
+      subject: { type: "string", description: "item:iNNN or item:<task id> (a Task with no alias), or scope:<group> when no item" },
       question: { type: "string", description: "Shown on the Orca gate; not part of the decision key" },
       options: { type: "array", items: { type: "string" } },
       waiters: {

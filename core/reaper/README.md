@@ -3,7 +3,7 @@
 
 끝난 일이 남긴 카드와 기록된 Docker id 만 치우는 라운드 하나(결정 82·83·86·88, 구현 결정 144·145). plugin worker 의 타이머 라운드(`orca-plugin/reaper/`)와 `sangsoe reap run` 이 같은 `reapRound` 를 부른다.
 
-- `round.ts` — 편입 → 루트 읽기(열린 Task 포함, 결정 194) → 표시 → `reap_candidate` → 대상 → 삭제 전 검사 → `worktree rm --run-hooks --delete-branch` → Docker → `reap_round`. 루트 하나라도 못 읽으면 후보 기록도 정리도 없다. 설정에 `reaper` 칸이 없어도 후보 기록과 정리가 없지만, 그 라운드는 루트 실패가 아니라 `mark_only` 로 남는다(결정 174). `append` 가 없으면(dry run) 지우지 않는다.
+- `round.ts` — 편입 → 루트 읽기(열린 Task 포함, 결정 194) → 표시 → `reap_candidate` → 대상 → 삭제 전 검사 → `worktree rm --run-hooks --delete-branch` → Docker → `reap_round`. 루트 하나라도 못 읽으면 후보 기록도 정리도 없다. 열린 PR 루트는 sangsoe 의 저장소(`unit_started.worktree`·`resource`{kind `worktree`} 가 가리키는 카드가 있는 저장소)에만 그렇다: 다른 저장소를 못 읽으면 그 카드만 모름으로 두고 `reap_blocked`{kind `repo`, reason `repo_unreadable`} 를 저장소마다 한 번 남긴다(결정 207). 설정에 `reaper` 칸이 없어도 후보 기록과 정리가 없지만, 그 라운드는 루트 실패가 아니라 `mark_only` 로 남는다(결정 174). `append` 가 없으면(dry run) 지우지 않는다.
 - `finished.ts` — 끝남 판정(d119): PR 상태와 HEAD 포함을 GitHub 에 묻고, PR 이 없으면 Dispatch 가 끝났는지 본다. 조용함은 보지 않는다.
 - `checks.ts` — 삭제 전 검사(결정 194): 열린 Task·살아 있는 세션(`worker-show` → `task-list --run`, 루트도 같은 함수), worktree 안에 남은 증거 파일, 추적 안 된 파일까지 미커밋, GitHub 에 없는 HEAD.
 - `live.ts` — 삭제 전 검사 중 살아 있는 것: Orca `ports` 가 그 worktree 에 묶은 listener, 그 worktree 의 설정 파일로 도는 compose stack(`docker compose ls`). 걸리면 `reap_blocked` 만 쓰고 죽이거나 `down` 하지 않는다. `docker` 명령이 없을 때(spawn ENOENT)만 compose 검사를 건너뛰고, 설치된 Docker 가 답하지 않으면(데몬 없음·context 오류·시간 초과) `docker_unreachable` 로 막는다(결정 201).

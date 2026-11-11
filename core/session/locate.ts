@@ -44,6 +44,25 @@ const within = (dir: string, root: string) => dir === root || dir.startsWith(`${
 const MAX_PAGES = 10;
 
 /**
+ * The unsettled Dispatch on this worktree in one worker-list scope; null when a read failed. `bound`:
+ * Orca read only the caller's bound Run, so a miss says nothing about the other Runs.
+ */
+async function dispatchIn(orca: OrcaAdapter, worktree: string, run?: string): Promise<{ hit: string | null | undefined; bound: boolean }> {
+  let cursor: string | undefined;
+  let bound = false;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const r = await orca.workerList({ limit: 100, ...(run ? { run } : {}), ...(cursor ? { cursor } : {}) });
+    if (!r.ok) return { hit: null, bound };
+    bound ||= r.value.scopeSource === "bound";
+    const hit = r.value.rows.find((w) => w.workspace === worktree && !settled(w))?.dispatchId;
+    if (hit) return { hit, bound };
+    cursor = r.value.nextCursor;
+    if (!cursor) break;
+  }
+  return { hit: undefined, bound };
+}
+
+/**
  * The Dispatch working in cwd's worktree, read from Orca alone (no copy in sqlite): the worktree whose
  * path holds cwd, its unsettled Dispatch, that Dispatch's Run, and the Task's spec. undefined when any
  * read fails or nothing matches: the caller then does nothing.
@@ -57,14 +76,21 @@ export async function locate(orca: OrcaAdapter, cwd: string): Promise<Located | 
     .filter((t) => !t.isMainWorktree && within(here, real(t.path)))
     .sort((a, b) => b.path.length - a.path.length)[0];
   if (!tree) return undefined;
-  let cursor: string | undefined;
-  let dispatch: string | undefined;
-  for (let page = 0; page < MAX_PAGES && !dispatch; page++) {
-    const r = await orca.workerList({ limit: 100, ...(cursor ? { cursor } : {}) });
-    if (!r.ok) return undefined;
-    dispatch = r.value.rows.find((w) => w.workspace === tree.id && !settled(w))?.dispatchId;
-    cursor = r.value.nextCursor;
-    if (!cursor) break;
+  // Without --run, worker-list holds only the bound Run's Dispatches; a lead bound to its own Run is
+  // dispatched in its parent's, so each Run is read in turn (decision 207). A list over every Run that
+  // missed has already said there is none.
+  const first = await dispatchIn(orca, tree.id);
+  let dispatch = first.hit;
+  let runCursor: string | undefined;
+  for (let page = 0; page < MAX_PAGES && dispatch === undefined && first.bound; page++) {
+    const runs = await orca.runList({ limit: 100, ...(runCursor ? { cursor: runCursor } : {}) });
+    if (!runs.ok) return undefined;
+    for (const r of runs.value.runs) {
+      dispatch = (await dispatchIn(orca, tree.id, r.id)).hit;
+      if (dispatch !== undefined) break;
+    }
+    runCursor = runs.value.nextCursor;
+    if (!runCursor) break;
   }
   if (!dispatch) return undefined;
   const shown = await orca.workerShow({ dispatch });

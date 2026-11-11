@@ -66,7 +66,11 @@ test("both entrances refuse the same malformed decision the same way", async () 
   });
   assert.deepEqual(open, {
     ok: false,
-    refusal: { code: "bad_input", reason: "subject: expected item:iNNN or scope:<group>", fix: "pass subject as item:iNNN or scope:<group>" },
+    refusal: {
+      code: "bad_input",
+      reason: "subject: expected item:iNNN, item:<task id> or scope:<group>",
+      fix: "pass subject as item:iNNN, item:<task id> or scope:<group>",
+    },
   });
   const answer = await expectSameViaBothEntrances({
     tool: "decision_answer",
@@ -96,6 +100,22 @@ test("decision_open, decision_answer and decision moot act in the Run Orca repor
   assert.equal(w.calls("orchestration run-current").length, 2);
   assert.deepEqual(r.value.resolved, ["gate_000000000001"]);
   assert.equal(w.store.events({ type: "decision_answered" })[0]?.payload.linked_by, "orchestrator");
+});
+
+test("decision_open takes a Task id as its item, and keys it under the Task's iNNN alias when it has one", async () => {
+  // A Task the orchestrator made with `task-create` and started by id has no alias (smoke P2).
+  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }], { currentRun: RUN });
+  const byId = await decisionOpenFrom({ subject: `item:${T1}`, question: "Which?", options: ["a", "b"], waiters: [{ task: T1, run: RUN }] }, w);
+  assert.ok(byId.ok, JSON.stringify(byId));
+  assert.equal(byId.value.status, "opened");
+
+  const aliased = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }], { currentRun: RUN });
+  aliased.store.append({ type: "item_created", source: "test", payload: { task: T1, alias: "i012", who: "orchestrator", done_when: "x", owner_action: 0 } });
+  const first = await decisionOpenFrom({ subject: "item:i012", question: "Which?", options: ["a", "b"], waiters: [{ task: T1, run: RUN }] }, aliased);
+  const second = await decisionOpenFrom({ subject: `item:${T1}`, question: "Which, again?", options: ["b", "a"], waiters: [{ task: T1, run: RUN }] }, aliased);
+  assert.ok(first.ok && second.ok);
+  assert.equal(second.value.decision, first.value.decision);
+  assert.equal(second.value.status, "joined");
 });
 
 test("decision moot takes no evidence from its caller, and the parsers ignore a run passed in the input", async () => {

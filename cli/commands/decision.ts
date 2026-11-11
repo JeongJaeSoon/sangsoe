@@ -26,7 +26,7 @@ export default {
   name: "decision",
   summary: "open a decision (re-ask gate), link an answer to one, or moot one",
   usage:
-    "add --subject <item:iNNN|scope:x> --question <text> [--option <o>]... [--waiter <task>@<run>]... [--carrier-run <run>]\n" +
+    "add --subject <item:iNNN|item:task_x|scope:x> --question <text> [--option <o>]... [--waiter <task>@<run>]... [--carrier-run <run>]\n" +
     "       | answer --decision <dNNN> --answer <text> --owner-action <seq> [--linked-by <how>]\n" +
     "       | moot --decision <dNNN>",
   options: {
