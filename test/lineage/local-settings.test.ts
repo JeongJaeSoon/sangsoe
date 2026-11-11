@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -12,6 +12,22 @@ import { LOCAL_SETTINGS, localSettingsJson, writeLocalSettings } from "../../cor
 test("the local settings carry the row's advisor, or the advisor's off switch, and nothing else", () => {
   assert.deepEqual(JSON.parse(localSettingsJson({ advisorModel: "a" })), { advisorModel: "a" });
   assert.deepEqual(JSON.parse(localSettingsJson({ disableAdvisor: true })), { env: { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1" } });
+  // A file a repo setup hook wrote keeps its own keys; only the advisor keys are sangsoe's.
+  const base = { permissions: { allow: ["x"] }, advisorModel: "old", env: { A: "1", CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1" } };
+  assert.deepEqual(JSON.parse(localSettingsJson({ advisorModel: "a" }, base)), { permissions: { allow: ["x"] }, advisorModel: "a", env: { A: "1" } });
+});
+
+test("a path that is not a local git worktree throws and leaves nothing behind", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sangsoe-local-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const plain = join(dir, "plain");
+  mkdirSync(plain);
+  const missing = join(dir, "remote", "host", "tree");
+  for (const p of [plain, missing]) {
+    assert.throws(() => writeLocalSettings(p, { advisorModel: "a" }));
+  }
+  assert.ok(!existsSync(join(plain, ".claude")), "no file in a plain folder");
+  assert.ok(!existsSync(join(dir, "remote")), "no directories made for a path that is not here");
 });
 
 test("the file is written in the worktree and kept out of git status, in a linked worktree too", (t) => {

@@ -387,7 +387,26 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       plan = launch(choice, { orcaFlag, ownerSetting: choice.advisor && !orcaFlag ? ownerSetting() : false, spent });
     }
   }
-  // A lead's terminal is the one the owner watches: kept open until the orchestrator releases it.
+  // Before worker-start: the new session's SessionStart reads this row for its budget and finish lines.
+  store.append({
+    type: "unit_started",
+    source,
+    entity: "task",
+    entity_id: taskId,
+    payload: {
+      kind: choice.kind,
+      picked_by: req.pickedBy ?? "role",
+      model: plan.model,
+      effort: plan.effort,
+      ...(plan.route !== "none" && choice.advisor ? { advisor: choice.advisor } : {}),
+      route: plan.route,
+      budget: row.budget.calls,
+      budget_per: row.budget.per,
+      used,
+    },
+  });
+  // Every start keeps its terminal open, the lifetime Orca gave new-child workers: in an existing
+  // worktree Orca would close it at worker_done, before the starter reads it (decision 200).
   const startArgs = {
     task: taskId,
     agent: req.agent,
@@ -395,16 +414,15 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     run: requester.runId,
     model: plan.model,
     effort: plan.effort,
-    ...(req.childRole === "lead" ? { keepOpen: true } : {}),
+    keepOpen: true,
     ...(plan.advisor ? { advisor: plan.advisor } : {}),
   };
   const started = await write(orca, orca.workerStart(startArgs), (o) => orca.workerStart(startArgs, o));
   if (!started.ok) {
     const dead = findKey(started.error.data, DISPATCH_KEYS);
     if (dead) store.append({ type: "worker_dead", source, payload: { reason: "start_failed" }, entity: "dispatch", entity_id: dead, target: taskId });
-    // The empty worktree this attempt made goes with it; a failed removal is left for the reaper.
-    await orca.worktreeRm({ worktree: `id:${tree.value.id}` });
-    return failedAttempt("orca_error", `worker-start 실패 (${started.error.code}: ${started.error.message})`);
+    // A failed start can still own a live terminal in that worktree, so it is left for the reaper.
+    return failedAttempt("orca_error", `worker-start 실패 (${started.error.code}: ${started.error.message}), 남은 worktree: ${tree.value.id}`);
   }
 
   // ⑤ no_dispatch: the receipt first, then dispatch-show (decision 94 (나)⑤).
@@ -425,24 +443,6 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     store.append({ type: "model_changed", source, payload: { from: moved.from, to, reason: moved.reason }, entity: "task", entity_id: taskId });
   }
 
-  store.append({
-    type: "unit_started",
-    source,
-    entity: "task",
-    entity_id: taskId,
-    payload: {
-      dispatch: dispatchId,
-      kind: choice.kind,
-      picked_by: req.pickedBy ?? "role",
-      model: plan.model,
-      effort: plan.effort,
-      ...(plan.route !== "none" && choice.advisor ? { advisor: choice.advisor } : {}),
-      route: plan.route,
-      budget: row.budget.calls,
-      budget_per: row.budget.per,
-      used,
-    },
-  });
   if (plan.note) notes.push(plan.note);
   if (req.references?.length) {
     if (!worktreeId) notes.push("reference add 건너뜀: 새 worktree id 를 영수증에서 찾지 못했다");

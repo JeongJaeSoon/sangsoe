@@ -30,7 +30,7 @@ const advisor = alias(row.advisor);
 const STARTED = line(
   "2026-11-10T10:00:00.000Z",
   "unit_started",
-  { dispatch: "ctx_26", kind: "worker", picked_by: "class", model: alias(row.tier)?.alias, effort: row.effort, advisor: advisor?.alias, route: "worktree_file", budget: 3, budget_per: "unit", used: 0 },
+  { kind: "worker", picked_by: "class", model: alias(row.tier)?.alias, effort: row.effort, advisor: advisor?.alias, route: "worktree_file", budget: 2, budget_per: "unit", used: 0 },
   { entity: "task", entity_id: "task_26" },
 );
 const USED = line(
@@ -40,7 +40,8 @@ const USED = line(
   { entity: "task", entity_id: "task_26" },
 );
 
-test("the item detail carries one model line with the row, the budget and the unit's spend", () => {
+// The budget is the one the start recorded (2 here), not the table's: no second source.
+test("the item detail carries one model line with the row, the recorded budget and the unit's spend", () => {
   const before = buildItem(withEvents(), "i026");
   const after = buildItem(withEvents(STARTED, USED), "i026");
   assert.ok(before && after);
@@ -49,7 +50,7 @@ test("the item detail carries one model line with the row, the budget and the un
   const price = advisor?.price.input ?? 0;
   assert.equal(
     after.model,
-    `모델: ${row.label} · ${alias(row.tier)?.alias} · effort ${row.effort} · advisor ${advisor?.alias} · 예산 3회/단위 · advisor 1회 · 약 $${price.toFixed(2)}`,
+    `모델: ${row.label} · ${alias(row.tier)?.alias} · effort ${row.effort} · advisor ${advisor?.alias} · 예산 2회/단위 · advisor 1회 · 약 $${price.toFixed(2)}`,
   );
   assert.ok(renderMarkdown(after).split("\n")[1]?.startsWith("모델: "));
 });

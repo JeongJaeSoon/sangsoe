@@ -122,7 +122,8 @@ async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
 
 /**
  * Decision 200: each advisor call in the transcript's tail, once. The tail overlaps between turns,
- * so the call's own key is the dedupe key; a turn longer than the tail can miss a call (undercount).
+ * so the call's own key is the dedupe key, without the session: a resumed session under a new id
+ * carries the same records. A turn longer than the tail can miss a call (undercount).
  */
 function advisorUsed(store: Store, row: SessionRow, input: SessionHookInput): void {
   for (const c of advisorCalls(tail(input.transcript_path))) {
@@ -130,7 +131,7 @@ function advisorUsed(store: Store, row: SessionRow, input: SessionHookInput): vo
       type: "advisor_used",
       source: "Stop",
       ...(row.task ? { entity: "task", entity_id: row.task } : {}),
-      dedupe_key: dedupeKey(EVENTS.advisor_used, input.session_id, c.key),
+      dedupe_key: dedupeKey(EVENTS.advisor_used, c.key),
       payload: { session: input.session_id, msg: c.key, model: c.model, input_tokens: c.input, output_tokens: c.output },
     });
   }

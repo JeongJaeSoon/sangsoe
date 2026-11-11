@@ -73,11 +73,20 @@ test("decision 200: SessionStart adds the started row's advisor budget and, belo
     source: "mcp:start_unit",
     entity: "task",
     entity_id: TASK,
-    payload: { dispatch: DISPATCH, kind: "worker", picked_by: "class", model: "m", effort: "medium", route: "worktree_file", budget: 3, budget_per: "unit", used: 0 },
+    payload: { kind: "worker", picked_by: "class", model: "m", effort: "medium", route: "worktree_file", budget: 3, budget_per: "unit", used: 0 },
   });
   const lines = await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
-  assert.deepEqual(lines.slice(1), modelRowLines("worker", "medium"));
+  assert.deepEqual(lines.slice(1), modelRowLines({ effort: "medium", route: "worktree_file", budget: 3, budget_per: "unit" }));
   assert.equal(lines.length, 3, "the budget line and the finish line");
+  // A restart with the budget spent: the newest row, and no budget line for an advisor that is off.
+  w.store.append({
+    type: "unit_started",
+    source: "mcp:start_unit",
+    entity: "task",
+    entity_id: TASK,
+    payload: { kind: "worker", picked_by: "class", model: "m", effort: "high", route: "none", budget: 3, budget_per: "unit", used: 3 },
+  });
+  assert.deepEqual((await hook(w, "session-start", { session_id: "s2", source: "startup" }, VERSION)).slice(1), []);
 });
 
 test("a lead whose Run binding is gone is told to run-use the Run its earlier session held", async () => {

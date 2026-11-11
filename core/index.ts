@@ -188,6 +188,7 @@ export {
   REQUIRED_CAPABILITIES,
   runChecks,
   START_CHECKS,
+  spendToday,
   startReport,
 } from "./checks/index.ts";
 

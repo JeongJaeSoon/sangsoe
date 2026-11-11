@@ -310,9 +310,15 @@ test("decision 200: every case has a row with tier, effort, advisor or none, a b
 });
 
 test("decision 200: a row below high gets the finish-the-whole-task line, and a row with a budget gets the budget line", () => {
-  assert.ok(modelRowLines("sweep", "low").some((l) => l.startsWith("일 전체를 끝까지")));
-  assert.ok(!modelRowLines("design", "high").some((l) => l.startsWith("일 전체를 끝까지")));
-  assert.ok(modelRowLines("worker", "medium").some((l) => l.includes(`${POLICY.worker.budget.calls}회`)));
-  assert.deepEqual(modelRowLines("review", "high"), [], "no advisor, high effort: nothing to add");
-  assert.match(modelRowLines("lead", "medium")[0] ?? "", /하루/);
+  const at = (kind: keyof typeof POLICY, route: "worktree_file" | "none" = "worktree_file") => {
+    const row = POLICY[kind];
+    return modelRowLines({ effort: row.effort, route: row.advisor ? route : "none", budget: row.budget.calls, budget_per: row.budget.per });
+  };
+  assert.ok(at("sweep").some((l) => l.startsWith("일 전체를 끝까지")));
+  assert.ok(!at("design").some((l) => l.startsWith("일 전체를 끝까지")));
+  assert.ok(at("worker").some((l) => l.includes(`${POLICY.worker.budget.calls}회`)));
+  assert.deepEqual(at("review"), [], "no advisor, high effort: nothing to add");
+  assert.match(at("lead")[0] ?? "", /하루/);
+  // A spent budget or an advisor that did not attach: no budget line to follow.
+  assert.ok(!at("worker", "none").some((l) => l.startsWith("advisor")));
 });

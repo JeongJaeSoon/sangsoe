@@ -138,9 +138,11 @@ export function launch(choice: Choice, path: AdvisorPath): Launch {
   const why = path.spent ? ADVISOR_SPENT : ADVISOR_NOT_APPLIED;
   const floor = POLICY[choice.kind].withoutAdvisor;
   if (!floor || TIERS.indexOf(choice.tier) <= TIERS.indexOf(floor)) return { ...out, ...off, note: why };
+  // The floor tier starts at its API default, but never below an effort the lead already raised to.
+  const base = catalogRow(floor).apiDefaultEffort;
   return {
     model: aliasOf(floor),
-    effort: catalogRow(floor).apiDefaultEffort,
+    effort: EFFORTS.indexOf(choice.effort) > EFFORTS.indexOf(base) ? choice.effort : base,
     route: "none",
     ...off,
     note: why,
@@ -152,16 +154,15 @@ export function launch(choice: Choice, path: AdvisorPath): Launch {
  * The first lines a session of this row reads (decision 200): the advisor budget and, below high
  * effort, the guide's finish-the-whole-task advice. SessionStart prints them; nothing stores them.
  */
-export function rowLines(kind: Kind, effort: Effort): string[] {
-  const row = POLICY[kind];
+export function rowLines(started: { effort: Effort; route: AdvisorRoute; budget: number; budget_per: "unit" | "day" }): string[] {
   const lines: string[] = [];
-  if (row.budget.calls > 0) {
-    const per = row.budget.per === "day" ? "하루" : "이 단위에서";
+  if (started.budget > 0 && started.route !== "none") {
+    const per = started.budget_per === "day" ? "하루" : "이 단위에서";
     lines.push(
-      `advisor 는 ${per} 약 ${row.budget.calls}회: 접근을 정하기 전, 끝났다고 말하기 전, 막혔을 때. sangsoe 가 transcript 에서 세고, 다 쓰면 다음 시작부터 끈다.`,
+      `advisor 는 ${per} 약 ${started.budget}회: 접근을 정하기 전, 끝났다고 말하기 전, 막혔을 때. sangsoe 가 transcript 에서 세고, 다 쓰면 다음 시작부터 끈다.`,
     );
   }
-  if (EFFORTS.indexOf(effort) < EFFORTS.indexOf("high")) {
+  if (EFFORTS.indexOf(started.effort) < EFFORTS.indexOf("high")) {
     lines.push("일 전체를 끝까지 한다: 남은 일 목록이나 계속할지 묻는 말로 턴을 닫지 않고, 평범한 장애는 진단해 넘어간다. 답이 필요한 결정만 묻고 나머지는 계속한다.");
   }
   return lines;

@@ -67,11 +67,16 @@ const RANK: Record<CheckStatus, number> = { ok: 0, notice: 1, warn: 2, fail: 3 }
 export function spendToday(home: string, now: Date): string | undefined {
   const path = defaultDbPath(home);
   if (!existsSync(path)) return undefined;
-  const store = Store.open({ path });
+  // A spend line is extra: an unreadable or locked store must not fail the model-table row.
   try {
-    return `오늘 ${spendText(spend(store.events({ type: "advisor_used" }), { day: localDay(now) }))}`;
-  } finally {
-    store.close();
+    const store = Store.open({ path });
+    try {
+      return `오늘 ${spendText(spend(store.events({ type: "advisor_used" }), { day: localDay(now) }))}`;
+    } finally {
+      store.close();
+    }
+  } catch (err) {
+    return `오늘 advisor 사용을 읽지 못함 (${(err as Error).message})`;
   }
 }
 

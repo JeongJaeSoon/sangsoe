@@ -786,6 +786,7 @@ test("decision 197: an orchestrator in no worktree (cwd / or a plain folder) sta
     const made = h.created()[0] ?? [];
     assert.equal(flag(made, "repo"), TARGET);
     assert.ok(!made.includes("--parent-worktree"), "no parent worktree to keep");
+    assert.ok(made.includes("--no-parent"), "Orca would infer a parent from a folder context");
     const ws = h.called("worker-start")[0] ?? [];
     assert.equal(flag(ws, "worktree"), CHILD_SELECTOR);
     assert.ok(!ws.includes("--repo"), "Orca refuses creation flags on an existing worktree");
@@ -829,6 +830,7 @@ test("decision 197: a target repo rides on the parent's child worktree, so the p
   // Decision 200: new-child's lineage, made explicit: the requester's worktree is the new one's parent.
   const made = h.created()[0] ?? [];
   assert.equal(flag(made, "parent-worktree"), `id:${PARENT_TREE}`);
+  assert.ok(!made.includes("--no-parent"));
   assert.equal(flag(made, "repo"), TARGET);
   assert.equal(flag(h.called("worker-start")[0] ?? [], "worktree"), CHILD_SELECTOR);
 
@@ -843,9 +845,17 @@ test("decision 197: a target repo rides on the parent's child worktree, so the p
 
 test("decision 200: the worktree's local settings are written before the session starts, per row", async () => {
   // A worker row with an advisor: advisorModel goes into the new worktree, not --advisor.
-  const h = harness();
+  // unit_started is in the store before worker-start: the new session's SessionStart reads it.
+  let seenAtStart = -1;
+  const h = harness({
+    workerStart: () => {
+      seenAtStart = h.store.events({ type: "unit_started" }).length;
+      return ok({ dispatchId: "ctx_new", worktreeId: CHILD_TREE });
+    },
+  });
   const out = await start(h);
   assert.equal(out.kind, "started");
+  assert.equal(seenAtStart, 1, "the row is recorded before the session starts");
   assert.deepEqual(h.written, [{ path: CHILD_PATH, settings: { advisorModel: aliasOf(MODEL_POLICY.worker.advisor) } }]);
   const order = h.fake.calls.map((c) => c.slice(1, 3).join(" "));
   assert.ok(order.indexOf("worktree create") < order.indexOf("orchestration worker-start"), "the worktree exists before the session");
@@ -854,7 +864,6 @@ test("decision 200: the worktree's local settings are written before the session
   assert.deepEqual(
     { ...started[0]?.payload },
     {
-      dispatch: "ctx_new",
       kind: "worker",
       picked_by: "role",
       model: aliasOf(MODEL_POLICY.worker.tier),
@@ -876,39 +885,51 @@ test("decision 200: the worktree's local settings are written before the session
   assert.deepEqual(r.written[0]?.settings, { disableAdvisor: true });
   assert.equal(r.store.events({ type: "unit_started" })[0]?.payload.picked_by, "kind");
 
-  // A spent budget turns the advisor off at this start, and the worker row leaves its main tier.
+  // A spent budget turns the advisor off at this start, and the worker row leaves its main tier
+  // without dropping the effort the lead asked for.
+  const spendAll = (x: ReturnType<typeof harness>) => {
+    for (let i = 0; i < MODEL_POLICY.worker.budget.calls; i++) {
+      x.store.append({
+        type: "advisor_used",
+        source: "Stop",
+        entity: "task",
+        entity_id: NEW_TASK,
+        dedupe_key: dedupeKey(EVENTS.advisor_used, `m${i}`),
+        payload: { session: "sess-0", msg: `m${i}`, model: "x", input_tokens: 1, output_tokens: 1 },
+      });
+    }
+  };
   const s = harness();
-  for (let i = 0; i < MODEL_POLICY.worker.budget.calls; i++) {
-    s.store.append({
-      type: "advisor_used",
-      source: "Stop",
-      entity: "task",
-      entity_id: NEW_TASK,
-      dedupe_key: dedupeKey(EVENTS.advisor_used, "sess-0", `m${i}`),
-      payload: { session: "sess-0", msg: `m${i}`, model: "x", input_tokens: 1, output_tokens: 1 },
-    });
-  }
+  spendAll(s);
   const spent = await start(s, request({ task: { id: NEW_TASK } }));
   assert.equal(spent.kind, "started");
   assert.deepEqual(s.written[0]?.settings, { disableAdvisor: true });
   assert.equal(flag(s.called("worker-start")[0] ?? [], "model"), aliasOf(MODEL_POLICY.worker.withoutAdvisor));
   assert.ok(spent.kind === "started" && spent.notes.includes(ADVISOR_SPENT));
   assert.equal(s.store.events({ type: "unit_started" })[0]?.payload.used, MODEL_POLICY.worker.budget.calls);
+  const raised = resolveModel("worker", { effort: "high", reason: "first Act-on" });
+  assert.ok(raised.ok);
+  const sr = harness();
+  spendAll(sr);
+  await start(sr, request({ task: { id: NEW_TASK }, model: raised.value }));
+  assert.equal(flag(sr.called("worker-start")[0] ?? [], "effort"), "high", "the raised effort survives the floor");
 
-  // A failed worker-start removes the empty worktree it made.
+  // A failed worker-start may still own a live terminal: the worktree is left and named, never removed.
   const f = harness({ workerStart: () => fail("agent_failed") });
-  await start(f);
-  const rm = f.fake.calls.filter((c) => c.slice(1, 3).join(" ") === "worktree rm");
-  assert.equal(flag(rm[0] ?? [], "worktree"), CHILD_SELECTOR);
+  const failed = await start(f);
+  assert.equal(f.fake.calls.filter((c) => c.slice(1, 3).join(" ") === "worktree rm").length, 0);
+  assert.ok(failed.kind === "refused" && failed.detail.includes(CHILD_TREE), JSON.stringify(failed));
 });
 
-test("decision 197: a lead starts with --keep-open; a worker does not", async () => {
+test("decisions 197, 200: every start passes --keep-open, the lifetime Orca gave a new-child worker", async () => {
+  // Orca closes a finished worker in an existing worktree unless it is kept open; the starter
+  // releases it after reading worker_done, as before decision 200.
   const asLead = harness();
   await start(asLead, request({ requester: orchestrator, childRole: "lead" }));
   assert.ok((asLead.called("worker-start")[0] ?? []).includes("--keep-open"));
   const asWorker = harness();
   await start(asWorker, request());
-  assert.ok(!(asWorker.called("worker-start")[0] ?? []).includes("--keep-open"));
+  assert.ok((asWorker.called("worker-start")[0] ?? []).includes("--keep-open"));
 });
 
 test("decision 197: a Task start_unit creates gets an iNNN alias, so a decision can name it item:iNNN", async () => {

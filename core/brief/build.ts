@@ -506,12 +506,12 @@ function modelLine(input: BriefInput, task: string): string | undefined {
   const last = input.events.filter((e) => e.type === "unit_started" && e.entity_id === task).at(-1);
   const kind = String(last?.payload.kind ?? "");
   if (!last || !isKind(kind)) return undefined;
-  const row = POLICY[kind];
   const p = last.payload;
   const advisor = typeof p.advisor === "string" ? ` · advisor ${p.advisor}` : " · advisor 없음";
-  const per = row.budget.per === "day" ? "하루" : "단위";
-  const used = spend(input.events.filter((e) => e.type === "advisor_used"), { task });
-  return `모델: ${row.label} · ${String(p.model)} · effort ${String(p.effort)}${advisor} · 예산 ${row.budget.calls}회/${per} · ${spendText(used)}`;
+  // The budget the start recorded, counted over the same span: a day-budget row counts today.
+  const daily = p.budget_per === "day";
+  const used = spend(input.events.filter((e) => e.type === "advisor_used"), { task, ...(daily ? { day: localDay(new Date(input.now)) } : {}) });
+  return `모델: ${POLICY[kind].label} · ${String(p.model)} · effort ${String(p.effort)}${advisor} · 예산 ${Number(p.budget)}회/${daily ? "하루" : "단위"} · ${spendText(used)}`;
 }
 
 /** Decision 200: today's advisor calls over every session; undefined on a day with none. */

@@ -1,5 +1,5 @@
 import { answerNotifiedKey, dedupeKey, dedupeSegment, EVENTS } from "../contract/index.ts";
-import { isEffort, isKind, rowLines } from "../models/index.ts";
+import { type AdvisorRoute, isEffort, rowLines } from "../models/index.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { decision as decisionView } from "../store/views/decision.ts";
 import { roleLine } from "../start/start.ts";
@@ -74,12 +74,16 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   return lines;
 }
 
-/** Decision 200: the row start_unit picked for this Task, as the budget and finish lines it asks for. */
+/**
+ * Decision 200: the row start_unit recorded for this start (before worker-start), as the budget and
+ * finish lines it asks for. The recorded route and budget, not the table: a spent or unattached
+ * advisor gets no budget line.
+ */
 function unitRowLines(store: CoreDeps["store"], task: string): string[] {
-  const last = store.events({ type: "unit_started" }).filter((e) => e.entity_id === task).at(-1);
-  const kind = String(last?.payload.kind ?? "");
-  const effort = String(last?.payload.effort ?? "");
-  return isKind(kind) && isEffort(effort) ? rowLines(kind, effort) : [];
+  const p = store.events({ type: "unit_started" }).filter((e) => e.entity_id === task).at(-1)?.payload;
+  const effort = String(p?.effort ?? "");
+  if (!p || !isEffort(effort)) return [];
+  return rowLines({ effort, route: p.route as AdvisorRoute, budget: Number(p.budget), budget_per: p.budget_per === "day" ? "day" : "unit" });
 }
 
 /** A line to inject, written as `notified` only when it is taken; empty when it already rode once. */

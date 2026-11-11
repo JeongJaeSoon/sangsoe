@@ -1,7 +1,7 @@
 // Decision 200: the catalog view, docs/models.md and the advisor spend all read core/models/table.ts.
 
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -22,6 +22,7 @@ import {
   modelsView,
   recordHook,
   Store,
+  spendToday,
 } from "../core/index.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -74,6 +75,16 @@ test("advisorCalls counts each advisor iteration once, and its cost is the catal
   assert.equal(advisorCallCost({ model: "unknown-model", input: 1, output: 1 }), undefined);
 });
 
+test("doctor's spend line: none without a store, a note instead of a throw when the store is unreadable", (t) => {
+  const home = mkdtempSync(join(tmpdir(), "sangsoe-home-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  assert.equal(spendToday(home, new Date()), undefined);
+  const db = join(home, ".local", "share", "sangsoe");
+  // A directory where the database file should be: opening it fails.
+  mkdirSync(join(db, "sangsoe.db"), { recursive: true });
+  assert.match(spendToday(home, new Date()) ?? "", /^오늘 advisor 사용을 읽지 못함/);
+});
+
 test("the Stop hook records each advisor call once per session, and spend sums by unit and by day", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "sangsoe-spend-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -91,8 +102,18 @@ test("the Stop hook records each advisor call once per session, and spend sums b
   const deps = { store, orca: { dispatchShow: async () => ({ ok: false, error: { code: "x", message: "x" } }) } } as never;
   await recordHook("stop", deps, { session_id: "sess-1", transcript_path: transcript } as never);
   await recordHook("stop", deps, { session_id: "sess-1", transcript_path: transcript } as never);
+  // A resumed session under a new id reads the same records.
+  store.append({
+    type: "session_started",
+    source: "SessionStart",
+    entity: "task",
+    entity_id: "task_1",
+    dedupe_key: dedupeKey(EVENTS.session_started, "sess-2", "resume"),
+    payload: { session: "sess-2", role: "worker", model: "m" },
+  });
+  await recordHook("stop", deps, { session_id: "sess-2", transcript_path: transcript } as never);
   const used = store.events({ type: "advisor_used" });
-  assert.equal(used.length, 1, "the tail overlaps between turns; the call's key keeps it one row");
+  assert.equal(used.length, 1, "the tail overlaps between turns and sessions; the call's key keeps it one row");
   assert.equal(used[0]?.entity_id, "task_1");
   const today = localDay(new Date(used[0]?.ts ?? ""));
   const s = advisorSpend(used, { task: "task_1", day: today });

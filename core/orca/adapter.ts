@@ -295,7 +295,10 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
       local("worktreePs", "worktrees", "hostId", "worktreeId", { flags: { limit: a.limit, "agent-wait": a.agentWait } }),
     worktreeRm: (a) => run("worktreeRm", { flags: { worktree: a.worktree, "run-hooks": true, "delete-branch": true } }),
     worktreeCreate: async (a) => {
-      const r = await run<unknown>("worktreeCreate", { flags: { name: a.name, "parent-worktree": a.parent, repo: a.repo, setup: "run" } });
+      const r = await run<unknown>("worktreeCreate", {
+        // Orca infers a parent from the caller's folder context; a top-level start forces none.
+        flags: { name: a.name, ...(a.parent ? { "parent-worktree": a.parent } : { "no-parent": true }), repo: a.repo, setup: "run" },
+      });
       if (!r.ok) return r;
       const w = isObject(r.value) && isObject(r.value.worktree) ? r.value.worktree : undefined;
       if (typeof w?.id !== "string" || typeof w.path !== "string") return unexpected("orca worktree create: no worktree id and path", r.value);
