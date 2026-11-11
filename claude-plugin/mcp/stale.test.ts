@@ -58,7 +58,9 @@ test("decision 211: a running server refuses start_unit once the install under i
   const lines = createInterface({ input: server.stdout })[Symbol.asyncIterator]();
   const call = async (id: number, method: string, params: object) => {
     server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
-    return JSON.parse((await lines.next()).value);
+    const line = await lines.next();
+    assert.ok(!line.done, "the server answered");
+    return JSON.parse(line.value);
   };
   await call(1, "initialize", { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "test", version: "0" } });
   // No task or spec: past the stale check, handle refuses before it opens the store or calls Orca.
