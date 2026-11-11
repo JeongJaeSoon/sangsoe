@@ -63,7 +63,7 @@ test("decision 211: a running server refuses start_unit once the install under i
     return JSON.parse(line.value);
   };
   await call(1, "initialize", { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "test", version: "0" } });
-  // No task or spec: past the stale check, handle refuses before it opens the store or calls Orca.
+  // No task or spec: past the stale check the handler opens a store under this HOME, and handle refuses before calling Orca.
   const args = { name: "start_unit", arguments: { role: "orchestrator", runId: "run_x", childRole: "worker" } };
   assert.equal(JSON.parse((await call(2, "tools/call", args)).result.content[0].text).code, "invalid_input");
 
