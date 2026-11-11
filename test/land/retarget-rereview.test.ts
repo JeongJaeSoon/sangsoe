@@ -183,8 +183,16 @@ test("G31: a retarget that dismisses the approval makes a re-review item, and la
   const recorded = await x.record();
   assert.ok(recorded.inserted, recorded.note);
 
-  assert.deepEqual(graphRead.why(await x.view(), ITEM), [], "the review clears the row");
-  assert.deepEqual(buildGroup(await x.view(), "api")?.why.rows, []);
+  // Decision 218: the re-review row goes; the item still waits on its own open PR.
+  assert.deepEqual(
+    graphRead.why(await x.view(), ITEM).map((r) => [r.pred, r.kind]),
+    [["pr:acme/api#12", "pr"]],
+    "the review clears the re-review row",
+  );
+  assert.deepEqual(
+    buildGroup(await x.view(), "api")?.why.rows.map((r) => r.cells[2]?.text),
+    ["pr"],
+  );
   await runMonitor("pr", x.monitor);
   assert.equal(x.store.events({ type: "pr_ready_to_merge" }).length, 1);
   const landed = await landPr(x.landDeps);
@@ -280,7 +288,12 @@ test("S6 NOW-1: a PR closed, then reopened and retargeted, is open again: re-rev
   x.github("main", "DISMISSED", { closed: true });
   await runMonitor("pr", x.monitor);
   assert.equal(x.store.events({ type: "pr_closed" }).length, 2);
-  assert.deepEqual(graphRead.why(await x.view(), ITEM), [], "closed again: no row waits on it");
+  // Decision 218: no re-review row; the closed PR is the 🚧 pr_closed row the lead acts on.
+  assert.deepEqual(
+    graphRead.why(await x.view(), ITEM).map((r) => [r.pred, r.kind, r.predState]),
+    [["pr:acme/api#12", "pr", "머지 없이 닫힘"]],
+    "closed again: no re-review row waits on it",
+  );
   x.github("main", "DISMISSED");
   await runMonitor("pr", x.monitor);
   assert.equal(x.store.events({ type: "pr_reopened" }).length, 2);

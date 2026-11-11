@@ -1,7 +1,7 @@
-import type { ReadyRow, ViewInput, ViewTask } from "../contract/views.ts";
+import type { ReadyRow, ViewGate, ViewInput, ViewTask } from "../contract/views.ts";
 import { pendingRereview, rereviewItem } from "../land/rereview.ts";
 import { type EdgeKind, type Facts, foldFacts, type Stage } from "./facts.ts";
-import { itemRef, parseNode } from "./nodes.ts";
+import { itemRef, parseNode, prNode } from "./nodes.ts";
 import { taskPr } from "./task-pr.ts";
 
 // ready is computed, never stored (decision 26, 76(9)). An edge is ok (1), not ok (0) or unknown
@@ -31,14 +31,14 @@ export interface WhyRow {
   readonly item: string;
   /** 막는 선행: a node name, or `trigger` / `hold` for those rows. */
   readonly pred: string;
-  /** 간선 종류. */
-  readonly kind: EdgeKind | "trigger" | "hold" | "orca";
+  /** 간선 종류, or what holds the item itself: its own PR, an owner gate, Orca's 🚧 (decision 218). */
+  readonly kind: EdgeKind | "trigger" | "hold" | "orca" | "pr" | "gate";
   readonly predState: string;
   readonly dangling: boolean;
   readonly todo: string;
 }
 
-export type Readiness = "ready" | "owner_ready" | "waiting" | "not_waiting" | "unknown";
+export type Readiness = "ready" | "owner_ready" | "waiting" | "blocked" | "not_waiting" | "unknown";
 
 export interface WhyReport {
   readonly task: string;
@@ -62,6 +62,63 @@ export function taskState(t: ViewTask | undefined): string {
 }
 
 const tasksById = (input: ViewInput) => new Map(input.orca.tasks.map((t) => [t.id, t]));
+
+/**
+ * Decision 218: what holds an item by itself, apart from its predecessors: its own PR after the author's
+ * worker_done (decision 178), an open owner gate, or Orca's blocked or failed. item_status reads 🚧 from
+ * this and whyFrom writes its rows from it, so a 🚧 item always has a why row.
+ */
+export type Hold =
+  | { readonly by: "pr"; readonly state: "open" | "closed_unmerged" | "unknown"; readonly prs: readonly string[] }
+  | { readonly by: "gate"; readonly gates: readonly string[] }
+  | { readonly by: "orca" };
+
+export function holdOf(t: ViewTask, facts: Facts, gates: readonly ViewGate[]): Hold | null {
+  if (DONE(t)) {
+    const p = taskPr(t, facts);
+    return p.state === "none" || p.state === "merged" ? null : { by: "pr", state: p.state, prs: p.prs };
+  }
+  if (CANCELLED(t)) return null;
+  const open = gates.filter((g) => g.taskId === t.id && g.open).map((g) => g.id);
+  if (open.length > 0) return { by: "gate", gates: open };
+  return t.status === "blocked" || t.status === "failed" ? { by: "orca" } : null;
+}
+
+function holdRows(input: ViewInput, facts: Facts, t: ViewTask, item: string, hold: Hold): WhyRow[] {
+  const tasks = tasksById(input);
+  const edges = inEdges(t.id, facts, tasks).flatMap((e) => {
+    const s = edgeOk(e, facts, tasks);
+    return s.ok === 1 ? [] : [{ item, pred: e.pred, kind: e.kind, predState: s.predState, dangling: s.dangling, todo: s.todo }];
+  });
+  if (hold.by === "pr") {
+    // The work is done, so blocks and after (when to start) are past; what still holds the merge is a
+    // stack or a deploy order. A re-review item's blocks edge is decision 215's row, not an edge row.
+    const rows = [...rereviewRows(input, facts, t, item), ...edges.filter((e) => e.kind === "stacked_on" || e.kind === "deploys_after")];
+    if (rows.length > 0) return rows;
+    return hold.prs.flatMap((pr) => {
+      const s = prState(pr, facts);
+      if (s.merged) return [];
+      const [predState, todo] = !s.known
+        ? ["모름: PR 상태를 읽지 못했다", "PR 상태를 다시 읽는다(pr-monitor)"]
+        : s.closed
+          ? ["머지 없이 닫힘", "리드: PR 을 다시 열거나 항목을 취소한다"]
+          : ["열림", "PR 머지를 기다린다"];
+      return [{ item, pred: prNode(pr), kind: "pr" as const, predState, dangling: false, todo }];
+    });
+  }
+  if (hold.by === "gate") {
+    const decisionOf = new Map(
+      input.events.filter((e) => e.type === "decision_opened" && typeof e.payload.gate === "string").map((e) => [String(e.payload.gate), String(e.payload.decision)]),
+    );
+    const gateRows = hold.gates.map((g) => {
+      const d = decisionOf.get(g);
+      return { item, pred: d ? `decision:${d}` : `gate:${g}`, kind: "gate" as const, predState: "열림", dangling: false, todo: "오너의 답을 기다린다" };
+    });
+    return [...gateRows, ...edges];
+  }
+  if (edges.length > 0) return edges;
+  return [{ item, pred: "orca", kind: "orca", predState: "🚧 막힘", dangling: false, todo: "리드: 막은 이유를 풀고 Task 를 되돌린다" }];
+}
 
 /** PRs bound to items of the same flow as `task`, and to those items' Orca deps (ship-batch members). */
 function flowPrs(task: string, facts: Facts, tasks: ReadonlyMap<string, ViewTask>): string[] {
@@ -210,10 +267,11 @@ export function whyFrom(input: ViewInput, facts: Facts, task: string): WhyReport
   if (!t) {
     return { task, item, readiness: "unknown", rows: [{ item, pred: itemRef(task), kind: "orca", predState: taskState(undefined), dangling: false, todo: "이 Task 의 Run 을 읽는다" }] };
   }
-  if (DONE(t)) {
-    const rows = rereviewRows(input, facts, t, item);
-    return { task, item, readiness: rows.length > 0 ? "waiting" : "not_waiting", rows };
+  const hold = holdOf(t, facts, input.orca.gates);
+  if (hold?.by === "orca" && x?.hold) {
+    return { task, item, readiness: "not_waiting", rows: [{ item, pred: "hold", kind: "hold", predState: "⏸️ 보류", dangling: false, todo: "재검토 trigger 가 차거나 리드·오너가 다시 연다" }] };
   }
+  if (hold) return { task, item, readiness: "blocked", rows: holdRows(input, facts, t, item, hold) };
   if (t.status !== "pending" && t.status !== "ready") return { task, item, readiness: "not_waiting", rows: [] };
   const rows: WhyRow[] = [];
   for (const e of inEdges(task, facts, tasks)) {
@@ -246,7 +304,7 @@ export function readiness(input: ViewInput): WhyReport[] {
 
 /** Decision 92④'s table, one row per blocking predecessor. */
 export function renderWhy(r: WhyReport): string {
-  const head = r.readiness === "ready" ? "🟢 준비됨" : r.readiness === "owner_ready" ? "🟢 준비됨 (오너가 시작)" : r.readiness === "not_waiting" ? "기다리는 항목이 아니다" : r.readiness === "unknown" ? "모름" : "📅 예정";
+  const head = r.readiness === "ready" ? "🟢 준비됨" : r.readiness === "owner_ready" ? "🟢 준비됨 (오너가 시작)" : r.readiness === "blocked" ? "🚧 막힘" : r.readiness === "not_waiting" ? "기다리는 항목이 아니다" : r.readiness === "unknown" ? "모름" : "📅 예정";
   const lines = [`${r.item}: ${head}`];
   if (r.rows.length > 0) {
     lines.push("| 항목 | 막는 선행 | 간선 종류 | 선행 상태 | 해야 할 일 |", "|---|---|---|---|---|");

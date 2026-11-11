@@ -187,7 +187,12 @@ test("stage 2: group rows by state, dependency edges, critical path and why-not-
   assert.deepEqual(g.sections.map((s) => s.title), ["🚧 막힘", "🔄 진행 중", "대기열"]);
   assert.deepEqual(g.edges, [{ pred: "i033", succ: "i029", kind: "blocks", met: false }]);
   assert.deepEqual(g.criticalPath, ["i033", "i029"]);
-  assert.deepEqual(g.why.rows.map((r) => r.cells.map((c) => c.text)), [["i029", "i033", "blocks", "🚧", "키 도착 확인"]]);
+  // Decision 218: each 🚧 item has its row, the Orca-blocked one with the lead's reason, the gated one with its decision.
+  assert.deepEqual(g.why.rows.map((r) => r.cells.map((c) => c.text)), [
+    ["i033", "orca", "orca", "🚧 막힘", "키 도착 확인"],
+    ["i031", "decision:d012", "gate", "열림", "오너의 답을 기다린다"],
+    ["i029", "i033", "blocks", "🚧", "키 도착 확인"],
+  ]);
   assert.equal(g.doneFolded, 2);
   const out = renderMarkdown(g, { maxWidth: 78 });
   for (const w of tableWidths(out)) assert.ok(w.width <= 78 && w.cols <= 5, `line ${w.line}`);

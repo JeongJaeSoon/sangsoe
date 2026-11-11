@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dedupeKey } from "../../core/contract/dedupe.ts";
-import { EVENTS } from "../../core/contract/index.ts";
-import { buildGroup, criticalPath, graphRead, itemFacts, Store, type ViewGate, type ViewInput, type ViewTask, why } from "../../core/index.ts";
+import { buildGroup, criticalPath, dedupeKey, EVENTS, graphRead, itemFacts, Store, type ViewGate, type ViewInput, type ViewTask, why } from "../../core/index.ts";
 
 // Decision 218: every item the brief reads 🚧 has a why row naming what it waits on, from the same hold
 // item_status reads; a PR predecessor that is a group item's PR is that item on the critical path.
@@ -35,7 +33,7 @@ function world({ tasks, rows, gates = [] }: Shape): ViewInput {
 }
 
 const pr = (s: Store, p: string, task: string) => s.append({ type: "pr_opened", source: "test", payload: { pr: p, task } });
-const edge = (s: Store, pred: string, succ: string, kind: string) => s.append({ type: "edge_added", source: "GRAPH", dedupe_key: dedupeKey(EVENTS.edge_added, pred, succ, kind), payload: { pred, succ, kind } });
+const edge = (s: Store, pred: string, succ: string, kind: "blocks" | "after" | "stacked_on") => s.append({ type: "edge_added", source: "GRAPH", dedupe_key: dedupeKey(EVENTS.edge_added, pred, succ, kind), payload: { pred, succ, kind } });
 const task = (id: string, status: string, deps: string[] = []): ViewTask => ({ id, runId: "run_a", status, deps }) as ViewTask;
 const blockedAliases = (input: ViewInput) => itemFacts(input).filter((f) => f.state === "blocked" || f.state === "pr_closed").map((f) => f.alias);
 const whyIds = (input: ViewInput) => new Set(buildGroup(input, LEAD)?.why.rows.map((r) => r.id));
@@ -106,7 +104,14 @@ test("a PR closed unmerged reads pr_closed and has its row", () => {
 test("an Orca-blocked Task and an open owner gate each have a row", () => {
   const input = world({
     tasks: [task(A, "blocked"), task(B, "dispatched")],
-    gates: [{ id: "gate_1", taskId: B, open: true, question: "d012: which cache?" } as ViewGate],
+    gates: [{ id: "gate_000000000001", taskId: B, open: true }],
+    rows: (s) =>
+      s.append({
+        type: "decision_opened",
+        source: "orchestrator",
+        dedupe_key: dedupeKey(EVENTS.decision_opened, "cache-choice"),
+        payload: { decision: "d012", decision_key: "cache-choice", task: B, gate: "gate_000000000001" },
+      }),
   });
   assert.deepEqual(blockedAliases(input).sort(), ["i015", "i016"]);
   assert.deepEqual(

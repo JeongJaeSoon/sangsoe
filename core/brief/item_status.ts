@@ -1,8 +1,8 @@
-import type { ItemReading, ItemState, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, WaitsOn } from "../contract/index.ts";
+import type { ItemReading, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, WaitsOn } from "../contract/index.ts";
 import { type Facts, foldFacts } from "../graph/facts.ts";
 import { itemRef, prNode } from "../graph/nodes.ts";
 import { mergedItemMark } from "../verify/evidence.ts";
-import { taskPr } from "../graph/task-pr.ts";
+import { type Hold, holdOf } from "../graph/ready.ts";
 import { waiterReading } from "../decision/held.ts";
 import { countsAsEvidence } from "../owner/marks.ts";
 import { decision } from "../store/views/decision.ts";
@@ -73,12 +73,17 @@ function taskOf(e: StoredEvent, prTask: ReadonlyMap<string, string>, dispatchTas
   return pr ? (prTask.get(pr) ?? null) : null;
 }
 
-function stateOf(t: BriefTask, hold: boolean, held: ReturnType<typeof waiterReading>, ready: boolean): ItemState {
-  if (t.status === "completed") return "done";
+// Decision 218: the 🚧 readings come from GRAPH's holdOf, the same answer the why rows are written from.
+function stateOf(t: BriefTask, hold: Hold | null, onHold: boolean, held: ReturnType<typeof waiterReading>, ready: boolean): ItemReading {
+  if (t.status === "completed") {
+    if (hold?.by !== "pr") return "done";
+    return hold.state === "open" ? "blocked" : hold.state === "closed_unmerged" ? "pr_closed" : "unknown";
+  }
   if (t.status === "failed" && t.result === "cancelled") return "cancelled";
+  if (hold?.by === "gate") return "blocked";
   if (held) return held;
   if (t.status === "dispatched") return "in_progress";
-  if (t.status === "blocked" || t.status === "failed") return hold ? "on_hold" : "blocked";
+  if (hold?.by === "orca") return onHold ? "on_hold" : "blocked";
   // Orca's own `ready` is not enough: GRAPH's extra edges, trigger and hold decide (decision 147).
   return ready ? "ready" : "planned";
 }
@@ -156,15 +161,14 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     const lead = str(x.lead) ?? OTHERS;
     const own = decisions.filter((d) => d.waiters.some((w) => w.task === t.id));
     const openDecisions = own.filter((d) => d.state === "open").map((d) => d.decision);
-    const closed = stateOf(t, x.hold === true && str(x.review_trigger) !== null, waiterReading(t, input.orca.gates), ready.has(t.id));
     // Decisions 175 and 178: the author's worker_done completes the Task in Orca before its PR merges.
-    const p = closed === "done" ? taskPr(t, prFacts) : null;
-    const prRead: ItemReading =
-      !p || p.state === "none" || p.state === "merged" ? closed : p.state === "open" ? "blocked" : p.state === "closed_unmerged" ? "pr_closed" : "unknown";
+    const hold = holdOf(t, prFacts, input.orca.gates);
+    const prRead = stateOf(t, hold, x.hold === true && str(x.review_trigger) !== null, waiterReading(t, input.orca.gates), ready.has(t.id));
     // Decision 181: an owner to-do closes on verification, whoever completed the Task.
     const verifiedAt = prFacts.ownerVerify.get(t.id);
     const state: ItemReading = prRead === "done" && verifiedAt === null ? "pending_verify" : prRead;
-    const prWait = p !== null && prRead !== "done";
+    const p = hold?.by === "pr" ? hold : null;
+    const prWait = p !== null;
     const last = moved.get(t.id) ?? 0;
     // Decision 201: review comments are answered when the author's reply is newer, by GitHub's time,
     // than every comment since the last move; a comment without that time is never taken as answered.

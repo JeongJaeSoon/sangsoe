@@ -304,6 +304,13 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
   const meta = groupBriefFrom(input, facts).find((g) => g.lead === key);
   if (!meta) return null;
   const mine = facts.filter((f) => f.lead === key);
+  const tasks = new Set(mine.map((f) => f.task));
+  const g = foldFacts(input.events);
+  // Decision 218: a PR predecessor bound to an item of this group is that item, unless it is the successor's own PR.
+  const resolve = (pred: string, succ: string): string => {
+    const pr = pred.startsWith("pr:") ? g.prs.get(pred.slice(3)) : undefined;
+    return (pr && [...pr.tasks].find((t) => tasks.has(t) && t !== succ)) ?? pred;
+  };
   const alias = new Map(facts.map((f) => [f.task, f]));
   const label = (task: string) => alias.get(task)?.alias ?? task;
   const sectionOf: [string, ItemReading[]][] = [
@@ -316,24 +323,31 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
       table(title, COLS.inProgress, mine.filter((f) => states.includes(f.state)).sort(inGroupOrder).map((f) => itemRow(f, input.now, false))),
     )
     .filter((s) => s.rows.length > 0);
-  const tasks = new Set(mine.map((f) => f.task));
-  const raw = graph.edges(input).filter((e) => tasks.has(e.succ) || tasks.has(e.pred));
+  const seen = new Set<string>();
+  const raw = graph
+    .edges(input)
+    .filter((e) => tasks.has(e.succ) || tasks.has(e.pred))
+    .map((e) => ({ ...e, pred: resolve(e.pred, e.succ) }))
+    .filter((e) => {
+      const id = `${e.pred}>${e.succ}:${e.kind}`;
+      return !seen.has(id) && !!seen.add(id);
+    });
   const edges = raw.map((e) => ({ pred: label(e.pred), succ: label(e.succ), kind: e.kind, met: alias.has(e.pred) ? alias.get(e.pred)?.state === "done" : null }));
   const open = mine.filter((f) => f.state !== "done" && f.state !== "cancelled").sort(inGroupOrder);
-  // Every open item: GRAPH answers rows only for a Task that waits (pending or ready).
-  const whyOf = open.map((f) => [f, graph.why(input, f.task)] as const);
+  // Every open item; a 🚧 one always has a row (decision 218).
+  const whyOf = open.map((f) => [f, graph.why(input, f.task).map((e) => ({ ...e, pred: resolve(e.pred, e.succ) }))] as const);
   const whyRows: Row[] = whyOf.flatMap(([f, rows]) =>
     rows.map((e) => {
       const p = alias.get(e.pred);
       const state = e.dangling || !p ? e.predState : EMOJI[p.state];
-      const todo = e.dangling ? e.todo : p ? next(p) : e.todo || "—";
+      // Orca's 🚧 names no predecessor: the lead's reason on the item is what it waits on.
+      const todo = e.dangling ? e.todo : p ? next(p) : e.kind === "orca" ? (f.lastReason ?? e.todo) : e.todo || "—";
       return { id: f.alias, cells: [t(f.alias), t(label(e.pred)), t(e.kind), t(state), t(todo)], ...(e.dangling ? { broken: true } : {}) };
     }),
   );
   const dangling = whyOf.flatMap(([f, rows]) => rows.filter((e) => e.dangling).map((e) => ({ f, e })));
   const brokenEdges = dangling.map(({ e }) => `${label(e.pred)}>${label(e.succ)}:${e.kind}`);
   const critical = graph.criticalPath(input, [...tasks]);
-  const g = foldFacts(input.events);
   const titled = (f: ItemFacts) => `${f.alias} ${f.title}`;
   const stateText = (f: ItemFacts | undefined) => (f ? READING_LABEL[f.state] : "—");
 
@@ -440,8 +454,9 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
     now: input.now,
     lead: leadName(key),
     priority: meta.priority,
-    items: meta.items,
-    blockedCount: meta.blocked,
+    // Decision 218: 건 is the open items (🔄 + 🚧 + 남은 것); ✅ is counted apart from it.
+    items: open.length,
+    blockedCount: count("blocked", "pr_closed"),
     sections,
     doneFolded: meta.done,
     edges,
