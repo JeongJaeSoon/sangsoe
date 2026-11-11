@@ -220,7 +220,10 @@ const skillNames = new Set(
     !e.isDirectory() ? [] : e.name === "general" ? readdirSync(`${ROOT}claude-plugin/skills/general`) : [e.name],
   ),
 );
-const orcaSubcommands = new Set([...read("core/orca/commands.ts").matchAll(/path: \[([^\]]+)\]/g)].map((m) => /"([a-z-]+)"\]?$/.exec(m[1]?.trim() ?? "")?.[1] ?? ""));
+// The recorded `orca agent-context`, not the adapter table: sessions run some verbs themselves (decision 193).
+const orcaSubcommands = new Set(
+  (JSON.parse(read("test/fake-orca/scenarios/local/agent-context.json")) as { commands: { path: string[] }[] }).commands.map((c) => c.path.at(-1) ?? ""),
+);
 const walkTs = (dir: string): string[] =>
   readdirSync(`${ROOT}${dir}`, { withFileTypes: true }).flatMap((e) =>
     e.isDirectory() ? walkTs(`${dir}/${e.name}`) : /\.ts$/.test(e.name) && !e.name.includes(".test.") ? [`${dir}/${e.name}`] : [],

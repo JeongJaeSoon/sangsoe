@@ -2,11 +2,13 @@ import type { StoredEvent } from "../../contract/index.ts";
 import { canTransition } from "../../contract/transitions.ts";
 import { budgetLevel, type GhResponse } from "../../gh/client.ts";
 import { approvedAndGreen, mergeConfirm, type Pull, readDiff, readLabels, readPull } from "../../land/github.ts";
+import { hostRereadPending } from "../../store/backup.ts";
 import { verifyTier } from "../../verify/verify-tier.ts";
 import type { Act, MonitorDeps, Planned, Reading } from "../monitor.ts";
 import { sendNotice } from "../notice.ts";
 import type { WatchConfig } from "./config.ts";
 import { classifyMain, isClosedTask, itemStateOf, key, type MainRun, prRef, prUrl, requestedTier } from "./judge.ts";
+import { type IssueEvent, PAGE, type Review, type ReviewComment, type ReviewReads, reviewFacts } from "./reviews.ts";
 
 const SOURCE = "pr-monitor";
 const CLOSED_PAGE = 30;
@@ -21,7 +23,7 @@ type ListedPull = {
 };
 
 /** A Task Orca links to the PR: a local workspace whose agent's mailbox is a Dispatch. */
-export type LinkedTask = { task: string; run: string; dispatch: string };
+export type LinkedTask = { task: string; run: string; dispatch: string; live: boolean };
 type Link = { linked: boolean; tasks: LinkedTask[] };
 
 class RateLimited extends Error {
@@ -40,6 +42,13 @@ type Reads = {
   planned: Planned[];
   unseen: string[];
   acts: Act[];
+  /**
+   * Review lists are read against the last ETag. Not while a lost database waits for its reread:
+   * the ETags outlive the rows they were judged into (decision 195).
+   */
+  conditional: boolean;
+  /** `notified` dedupe keys, read once per round when a review wake is weighed. */
+  notified?: string[];
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
@@ -51,6 +60,18 @@ async function get<T>(r: Reads, path: string): Promise<T | null> {
   if (!res) return null;
   if (res.kind === "rate_limited") throw new RateLimited(res.resetAt);
   if (res.kind !== "ok" || res.data === null) {
+    r.unseen.push(`gh ${path}`);
+    return null;
+  }
+  return res.data;
+}
+
+/** A conditional read: `unchanged` on a 304, so a list already judged is not judged again. */
+async function changed<T>(r: Reads, path: string): Promise<T | "unchanged" | null> {
+  const res = (await r.d.gh?.get<T>(path, { conditional: r.conditional })) as GhResponse<T> | undefined;
+  if (res?.kind === "not_modified") return "unchanged";
+  if (res?.kind === "rate_limited") throw new RateLimited(res.resetAt);
+  if (res?.kind !== "ok" || res.data === null) {
     r.unseen.push(`gh ${path}`);
     return null;
   }
@@ -99,7 +120,9 @@ export async function linkOf(d: MonitorDeps, url: string, workers: () => Promise
   for (const dispatch of dispatches) {
     const show = await d.orca.workerShow({ dispatch });
     if (show.ok && show.value.taskId && show.value.runId) {
-      tasks.set(show.value.taskId, { task: show.value.taskId, run: show.value.runId, dispatch });
+      const live = show.value.liveness === "live";
+      // A Task's live Dispatch wins over its ended ones, whatever order Orca listed them in.
+      if (!tasks.get(show.value.taskId)?.live) tasks.set(show.value.taskId, { task: show.value.taskId, run: show.value.runId, dispatch, live });
     }
   }
   return { linked: local.length > 0, tasks: [...tasks.values()] };
@@ -219,6 +242,85 @@ async function onOpen(r: Reads, repo: string, p: ListedPull, link: Link | null, 
 
   if (level === "normal") await tier(r, repo, p);
   await readyToMerge(r, repo, p, link);
+  await reviews(r, repo, p);
+  reviewWake(r, ref, link);
+}
+
+/** The review events that wake, with the one-letter mark that keeps review and comment ids apart in a key. */
+const WAKE_TYPES: Readonly<Record<string, { mark: string; label: string }>> = {
+  pr_changes_requested: { mark: "r", label: "변경 요청(review id)" },
+  review_commented: { mark: "c", label: "리뷰 코멘트(review comment id)" },
+};
+
+/**
+ * Decision 201: reviews that ask for action wake the PR's worker with one message per round naming
+ * the GitHub ids not sent before: the Task's live Dispatch, else its lead's Run. The notify key lists
+ * the ids, so each id goes out once. Read from the rows, not from this round's writes, so a wake that
+ * could not be sent (link unread, send failed) goes out on a later round. Ids only, no text.
+ */
+function reviewWake(r: Reads, ref: string, link: Link | null): void {
+  const rows = Object.keys(WAKE_TYPES).flatMap((type) => [
+    ...rowsOf(r, type, ref),
+    ...r.planned.filter((e) => e.type === type && (e.payload as { pr?: unknown }).pr === ref),
+  ]);
+  if (rows.length === 0) return;
+  const task = itemTask(r, ref, link);
+  const linked = link?.tasks.find((t) => t.task === task);
+  if (!task || !linked) return void r.unseen.push(`review wake of ${ref}: no linked Task`);
+  const prefix = `${key("notify", task, "review")}:`;
+  r.notified ??= r.d.events({ type: "notified" }).map((e) => e.dedupe_key ?? "");
+  const told = new Set(
+    r.notified
+      .filter((k) => k.startsWith(prefix))
+      .flatMap((k) => k.slice(prefix.length).split(":")),
+  );
+  const fresh = new Map<string, string[]>();
+  for (const e of rows) {
+    const w = WAKE_TYPES[e.type];
+    const id = (e.dedupe_key ?? "").split(":").at(-1) ?? "";
+    if (!w || !/^\d+$/.test(id) || told.has(`${w.mark}${id}`)) continue;
+    told.add(`${w.mark}${id}`);
+    fresh.set(w.label, [...(fresh.get(w.label) ?? []), id]);
+  }
+  if (fresh.size === 0) return;
+  const marks = Object.values(WAKE_TYPES).flatMap((w) => (fresh.get(w.label) ?? []).map((id) => `${w.mark}${id}`));
+  const ids = [...fresh].map(([label, list]) => `${label} ${list.join(", ")}`).join(" · ");
+  const address = linked.live ? `dispatch:${linked.dispatch}` : `run:${linked.run}`;
+  r.acts.push({
+    what: `notify ${address} ${ref} reviews ${marks.join(" ")}`,
+    wake: true,
+    run: async (d) => ({
+      ...(await sendNotice(d, {
+        key: { target: task, dedupe_key: key("notify", task, "review", ...marks) },
+        to: linked.live ? "worker" : "lead",
+        chain: linked.live ? { dispatch: linked.dispatch, leadRun: linked.run } : { leadRun: linked.run },
+        subject: `🔁 리뷰: ${ref}`,
+        body: `${ref} 에 대응할 리뷰가 왔다: ${ids}. GitHub 에서 읽고 대응한다.`,
+        msgType: "status",
+        source: SOURCE,
+      })),
+      planned: [],
+    }),
+  });
+}
+
+/** Decision 195: review requests, changes requested, comments and the author's replies, by GitHub id. */
+async function reviews(r: Reads, repo: string, p: ListedPull): Promise<void> {
+  const ref = prRef(repo, p.number);
+  const at = `repos/${repo}`;
+  const known = new Set(REVIEW_TYPES.flatMap((t) => rowsOf(r, t, ref).map((e) => e.dedupe_key)));
+  const none: ReviewReads = { requests: null, reviews: null, comments: null };
+  // Each list is planned as soon as it is read: its ETag is saved now, and a rate limit on the next
+  // list ends the round with only what is already planned.
+  const judge = (reads: ReviewReads) => {
+    const { facts, full } = reviewFacts(ref, p.user?.login.toLowerCase() ?? "", reads);
+    for (const f of facts) if (!known.has(f.dedupe_key ?? null)) plan(r, f);
+    for (const k of full) r.unseen.push(`${ref}: ${k} past the first ${PAGE}`);
+  };
+  judge({ ...none, requests: await changed<IssueEvent[]>(r, `${at}/issues/${p.number}/events?per_page=${PAGE}`) });
+  judge({ ...none, reviews: await changed<Review[]>(r, `${at}/pulls/${p.number}/reviews?per_page=${PAGE}`) });
+  // Newest first, so a long thread's page always holds the new comments.
+  judge({ ...none, comments: await changed<ReviewComment[]>(r, `${at}/pulls/${p.number}/comments?sort=created&direction=desc&per_page=${PAGE}`) });
 }
 
 /** A PR whose branch is a local workspace Orca did not link yet: attach it there (decision 64, one-way). */
@@ -362,7 +464,8 @@ async function mainCi(r: Reads): Promise<void> {
   }
 }
 
-const TYPES = ["pr_opened", "pr_merged", "pr_closed", "pr_base_changed", "verify_tier_set", "land_requested", "pr_ready_to_merge", "main_green", "main_red", "ci_failed", "item_transition"];
+const REVIEW_TYPES = ["pr_review_requested", "pr_changes_requested", "review_commented", "review_replied"];
+const TYPES = ["pr_opened", "pr_merged", "pr_closed", "pr_base_changed", "verify_tier_set", "land_requested", "pr_ready_to_merge", "main_green", "main_red", "ci_failed", "item_transition", ...REVIEW_TYPES];
 
 /**
  * One pr-monitor round. GitHub through core/gh only, Orca through the adapter only; the PR's link to
@@ -370,7 +473,8 @@ const TYPES = ["pr_opened", "pr_merged", "pr_closed", "pr_base_changed", "verify
  * merged PR's Task goes `completed`, as an act after `pr_merged` (decision 84 ①).
  */
 export async function prRound(d: MonitorDeps, signal: AbortSignal): Promise<Reading> {
-  const r: Reads = { d, watch: { repos: [], authors: [], linkedOnly: true, owners: [] }, rows: new Map(), planned: [], unseen: [], acts: [] };
+  const conditional = !hostRereadPending(d.events({ type: "signal" }));
+  const r: Reads = { d, watch: { repos: [], authors: [], linkedOnly: true, owners: [] }, rows: new Map(), planned: [], unseen: [], acts: [], conditional };
   if (!d.gh) return { planned: [], unseen: ["gh client"] };
   const watch = d.watch?.() ?? null;
   if (!watch || watch.repos.length === 0) return { planned: [], unseen: ["watch.repos setting"] };

@@ -1,18 +1,23 @@
 import type { ItemReading, ItemState, OwnerTodoRow, WaitsOn } from "../contract/index.ts";
 import { ITEM_READINGS, READING_LABEL, STATE_LABEL } from "../contract/index.ts";
+import { isKind, localDay, POLICY, spend, spendText } from "../models/index.ts";
 import { linkedActs } from "../owner/link.ts";
 import { item_timeline } from "../store/views/item_timeline.ts";
+import { type Facts, foldFacts } from "../graph/facts.ts";
+import { itemRef } from "../graph/nodes.ts";
 import { graphRead } from "../graph/read.ts";
-import type { GraphRead } from "./graph.ts";
 import { groupBriefFrom } from "./group.ts";
 import { type ItemFacts, itemFacts, OTHERS, rank } from "./item_status.ts";
 import { ownerTodoFrom } from "./owner_todo.ts";
+import { localShort } from "./time.ts";
 import type {
   BriefInput,
   BriefOptions,
   Cell,
   Column,
+  GraphNodeRow,
   GroupDetail,
+  GroupGraph,
   ItemDetail,
   Overview,
   Row,
@@ -22,7 +27,7 @@ import type {
 import { prLabel, prUrl, since } from "./width.ts";
 
 export interface BuildOptions extends BriefOptions {
-  readonly graph?: GraphRead;
+  readonly graph?: GroupGraph;
 }
 
 // The marker is the label's first word, so the brief and the panel's note cannot drift apart.
@@ -36,6 +41,9 @@ const ALARM_NEXT: Readonly<Record<string, string>> = {
   land_failed: "land 확인",
   loop_detected: "반복 확인",
   decision_untracked: "결정 연결",
+  pr_changes_requested: "리뷰 변경 요청 반영",
+  review_commented: "리뷰 코멘트에 답",
+  refusal_report: "거부 보고 확인",
 };
 
 const COLS = {
@@ -45,7 +53,15 @@ const COLS = {
   onHold: [c("상태", 4), c("항목", 24), c("PR", 12), c("다시 볼 조건", 16), c("기간", 4)],
   why: [c("항목", 8), c("막는 선행", 10), c("간선 종류", 12), c("선행 상태", 10), c("해야 할 일", 16)],
   chain: [c("시각", 11), c("단계", 4), c("내용", 44)],
+  done: [c("항목", 28), c("PR", 12), c("닫힘", 11)],
+  critical: [c("단계", 4), c("항목", 24), c("상태", 12), c("단계 이름", 16)],
+  stack: [c("층", 4), c("PR", 12), c("항목", 24), c("상태", 12)],
+  release: [c("단계", 12), c("조건", 28), c("항목", 24)],
+  broken: [c("항목", 8), c("끊긴 선행", 24), c("처리", 32)],
+  edges: [c("종류", 13), c("선행", 24), c("후속", 24), c("비고", 20)],
+  recent: [c("시각", 11), c("항목", 24), c("전환", 32)],
 };
+const RECENT = 5;
 function c(name: string, max: number): Column {
   return { name, max };
 }
@@ -77,6 +93,7 @@ function next(f: ItemFacts): string {
   else if (f.state === "blocked") base = f.lastReason ?? "—";
   else if (f.state === "ready") base = "시작";
   else if (f.state === "planned") base = "선행 대기";
+  else if (f.idle) base = "워커가 다음 지시를 기다림";
   const alarm = f.alarms[0];
   if (!alarm) return base;
   return `🚨 ${base === "—" ? (ALARM_NEXT[alarm] ?? alarm) : base}`;
@@ -130,11 +147,13 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
   let evidenceShort = 0;
   const groupRows = new Map<string, ItemFacts[]>();
   const held: ItemFacts[] = [];
+  const closed: ItemFacts[] = [];
   for (const f of facts) {
     if (f.state === "cancelled") continue;
     if (f.state === "done") {
       if (f.closedAt && Date.parse(f.closedAt) >= windowStart) {
         done++;
+        closed.push(f);
         if (f.evidenceShort) evidenceShort++;
       }
       continue;
@@ -207,6 +226,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     }));
 
   const decisions = decisionRows.length;
+  const today = advisorToday(input);
   return {
     stage: 1,
     now,
@@ -219,7 +239,19 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     onHold: holdRows.length > 0 ? table("보류", COLS.onHold, holdRows) : null,
     doneDays,
     evidenceShort,
+    done: doneTable(closed, foldFacts(input.events), doneDays),
+    ...(today ? { advisorToday: today } : {}),
   };
+}
+
+// Done items drop their open PR from ItemFacts; the PR they merged is the last one bound to the Task.
+const prOf = (g: Facts, task: string): string | null => [...g.prs.values()].filter((p) => p.tasks.has(task)).at(-1)?.pr ?? null;
+
+function doneTable(closed: readonly ItemFacts[], g: Facts, doneDays: number): Table {
+  const rows = [...closed]
+    .sort((a, b) => -byOldest(a.closedAt, b.closedAt))
+    .map((f) => ({ id: f.alias, cells: [t(`${f.alias} ${f.title}`), pr(prOf(g, f.task)), t(localShort(f.closedAt ?? ""))] }));
+  return table(`✅ 완료 최근 ${doneDays}일`, COLS.done, rows);
 }
 
 function gateFor(input: BriefInput, d: string) {
@@ -257,7 +289,11 @@ function todoRow(input: BriefInput, r: OwnerTodoRow, byAlias: ReadonlyMap<string
   return { id: r.ref, cells: [t(r.ref), t(f?.title ?? r.ref), t(after.join(", ") || "—"), t(f?.cmdHint ?? "—"), age] };
 }
 
-/** Stage 2: one group's rows by state, its dependency edges, critical path and why-not-ready rows. */
+/**
+ * Stage 2: one group's rows by state, its DAG (edges, nodes, critical path), why-not-ready rows, and the
+ * decision-199 parts: summary figures, stack, release bundles, broken predecessors, edge list, recent
+ * transitions and the folded done list.
+ */
 export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions = {}): GroupDetail | null {
   const graph = opts.graph ?? graphRead;
   const key = lead === "그 외" ? OTHERS : lead;
@@ -278,20 +314,124 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
     )
     .filter((s) => s.rows.length > 0);
   const tasks = new Set(mine.map((f) => f.task));
-  const edges = graph
-    .edges(input)
-    .filter((e) => tasks.has(e.succ) || tasks.has(e.pred))
-    .map((e) => ({ pred: label(e.pred), succ: label(e.succ), kind: e.kind, met: alias.has(e.pred) ? alias.get(e.pred)?.state === "done" : null }));
-  const notReady = mine.filter((f) => f.state === "planned").sort(inGroupOrder);
-  const whyRows = notReady.flatMap((f) =>
-    graph.why(input, f.task).map((e) => {
+  const raw = graph.edges(input).filter((e) => tasks.has(e.succ) || tasks.has(e.pred));
+  const edges = raw.map((e) => ({ pred: label(e.pred), succ: label(e.succ), kind: e.kind, met: alias.has(e.pred) ? alias.get(e.pred)?.state === "done" : null }));
+  const open = mine.filter((f) => f.state !== "done" && f.state !== "cancelled").sort(inGroupOrder);
+  // Every open item: GRAPH answers rows only for a Task that waits (pending or ready).
+  const whyOf = open.map((f) => [f, graph.why(input, f.task)] as const);
+  const whyRows: Row[] = whyOf.flatMap(([f, rows]) =>
+    rows.map((e) => {
       const p = alias.get(e.pred);
-      return {
-        id: f.alias,
-        cells: [t(f.alias), t(label(e.pred)), t(e.kind), t(p ? EMOJI[p.state] : "—"), t(p ? next(p) : "—")],
-      };
+      const state = e.dangling || !p ? e.predState : EMOJI[p.state];
+      const todo = e.dangling ? e.todo : p ? next(p) : e.todo || "—";
+      return { id: f.alias, cells: [t(f.alias), t(label(e.pred)), t(e.kind), t(state), t(todo)], ...(e.dangling ? { broken: true } : {}) };
     }),
   );
+  const dangling = whyOf.flatMap(([f, rows]) => rows.filter((e) => e.dangling).map((e) => ({ f, e })));
+  const brokenEdges = dangling.map(({ e }) => `${label(e.pred)}>${label(e.succ)}:${e.kind}`);
+  const critical = graph.criticalPath(input, [...tasks]);
+  const g = foldFacts(input.events);
+  const titled = (f: ItemFacts) => `${f.alias} ${f.title}`;
+  const stateText = (f: ItemFacts | undefined) => (f ? READING_LABEL[f.state] : "—");
+
+  const nodes: GraphNodeRow[] = [...new Set(raw.flatMap((e) => [e.pred, e.succ]))]
+    .map((task) => alias.get(task))
+    .filter((f): f is ItemFacts => f !== undefined)
+    .map((f) => ({ id: f.alias, title: f.title, state: EMOJI[f.state], stateLabel: READING_LABEL[f.state], flags: flagsOf(f), outside: f.lead === key ? null : leadName(f.lead) }));
+
+  const criticalRows: Row[] = critical.map((task, i) => {
+    const f = alias.get(task);
+    const x = g.items.get(task);
+    const name = [x?.step ?? "", i === 0 ? "지금 늦추는 것" : "", x?.execBy === "owner" ? "오너 게이트" : ""].filter(Boolean).join(", ");
+    return { id: label(task), cells: [t(String(i + 1)), t(f ? titled(f) : label(task)), t(`${stateText(f)}${f && flagsOf(f) ? ` ${flagsOf(f)}` : ""}`), t(name || "—")] };
+  });
+
+  const stacked = raw.filter((e) => e.kind === "stacked_on" && alias.has(e.pred) && alias.has(e.succ));
+  const above = (task: string) => stacked.filter((e) => e.pred === task).map((e) => e.succ);
+  const stackRows: Row[] = [];
+  const placed = new Set<string>();
+  const climb = (task: string, floor: number) => {
+    if (placed.has(task)) return;
+    placed.add(task);
+    const f = alias.get(task) as ItemFacts;
+    stackRows.push({ id: f.alias, cells: [t(`${floor}층`), pr(f.pr ?? prOf(g, task)), t(titled(f)), t(stateText(f))] });
+    for (const s of above(task)) climb(s, floor + 1);
+  };
+  for (const e of stacked) if (!stacked.some((x) => x.succ === e.pred)) climb(e.pred, 1);
+
+  const deps = new Map(input.orca.tasks.map((x) => [x.id, x.deps]));
+  const release = g.flows
+    .filter((fl) => tasks.has(fl.parent))
+    .map((fl) => {
+      const stepTask = new Map([...g.items.values()].filter((x) => x.flow === fl.parent && x.step).map((x) => [x.task, x.step as string]));
+      const order = (task: string) => fl.steps.indexOf(stepTask.get(task) ?? "");
+      const rows: Row[] = [];
+      for (const task of [...stepTask.keys()].sort((a, b) => order(a) - order(b))) {
+        const members = (deps.get(task) ?? []).filter((d) => !stepTask.has(d));
+        if (members.length > 0) {
+          const shown = members.map((m) => alias.get(m)).map((f, i) => (f ? `${f.alias} ${EMOJI[f.state]} ${prOf(g, f.task) ?? ""}`.trim() : (members[i] as string)));
+          rows.push({ id: `merge:${label(task)}`, cells: [t("머지"), t(`구성원 ${members.length}건이 모두 머지`), t(shown.join(", "))] });
+        }
+        const ins = [
+          ...(deps.get(task) ?? []).filter((d) => stepTask.has(d)).map((d) => `${stepTask.get(d)} 완료 뒤`),
+          ...(members.length > 0 ? ["구성원이 모두 머지된 뒤"] : []),
+          ...g.edges
+            .filter((e) => e.succ === itemRef(task))
+            .map((e) => {
+              const p = e.pred.startsWith("item:") ? e.pred.slice(5) : e.pred;
+              const s = stepTask.get(p);
+              if (s) return e.kind === "deploys_after" ? `${s} 단계 기록 뒤` : `${s} 완료 뒤`;
+              return `${label(p)} ${e.kind}`;
+            }),
+          ...(g.items.get(task)?.execBy === "owner" ? ["오너 게이트"] : []),
+        ];
+        const f = alias.get(task);
+        rows.push({ id: label(task), cells: [t(stepTask.get(task) as string), t(ins.join(", ") || "—"), t(f ? `${f.alias} ${EMOJI[f.state]}` : label(task))] });
+      }
+      return table(`릴리스 묶음 ${fl.flow} · ${label(fl.parent)}`, COLS.release, rows);
+    });
+
+  const brokenRows: Row[] = dangling.map(({ f, e }) => {
+    const p = alias.get(e.pred);
+    return { id: f.alias, broken: true, cells: [t(f.alias), t(`${p ? titled(p) : label(e.pred)} ${e.predState.replace(" (끊긴 선행)", "")} (${e.kind})`), t(e.todo)] };
+  });
+
+  const step = new Map(critical.map((task, i) => [label(task), i + 1]));
+  const edgeRows: Row[] = raw.map((e, i) => {
+    const row = edges[i] as (typeof edges)[number];
+    const id = `${row.pred}>${row.succ}:${row.kind}`;
+    const p = alias.get(e.pred);
+    const s = alias.get(e.succ);
+    const a = step.get(row.pred);
+    const b = step.get(row.succ);
+    const note = brokenEdges.includes(id)
+      ? "끊긴 선행"
+      : [
+          a !== undefined && b !== undefined && b === a + 1 ? `크리티컬 패스 ${a}에서 ${b}` : "",
+          !p ? "그림 밖 선행" : p.lead !== key ? `외부 선행 ${leadName(p.lead)}` : "",
+          row.met ? "충족" : "",
+        ]
+          .filter(Boolean)
+          .join(", ");
+    const end = (f: ItemFacts | undefined, name: string) => (f ? `${titled(f)} ${EMOJI[f.state]}` : name);
+    return { id, cells: [t(row.kind), t(end(p, row.pred)), t(end(s, row.succ)), t(note || "—")], ...(brokenEdges.includes(id) ? { broken: true } : {}) };
+  });
+
+  const recentRows: Row[] = input.events
+    .filter((e) => e.type === "item_transition" && tasks.has(String(e.payload.task)) && Date.parse(e.ts) <= Date.parse(input.now))
+    .sort((a, b) => -byOldest(a.ts, b.ts) || b.seq - a.seq)
+    .slice(0, RECENT)
+    .map((e) => {
+      const f = alias.get(String(e.payload.task)) as ItemFacts;
+      const p = e.payload;
+      const move = `${STATE_LABEL[p.from as ItemState] ?? String(p.from)} → ${STATE_LABEL[p.to as ItemState] ?? String(p.to)} ${typeof p.reason === "string" ? p.reason : ""}`.trim();
+      return { id: `seq:${e.seq}`, cells: [t(localShort(e.ts)), t(titled(f)), t(move)] };
+    });
+
+  const doneDays = opts.doneDays ?? 7;
+  const windowStart = Date.parse(input.now) - doneDays * 86_400_000;
+  const closed = mine.filter((f) => f.state === "done" && f.closedAt !== null && Date.parse(f.closedAt) >= windowStart);
+  const count = (...states: ItemReading[]) => open.filter((f) => states.includes(f.state)).length;
   return {
     stage: 2,
     now: input.now,
@@ -302,10 +442,33 @@ export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions =
     sections,
     doneFolded: meta.done,
     edges,
-    criticalPath: graph.criticalPath(input, [...tasks]).map(label),
+    criticalPath: critical.map(label),
     why: table("왜 준비되지 않았나", COLS.why, whyRows),
+    figures: {
+      done: closed.length,
+      doneDays,
+      doing: count("in_progress", "pending_verify"),
+      blocked: count("blocked", "pr_closed"),
+      left: count("unknown", "ready", "planned", "on_hold"),
+      planned: count("planned", "unknown"),
+      ready: count("ready"),
+      onHold: count("on_hold"),
+      owner: open.filter((f) => f.openDecisions.length > 0 || f.undelivered.length > 0).length,
+      flags: open.filter((f) => f.alarms.length > 0).length,
+    },
+    nodes,
+    brokenEdges,
+    critical: table("크리티컬 패스", COLS.critical, criticalRows),
+    stack: table("스택 PR 체인", COLS.stack, stackRows),
+    release,
+    broken: table("끊긴 선행", COLS.broken, brokenRows),
+    edgeList: table("간선", COLS.edges, edgeRows),
+    recent: table("최근 전환", COLS.recent, recentRows),
+    done: doneTable(closed, g, doneDays),
   };
 }
+
+const flagsOf = (f: ItemFacts): string => `${f.openDecisions.length > 0 || f.undelivered.length > 0 ? "🙋" : ""}${f.alarms.length > 0 ? "🚨" : ""}`;
 
 const STAGE: Readonly<Record<string, string>> = {
   owner_action: "원문",
@@ -315,8 +478,47 @@ const STAGE: Readonly<Record<string, string>> = {
   evidence: "증거",
   waiting_human: "대기",
   waiting_released: "대기",
+  worker_idle: "대기",
+  worker_done: "보고",
+  refusal_report: "거부",
+  flow_step_skipped: "흐름",
+  observed_change: "신호",
 };
-const SKIP = new Set(["item_extra_set", "priority_set", "item_ready"]);
+
+// Decision 186's nine events in the owner's words (decision 198); their writers are the monitors'.
+const NINE: Readonly<Record<string, (s: (k: string) => string) => string>> = {
+  pr_review_requested: (s) => `${s("pr")} 리뷰 요청 ${s("reviewer")}`,
+  pr_changes_requested: (s) => `${s("pr")} 변경 요청 ${s("reviewer")}`,
+  review_commented: (s) => `${s("pr")} 리뷰 코멘트 ${s("reviewer")}`,
+  review_replied: (s) => `${s("pr")} 리뷰에 답함 ${s("by")}`,
+  flow_step_skipped: (s) => `${s("step")} 건너뜀: ${s("reason")}`,
+  worker_idle: () => "워커가 다음 지시를 기다림",
+  observed_change: (s) => `Orca 에서 ${s("field")} 바뀜`,
+  refusal_report: (s) => `${s("act")} 거부됨(${s("category")})`,
+  // A marker only (decision 196): the outcome stays in Orca.
+  worker_done: () => "워커 완료 보고 받음",
+};
+// unit_started and advisor_used are drawn once, as the item's model line (decision 200).
+const SKIP = new Set(["item_extra_set", "priority_set", "item_ready", "unit_started", "advisor_used"]);
+
+/** Decision 200: the row the last start picked, and the unit's advisor spend against its budget. */
+function modelLine(input: BriefInput, task: string): string | undefined {
+  const last = input.events.filter((e) => e.type === "unit_started" && e.entity_id === task).at(-1);
+  const kind = String(last?.payload.kind ?? "");
+  if (!last || !isKind(kind)) return undefined;
+  const p = last.payload;
+  const advisor = typeof p.advisor === "string" ? ` · advisor ${p.advisor}` : " · advisor 없음";
+  // The budget the start recorded, counted over the same span: a day-budget row counts today.
+  const daily = p.budget_per === "day";
+  const used = spend(input.events.filter((e) => e.type === "advisor_used"), { task, ...(daily ? { day: localDay(new Date(input.now)) } : {}) });
+  return `모델: ${POLICY[kind].label} · ${String(p.model)} · effort ${String(p.effort)}${advisor} · 예산 ${Number(p.budget)}회/${daily ? "하루" : "단위"} · ${spendText(used)}`;
+}
+
+/** Decision 200: today's advisor calls over every session; undefined on a day with none. */
+function advisorToday(input: BriefInput): string | undefined {
+  const s = spend(input.events.filter((e) => e.type === "advisor_used"), { day: localDay(new Date(input.now)) });
+  return s.calls > 0 ? `오늘 ${spendText(s)}` : undefined;
+}
 
 function chainText(type: string, p: Record<string, unknown>): string {
   const s = (k: string) => (typeof p[k] === "string" ? String(p[k]) : "");
@@ -330,6 +532,8 @@ function chainText(type: string, p: Record<string, unknown>): string {
   }
   if (type === "evidence") return `${s("kind")}${typeof p.exit_code === "number" ? ` exit ${p.exit_code}` : ""}`;
   if (type.startsWith("decision_")) return `${s("decision")} ${type.slice(9)}${p.answer ? ` "${s("answer")}"` : ""}`;
+  const nine = NINE[type];
+  if (nine) return nine(s).replace(/\s+/g, " ").trim();
   return [type, s("pr")].filter(Boolean).join(" ");
 }
 
@@ -342,7 +546,7 @@ export function buildItem(input: BriefInput, alias: string, opts: BuildOptions =
     .map((e) => ({
       id: `seq:${e.seq}`,
       cells: [
-        t(`${e.ts.slice(5, 10)} ${e.ts.slice(11, 16)}`),
+        t(localShort(e.ts)),
         t(STAGE[e.type] ?? (e.type.startsWith("decision_") ? "결정" : typeof e.payload.pr === "string" ? "PR" : "신호")),
         t(chainText(e.type, e.payload)),
       ],
@@ -353,6 +557,7 @@ export function buildItem(input: BriefInput, alias: string, opts: BuildOptions =
     f.unclear ? "⚠️" : "",
     f.evidenceShort ? "🔍" : "",
   ].join("");
+  const model = modelLine(input, f.task);
   return {
     stage: 3,
     now: input.now,
@@ -362,6 +567,7 @@ export function buildItem(input: BriefInput, alias: string, opts: BuildOptions =
     flags,
     who: f.who,
     priority: f.priority,
+    ...(model ? { model } : {}),
     chain: table("시간순", COLS.chain, rows),
   };
 }

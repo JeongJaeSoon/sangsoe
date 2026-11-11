@@ -1,3 +1,6 @@
+// sample.md is drawn in UTC (decision 198 draws in the system zone).
+process.env.TZ = "UTC";
+
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

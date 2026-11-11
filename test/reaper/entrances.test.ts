@@ -71,12 +71,14 @@ test("`sangsoe reap run` passes --dry-run and --mark-only through, and refuses o
   assert.equal(bad.ok, false);
 });
 
-test("the reaper config: no section is null (mark only), malformed protect is null, minutes become ms", () => {
-  assert.equal(parseReaperConfig({}), null);
-  assert.equal(parseReaperConfig({ reaper: { protect: "x" } }), null);
+test("the reaper config: no section is absent (mark only), a malformed one is unreadable, minutes become ms", () => {
+  assert.deepEqual(parseReaperConfig({}), { kind: "absent" });
+  // Decision 201: a section that is there but cannot be read is not "no config".
+  for (const raw of [{ reaper: { protect: "x" } }, { reaper: {} }, { reaper: null }, { reaper: [] }, null, []]) {
+    assert.equal(parseReaperConfig(raw).kind, "unreadable", JSON.stringify(raw));
+  }
   assert.deepEqual(parseReaperConfig({ reaper: { protect: ["keep-me"], grace_minutes: 60, min_gap_minutes: 90 } }), {
-    protect: ["keep-me"],
-    graceMs: 3_600_000,
-    minGapMs: 3_600_000,
+    kind: "ok",
+    config: { protect: ["keep-me"], graceMs: 3_600_000, minGapMs: 3_600_000 },
   });
 });

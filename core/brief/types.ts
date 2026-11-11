@@ -1,4 +1,5 @@
 import type { OrcaSnapshot, ViewGate, ViewInput, ViewTask } from "../contract/index.ts";
+import type { Edge, GraphRead } from "./graph.ts";
 
 // Orca owns titles, assignees and gate text (ORCA_OWNED_KEYS); the brief reads them from the same
 // snapshot it reads statuses from and stores none of them.
@@ -25,6 +26,8 @@ export interface Cell {
 export interface Row {
   readonly id: string;
   readonly cells: readonly Cell[];
+  /** The row is about a dangling predecessor (decision 26): the panel draws it in the danger tone. */
+  readonly broken?: boolean;
 }
 
 export interface Column {
@@ -74,13 +77,60 @@ export interface Overview {
   readonly onHold: Table | null;
   readonly doneDays: number;
   readonly evidenceShort: number;
+  /** ✅ closed in the last `doneDays`, newest first: summary.done rows (decision 199). */
+  readonly done: Table;
+  /** Today's advisor calls and estimated cost (decision 200); absent on a day with none. */
+  readonly advisorToday?: string;
 }
 
 export interface GraphEdgeRow {
   readonly pred: string;
   readonly succ: string;
   readonly kind: string;
+  /** Null when `pred` is not an item (a PR, a decision, a Task Orca does not list): a reference. */
   readonly met: boolean | null;
+}
+
+/** One item box of the group's DAG; a predecessor that is not an item has none (decision 199). */
+export interface GraphNodeRow {
+  readonly id: string;
+  readonly title: string;
+  /** The state marker (🔄, 🚧, ...). */
+  readonly state: string;
+  /** The marker with its word (🔄 진행 중): what a table cell shows for this item's state. */
+  readonly stateLabel: string;
+  /** 🙋 🚨 as the brief prints them, "" when none. */
+  readonly flags: string;
+  /** The other group's name when the item is not this group's, else null. */
+  readonly outside: string | null;
+}
+
+/** The group's summary tiles; doing + blocked + left is `items` (decision 199). */
+export interface GroupFigures {
+  readonly done: number;
+  readonly doneDays: number;
+  readonly doing: number;
+  readonly blocked: number;
+  readonly left: number;
+  readonly planned: number;
+  readonly ready: number;
+  readonly onHold: number;
+  /** Items with an open or undelivered decision (🙋). */
+  readonly owner: number;
+  /** Items with a standing alarm (🚨). */
+  readonly flags: number;
+}
+
+/** GRAPH's why row as stage 2 reads it: the edge with ready.ts's 선행 상태 and 해야 할 일. */
+export interface WhyEdge extends Edge {
+  readonly predState: string;
+  readonly dangling: boolean;
+  readonly todo: string;
+}
+
+/** The read port stage 2 takes; graphRead (core/graph/read.ts) is the body. */
+export interface GroupGraph extends GraphRead {
+  why(input: ViewInput, task: string): readonly WhyEdge[];
 }
 
 export interface GroupDetail {
@@ -97,6 +147,21 @@ export interface GroupDetail {
   /** Item labels, first is what slows the group now. */
   readonly criticalPath: readonly string[];
   readonly why: Table;
+  readonly figures: GroupFigures;
+  /** Every item an edge touches, this group's and others'. */
+  readonly nodes: readonly GraphNodeRow[];
+  /** `pred>succ:kind` of the edges whose predecessor is dangling. */
+  readonly brokenEdges: readonly string[];
+  /** 단계 · 항목 · 상태 · 단계 이름, in path order. */
+  readonly critical: Table;
+  readonly stack: Table;
+  /** One table per flow expanded under this group (ship-batch and the like). */
+  readonly release: readonly Table[];
+  readonly broken: Table;
+  readonly edgeList: Table;
+  /** The group's latest item transitions, newest first. */
+  readonly recent: Table;
+  readonly done: Table;
 }
 
 export interface ItemDetail {
@@ -108,6 +173,8 @@ export interface ItemDetail {
   readonly flags: string;
   readonly who: string;
   readonly priority: string;
+  /** The row start_unit picked and the unit's advisor spend (decision 200); absent before a start. */
+  readonly model?: string;
   readonly chain: Table;
 }
 

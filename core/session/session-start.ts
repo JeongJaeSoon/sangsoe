@@ -1,9 +1,11 @@
 import { answerNotifiedKey, dedupeKey, dedupeSegment, EVENTS } from "../contract/index.ts";
+import { type AdvisorRoute, isEffort, rowLines } from "../models/index.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { decision as decisionView } from "../store/views/decision.ts";
 import { roleLine } from "../start/start.ts";
 import type { Role } from "../start/types.ts";
 import { VERSION } from "../version.ts";
+import { handoffSubject } from "./handoff.ts";
 import { agentRole, type Located, locate, readRoleLine } from "./locate.ts";
 import { type SessionHookInput, toSessionRow } from "./session.ts";
 
@@ -52,11 +54,17 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   });
 
   const lines = [`${roleLine(role)}${loc ? ` · Task ${loc.task} · Dispatch ${loc.dispatch} · Run ${loc.run}` : ""}`];
+  if (loc) lines.push(...unitRowLines(store, loc.task));
   const run = held ?? before;
   if (held) lines.push(`Run ${held} 을 쥐고 있다(run-current).`);
   else if (before && role !== "worker") lines.push(`run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use ${before}`);
   // Every read comes before the first `notified` row, so a failure while reading marks nothing delivered.
-  const handoff = run ? await lastHandoff(deps, run, input.session_id) : undefined;
+  // A session with a Dispatch saved its handoff in that Dispatch's Run under its Task (handoff_save).
+  const handoff = loc
+    ? await lastHandoff(deps, loc.run, input.session_id, handoffSubject(loc.task))
+    : run
+      ? await lastHandoff(deps, run, input.session_id, "handoff")
+      : undefined;
   const late = loc ? lateAnswers(deps, loc.task, input.session_id) : [];
   if (handoff) lines.push(...handoff());
   if (opts.pluginVersion && opts.pluginVersion !== VERSION) {
@@ -64,6 +72,18 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   }
   for (const deliver of late) lines.push(...deliver());
   return lines;
+}
+
+/**
+ * Decision 200: the row start_unit recorded for this start (before worker-start), as the budget and
+ * finish lines it asks for. The recorded route and budget, not the table: an advisor that did not
+ * attach (route none) gets no budget line.
+ */
+function unitRowLines(store: CoreDeps["store"], task: string): string[] {
+  const p = store.events({ type: "unit_started" }).filter((e) => e.entity_id === task).at(-1)?.payload;
+  const effort = String(p?.effort ?? "");
+  if (!p || !isEffort(effort)) return [];
+  return rowLines({ effort, route: p.route as AdvisorRoute, budget: Number(p.budget), budget_per: p.budget_per === "day" ? "day" : "unit" });
 }
 
 /** A line to inject, written as `notified` only when it is taken; empty when it already rode once. */
@@ -76,10 +96,10 @@ function previous(deps: CoreDeps, role: Role, loc: Located | undefined): string 
   return same.reverse().find((r) => r.heldRun)?.heldRun;
 }
 
-async function lastHandoff(deps: CoreDeps, run: string, session: string): Promise<Delivery | undefined> {
+async function lastHandoff(deps: CoreDeps, run: string, session: string, subject: string): Promise<Delivery | undefined> {
   const box = await deps.orca.inbox({ terminal: `run:${run}`, limit: 50 });
   if (!box.ok) return undefined;
-  const last = box.value.filter((m) => m.type === "handoff").at(-1);
+  const last = box.value.filter((m) => m.type === "handoff" && m.subject === subject).at(-1);
   const body = last?.body;
   if (!last || !body) return undefined;
   return () => {

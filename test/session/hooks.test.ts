@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   answerNotifiedKey,
+  awaitingResume,
   DEFAULT_RESTART_RULES,
   handoffSave,
   mask,
+  modelRowLines,
   ownerMarks,
   recordHook,
   restart_due,
@@ -29,7 +31,15 @@ function answered(w: SessionWorld, answer = "Path versioning") {
 
 test("SessionStart injects role, Run, the last handoff once, a version line and late answers, in that order", async () => {
   const w = createSessionWorld({ spec: "sangsoe-role: lead\nrun the api program", heldRun: "run_lead" });
-  w.mail.push({ id: "msg_1", type: "handoff", body: "old" }, { id: "msg_2", type: "status", body: "x" }, { id: "msg_3", type: "handoff", body: "## 다음에 할 일\nland U13" });
+  // A lead's handoff sits in its Dispatch's Run under its Task (decision 197); its own Run's mail is not it.
+  const mine = { subject: `handoff ${TASK}`, run: TASK_RUN };
+  w.mail.push(
+    { id: "msg_1", type: "handoff", body: "old", ...mine },
+    { id: "msg_2", type: "status", body: "x", run: TASK_RUN },
+    { id: "msg_3", type: "handoff", body: "## 다음에 할 일\nland U13", ...mine },
+    { id: "msg_4", type: "handoff", body: "another lead's", subject: "handoff task_000000000009", run: TASK_RUN },
+    { id: "msg_5", type: "handoff", body: "the Run's own", run: "run_lead" },
+  );
   answered(w);
   const lines = await hook(w, "session-start", { session_id: "s1", source: "startup" }, "0.0.1-other");
   assert.deepEqual(lines, [
@@ -48,12 +58,35 @@ test("SessionStart injects role, Run, the last handoff once, a version line and 
 
 test("late_answer_reaches_next_worker: after /clear the new session gets neither the answer nor the handoff again", async () => {
   const w = createSessionWorld({ spec: "sangsoe-role: lead\nx", heldRun: "run_lead" });
-  w.mail.push({ id: "msg_3", type: "handoff", body: "next" });
+  w.mail.push({ id: "msg_3", type: "handoff", body: "next", subject: `handoff ${TASK}`, run: TASK_RUN });
   answered(w);
   await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
   const again = await hook(w, "session-start", { session_id: "s2", source: "clear", model: "claude-x" }, VERSION);
   assert.deepEqual(again, [`sangsoe-role: lead · Task ${TASK} · Dispatch ${DISPATCH} · Run ${TASK_RUN}`, "Run run_lead 을 쥐고 있다(run-current)."]);
   assert.equal(w.store.events({ type: "notified" }).length, 2, "one for the handoff, one for d001");
+});
+
+test("decision 200: SessionStart adds the started row's advisor budget and, below high effort, the finish line", async () => {
+  const w = createSessionWorld({ spec: "sangsoe-role: worker\nx", heldRun: null });
+  w.store.append({
+    type: "unit_started",
+    source: "mcp:start_unit",
+    entity: "task",
+    entity_id: TASK,
+    payload: { kind: "worker", picked_by: "class", model: "m", effort: "medium", route: "owner_setting", budget: 3, budget_per: "unit", used: 0 },
+  });
+  const lines = await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
+  assert.deepEqual(lines.slice(1), modelRowLines({ effort: "medium", route: "owner_setting", budget: 3, budget_per: "unit" }));
+  assert.equal(lines.length, 3, "the budget line and the finish line");
+  // A restart whose advisor did not attach: the newest row wins, and route none has no budget line.
+  w.store.append({
+    type: "unit_started",
+    source: "mcp:start_unit",
+    entity: "task",
+    entity_id: TASK,
+    payload: { kind: "worker", picked_by: "class", model: "m", effort: "high", route: "none", budget: 3, budget_per: "unit", used: 3 },
+  });
+  assert.deepEqual((await hook(w, "session-start", { session_id: "s2", source: "startup" }, VERSION)).slice(1), []);
 });
 
 test("a lead whose Run binding is gone is told to run-use the Run its earlier session held", async () => {
@@ -164,15 +197,22 @@ test("only an undispatched session's line that starts with the number answers a 
   assert.deepEqual(closed(orch), [["d001", "answered"]]);
 });
 
-test("waiting_human_released (hook side): the owner's words mark, the session moving releases, an end is moot", async () => {
+test("a dispatched session's Notification writes no wait and sends nothing: Orca's needs-input mail is its one source", async () => {
   const w = createSessionWorld({ spec: "sangsoe-role: worker\nx" });
   await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
+  await hook(w, "notification", { session_id: "s1", notification_type: "permission_prompt", message: "Claude needs your permission to use Bash" });
+  assert.equal(w.store.events({ type: "waiting_human" }).length, 0);
+  assert.deepEqual(w.sends, []);
+});
+
+test("waiting_human_released (hook side): the owner's words mark, the session moving releases, an end is moot", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  await hook(w, "session-start", { session_id: "s1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
   const ask = { session_id: "s1", notification_type: "permission_prompt", message: "Claude needs your permission to use Bash" };
   await hook(w, "notification", ask);
   await hook(w, "notification", ask);
   const waits = w.store.events({ type: "waiting_human" });
-  assert.deepEqual(waits.map((e) => [e.payload.tool, e.entity_id]), [["Bash", TASK]], "a repeat for the same open wait writes nothing");
-  assert.deepEqual(w.sends.map((s) => [s.to, s.type]), [[`run:${TASK_RUN}`, "escalation"]], "the owning lead is told first, once");
+  assert.deepEqual(waits.map((e) => e.payload.tool), ["Bash"], "a repeat for the same open wait writes nothing");
 
   await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: "p1", prompt: "yes go ahead" });
   await hook(w, "post-tool-use", { session_id: "s1", tool_name: "Read" });
@@ -181,7 +221,6 @@ test("waiting_human_released (hook side): the owner's words mark, the session mo
   await hook(w, "stop", { session_id: "s1", prompt_id: "p1" });
   const rel = w.store.events({ type: "waiting_released" });
   assert.deepEqual(rel.map((e) => e.payload), [{ ref: String(waits[0]?.seq), outcome: "answered", by: "owner", evidence: "tool:Bash" }]);
-  assert.deepEqual(rel.map((e) => e.entity_id), [TASK], "the release stays on the item's timeline");
 
   await hook(w, "notification", { session_id: "s1", notification_type: "idle_prompt", message: "Claude is waiting for your input" });
   await hook(w, "session-end", { session_id: "s1", reason: "clear" });
@@ -189,6 +228,46 @@ test("waiting_human_released (hook side): the owner's words mark, the session mo
   assert.deepEqual([last?.payload.outcome, last?.payload.by, last?.payload.evidence], ["moot", "unknown", "session_ended"]);
   await hook(w, "notification", { session_id: "s1", notification_type: "auth_success", message: "ok" });
   assert.equal(w.store.events({ type: "waiting_human" }).length, 2, "a notification that is no wait writes nothing");
+});
+
+test("C11: Orca's nudge, its mail turn, another session's message and a task notice are not the owner's words", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  await hook(w, "session-start", { session_id: "s1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+  await hook(w, "notification", { session_id: "s1", notification_type: "idle_prompt", message: "Claude is waiting for your input" });
+  const prompts = [
+    // Orca's nudge goes on to name its read command, which test/orca-boundary.test.ts keeps out of the tree.
+    "You have 1 orchestration message.",
+    "You have 3 orchestration messages.",
+    "You have new orchestration messages. They arrive next, one at a time; act on each.",
+    'Another Claude session sent a message:\n<agent-message from="abc">done</agent-message>',
+    "<task-notification>\n<task-id>b1</task-id>\n</task-notification>",
+  ];
+  for (const [i, prompt] of prompts.entries()) await hook(w, "user-prompt-submit", { session_id: "s1", prompt_id: `p${i}`, prompt });
+  assert.equal(w.store.events({ type: "owner_action" }).length, 0, "no owner_action for a prompt no person typed");
+  assert.deepEqual(awaitingResume({ events: w.store.events() } as unknown as Parameters<typeof awaitingResume>[0]), [], "nor a wait marked answered by the owner");
+  await hook(w, "stop", { session_id: "s1", prompt_id: "p9" });
+  assert.deepEqual(
+    w.store.events({ type: "waiting_released" }).map((e) => e.payload.by),
+    ["unknown"],
+    "the turn's end releases the wait, not as the owner",
+  );
+});
+
+test("worker_idle: a dispatched session's turn ends with its Dispatch still open; after worker_done it is not idle", async () => {
+  const w = createSessionWorld({ spec: "sangsoe-role: worker\nx" });
+  await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
+  await hook(w, "stop", { session_id: "s1", prompt_id: "p1" });
+  await hook(w, "stop", { session_id: "s1", prompt_id: "p1" });
+  const idle = w.store.events({ type: "worker_idle" });
+  assert.deepEqual(idle.map((e) => [e.payload.session, e.entity_id]), [["s1", TASK]], "one row per turn");
+  w.dispatchStatus = "completed";
+  await hook(w, "stop", { session_id: "s1", prompt_id: "p2" });
+  assert.equal(w.store.events({ type: "worker_idle" }).length, 1);
+
+  const o = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  await hook(o, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+  await hook(o, "stop", { session_id: "o1", prompt_id: "p1" });
+  assert.equal(o.store.events({ type: "worker_idle" }).length, 0, "a session holding no Dispatch is never idle");
 });
 
 const ITEM = "task_000000000002";
@@ -344,6 +423,38 @@ test("handoff_save checks the four fields, sends one handoff to the caller's own
   w.heldRun = null;
   const none = await handoffSave(w, full);
   assert.equal(!none.ok && none.refusal.code, "no_run");
+});
+
+test("handoff_save from a session holding a Dispatch goes to that Dispatch's Run under its Task, not to run:<held>", async () => {
+  // Orca: a sender with an active Dispatch may write only to that Dispatch's Run (dispatch_run_mismatch,
+  // test/fixtures/orca-refusals.json), so a lead's own Run mailbox is out of its reach.
+  const w = createSessionWorld({ spec: "sangsoe-role: lead\nx", heldRun: "run_lead" });
+  const full = { next: "land U13", waiting: "없음", open_questions: "없음", reply_to: "run:run_orch" };
+  const r = await handoffSave(w, full, `${w.dir}/src`);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(r.value.run, TASK_RUN);
+  assert.deepEqual(
+    w.sends.map((s) => [s.to, s.type, s.subject, s.dispatchId]),
+    [[`run:${TASK_RUN}`, "handoff", `handoff ${TASK}`, DISPATCH]],
+  );
+  assert.ok(!w.sends.some((s) => s.to === "run:run_lead"));
+
+  // The next session of the same Task finds it there, once.
+  w.mail.push({ id: "msg_9", type: "handoff", body: w.sends[0]?.body ?? "", subject: `handoff ${TASK}`, run: TASK_RUN });
+  const lines = await hook(w, "session-start", { session_id: "s9", source: "startup" }, VERSION);
+  assert.ok(lines.includes("인계(handoff msg_9, 한 번만 싣는다):"), lines.join("\n"));
+});
+
+test("an orchestrator's SessionStart reads only the plain handoff of its Run, not a lead's or a gate hand-off", async () => {
+  const w = createSessionWorld({ heldRun: "run_orch", dispatched: false });
+  w.mail.push(
+    { id: "msg_1", type: "handoff", body: "mine", run: "run_orch" },
+    { id: "msg_2", type: "handoff", body: "a lead's", subject: `handoff ${TASK}`, run: "run_orch" },
+    { id: "msg_3", type: "handoff", body: "resolve it", subject: "d001: resolve gate gate_1", run: "run_orch" },
+  );
+  const lines = await hook(w, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+  assert.ok(lines.includes("인계(handoff msg_1, 한 번만 싣는다):"), lines.join("\n"));
+  assert.ok(!lines.some((l) => l.includes("msg_2") || l.includes("msg_3")));
 });
 
 test("review_ask_record writes review_ask_sent and raises an unmapped reviewer once", () => {

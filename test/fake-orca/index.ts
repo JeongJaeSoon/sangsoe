@@ -14,7 +14,7 @@ export type FakeOrca = {
 };
 
 /** Writes Orca keeps no request receipt for, so ORCA_COMMANDS does not mark them `write`. */
-const UNTRACKED_WRITES = new Set(["worktree-set", "worktree-rm", "reference-add"]);
+const UNTRACKED_WRITES = new Set(["worktree-rm", "reference-add", "worktree-create", "terminal-close"]);
 
 /** `orchestration send --help`: "Valid --type values". Real Orca refuses any other. */
 export const SEND_TYPES: ReadonlySet<string> = new Set(["status", "dispatch", "worker_done", "merge_ready", "escalation", "handoff", "decision_gate", "question", "heartbeat"]);

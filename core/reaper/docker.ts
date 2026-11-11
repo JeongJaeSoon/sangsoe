@@ -7,10 +7,18 @@ export const isDockerKind = (k: string): k is DockerKind => (DOCKER_KINDS as rea
 export type DockerRef = { kind: DockerKind; ref: string };
 export type DockerOutcome = { kind: DockerKind; ref: string; result: "removed" | "gone" | "in_use" | "unknown" };
 
-/** Whether `docker` has a daemon to answer; with none the Docker step is skipped (decision 82 R6). */
-export async function dockerUp(exec: Exec): Promise<boolean> {
+export type DockerState = { kind: "up" } | { kind: "absent" } | { kind: "unanswered"; why: string };
+
+/**
+ * Decision 201: only a missing `docker` binary (spawn ENOENT) means there is nothing to lose and the
+ * Docker steps are skipped (decision 82 R6). Any other failure is a Docker that may still run stacks.
+ */
+export async function dockerState(exec: Exec): Promise<DockerState> {
   const r = await exec("docker", ["version", "--format", "{{.Server.Version}}"]);
-  return r.code === 0 && r.stdout.trim() !== "";
+  if (r.code === 0 && r.stdout.trim() !== "") return { kind: "up" };
+  if (r.failure === "spawn" && /\bENOENT\b/.test(r.stderr)) return { kind: "absent" };
+  const why = r.failure === "timeout" ? "timed out" : r.failure === "spawn" ? r.stderr.trim() : r.code === 0 ? "no server version" : `exit ${r.code}`;
+  return { kind: "unanswered", why: `docker version: ${why}` };
 }
 
 /**

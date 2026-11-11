@@ -7,4 +7,4 @@ export { configuredReviewers, parseReviewAsk, type ReviewAsk, reviewAskRecord } 
 export { parseSessionInput, type SessionHookInput, type SessionRow, sessionOf } from "./session.ts";
 export { type SessionStartOptions, sessionStart } from "./session-start.ts";
 export { recordShellInputs } from "./shell.ts";
-export { lastContextTokens, lastPreTokens, type ShellInput, shellInputs, tail } from "./transcript.ts";
+export { lastContextTokens, lastPreTokens, marked, type ShellInput, shellInputs, tail } from "./transcript.ts";

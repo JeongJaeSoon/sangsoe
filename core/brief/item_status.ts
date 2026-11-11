@@ -34,21 +34,38 @@ export interface ItemFacts {
   readonly undelivered: readonly string[];
   readonly alarms: readonly string[];
   readonly unclear: boolean;
+  /** In progress and its worker_idle (decision 186) is newer than its last move: the 대기 line. */
+  readonly idle: boolean;
   readonly evidenceShort: boolean;
   readonly closedAt: string | null;
 }
 
-const ALARMS = new Set(["worker_stuck", "worker_dead", "ci_failed", "land_failed", "loop_detected", "decision_untracked"]);
+// Decision 198: decision 186's events that ask for action or judgment (pr_changes_requested,
+// review_commented, refusal_report) join the 🚨 line, on the same "until the item moves" rule.
+const ALARMS = new Set([
+  "worker_stuck",
+  "worker_dead",
+  "ci_failed",
+  "land_failed",
+  "loop_detected",
+  "decision_untracked",
+  "pr_changes_requested",
+  "review_commented",
+  "refusal_report",
+]);
 // The author's session is gone while the item waits on the merge: only the PR's own alarms still apply.
-const PR_ALARMS = new Set(["ci_failed", "land_failed"]);
+const PR_ALARMS = new Set(["ci_failed", "land_failed", "pr_changes_requested", "review_commented"]);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const latest = (a: string | null, b: string | null): string | null => (a === null ? b : b === null || Date.parse(a) >= Date.parse(b) ? a : b);
 
 const RANK: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
 export const rank = (p: Priority): number => RANK[p];
 
-function taskOf(e: StoredEvent, prTask: ReadonlyMap<string, string>): string | null {
-  const t = str(e.payload.task) ?? (e.entity === "task" ? e.entity_id : null);
+// A row on a Dispatch (worker_dead, decision 201): orca-monitor names the Task in `target`; a failed
+// start does not, and the Task is the one a worker_done or Orca's activeDispatchId pairs it with.
+function taskOf(e: StoredEvent, prTask: ReadonlyMap<string, string>, dispatchTask: ReadonlyMap<string, string>): string | null {
+  const onDispatch = e.entity === "dispatch" && e.entity_id ? (e.target ?? dispatchTask.get(e.entity_id) ?? null) : null;
+  const t = str(e.payload.task) ?? (e.entity === "task" ? e.entity_id : null) ?? onDispatch;
   if (t) return t;
   const pr = str(e.payload.pr);
   return pr ? (prTask.get(pr) ?? null) : null;
@@ -78,6 +95,16 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
   const alarms = new Map<string, Map<string, number>>();
   const unclear = new Map<string, number>();
   const moved = new Map<string, number>();
+  const idle = new Map<string, number>();
+  const comments = new Map<string, { seq: number; at: string | null }[]>();
+  const replied = new Map<string, string>();
+  const dispatchTask = new Map<string, string>();
+  for (const t of input.orca.tasks) if (t.activeDispatchId) dispatchTask.set(t.activeDispatchId, t.id);
+  for (const e of input.events) {
+    const d = e.entity === "dispatch" ? e.entity_id : str(e.payload.dispatch);
+    const t = e.entity === "dispatch" ? e.target : str(e.payload.task);
+    if (d && t) dispatchTask.set(d, t);
+  }
 
   for (const e of input.events) {
     const p = e.payload;
@@ -98,8 +125,18 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     } else if (countsAsEvidence(e) && e.entity === "task" && e.entity_id) evidence.add(e.entity_id);
     else if (e.type === "trigger_unclear") unclear.set(String(p.task), e.seq);
     if (ALARMS.has(e.type)) {
-      const t = taskOf(e, prTask);
+      const t = taskOf(e, prTask, dispatchTask);
       if (t) alarms.set(t, new Map(alarms.get(t)).set(e.type, e.seq));
+    }
+    if (e.type === "worker_idle") {
+      const t = taskOf(e, prTask, dispatchTask);
+      if (t) idle.set(t, e.seq);
+    }
+    if (e.type === "review_commented" || e.type === "review_replied") {
+      const t = taskOf(e, prTask, dispatchTask);
+      const at = str(p.at);
+      if (t && e.type === "review_commented") comments.set(t, [...(comments.get(t) ?? []), { seq: e.seq, at }]);
+      else if (t && at) replied.set(t, latest(replied.get(t) ?? null, at) ?? at);
     }
   }
 
@@ -124,9 +161,14 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     const state: ItemReading = prRead === "done" && verifiedAt === null ? "pending_verify" : prRead;
     const prWait = p !== null && prRead !== "done";
     const last = moved.get(t.id) ?? 0;
+    // Decision 201: review comments are answered when the author's reply is newer, by GitHub's time,
+    // than every comment since the last move; a comment without that time is never taken as answered.
+    const open = (comments.get(t.id) ?? []).filter((c) => c.seq > last);
+    const reply = replied.get(t.id) ?? null;
+    const answered = reply !== null && open.every((c) => c.at !== null && Date.parse(reply) > Date.parse(c.at));
     // An alarm stands until the item moves again.
     const standing = [...(alarms.get(t.id) ?? new Map<string, number>())]
-      .filter(([type, seq]) => seq > last && (!prWait || PR_ALARMS.has(type)))
+      .filter(([type, seq]) => seq > last && (!prWait || PR_ALARMS.has(type)) && !(type === "review_commented" && answered))
       .map(([type]) => type);
     const undelivered = own.filter((d) => d.undelivered).map((d) => d.decision);
     const waitsOn: WaitsOn | null =
@@ -156,6 +198,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       undelivered,
       alarms: state === "done" || state === "cancelled" ? [] : standing,
       unclear: (unclear.get(t.id) ?? 0) > last,
+      idle: state === "in_progress" && (idle.get(t.id) ?? 0) > last,
       evidenceShort: state === "done" && !evidence.has(t.id),
       // A worker_done or a lead's task-update closes a Task with no item_transition (decision 175, S7).
       closedAt: state === "done" ? latest(closedAt.get(t.id) ?? mergedAt.get(t.id) ?? t.completedAt ?? null, verifiedAt ?? null) : null,

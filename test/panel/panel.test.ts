@@ -74,7 +74,9 @@ test("PN2: the panel draws exactly the BriefModel's row ids, in order, at all th
   const two = view({ group: "api-migration" });
   assert.equal(two.model.stage, 2);
   if (two.model.stage === 2) {
-    assert.deepEqual(drawnRowIds(renderStage(two)), [...two.model.sections.flatMap((s) => s.rows.map((r) => r.id)), ...two.model.why.rows.map((r) => r.id)]);
+    const g = two.model;
+    const tables = [...g.sections, g.recent, g.critical, g.stack, ...(g.release ?? []), g.broken, g.why, g.edgeList];
+    assert.deepEqual(drawnRowIds(renderStage(two)), tables.flatMap((t) => t?.rows.map((r) => r.id) ?? []));
   }
 
   const three = view({ item: "i031" });
@@ -166,6 +168,7 @@ test("decision 169: header row, stage 1 tabs with model counts, empty sections o
   const m = one.model;
   const html = renderStage(one);
   assert.match(html, /<header class="top">.*data-refresh.*data-open=.*<details class="menu">/s);
+  assert.match(html, /role="menuitem" data-open="[^"]*models[^"]*">터미널에서 sangsoe models</, "decision 200: the catalog view");
   assert.match(html, /<main data-view="all">/, "every section shows by default");
   assert.ok(html.includes(`data-tab-to="todo">할 일 <span class="count">${m.todo.total}</span>`));
   assert.ok(html.includes(`data-tab-to="prog">진행 중 <span class="count">${m.inProgress.count}</span>`), "the tab says the section heading's number");
@@ -193,17 +196,73 @@ test("panel.open builds the terminal command itself; panel text never reaches th
   assert.equal(openCommand({ view: "todo" }), "sangsoe todo");
   for (const bad of [null, {}, { view: "sh" }, { view: "doctor; id" }]) assert.equal(openCommand(bad), null, JSON.stringify(bad));
 
+  const WT = "0000aaaa-1111-2222-3333-444455556666::/work/acme/api-i033";
   const calls: string[][] = [];
-  const h = openHandler(async (cmd, args) => {
-    calls.push([cmd, ...args]);
-    return { ok: true, code: 0, out: "{}", err: "" };
-  });
-  assert.deepEqual(await h({ view: "doctor" }), { ok: true, value: { status: "opened" } });
-  assert.deepEqual(calls[0], ["orca", "terminal", "create", "--worktree", "active", "--title", "sangsoe doctor", "--command", "sangsoe doctor", "--focus", "--json"]);
+  const asked: unknown[] = [];
+  const h = openHandler(
+    async (cmd, args) => {
+      calls.push([cmd, ...args]);
+      return { ok: true, code: 0, out: "{}", err: "" };
+    },
+    async (t) => {
+      asked.push(t);
+      return t.item ? { ok: true, value: { worktree: WT } } : { ok: false, refusal: { code: "no_worktree", reason: "no row", fix: "" } };
+    },
+  );
+  assert.deepEqual(await h({ view: "brief", group: "api-migration", item: "i033" }), { ok: true, value: { status: "opened" } });
+  assert.deepEqual(calls[0], ["orca", "terminal", "create", "--worktree", `id:${WT}`, "--title", "sangsoe brief api-migration i033", "--command", "sangsoe brief api-migration i033", "--focus", "--json"]);
+  assert.ok(!calls.flat().includes("active"), "decision 198: never `active`, which Orca resolves from the worker's cwd /");
+  // No worktree: refused in the panel's words, and Orca is never called (from cwd / it would answer selector_not_found).
+  for (const o of [{ view: "brief" }, { view: "brief", group: "api-migration" }, { view: "doctor" }, { view: "todo" }]) {
+    const r = (await h(o)) as { ok: false; refusal: { code: string; fix: string } };
+    assert.equal(r.ok, false, JSON.stringify(o));
+    assert.equal(r.refusal.code, "no_worktree");
+    assert.match(r.refusal.fix, /^run sangsoe (brief|doctor|todo)/);
+  }
+  assert.deepEqual(asked, [{ group: "api-migration", item: "i033" }, {}, { group: "api-migration" }], "doctor and todo ask for no worktree");
   assert.equal(((await h({ view: "x" })) as { ok: boolean }).ok, false);
   assert.equal(calls.length, 1, "a refused view runs nothing");
-  const failing = openHandler(async () => ({ ok: false, code: 1, out: "", err: "no active worktree" }));
-  assert.deepEqual(await failing({ view: "todo" }), { ok: false, refusal: { code: "open_failed", reason: "no active worktree", fix: "run sangsoe todo in a terminal" } });
+  // Decision 200: the more menu opens `sangsoe models` in the same worktree as the overview's brief.
+  assert.equal(openCommand({ view: "models", group: "g; id" }), "sangsoe models");
+  const seen: unknown[] = [];
+  const models = openHandler(
+    async (cmd, args) => {
+      calls.push([cmd, ...args]);
+      return { ok: true, code: 0, out: "{}", err: "" };
+    },
+    async (t) => {
+      seen.push(t);
+      return { ok: true, value: { worktree: WT } };
+    },
+  );
+  assert.deepEqual(await models({ view: "models", group: "api-migration", item: "i033" }), { ok: true, value: { status: "opened" } });
+  assert.deepEqual(seen, [{}], "the catalog belongs to no group: the overview's worktree");
+  assert.deepEqual(calls.at(-1), ["orca", "terminal", "create", "--worktree", `id:${WT}`, "--title", "sangsoe models", "--command", "sangsoe models", "--focus", "--json"]);
+  const shell = openHandler(async () => ({ ok: true, code: 0, out: "{}", err: "" }), async () => ({ ok: true, value: { worktree: "x; id" } }));
+  assert.equal(((await shell({ view: "brief", group: "g", item: "i001" })) as { ok: boolean }).ok, false, "a worktree that is not Orca's id form is not passed on");
+  const failing = openHandler(async () => ({ ok: false, code: 1, out: "", err: "terminal refused" }), async () => ({ ok: true, value: { worktree: WT } }));
+  assert.deepEqual(await failing({ view: "brief", group: "g", item: "i001" }), { ok: false, refusal: { code: "open_failed", reason: "terminal refused", fix: "run sangsoe brief g i001 in a terminal" } });
+});
+
+test("decision 198: the core names an item's worktree from Orca's worker-list row, and no other stage has one", async () => {
+  const WT = "repo-1::/work/acme/api-i031";
+  const task = input.orca.tasks.find((t) => t.title !== undefined && input.events.some((e) => e.type === "item_created" && e.payload.task === t.id && e.payload.alias === "i031"));
+  assert.ok(task, "fixture has i031");
+  const runs: unknown[] = [];
+  const orca = {
+    workerList: async (a: unknown) => {
+      runs.push(a);
+      return { ok: true, value: { rows: [{ dispatchId: "ctx_1", taskId: task.id, state: "ready", workspace: WT }], nonLocal: { rows: 0, hostIds: [] }, omittedHostIds: [], truncated: false } };
+    },
+  } as unknown as OrcaAdapter;
+  const core = panelCore({ orca, now: () => NOW, withStore: async () => { throw new Error("no store"); }, load: async () => ({ ok: true, value: input }) });
+  assert.deepEqual(await core.worktree({ item: "i031" }), { ok: true, value: { worktree: WT } });
+  assert.deepEqual(runs, [{ run: task.runId }]);
+  assert.equal((await core.worktree({})).ok, false);
+  assert.equal((await core.worktree({ group: "api-migration" })).ok, false);
+  const none = panelCore({ orca: { workerList: async () => ({ ok: true, value: { rows: [], nonLocal: { rows: 0, hostIds: [] }, omittedHostIds: [], truncated: false } }) } as unknown as OrcaAdapter, now: () => NOW, withStore: async () => { throw new Error("no store"); }, load: async () => ({ ok: true, value: input }) });
+  const r = await none.worktree({ item: "i031" });
+  assert.ok(!r.ok && r.refusal.code === "no_worktree");
 });
 
 test("parseAct lets through the three button acts only", () => {
@@ -222,7 +281,8 @@ const T1 = "task_000000000001";
  * returns each gate's options as the JSON text real Orca does. `unreadable` and `blank-first` replace that text.
  */
 async function world(how: "options" | "no-options" | "unreadable" | "blank-first" = "options") {
-  const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001", title: "webhook retry" }]);
+  // Not started yet: Orca gates only such a Task (decision 197).
+  const w = createWorld([{ id: T1, run: RUN, status: "pending", title: "webhook retry" }]);
   const opened = await decisionOpen(w, {
     subject: "item:i012",
     question: "Retry policy?",

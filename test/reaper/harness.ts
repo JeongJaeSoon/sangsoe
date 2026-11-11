@@ -13,13 +13,19 @@ import {
   type LoadSample,
   type LocalRows,
   type OrcaResult,
+  type Planned,
+  type PortRow,
   type ReaperConfig,
+  type ReaperConfigRead,
   type ReaperDeps,
   type ReapOptions,
   type ReapReport,
   reapRound,
   Store,
+  type TaskRow,
+  type TerminalRow,
   type WorkerRow,
+  type WorkerShow,
   type WorktreePsRow,
   type WorktreeRow,
 } from "../../core/index.ts";
@@ -77,7 +83,7 @@ export function card(name: string, repo: Repo, o: Partial<WorktreeRow> = {}): Wo
 }
 
 export function worker(workspace: string, o: Partial<WorkerRow> = {}): WorkerRow {
-  return { dispatchId: `ctx_${workspace.length}`, taskId: "task_1", state: "succeeded", workspace, host: "local", ...o };
+  return { dispatchId: `ctx_${workspace.length}`, taskId: "task_1", state: "succeeded", liveness: "exited", workspace, host: "local", ...o };
 }
 
 const rows = <T>(r: T[], nonLocalIds: string[] = []): LocalRows<T> => ({
@@ -97,6 +103,12 @@ export class FakeOrca {
   workers: WorkerRow[] = [];
   failing = new Set<string>();
   rmError: string | null = null;
+  /** Task id → status; a Task of a listed worker not named here is `completed`. Every Task is in run_1. */
+  taskStatus = new Map<string, string>();
+  /** Dispatch id → liveness `worker-show` reports; unnamed ones report the worker-list row's. */
+  showLiveness = new Map<string, string>();
+  /** Card id → the listeners `ports --worktree id:<card>` reports. */
+  listeners = new Map<string, PortRow[]>();
   calls: string[] = [];
 
   async worktreeList(): Promise<OrcaResult<LocalRows<WorktreeRow>>> {
@@ -114,11 +126,46 @@ export class FakeOrca {
     if (this.failing.has("workerList")) return fail("runtime_unreachable");
     return { ok: true, value: rows(this.workers) };
   }
+  async workerShow(a: { dispatch: string }): Promise<OrcaResult<WorkerShow>> {
+    this.calls.push(`workerShow ${a.dispatch}`);
+    if (this.failing.has("workerShow")) return fail("runtime_unreachable");
+    const w = this.workers.find((x) => x.dispatchId === a.dispatch);
+    if (!w) return fail("dispatch_not_found");
+    const liveness = this.showLiveness.get(a.dispatch) ?? w.liveness;
+    return { ok: true, value: { dispatchId: w.dispatchId, taskId: w.taskId, runId: "run_1", state: w.state, ...(liveness ? { liveness } : {}) } };
+  }
+  async taskList(a: { run: string }): Promise<OrcaResult<TaskRow[]>> {
+    this.calls.push(`taskList ${a.run}`);
+    if (this.failing.has("taskList")) return fail("runtime_unreachable");
+    const ids = [...new Set(this.workers.map((w) => w.taskId))];
+    return { ok: true, value: ids.map((id) => ({ id, status: this.taskStatus.get(id) ?? "completed", title: id })) };
+  }
+  async ports(a: { worktree: string }): Promise<OrcaResult<PortRow[]>> {
+    this.calls.push(`ports ${a.worktree}`);
+    if (this.failing.has("ports")) return fail("non_local_host");
+    return { ok: true, value: this.listeners.get(a.worktree.replace(/^id:/, "")) ?? [] };
+  }
   async worktreeRm(a: { worktree: string }): Promise<OrcaResult<Record<string, unknown>>> {
     this.calls.push(`worktreeRm ${a.worktree}`);
     if (this.rmError) return fail(this.rmError);
     this.cards = this.cards.filter((c) => `id:${c.id}` !== a.worktree);
     return { ok: true, value: { removed: true } };
+  }
+  /** Card id → its live terminals (decision 202). A closed one leaves this list and the card's ps count. */
+  terminals = new Map<string, TerminalRow[]>();
+  async terminalList(a: { worktree: string }): Promise<OrcaResult<LocalRows<TerminalRow>>> {
+    this.calls.push(`terminalList ${a.worktree}`);
+    if (this.failing.has("terminalList")) return fail("runtime_unreachable");
+    return { ok: true, value: rows(this.terminals.get(a.worktree.replace(/^id:/, "")) ?? []) };
+  }
+  async terminalClose(a: { terminal: string }): Promise<OrcaResult<Record<string, unknown>>> {
+    this.calls.push(`terminalClose ${a.terminal}`);
+    for (const [id, ts] of this.terminals) {
+      if (!ts.some((t) => t.handle === a.terminal)) continue;
+      this.terminals.set(id, ts.filter((t) => t.handle !== a.terminal));
+      this.ps = this.ps.map((p) => (p.worktreeId === id ? { ...p, liveTerminalCount: p.liveTerminalCount - 1 } : p));
+    }
+    return { ok: true, value: { close: { handle: a.terminal } } };
   }
 }
 
@@ -174,11 +221,19 @@ export class FakeGh implements GhClient {
 
 /** Docker as REAPER may run it; any other form fails the test. */
 export class FakeDocker {
-  daemon = true;
+  /**
+   * How `docker version` answers. `absent` is nodeExec's shape for a missing binary (measured:
+   * `failure: "spawn"`, stderr `spawn docker ENOENT`); every other non-`up` state is a Docker that is
+   * installed but does not answer.
+   */
+  state: "up" | "absent" | "down" | "timeout" | "empty" | "denied" = "up";
   /** inspect fails with an error that is not "No such ...". */
   inspectError = false;
   /** id → running (containers) or present (others). */
   objects = new Map<string, { kind: string; running?: boolean; inUse?: boolean }>();
+  /** What `compose ls --all --format json` lists. */
+  stacks: { Name: string; Status: string; ConfigFiles: string }[] = [];
+  composeError = false;
   calls: string[] = [];
 
   exec: Exec = async (file, args) => {
@@ -188,8 +243,17 @@ export class FakeDocker {
     this.calls.push(line);
     if (/\bprune\b|\bdown\b|(^| )-f( |$)|--force|--filter|label=/.test(line)) throw new Error(`forbidden docker call: ${line}`);
     const [kind, verb, ...rest] = args;
-    if (kind === "version") return this.daemon ? r(0, "27.0.0") : r(1);
-    if (!this.daemon) return r(1);
+    const spawn = (stderr: string): ExecResult => ({ code: null, stdout: "", stderr, failure: "spawn" });
+    if (this.state === "absent") return spawn("spawn docker ENOENT");
+    if (this.state === "denied") return spawn("spawn docker EACCES");
+    if (kind === "version") {
+      if (this.state === "timeout") return { code: null, stdout: "", stderr: "", failure: "timeout" };
+      return this.state === "up" ? r(0, "27.0.0") : this.state === "empty" ? r(0, "") : r(1);
+    }
+    if (this.state !== "up") return r(1);
+    if (kind === "compose" && line === "compose ls --all --format json") {
+      return this.composeError ? r(1) : r(0, JSON.stringify(this.stacks));
+    }
     const id = rest.at(-1) ?? "";
     const o = this.objects.get(id);
     if (verb === "inspect") {
@@ -223,13 +287,19 @@ export type World = {
   docker: FakeDocker;
   store: Store;
   clock: { now: number };
-  config: ReaperConfig | null;
+  /** null: no config file; `{ unreadable }`: a file the read could not parse. */
+  config: ReaperConfig | null | { unreadable: string };
   load: LoadSample;
   /** The timer period the round judges a pause by; unset in the scenarios that predate decision 182. */
   intervalMs?: number;
+  /** `sangsoe reap run --dry-run`: the round gets no `append`. */
+  dryRun?: boolean;
   round(o?: ReapOptions): Promise<ReapReport>;
   types(type: string): Record<string, unknown>[];
 };
+
+const configRead = (c: World["config"]): ReaperConfigRead =>
+  c === null ? { kind: "absent" } : "unreadable" in c ? { kind: "unreadable", why: c.unreadable } : { kind: "ok", config: c };
 
 export function world(): World {
   const clock = { now: Date.parse("2026-11-10T00:00:00Z") };
@@ -248,9 +318,9 @@ export function world(): World {
         gh: w.gh,
         exec: w.docker.exec,
         events: (f) => store.events(f),
-        append: (e) => store.append(e),
+        ...(w.dryRun ? {} : { append: (e: Planned) => store.append(e) }),
         now: () => clock.now,
-        config: w.config,
+        config: configRead(w.config),
         sample: () => w.load,
         ...(w.intervalMs ? { intervalMs: w.intervalMs } : {}),
       };
@@ -282,9 +352,15 @@ export async function rounds(w: World, n: number, gapMin = 20): Promise<ReapRepo
   return last;
 }
 
-/** Calls REAPER must never make, on any path (decision 74 O-12, 82 R6, 86 ①). */
+/**
+ * Calls REAPER must never make, on any path (decision 74 O-12, 82 R6, 86 ①). The one terminal it
+ * may close is a setup shell start_unit recorded on `unit_started` (decision 202).
+ */
 export function assertNeverForbidden(w: World): void {
+  const recorded = new Set(w.types("unit_started").map((p) => p.shell));
   for (const c of w.orca.calls) {
+    if (c.startsWith("terminalList ")) continue;
+    if (c.startsWith("terminalClose ") && recorded.has(c.slice("terminalClose ".length))) continue;
     if (/release|terminal|force|allow-failed/i.test(c)) throw new Error(`forbidden orca call: ${c}`);
   }
 }

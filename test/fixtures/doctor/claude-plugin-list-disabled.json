@@ -1,0 +1,23 @@
+[
+  {
+    "id": "sangsoe@sangsoe",
+    "version": "0.1.0",
+    "scope": "user",
+    "enabled": false,
+    "installPath": "/home/dev/.claude/plugins/cache/sangsoe/sangsoe/0.1.0",
+    "installedAt": "2026-11-09T18:59:01.441Z",
+    "lastUpdated": "2026-11-10T20:22:51.248Z",
+    "projectEnabled": false
+  },
+  {
+    "id": "sangsoe@sangsoe",
+    "version": "0.1.0",
+    "scope": "project",
+    "enabled": false,
+    "installPath": "/home/dev/.claude/plugins/cache/sangsoe/sangsoe/0.1.0",
+    "installedAt": "2026-11-09T18:59:01.441Z",
+    "lastUpdated": "2026-11-10T20:22:51.248Z",
+    "projectPath": "/home/dev/work/proj",
+    "projectEnabled": false
+  }
+]

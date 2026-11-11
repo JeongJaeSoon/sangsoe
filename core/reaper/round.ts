@@ -5,14 +5,21 @@ import type { Planned } from "../detect/monitor.ts";
 import type { GhClient } from "../gh/client.ts";
 import { settled } from "../recover/recover.ts";
 import type { Appended, EventFilter } from "../store/store.ts";
-import { preDelete } from "./checks.ts";
-import type { ReaperConfig } from "./config.ts";
-import { dockerUp, sweepDocker } from "./docker.ts";
+import { type Check, type BlockReason as CheckReason, evidenceInWorktree, openWork, preDelete } from "./checks.ts";
+import type { ReaperConfig, ReaperConfigRead } from "./config.ts";
+import { type DockerState, dockerState, sweepDocker } from "./docker.ts";
 import { branchOf, type Finished, judgeFinished, repoOf, withRemoteCase } from "./finished.ts";
+import { composeRunning, listening, readStacks, type Stacks } from "./live.ts";
 import { blockedKey, dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
 
-/** The only Orca calls REAPER has: three reads and the one removal. No terminal call exists here. */
-export type ReaperOrca = Pick<OrcaAdapter, "worktreeList" | "worktreePs" | "workerList" | "worktreeRm">;
+/**
+ * The only Orca calls REAPER has: reads, the one removal, and closing a setup shell start_unit
+ * recorded (decision 202). No other terminal is ever closed here.
+ */
+export type ReaperOrca = Pick<
+  OrcaAdapter,
+  "worktreeList" | "worktreePs" | "workerList" | "workerShow" | "taskList" | "ports" | "worktreeRm" | "terminalList" | "terminalClose"
+>;
 
 export type ReaperDeps = {
   orca: ReaperOrca;
@@ -23,8 +30,11 @@ export type ReaperDeps = {
   /** Absent on a dry run: the round marks and reports, and never sweeps. */
   append?: (e: Planned) => Appended;
   now(): number;
-  /** null with no readable `reaper` section: the round is mark-only (decision 174), not a failed root. */
-  config: ReaperConfig | null;
+  /**
+   * `absent`: the round is mark-only (decision 174), not a failed root. `unreadable`: a failed root
+   * (decision 201), so no shell is closed and nothing removed while the protect list is unknown.
+   */
+  config: ReaperConfigRead;
   sample(): LoadSample;
   /** The timer period. Absent: no round is judged a catch-up. */
   intervalMs?: number;
@@ -32,13 +42,7 @@ export type ReaperDeps = {
 
 export type ReapOptions = { trigger?: "timer" | "hint"; markOnly?: boolean; signal?: AbortSignal };
 
-export type BlockReason =
-  | "uncommitted"
-  | "unpushed"
-  | "unpushed_other_patch"
-  | "in_use"
-  | "archive_hook_failed"
-  | "remote_host";
+export type BlockReason = CheckReason | "in_use" | "archive_hook_failed" | "remote_host" | "config_unreadable";
 export type Blocked = { kind: string; ref: string; reason: BlockReason };
 
 export type ReapReport = {
@@ -61,6 +65,8 @@ export type ReapReport = {
   docker_skipped: boolean;
   /** Timer slots that never ran before this round (Orca was closed); 0 when the round is on time. */
   missed: number;
+  /** Setup shells start_unit recorded and this round closed after their units were released (decision 202). */
+  shells_closed: string[];
   planned: Planned[];
 };
 
@@ -114,6 +120,37 @@ async function openPrHeads(gh: GhClient, repo: string): Promise<Set<string> | nu
   return null;
 }
 
+/**
+ * Decision 202: `worker-release` never closes the plain shell `worktree create` opened, and a live
+ * terminal keeps a card from the reaper. Close that one recorded handle once every Dispatch in its
+ * worktree is released, only with no setup script that could still run there, and only while Orca
+ * still lists it with no agent in it. Unreadable means not now.
+ */
+async function closeReleasedShells(
+  d: ReaperDeps,
+  config: ReaperConfig | null,
+  scope: readonly WorktreeRow[],
+  workers: readonly WorkerRow[],
+): Promise<string[]> {
+  // A protected card is the owner's to touch, its shell included.
+  const protect = new Set<string | undefined>(config?.protect ?? []);
+  const inScope = new Set(scope.filter((c) => !protect.has(c.instanceId) && !protect.has(c.path) && !protect.has(branchOf(c))).map((c) => c.id));
+  const closed: string[] = [];
+  for (const e of d.events({ type: "unit_started" })) {
+    const p = e.payload as { worktree?: string; shell?: string; setup?: string };
+    if (!p.worktree || !p.shell || p.setup !== "none" || !inScope.has(p.worktree)) continue;
+    const own = workers.filter((w) => w.workspace === p.worktree);
+    if (own.length === 0 || !own.every((w) => w.terminalState === "released")) continue;
+    const list = await d.orca.terminalList({ worktree: `id:${p.worktree}` });
+    if (!list.ok || list.value.truncated || list.value.nonLocal.rows > 0) continue;
+    const row = list.value.rows.find((t) => t.handle === p.shell);
+    if (!row || row.agentIdentity) continue;
+    const r = await d.orca.terminalClose({ terminal: p.shell });
+    if (r.ok) closed.push(p.shell);
+  }
+  return closed;
+}
+
 type Sighting = { state: "seen" | "cleared"; round: number; at: number };
 
 function lastSightings(events: readonly StoredEvent[]): Map<string, Sighting> {
@@ -128,7 +165,8 @@ function lastSightings(events: readonly StoredEvent[]): Map<string, Sighting> {
 /**
  * One REAPER round (decisions 82, 83, 86, 88): adopt unrecorded cards, read the roots, mark, record
  * candidates, then sweep only targets that pass every gate. A root that cannot be read ends the
- * round before any candidate row or removal. Terminals are never closed here.
+ * round before any candidate row or removal. The only terminal closed here is a released unit's
+ * recorded setup shell (decision 202).
  */
 export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<ReapReport> {
   const trigger = o.trigger ?? "timer";
@@ -136,11 +174,12 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   const now = d.now();
   const rounds = d.events({ type: "reap_round" });
   const round = 1 + rounds.reduce((m, e) => Math.max(m, Number((e.payload as { round?: number }).round) || 0), 0);
+  const config = d.config.kind === "ok" ? d.config.config : null;
   const r: ReapReport = {
     round,
     trigger,
     roots_ok: true,
-    mark_only: d.config === null,
+    mark_only: d.config.kind === "absent",
     unseen: [],
     cards: 0,
     marked: [],
@@ -152,6 +191,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     unknown: [],
     docker_skipped: false,
     missed: missedSlots(rounds, now, d.intervalMs),
+    shells_closed: [],
     planned: [],
   };
   const write = (e: Planned) => {
@@ -187,6 +227,11 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     });
     return r;
   };
+
+  if (d.config.kind === "unreadable") {
+    rootFailed(`reaper config: ${d.config.why}`);
+    block("config", "reaper", "config_unreadable");
+  }
 
   // Card list: a root, and the input to adoption and remote_host.
   const list = await d.orca.worktreeList({ limit: 1000 });
@@ -235,6 +280,10 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   if (typeof workers === "string") rootFailed(workers);
   else for (const w of workers) if (!settled(w) && w.workspace && byId.has(w.workspace)) marked.add(w.workspace);
 
+  // Not a card removal, so mark-only rounds (by flag or by no config) close it too; a dry run does not,
+  // nor does a round whose protect list could not be read.
+  if (typeof workers !== "string" && d.append && d.config.kind !== "unreadable") r.shells_closed = await closeReleasedShells(d, config, scope, workers);
+
   const ps = await d.orca.worktreePs({});
   if (!ps.ok) rootFailed(`worktree ps: ${ps.error.code}`);
   else {
@@ -246,9 +295,24 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     }
   }
 
-  if (d.config) {
-    const protect = new Set(d.config.protect);
+  if (config) {
+    const protect = new Set(config.protect);
     for (const c of scope) if (protect.has(c.instanceId) || protect.has(c.path) || protect.has(branchOf(c))) marked.add(c.id);
+  }
+
+  // Open-Task root (decision 177): an open Task or a live session keeps its card. Unreadable is unknown.
+  if (typeof workers !== "string") {
+    for (const c of scope) {
+      if (marked.has(c.id) || unknown.has(c.id) || !workers.some((w) => w.workspace === c.id)) continue;
+      if (signal.aborted) break;
+      const open = await openWork(c, workers, d.orca);
+      if (open.ok) continue;
+      if ("blocked" in open) marked.add(c.id);
+      else {
+        unknown.add(c.id);
+        r.unseen.push(`open Task? ${c.instanceId}: ${open.unknown}`);
+      }
+    }
   }
 
   const repos = new Map<string, WorktreeRow[]>();
@@ -275,8 +339,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   r.marked = scope.filter((c) => marked.has(c.id)).map((c) => c.instanceId);
   const candidates = scope.filter((c) => !marked.has(c.id) && !unknown.has(c.id));
   r.candidates = candidates.map((c) => c.instanceId);
-  if (!r.roots_ok || !d.config) return finish();
-  const config = d.config;
+  if (!r.roots_ok || !config) return finish();
 
   // Candidate rows: first sighting `seen`, reached again (or no longer a clean candidate) `cleared`.
   const sightings = lastSightings(d.events({ type: "reap_candidate" }));
@@ -334,12 +397,34 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     r.reaped.push(`${kind}:${ref}`);
     write({ type: "reap_done", source: SOURCE, payload: { kind, ref }, dedupe_key: key("reap_done", kind, ref) });
   };
+  let up: Promise<DockerState> | undefined;
+  const docker = () => (up ??= dockerState(d.exec));
+  let stacks: Promise<Stacks> | undefined;
+  const evidence = d.events({ type: "evidence" });
+  // Decision 194: a hit skips the removal; nothing is stopped or killed. The Orca reads and `ports` are
+  // asked again per card, for the Dispatches the round's worker-list named; the compose list once per sweep.
+  const checks: ((card: WorktreeRow & { instanceId: string }, f: Extract<Finished, { state: "finished" }>) => Promise<Check> | Check)[] = [
+    (card) => openWork(card, workerRows, d.orca),
+    (card, f) => evidenceInWorktree(card, f, evidence),
+    (card) => listening(card, d.orca),
+    async (card) => {
+      stacks ??= readStacks(d.exec, docker);
+      const s = await stacks;
+      if (s.kind === "no_docker") r.docker_skipped = true;
+      return composeRunning(card, s);
+    },
+    (card, f) => preDelete(card, f, d.exec, d.gh),
+  ];
   for (const { card, finished } of targets) {
     if (signal.aborted) {
       r.unseen.push("round passed its cap before the sweep finished");
       break;
     }
-    const check = await preDelete(card, finished, d.exec, d.gh);
+    let check: Check = { ok: true };
+    for (const run of checks) {
+      check = await run(card, finished);
+      if (!check.ok) break;
+    }
     if (!check.ok) {
       if ("blocked" in check) block("worktree", card.instanceId, check.blocked);
       else r.unknown.push(`worktree:${card.instanceId}: ${check.unknown}`);
@@ -361,11 +446,14 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     if (c && !taskCard.has(w.taskId)) taskCard.set(w.taskId, c.instanceId);
   }
   const holds = dockerHolds(holdEvents(d.events));
-  const docker = [...holds.values()].filter((h) => h.held && reapedCards.has(taskCard.get(h.owner) ?? h.owner));
-  if (docker.length > 0 && !signal.aborted) {
-    if (!(await dockerUp(d.exec))) r.docker_skipped = true;
+  const owned = [...holds.values()].filter((h) => h.held && reapedCards.has(taskCard.get(h.owner) ?? h.owner));
+  if (owned.length > 0 && !signal.aborted) {
+    const s = await docker();
+    // A Docker that does not answer keeps every hold for the next round.
+    if (s.kind === "absent") r.docker_skipped = true;
+    else if (s.kind === "unanswered") r.unknown.push(`docker: ${s.why}`);
     else {
-      for (const x of await sweepDocker(d.exec, docker)) {
+      for (const x of await sweepDocker(d.exec, owned)) {
         const h = holds.get(`${x.kind}\n${x.ref}`) as Hold;
         const gen = `g${h.gen}`;
         if (x.result === "removed") {

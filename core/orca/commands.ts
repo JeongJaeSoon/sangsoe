@@ -38,8 +38,6 @@ export const ORCA_COMMANDS = {
     write: true,
   },
 
-  runCreate: { path: ["orchestration", "run-create"], flags: ["json", "objective", "retry-request"], write: true },
-  runUse: { path: ["orchestration", "run-use"], flags: ["json", "id", "retry-request"], write: true },
   runCurrent: { path: ["orchestration", "run-current"], flags: ["json"] },
   runShow: { path: ["orchestration", "run-show"], flags: ["json", "id", "full"] },
 
@@ -60,39 +58,30 @@ export const ORCA_COMMANDS = {
     flags: ["json", "to", "subject", "body", "type", "from", "task-id", "dispatch-id", "outcome", "retry-request"],
     write: true,
   },
-  ask: { path: ["orchestration", "ask"], flags: ["json", "question", "to", "options", "retry-request"], write: true },
-  reply: { path: ["orchestration", "reply"], flags: ["json", "id", "body", "retry-request"], write: true },
   inbox: { path: ["orchestration", "inbox"], flags: ["json", "terminal", "limit", "full"] },
 
   workerStart: {
     path: ["orchestration", "worker-start"],
-    flags: ["json", "task", "agent", "worktree", "run", "model", "effort", "retry-request"],
+    flags: ["json", "task", "agent", "worktree", "run", "model", "effort", "keep-open", "repo", "retry-request"],
     optional: ["advisor"],
     write: true,
   },
   workerShow: { path: ["orchestration", "worker-show"], flags: ["json", "dispatch"] },
   workerList: { path: ["orchestration", "worker-list"], flags: ["json", "run", "limit", "cursor"] },
-  workerRelease: {
-    path: ["orchestration", "worker-release"],
-    flags: ["json", "dispatch", "retry-request"],
-    write: true,
-  },
   dispatchShow: { path: ["orchestration", "dispatch-show"], flags: ["json", "task"] },
   requestShow: { path: ["orchestration", "request-show"], flags: ["json", "request"] },
 
   worktreeList: { path: ["worktree", "list"], flags: ["json", "repo", "limit"] },
   worktreePs: { path: ["worktree", "ps"], flags: ["json", "limit", "agent-wait"] },
-  worktreeSet: {
-    path: ["worktree", "set"],
-    flags: ["json", "worktree", "display-name", "comment", "workspace-status"],
-  },
   worktreeRm: { path: ["worktree", "rm"], flags: ["json", "worktree", "run-hooks", "delete-branch"] },
+  worktreeCreate: { path: ["worktree", "create"], flags: ["json", "name", "no-parent", "parent-worktree", "repo", "setup"] },
+  terminalList: { path: ["terminal", "list"], flags: ["json", "worktree"] },
+  terminalClose: { path: ["terminal", "close"], flags: ["json", "terminal"] },
+  repoShow: { path: ["repo", "show"], flags: ["json", "repo"] },
+  ports: { path: ["ports"], flags: ["json", "worktree"] },
 
   referenceAdd: { path: ["reference", "add"], flags: ["json", "worktree"] },
-  referenceList: { path: ["reference", "list"], flags: ["json", "worktree"] },
   referenceFind: { path: ["reference", "find"], flags: ["json", "limit"] },
-  search: { path: ["search"], flags: ["json", "scope", "limit"] },
-  terminalWaitIdle: { path: ["terminal", "wait"], flags: ["json", "terminal", "for", "timeout-ms"] },
 
   pluginList: { path: ["plugin", "list"], flags: ["json"] },
   pluginInspect: { path: ["plugin", "inspect"], flags: ["json"] },

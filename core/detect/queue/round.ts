@@ -90,7 +90,8 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   calls.push(`probeRound: read ${probes.read}, passed ${probes.passed.length}, skipped ${probes.skipped.length}`);
   if (!d.gh) unseen.push("gh client");
 
-  // waiting_human rows come from this machine's hooks, so each session they name is local (decision 88).
+  // waiting_human rows come from this machine's hooks or its orca-monitor, which drops other hosts' rows,
+  // so each wait is local (decisions 88, 196).
   const waits = unreleasedWaits(input, () => true, OWNER_DEFAULTS);
   for (const w of waits) recordUnreleased(collect, w, undefined, QUEUE_SOURCE);
   if (waits.length > 0) unseen.push("screen excerpt: the Orca adapter has no terminal read");
@@ -182,7 +183,7 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
 }
 
 /** `msgType` is one of Orca's closed `send --type` set; the event name rides in the subject. */
-type LeadNotice = { task: string; key: string; subject: string; body: string; msgType: "status" | "escalation" };
+type LeadNotice = { task: string; key: string; subject: string; body: string; msgType: "status" };
 
 /**
  * The rows whose notice goes to the item's owning lead (decision 154): todo_due and trigger_unclear
@@ -203,7 +204,8 @@ function leadNotice(e: Planned): LeadNotice | undefined {
   if (e.type === "escalation_stale" && p.reason === "verify_unconfirmed") {
     const task = String(p.ref);
     const key = `notify:${seg(task)}:verify_unconfirmed:${(e.dedupe_key ?? "").split(":").pop() ?? ""}`;
-    return { task, key, subject: `🔍 verify_unconfirmed: ${task}`, body: `The owner's input on ${task} is still not verified by its probe; check it or ask the owner.`, msgType: "escalation" };
+    // status, not escalation: queue-monitor holds no Dispatch, and Orca refuses an escalation from such a sender (decision 197).
+    return { task, key, subject: `🔍 verify_unconfirmed: ${task}`, body: `The owner's input on ${task} is still not verified by its probe; check it or ask the owner.`, msgType: "status" };
   }
   return undefined;
 }

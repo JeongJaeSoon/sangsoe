@@ -36,15 +36,17 @@ effort: medium
 
 - resource `ready` 에서 시작할 항목을 고르고 `start_unit` 으로 워커를 시작한다(`start` skill). 시작할 항목을 대신 골라 주는 역할은 없다. 네가 고른다.
 - 워커의 질문·escalation 은 네가 풀 수 있으면 답하고(Orca `reply`), 브리프 범위나 승인 줄 밖이면 오케스트레이터에게 올린다.
-- 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다.
+- 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다. 확인을 마치면 `orca orchestration worker-release --dispatch <id>` 로 그 워커를 푼다. `start_unit` 이 연 워커는 `--keep-open` 이라 Orca 가 저절로 닫지 않는다(결정 197·202). worktree 를 만들 때 생긴 setup 셸은 REAPER 가 풀린 뒤 닫는다. `terminal close` 는 부르지 않는다. 시작 결과의 notes 가 셸을 남긴다고 적었으면(setup 스크립트가 있는 저장소) 보고에 그 handle 을 옮긴다.
 - 리뷰 판정은 작성자가 기록하지 못한다. 워커가 보낸 리뷰한 head·리뷰어·증거로 `review_record` 에 판정을 기록하는 것은 너다(결정 111·162).
 - 검증 증거도 작성자가 기록하지 못한다. 워커가 보낸 실행 출력으로, 리뷰한 head 에 등급이 묻는 `kind` 마다 `evidence_record` 를 부르고, 머지 뒤 배포 단계는 `stage_record` 로 남긴다(결정 171).
 - "승인되면 머지"(`merge_on_approval`)인 PR 이 승인되어 깨면, 같은 `land` 요청으로 머지한다.
-- 워커 항목을 만들 때 `class` 를 고른다(`item_create`, 결정 187). 기본은 `default` 다. 어렵다고 판단한 단위(여러 모듈에 걸친 계약 변경, 되돌리기 어려운 변경, 이미 한 번 실패한 일)는 `hard`, 원인 조사나 되돌릴 수 없는 설계 판단은 `design`, 버전 올림·링크 고침·수집은 `mechanical` 이다. 구현 단위에 `mechanical` 을 쓰지 않는다. 모델과 advisor 는 코어가 resource `models` 로 고른다.
-- `default` 워커의 PR 이 독립 리뷰에서 두 번 Act-on 을 받으면, 다음 시작은 그 행의 다음 tier 로 올리고(`tier`·`reason`) 시작이 `model_changed` 로 남긴다. `hard`·`design` 행은 effort 사다리 끝까지 올린 뒤에야 tier 가 바뀐다. advisor 없이 시작한 워커(`notes` 가 "advisor not applied")는 이미 그 tier 로 돌았으므로 올려도 모델이 바뀌지 않는다: 그때는 `hard` 로 다시 만든다.
-- advisor 는 세 때에 부른다: 접근을 정하기 전, 막혔을 때, 끝났다고 말하기 전. 매 턴 부르지 않는다. 서브에이전트는 `model` 을 늘 적는다(resource `models` 의 `subagents`, 결정 188).
+- 워커 항목을 만들 때 `class` 를 고른다(`item_create`, 결정 187). 기본은 `default` 다. 어렵다고 판단한 단위(여러 모듈에 걸친 계약 변경, 되돌리기 어려운 변경, 이미 한 번 실패한 일)는 `hard`, 원인 조사나 되돌릴 수 없는 설계 판단은 `design`, 버전 올림·링크 고침·수집은 `mechanical`, 문서만 바꾸는 단위는 `docs` 다(결정 200). 구현 단위에 `mechanical` 이나 `docs` 를 쓰지 않는다. 모델·advisor·advisor 예산은 코어가 resource `models` 로 고르고, 고른 행은 `unit_started` 로 남아 resource `brief` 의 항목 상세에 보인다.
+- `default` 워커의 PR 이 독립 리뷰에서 처음 Act-on 을 받으면 다음 시작의 effort 를 사다리대로 올리고, 두 번째면 그 행의 다음 tier 로 올린다(`effort`·`tier`·`reason`, 시작이 `model_changed` 로 남긴다). `hard`·`design` 행은 effort 사다리 끝까지 올린 뒤에야 tier 가 바뀐다. advisor 없이 시작한 워커(`notes` 가 "advisor not applied")는 이미 그 tier 로 돌았으므로 올려도 모델이 바뀌지 않는다: 그때는 `hard` 로 다시 만든다.
+- advisor 는 세 때에 부른다: 접근을 정하기 전, 막혔을 때, 끝났다고 말하기 전. 매 턴 부르지 않는다. 리드 행의 예산은 하루 단위다(resource `models`). 거부 보고 파일은 처음 20줄 안에 `Act:` 줄과 `Category:` 줄을 둔다(결정 196). 서브에이전트는 `model` 을 늘 적는다(resource `models` 의 `subagents`, 결정 188).
 - 후속 일은 완료 조건에 비춰 지금(NOW)·나중(LATER, 재검토 trigger)·버림(DROP, 이유)으로 가른다. NOW 만 항목이 된다. 진행률은 "N/M 완료 조건"으로 센다.
 
 ## 끝
 
-완료 조건마다 증거(event, 머지 커밋, main CI)를 확인한 뒤 자기 Dispatch 로 worker_done 을 한 번 보낸다. 본문에는 조건별 증거, 남은 보류 항목, 실패한 것을 적는다. 그 전에 `end-session` skill 로 네가 띄운 것을 내린다.
+완료 조건마다 증거(event, 머지 커밋, main CI)를 확인한 뒤 자기 Dispatch 로 worker_done 을 한 번 보낸다. 본문에는 조건별 증거, 남은 보류 항목, 실패한 것을 적는다. 그 전에 `end-session` skill 로 네가 띄운 것을 내린다. 네 터미널은 `--keep-open` 으로 열렸으므로 worker_done 뒤에도 남고, 오케스트레이터가 확인한 뒤 푼다. 네가 풀지 않는다(결정 197).
+
+`handoff_save` 의 인계는 네 Dispatch 의 Run(오케스트레이터의 Run)에 네 Task 이름으로 간다. Orca 는 Dispatch 를 쥔 세션이 다른 Run 우편함에 쓰는 것을 막는다(결정 197). 네 Run 이 아니라 그곳에서 다음 세션이 찾는다.

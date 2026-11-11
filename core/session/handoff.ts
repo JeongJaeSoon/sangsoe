@@ -1,5 +1,6 @@
 import { receiptId } from "../notify/receipt.ts";
 import { type CoreDeps, done, type Result, refuse } from "../notify/result.ts";
+import { locate } from "./locate.ts";
 
 /** The four judgment states the store does not hold (design N1). */
 export const HANDOFF_FIELDS = ["next", "waiting", "open_questions", "reply_to"] as const;
@@ -28,14 +29,36 @@ export function parseHandoff(raw: Readonly<Record<string, unknown>>): Result<Han
 
 export const renderHandoff = (h: Handoff): string => HANDOFF_FIELDS.map((k) => `## ${LABEL[k]}\n${h[k]}`).join("\n\n");
 
+/** The subject a Dispatch-holding session's handoff carries, so its next session finds its own among the Run's mail. */
+export const handoffSubject = (task: string) => `handoff ${task}`;
+
 /**
- * handoff_save: checks the four fields and sends them as one Orca `handoff` message to the caller's own
- * Run mailbox, where the next session's SessionStart reads the last one. Nothing goes to sqlite: the
- * handoff body is Orca's (decision 80 N1).
+ * handoff_save: checks the four fields and sends them as one Orca `handoff` message, where the next
+ * session's SessionStart reads the last one. A session without a Dispatch (the orchestrator) sends to
+ * the Run it holds. One with a Dispatch cannot: Orca sends its mail only to the Dispatch's own Run
+ * (dispatch_run_mismatch), so it goes there under its Task's subject (decision 197). Nothing goes to
+ * sqlite: the handoff body is Orca's (decision 80 N1).
  */
-export async function handoffSave(deps: Pick<CoreDeps, "orca">, raw: Readonly<Record<string, unknown>>): Promise<Result<{ msgId: string | null; run: string }>> {
+export async function handoffSave(
+  deps: Pick<CoreDeps, "orca">,
+  raw: Readonly<Record<string, unknown>>,
+  cwd: string = process.cwd(),
+): Promise<Result<{ msgId: string | null; run: string }>> {
   const parsed = parseHandoff(raw);
   if (!parsed.ok) return parsed;
+  const loc = await locate(deps.orca, cwd);
+  if (loc) {
+    const sent = await deps.orca.send({
+      to: `run:${loc.run}`,
+      type: "handoff",
+      subject: handoffSubject(loc.task),
+      body: renderHandoff(parsed.value),
+      taskId: loc.task,
+      dispatchId: loc.dispatch,
+    });
+    if (!sent.ok) return refuse("orca_error", `send: ${sent.error.code}`, "call handoff_save again");
+    return done({ msgId: receiptId(sent.value, "message") ?? null, run: loc.run });
+  }
   const current = await deps.orca.runCurrent();
   if (!current.ok) return refuse("orca_error", `run-current: ${current.error.code}`, "retry once Orca answers");
   const run = current.value.runId;

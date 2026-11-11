@@ -30,7 +30,7 @@ export default {
 - 설명은 한두 문장(도구당 4,096자 상한, 부록 `#mcp`). 판단 기준은 skill 에 쓰고 여기에는 모양만 둔다.
 - 읽기는 tool 로 만들지 않는다: `resources/<name>.ts` 에 `ResourceDef` 를 두면 서버가 같은 방식으로 모은다(현황 `brief` 는 U9).
 
-## tool 14개 (부록 `#mcp`: 행동 7 + land 1 + 기록 6, 결정 160·162·171)
+## tool 15개 (부록 `#mcp`: 행동 8 + land 1 + 기록 6, 결정 160·162·171·195)
 
 이 표가 tool 이름의 목록이고 `test/spec-names.test.ts` 가 `tools/*.ts` 와 같은지 본다. tool 을 더하거나 빼면 이 표의 행도 같은 PR 에서 고친다.
 
@@ -41,6 +41,7 @@ export default {
 | `edge_add` | 간선 더하기(순환·없는 항목·후속이 항목 아닌 간선 거부, 같은 간선 합침). CLI `sangsoe graph add` 와 같은 Outcome | `{kind, pred, succ, runs}` | U7 |
 | `edge_remove` | 부가 간선 빼기(이유 필수, Orca deps 간선은 거부). CLI `sangsoe graph remove` | `{kind, pred, succ, reason, runs}` | U7 |
 | `flow_expand` | 흐름 틀 펼치기(`dry_run` 은 쓰지 않음, 같은 `request_id` 는 이어서). CLI `sangsoe graph expand` | `{template, vars?, run?, who?, request_id?, dry_run?}` | U7 |
+| `flow_step_skip` | 펼친 흐름의 단계 하나를 이유와 함께 건너뛴다(`flow_step_skipped`, 이유가 비거나 그 흐름에 없는 단계면 거부). 건너뛴 단계는 `flow_gap` 에서 빠진다(결정 195). CLI `sangsoe graph skip` | `{root, step, reason}` | U54 |
 | `decision_open` | 결정 열기(닫힌 같은 결정 키는 기존 dNNN 과 답 반환, 열린 것은 대기자 합류) | `{subject, question, options?, waiters?: [{task, run}], carrier_run?}` | U8 |
 | `decision_answer` | 결정 답·게이트 풀기·대기자마다 notify 한 번(다시 불러도 같다) | `{decision, answer, owner_action, linked_by?, run?}` | U8 |
 | `land` | land 판정 함수 호출: 머지 예약, "승인되면 머지"(`merge_on_approval`), 또는 `verdict_merge_repos` 에 든 저장소에서 기록된 리뷰 판정으로 바로 머지(`verdict_approved`, 결정 158). CLI `sangsoe land` 와 같은 결과 | `{pr, repo?, head_sha?, dry_run?, main_fix?}` | U11 |

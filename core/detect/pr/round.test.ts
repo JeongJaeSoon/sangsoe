@@ -36,7 +36,8 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
   const store = Store.open({ path: ":memory:" });
   const routes: Record<string, GhResponse<unknown>> = { [OPEN]: ok([]), [CLOSED]: ok([]) };
   const refs: Record<string, unknown[]> = {};
-  const dispatches: Record<string, { taskId: string; runId: string }> = {};
+  const dispatches: Record<string, { taskId: string; runId: string; liveness?: string }> = {};
+  const messages: { to: string; subject: string; body: string }[] = [];
   const tasks = new Map<string, Task>();
   const worktrees: { id: string; projectId?: string; branch: string; isArchived: boolean; displayName: string }[] = [];
   const calls: string[] = [];
@@ -61,12 +62,13 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
       calls.push(`reference add ${a.urls.join(" ")} ${a.worktree}`);
       return { ok: true, value: {} };
     },
-    send: async (m: { to: string; subject: string; type?: string }) => {
+    send: async (m: { to: string; subject: string; body: string; type?: string }) => {
       // Orca's closed `send --type` set (`orchestration send --help`).
       if (!["status", "dispatch", "worker_done", "merge_ready", "escalation", "handoff", "decision_gate", "question", "heartbeat"].includes(m.type ?? "")) {
         return { ok: false, error: { code: "invalid_argument", message: `--type ${m.type}` } };
       }
       calls.push(`send ${m.to} ${m.subject}`);
+      messages.push({ to: m.to, subject: m.subject, body: m.body });
       return { ok: true, value: { message: { id: `msg_${calls.length}` } } };
     },
   } as unknown as OrcaAdapter;
@@ -90,9 +92,9 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
    * A Task Orca links to PR n through a local workspace whose agent is the Task's Dispatch. A
    * released worker leaves the workspace with no agent; worker-list still names its Dispatch.
    */
-  const link = (n: number, task: string, status: string, run = "run_lead", released = false) => {
+  const link = (n: number, task: string, status: string, run = "run_lead", released = false, liveness?: string) => {
     const dispatch = `ctx_${task}`;
-    dispatches[dispatch] = { taskId: task, runId: run };
+    dispatches[dispatch] = { taskId: task, runId: run, ...(liveness ? { liveness } : {}) };
     tasks.set(task, { id: task, status, title: "t", run });
     workerRows.push({ dispatchId: dispatch, taskId: task, state: "succeeded", workspace: `ws_${task}` });
     const agents = released ? [] : [{ mailbox: `dispatch:${dispatch}`, linked: true }];
@@ -111,7 +113,7 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
     return runMonitor("pr", used as MonitorDeps);
   };
   const rows = (type?: string) => store.events(type ? { type } : {}).filter((e) => e.source === "pr-monitor" || e.type === "notified");
-  return { store, routes, tasks, worktrees, calls, link, merged, round, rows, deps };
+  return { store, routes, tasks, worktrees, calls, messages, link, merged, round, rows, deps };
 }
 
 test("merge_suggests_close (§9 X4): merge confirmed → pr_merged, the PR item's Task completed in the same round, other open Tasks only suggested", async () => {
@@ -338,6 +340,76 @@ test("pr_ready_to_merge: a merge_on_approval PR approved and green wakes its own
   assert.deepEqual(w.calls, ["send run:run_lead_c 🟢 머지 가능: acme/api#12"]);
   await w.round();
   assert.equal(w.calls.length, 1, "one wake per head");
+});
+
+/** PR 30 with one changes-requested review (2001), one review comment (3001) and the author's reply (3002). */
+function reviewed(w: ReturnType<typeof world>) {
+  w.routes[OPEN] = ok([listed(30)]);
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#30", task: "task_r", base: "main", head_sha: HEAD } });
+  w.routes[`repos/${REPO}/pulls/30/reviews?per_page=100`] = ok([
+    { id: 2001, state: "CHANGES_REQUESTED", user: { login: "bob" }, submitted_at: "2026-11-10T09:00:00Z", body: "secret review text" },
+    { id: 2002, state: "APPROVED", user: { login: "carol" }, submitted_at: "2026-11-10T09:30:00Z" },
+  ]);
+  w.routes[`repos/${REPO}/pulls/30/comments?sort=created&direction=desc&per_page=100`] = ok([
+    { id: 3002, user: { login: "alice" }, in_reply_to_id: 3001, created_at: "2026-11-10T11:00:00Z", body: "reply text" },
+    { id: 3001, user: { login: "bob" }, in_reply_to_id: null, created_at: "2026-11-10T10:00:00Z", body: "secret comment text" },
+  ]);
+}
+
+test("decision 201: a review that asks for action wakes the PR's live Dispatch once per GitHub id, ids only", async () => {
+  const w = world();
+  w.link(30, "task_r", "dispatched", "run_lead_r", false, "live");
+  reviewed(w);
+  const r = await w.round();
+  assert.deepEqual(
+    w.rows().filter((e) => ["pr_changes_requested", "review_commented", "review_replied"].includes(e.type)).map((e) => [e.type, e.payload.at]),
+    [
+      ["pr_changes_requested", "2026-11-10T09:00:00Z"],
+      ["review_replied", "2026-11-10T11:00:00Z"],
+      ["review_commented", "2026-11-10T10:00:00Z"],
+    ],
+    "GitHub's time rides on the row",
+  );
+  assert.deepEqual(w.messages, [
+    {
+      to: "dispatch:ctx_task_r",
+      subject: "🔁 리뷰: acme/api#30",
+      body: "acme/api#30 에 대응할 리뷰가 왔다: 변경 요청(review id) 2001 · 리뷰 코멘트(review comment id) 3001. GitHub 에서 읽고 대응한다.",
+    },
+  ]);
+  assert.ok(r.acts.every((a) => a.ok), JSON.stringify(r.acts));
+
+  await w.round();
+  assert.equal(w.messages.length, 1, "the next round sends nothing again");
+
+  // A new comment wakes once more, naming only the new id.
+  w.routes[`repos/${REPO}/pulls/30/comments?sort=created&direction=desc&per_page=100`] = ok([
+    { id: 3005, user: { login: "carol" }, in_reply_to_id: null, created_at: "2026-11-10T11:30:00Z" },
+  ]);
+  await w.round();
+  await w.round();
+  assert.deepEqual(w.messages.slice(1).map((m) => m.body), ["acme/api#30 에 대응할 리뷰가 왔다: 리뷰 코멘트(review comment id) 3005. GitHub 에서 읽고 대응한다."]);
+});
+
+test("decision 201: with no live Dispatch the review wake goes to the lead's Run", async () => {
+  const w = world();
+  w.link(30, "task_r", "dispatched", "run_lead_r", true, "exited");
+  reviewed(w);
+  await w.round();
+  assert.deepEqual(w.messages.map((m) => m.to), ["run:run_lead_r"]);
+});
+
+test("decision 201: a review wake that could not go out (link unread) goes out on the next round, once", async () => {
+  const w = world({ watch: { linkedOnly: false } });
+  w.link(30, "task_r", "dispatched", "run_lead_r", false, "live");
+  reviewed(w);
+  const blind = await w.round({ orca: { ...w.deps.orca, referenceFind: async () => ({ ok: false, error: { code: "x", message: "" } }) } as typeof w.deps.orca });
+  assert.deepEqual(w.messages, []);
+  assert.ok(blind.unseen.includes("review wake of acme/api#30: no linked Task"), blind.unseen.join("; "));
+  await w.round();
+  assert.equal(w.messages.length, 1);
+  await w.round();
+  assert.equal(w.messages.length, 1);
 });
 
 test("scope: watch.authors and linked_only; a branch workspace Orca has not linked gets reference add", async () => {

@@ -46,6 +46,46 @@ export function tail(path: string | undefined, bytes = TAIL_BYTES): Rec[] {
   return out;
 }
 
+/**
+ * The records anywhere in the file whose line contains `marker`: one long autonomous turn can push
+ * a record far past the tail, and only marked lines are parsed. Read in chunks: a transcript can
+ * pass the largest string Node holds.
+ */
+export function marked(path: string | undefined, marker: string, chunk = 1 << 20): Rec[] {
+  if (!path) return [];
+  const out: Rec[] = [];
+  const take = (line: Buffer) => {
+    if (!line.includes(marker)) return;
+    try {
+      const r = JSON.parse(line.toString("utf8")) as unknown;
+      if (r && typeof r === "object" && !Array.isArray(r)) out.push(r as Rec);
+    } catch {
+      // A partial last line is skipped.
+    }
+  };
+  try {
+    const fd = openSync(path, "r");
+    try {
+      const buf = Buffer.alloc(chunk);
+      let rest = Buffer.alloc(0);
+      for (let n = readSync(fd, buf, 0, chunk, null); n > 0; n = readSync(fd, buf, 0, chunk, null)) {
+        let data = Buffer.concat([rest, buf.subarray(0, n)]);
+        for (let nl = data.indexOf(10); nl >= 0; nl = data.indexOf(10)) {
+          take(data.subarray(0, nl));
+          data = data.subarray(nl + 1);
+        }
+        rest = Buffer.from(data);
+      }
+      take(rest);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return out;
+  }
+  return out;
+}
+
 export interface ShellInput {
   readonly uuid: string;
   readonly ts: string | undefined;

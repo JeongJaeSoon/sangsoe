@@ -20,6 +20,7 @@ export async function handle(input: Record<string, unknown>, ports: { orca: Orca
     ...(extra.value.cmdHint ? { cmd_hint: extra.value.cmdHint } : {}),
     ...Object.fromEntries(TIMING.filter((k) => input[k] !== undefined).map((k) => [k, input[k]])),
     ...(unitClass ? { unit_class: unitClass } : {}),
+    ...(input.repo !== undefined ? { repo: input.repo } : {}),
   };
   // Checked against the event contract before the Task exists: a row that fails after it would
   // leave an item with no trigger, visible as ready.
@@ -53,7 +54,7 @@ const FIX = {
   task_create_failed: "check that the Run id is right and the deps are Tasks of that Run",
   invalid_role: "role is lead or worker: the session start_unit opens for this item",
   invalid_class: "class is default, hard, design or mechanical, and only for a worker item",
-  invalid_timing: "trigger and review_trigger are non-empty text, hold a boolean, exec_by owner, lead or worker",
+  invalid_timing: "trigger and review_trigger are non-empty text, hold a boolean, exec_by owner, lead or worker, repo an Orca repo selector (id:, name: or path:)",
   invalid_verify: "verify is one of pr_merged{pr} · orca_field{target,field,value} · plugin_approved{key} · run_ok{repo} · pr_found{repo,search}; cmdHint a non-empty command prefix",
 } as const;
 
@@ -77,6 +78,10 @@ export default {
         enum: [...UNIT_CLASSES],
         description:
           "Worker items: the unit class start_unit picks the model and advisor from (resource models). hard for a unit the lead judges hard; design for a root-cause or one-way-door call; mechanical for version bumps, link fixes and collection. Default: default.",
+      },
+      repo: {
+        type: "string",
+        description: "The Orca repo selector (id:, name: or path:) start_unit puts this item's worktree in, when it is not the starter's own repo.",
       },
       who: { type: "string", description: "Who owns the item, e.g. lead:api." },
       doneWhen: { type: "string", description: "One line: when the item is done." },
