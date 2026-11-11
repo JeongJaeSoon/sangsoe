@@ -63,7 +63,7 @@ text{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;f
 <path class="a" d="M381,398 L488,398"/><text class="l c" x="435" y="391">ready 뷰 · capacity</text>
 <g class="st"><rect x="800" y="388" width="186" height="22" rx="5"/><text class="m" x="810" y="403">뷰 읽기 · event 없음</text></g>
 <g class="num"><circle cx="24" cy="436" r="9"/><text x="24" y="440">7</text></g>
-<path class="a" d="M381,436 L595,436"/><text class="l c" x="488" y="429">worker-start --task --model --effort</text>
+<path class="a" d="M381,436 L595,436"/><text class="l c" x="488" y="429">worktree create → worker-start --task</text>
 <g class="st"><rect x="800" y="426" width="186" height="22" rx="5"/><text class="m" x="810" y="441">session_started</text></g>
 <g class="num"><circle cx="24" cy="470" r="9"/><text x="24" y="474">8</text></g>
 <g class="scr"><rect x="632" y="455" width="140" height="30" rx="6"/><text class="c" x="702" y="475">PR 열림·리뷰 요청</text></g>

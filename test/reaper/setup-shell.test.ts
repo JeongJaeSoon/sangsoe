@@ -94,3 +94,25 @@ test("decision 202: a mark-only round, and one with no reaper config, still clos
   assert.deepEqual(rms(unset), []);
   assertNeverForbidden(unset);
 });
+
+test("decision 201: a reaper config that cannot be parsed blocks the round: no shell closed, no card removed, a reap_blocked row", async () => {
+  const w = world();
+  w.config = { unreadable: "the file is not valid JSON" };
+  // The protect list the file would have named is unknown, so even this card's shell stays.
+  unit(w, "maybe-protected");
+  finishedCard(w, "plain");
+  const last = await rounds(w, 3, 30);
+  assert.deepEqual(closes(w), []);
+  assert.deepEqual(rms(w), []);
+  assert.equal(last.roots_ok, false);
+  assert.equal(last.mark_only, false, "not the no-config case");
+  assert.ok(last.unseen.some((u) => u.includes("reaper config: the file is not valid JSON")), last.unseen.join("; "));
+  assert.deepEqual(last.blocked, [{ kind: "config", ref: "reaper", reason: "config_unreadable" }]);
+  assert.deepEqual(w.types("reap_blocked"), [{ kind: "config", ref: "reaper", reason: "config_unreadable" }]);
+  assert.deepEqual(w.types("reap_candidate"), []);
+  assertNeverForbidden(w);
+  // Once the file reads again, the next rounds close the shell and sweep as usual.
+  w.config = CONFIG;
+  await rounds(w, 3, 30);
+  assert.deepEqual(closes(w), [`terminalClose ${SHELL}`]);
+});
