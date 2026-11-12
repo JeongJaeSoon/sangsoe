@@ -17,7 +17,7 @@ import {
   type Store,
   tierOfPr,
 } from "../../core/index.ts";
-import { expectSameViaBothEntrances, viaMcp } from "../boundaries/both-entrances.ts";
+import { expectSameViaBothEntrances, viaCli, viaMcp } from "../boundaries/both-entrances.ts";
 import { createGraphWorld } from "../graph/world.ts";
 import { exec, HEAD, openStore, PR_BRANCH, REPO, reset, rows, world } from "./world.ts";
 
@@ -25,6 +25,22 @@ import { exec, HEAD, openStore, PR_BRANCH, REPO, reset, rows, world } from "./wo
 // CLI command over one core function). A PR above V0 lands once a non-author records its
 // evidence; the PR's author, by name or as the calling session, records nothing.
 after(() => rmSync(world.dir, { recursive: true, force: true }));
+
+// Decision 227: the CLI is an agent session when Claude Code set CLAUDECODE; this suite runs the
+// owner's shell unless a test says otherwise, whatever shell started it.
+delete process.env.CLAUDECODE;
+async function asAgent<T>(f: () => Promise<T>): Promise<T> {
+  process.env.CLAUDECODE = "1";
+  try {
+    return await f();
+  } finally {
+    delete process.env.CLAUDECODE;
+  }
+}
+const AUTHOR_BRANCH = { sha: "c".repeat(40), branch: PR_BRANCH };
+const AUTHOR_COMMIT = { sha: HEAD, branch: "HEAD" };
+const LEAD = { sha: "b".repeat(40), branch: "lead/program" };
+const gitCalls = () => world.calls.filter((c) => c.startsWith("git "));
 
 const dirs = { tools: new URL("./entrances/tools/", import.meta.url), commands: new URL("./entrances/commands/", import.meta.url) };
 const evidence = (extra: Record<string, unknown> = {}) =>
@@ -129,6 +145,46 @@ test("the PR's author is refused by name through both entrances, and by its chec
   assert.match(still.ok ? "" : still.refusal.reason, /test: written by the PR's author/, "a row the author slipped in by hand still does not count");
 });
 
+const evidenceArgv = (recorder = "lead") =>
+  ["evidence", "record", "--repo", REPO, "--pr", "12", "--head", HEAD, "--kind", "test", "--exit-code", "0", "--not-verified", "prod", "--recorder", recorder];
+
+test("decision 227: `sangsoe evidence record` from the PR's author session is refused, so land still lacks the evidence", async () => {
+  reset();
+  verdict();
+  for (const session of [AUTHOR_BRANCH, AUTHOR_COMMIT]) {
+    world.session = session;
+    const r = await asAgent(() => viaCli(evidenceArgv(), dirs));
+    assert.equal(r.ok ? "" : r.refusal.code, "recorder_is_author", JSON.stringify(r));
+    assert.match(r.ok ? "" : r.refusal.fix, /sends the reviewed head, the reviewer and the evidence to its lead/);
+  }
+  world.session = AUTHOR_BRANCH;
+  const both = await asAgent(() =>
+    expectSameViaBothEntrances({
+      tool: "evidence_record",
+      input: { repo: REPO, pr: 12, head_sha: HEAD, kind: "test", exit_code: 0, not_verified: ["prod"], recorder: "lead" },
+      argv: evidenceArgv(),
+      dirs,
+    }),
+  );
+  assert.equal(both.ok ? "" : both.refusal.code, "recorder_is_author");
+  assert.deepEqual(rows("evidence"), []);
+  const still = await land();
+  assert.equal(still.ok ? "" : still.refusal.code, "evidence_missing");
+
+  world.session = LEAD;
+  assert.equal((await asAgent(() => viaCli(evidenceArgv(), dirs))).ok, true, "another session records");
+  assert.equal(rows("evidence").length, 1);
+});
+
+test("decision 227: the owner's shell (no CLAUDECODE) records through the CLI from any folder, without a checkout read", async () => {
+  reset();
+  world.session = AUTHOR_BRANCH;
+  const r = await viaCli(evidenceArgv("owner"), dirs);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(gitCalls(), []);
+  assert.deepEqual(rows("evidence").map((e) => e.actor), ["owner"]);
+});
+
 test("evidence the reader could never count is refused before it is written", async () => {
   reset();
   const cases: [Record<string, unknown>, RegExp][] = [
@@ -142,6 +198,25 @@ test("evidence the reader could never count is refused before it is written", as
     assert.match(r.ok ? "" : r.refusal.reason, want);
   }
   assert.deepEqual(rows("evidence"), []);
+});
+
+test("decision 227: `sangsoe stage record` from the PR's author session is refused; another session and the owner's shell record", async () => {
+  reset();
+  world.merged = true;
+  const argv = (stage: string) => ["stage", "record", "--repo", REPO, "--pr", "12", "--stage", stage, "--sha", "abc1234", "--recorder", "lead"];
+  world.session = AUTHOR_BRANCH;
+  const r = await asAgent(() => viaCli(argv("merge"), dirs));
+  assert.equal(r.ok ? "" : r.refusal.code, "recorder_is_author", JSON.stringify(r));
+  assert.match(r.ok ? "" : r.refusal.fix, /sends the reviewed head, the reviewer and the evidence to its lead/);
+  assert.deepEqual(rows("stage_recorded"), []);
+
+  world.session = LEAD;
+  assert.equal((await asAgent(() => viaCli(argv("merge"), dirs))).ok, true);
+  world.session = AUTHOR_BRANCH;
+  world.calls = [];
+  assert.equal((await viaCli(argv("dev"), dirs)).ok, true, "the owner's shell");
+  assert.deepEqual(gitCalls(), []);
+  assert.deepEqual(rows("stage_recorded").map((e) => e.payload.stage), ["merge", "dev"]);
 });
 
 test("stage_record writes stage_recorded for a merged PR only, and a deploys_after edge waiting on it advances", async () => {
