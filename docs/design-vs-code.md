@@ -97,8 +97,8 @@
 | install Orca 프로필에도 등록 | README Claude profiles | changed (결정 167) | `core/install/install.ts:122`, `core/install/host.ts:108` | account list 를 읽는다 |
 | install Orca dev load | design.html 설치 | implemented | `core/install/install.ts:43`, `core/install/install.ts:48` | 3 이면 지문과 approve 안내 |
 | install 끝의 doctor | design.html 설치 | implemented | `core/install/install.ts:129` | doctor 종료 코드를 낸다 |
-| install --permissions | README Install 3 | changed (결정 221) | `cli/commands/install.ts:20`, `core/install/permissions.ts:11`, `core/install/permissions.ts:177` | 빠진 규칙만, diff·y/N·원자적 쓰기·백업, 두 번째는 변화 없음. 두 프로필(결정 167) |
-| uninstall 이 권한 규칙을 되돌림 | README Install 3 | changed (결정 221) | `core/install/install.ts:181`, `core/install/permissions.ts:263` | sangsoe 가 기록한 규칙 중 같은 글자로 남은 것만 |
+| install --permissions | README Install 3 | changed (결정 221·224) | `cli/commands/install.ts:20`, `core/install/permissions.ts:11`, `core/install/permissions.ts:183`, `core/install/permissions.ts:215` | 빠진 규칙만, diff·y/N·원자적 쓰기·백업, 두 번째는 변화 없음. 두 프로필(결정 167). 터미널이 없으면(Claude Code 의 `!` 줄) diff 뒤 같은 범위의 `--yes` 줄을 적고 쓰지 않는다(결정 224) |
+| uninstall 이 권한 규칙을 되돌림 | README Install 3 | changed (결정 221) | `core/install/install.ts:181`, `core/install/permissions.ts:271` | sangsoe 가 기록한 규칙 중 같은 글자로 남은 것만 |
 | formula · post_install 없음 | design.html 설치 | partial | `core/install/host.ts:46` | G9 — formula 는 별도 탭 저장소라 이 저장소에서 확인할 수 없다. 여기는 트리 경로 환경 변수를 받는 쪽만 있다 |
 | approve 세 조건 | design.html 설치, README Install | implemented | `core/approve/approve.ts:140`, `core/approve/approve.ts:174` | 켜기 직전 해시 재측정 |
 | approve 기록 event | design.html 설치 | implemented | `core/approve/approve.ts:199`, `core/approve/approve.ts:212` | store 를 먼저 연다(결정 123) |
@@ -116,7 +116,7 @@
 | doctor claude·claude profile | README Claude profiles | implemented | `core/install/doctor.ts:146`, `core/install/doctor.ts:150` | |
 | doctor orca claude profile | README Claude profiles | implemented | `core/install/doctor.ts:96` | |
 | doctor land allow | README Install | implemented | `core/install/doctor.ts:119` | notice, 설정은 쓰지 않는다. 고칠 명령은 `sangsoe install --permissions`(결정 221) |
-| doctor permissions | README Install 2·5 | changed (결정 221) | `core/install/doctor.ts:119`, `core/install/permissions.ts:325` | N of M, 모자라면 warn |
+| doctor permissions | README Install 2·5 | changed (결정 221·224) | `core/install/doctor.ts:133`, `core/install/permissions.ts:333` | N of M, 모자라면 warn. 고칠 말에 `!` 줄의 `--yes` 줄도 적는다(결정 224) |
 | doctor claude marketplace | README Install | implemented | `core/install/doctor.ts:156` | 경로가 트리와 다르면 FAIL |
 | doctor orca plugin | README Install | implemented | `core/install/doctor.ts:172`, `core/install/doctor.ts:182` | 승인 대기는 FAIL |
 | doctor orca-plugin-version | README Install | implemented | `core/checks/orca-plugin-version.ts:26` | |

@@ -2,6 +2,10 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+- **`sangsoe install --permissions` from a Claude Code `!` line ends with the line to run.** A `!` line has no terminal to answer y/N on, so the command showed the diff and stopped with no clear next step. It still writes nothing there and exits 1, and its last line is now `… Read the diff above, then run: sangsoe install --permissions --yes`, with the same `--scope` when one was given. Doctor's `permissions` fix, the README's install step 3 and the `sangsoe:setup` skill say the same (224).
+
 ## 0.1.4-rc.4 (pre-release)
 
 Everything since `v0.1.4-rc.3`: decisions 219, 220, 221, 222 and 223. A pre-release for the S6 re-run of what failed on rc.3 and of the panel, install and retire changes since; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.3.

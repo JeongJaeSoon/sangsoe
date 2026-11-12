@@ -29,6 +29,12 @@ export const SANGSOE_RULES: readonly string[] = [
 
 export const PERMISSIONS_FIX = "sangsoe install --permissions";
 
+/** Decision 224: the command that writes what a run without a terminal showed, same scope. */
+export const permissionsYesLine = (scope: Scope): string => `${PERMISSIONS_FIX} --yes${scope === "user" ? "" : ` --scope ${scope}`}`;
+
+/** Doctor's fix for a missing rule: a Claude Code `!` line has no terminal to answer y/N on. */
+export const PERMISSIONS_DOCTOR_FIX = `${PERMISSIONS_FIX} (from a Claude Code ! line: read the diff it prints, then run ${permissionsYesLine("user")})`;
+
 /** The file writes this step makes, so tests point it at a temporary home. */
 export type Files = {
   /** Undefined when the file does not exist. */
@@ -205,7 +211,9 @@ export async function installPermissions(host: Host, opts: PermissionOptions): P
   const shown = changes.map((c) => unifiedDiff(c.path, c.before, c.after)).join("\n");
   const total = changes.reduce((s, c) => s + c.add.length, 0);
   if (!opts.yes) {
-    if (!opts.ask) return { code: 1, lines: [...lines, shown, `permissions: no terminal to ask on; nothing written. Run it in a terminal, or add --yes to write without asking`] };
+    if (!opts.ask) {
+      return { code: 1, lines: [...lines, shown, `permissions: no terminal to ask on, so nothing was written. Read the diff above, then run: ${permissionsYesLine(opts.scope)}`] };
+    }
     if (!(await opts.ask(`${shown}\nAdd these ${total} rules? [y/N] `))) return { code: 0, lines: [...lines, "permissions: nothing written"] };
   } else lines.push(shown);
 
