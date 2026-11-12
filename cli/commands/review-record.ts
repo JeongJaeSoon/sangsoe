@@ -27,7 +27,7 @@ export async function reviewRecord(
   const repo = typeof values.repo === "string" ? values.repo : SANGSOE_REPO;
   const pr = num("pr");
   const head = text("head");
-  const refused = await recorderRefusal(deps.exec, { tool: "sangsoe review record", repo, pr, head, what: "verdict", refused: "review_refused", fix: REVIEW_FIX }, checkout);
+  const refused = await recorderRefusal(deps.exec, { tool: "sangsoe review record", repo, pr, head, what: "verdict", refused: "review_refused", fix: REVIEW_FIX, noCheckout: "pass" }, checkout);
   if (refused) return refused;
   const r = await recordReviewVerdict({ repo, pr, head, actOn: num("act-on"), reviewer: text("reviewer") }, deps);
   return r.ok ? { ok: true, value: r.note } : { ok: false, refusal: { code: "review_refused", reason: r.note, fix: REVIEW_FIX } };

@@ -28,7 +28,7 @@ export function reviewRecordTool(ports: () => ReviewRecordPorts): ToolDef {
       const repo = typeof input.repo === "string" ? input.repo : SANGSOE_REPO;
       const pr = Number(input.pr);
       const head = String(input.head_sha);
-      const refused = await recorderRefusal(p.exec, { tool: "review_record", repo, pr, head, what: "verdict", refused: "review_refused", fix: FIX }, process.cwd());
+      const refused = await recorderRefusal(p.exec, { tool: "review_record", repo, pr, head, what: "verdict", refused: "review_refused", fix: FIX, noCheckout: "refuse" }, process.cwd());
       if (refused) return refused;
       const r = await recordReviewVerdict({ repo, pr, head, actOn: Number(input.act_on), reviewer: String(input.reviewer) }, p);
       return r.ok ? { ok: true, value: r.note } : { ok: false, refusal: { code: "review_refused", reason: r.note, fix: FIX } };

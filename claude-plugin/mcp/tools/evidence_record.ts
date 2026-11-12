@@ -31,7 +31,7 @@ export function evidenceRecordTool(ports: () => RecordPorts): ToolDef {
       const repo = typeof input.repo === "string" ? input.repo : SANGSOE_REPO;
       const pr = Number(input.pr);
       const head = String(input.head_sha);
-      const refused = await recorderRefusal(p.exec, { tool: "evidence_record", repo, pr, head, what: "evidence", refused: "evidence_refused", fix: FIX }, process.cwd());
+      const refused = await recorderRefusal(p.exec, { tool: "evidence_record", repo, pr, head, what: "evidence", refused: "evidence_refused", fix: FIX, noCheckout: "refuse" }, process.cwd());
       if (refused) return refused;
       const r = await recordEvidence(
         {

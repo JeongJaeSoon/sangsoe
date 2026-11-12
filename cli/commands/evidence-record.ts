@@ -24,7 +24,7 @@ export async function evidenceRecord(
   const repo = opt("repo") ?? SANGSOE_REPO;
   const pr = /^[0-9]+$/.test(text("pr")) ? Number(text("pr")) : Number.NaN;
   const head = text("head");
-  const what = { tool: "sangsoe evidence record", repo, pr, head, what: "evidence", refused: "evidence_refused", fix: EVIDENCE_FIX };
+  const what = { tool: "sangsoe evidence record", repo, pr, head, what: "evidence", refused: "evidence_refused", fix: EVIDENCE_FIX, noCheckout: "pass" } as const;
   const refused = await recorderRefusal(deps.exec, what, checkout);
   if (refused) return refused;
   const r = await recordEvidence(

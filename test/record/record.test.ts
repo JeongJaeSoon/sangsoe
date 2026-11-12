@@ -185,6 +185,16 @@ test("decision 227: the owner's shell (no CLAUDECODE) records through the CLI fr
   assert.deepEqual(rows("evidence").map((e) => e.actor), ["owner"]);
 });
 
+test("decision 227: a `!` line in a session folder that is no checkout records through the CLI; the tool still refuses there", async () => {
+  reset();
+  world.session = null;
+  const tool = await evidence();
+  assert.equal(tool.ok ? "" : tool.refusal.code, "recorder_unknown");
+  const r = await asAgent(() => viaCli(evidenceArgv("owner"), dirs));
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(rows("evidence").map((e) => e.actor), ["owner"]);
+});
+
 test("evidence the reader could never count is refused before it is written", async () => {
   reset();
   const cases: [Record<string, unknown>, RegExp][] = [

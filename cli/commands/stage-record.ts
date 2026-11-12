@@ -18,7 +18,7 @@ export async function stageRecord(
   const text = (o: string) => String(values[o]);
   const repo = typeof values.repo === "string" ? values.repo : SANGSOE_REPO;
   const pr = /^[0-9]+$/.test(text("pr")) ? Number(text("pr")) : Number.NaN;
-  const refused = await recorderRefusal(deps.exec, { tool: "sangsoe stage record", repo, pr, head: null, what: "stages", refused: "stage_refused", fix: STAGE_FIX }, checkout);
+  const refused = await recorderRefusal(deps.exec, { tool: "sangsoe stage record", repo, pr, head: null, what: "stages", refused: "stage_refused", fix: STAGE_FIX, noCheckout: "pass" }, checkout);
   if (refused) return refused;
   const r = await recordStage(
     {

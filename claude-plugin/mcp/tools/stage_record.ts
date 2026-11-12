@@ -26,7 +26,7 @@ export function stageRecordTool(ports: () => RecordPorts): ToolDef {
       const p = ports();
       const repo = typeof input.repo === "string" ? input.repo : SANGSOE_REPO;
       const pr = Number(input.pr);
-      const refused = await recorderRefusal(p.exec, { tool: "stage_record", repo, pr, head: null, what: "stages", refused: "stage_refused", fix: FIX }, process.cwd());
+      const refused = await recorderRefusal(p.exec, { tool: "stage_record", repo, pr, head: null, what: "stages", refused: "stage_refused", fix: FIX, noCheckout: "refuse" }, process.cwd());
       if (refused) return refused;
       const r = await recordStage({ repo, pr, stage: String(input.stage), sha: String(input.sha), recorder: String(input.recorder) }, p);
       return r.ok ? { ok: true, value: r.note } : { ok: false, refusal: { code: "stage_refused", reason: r.note, fix: FIX } };

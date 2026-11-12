@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { type ApproveExec, agentCheckout, approveExec, recorderRefusal } from "../../core/index.ts";
 
-const A = { tool: "review_record", repo: "acme/api", pr: 12, head: "a".repeat(40), what: "verdict", refused: "review_refused", fix: "x" };
+const A = { tool: "review_record", repo: "acme/api", pr: 12, head: "a".repeat(40), what: "verdict", refused: "review_refused", fix: "x", noCheckout: "refuse" } as const;
 
 test("from / and from a folder outside every repo the recorder refuses in Korean and reads no PR", async () => {
   const plain = mkdtempSync(join(tmpdir(), "sangsoe-recorder-"));
