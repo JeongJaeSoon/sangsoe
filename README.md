@@ -1,12 +1,12 @@
 # sangsoe
 
-Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.4`; what changed is in `CHANGELOG.md`.
+Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.5`; what changed is in `CHANGELOG.md`.
 
 ## Install
 
 macOS with Homebrew, Claude Code, Orca and an authenticated `gh`. Run these in order, in a terminal or each on a Claude Code `!` line (step 3 says what changes there).
 
-1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.4`.
+1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.5`.
 2. `sangsoe install` registers and enables the Claude Code plugin, registers the Orca plugin, then runs `sangsoe doctor`. It is safe to re-run. On a first install it prints:
 
    ```
