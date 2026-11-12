@@ -1,12 +1,12 @@
 # sangsoe
 
-Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.4`; what changed is in `CHANGELOG.md`.
+Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.5`; what changed is in `CHANGELOG.md`.
 
 ## Install
 
 macOS with Homebrew, Claude Code, Orca and an authenticated `gh`. Run these in order, in a terminal or each on a Claude Code `!` line (step 3 says what changes there).
 
-1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.4`.
+1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.5`.
 2. `sangsoe install` registers and enables the Claude Code plugin, registers the Orca plugin, then runs `sangsoe doctor`. It is safe to re-run. On a first install it prints:
 
    ```
@@ -114,7 +114,7 @@ A V3 change or one touching `protected_paths` still waits for the owner's approv
 }
 ```
 
-**Evidence.** Someone other than the pull request's author records each run at the current head: `sangsoe evidence record --pr <n> --head <head> --kind test|run|ui|dev --exit-code <n> --not-verified <what> --recorder <name>` (agents use the `evidence_record` tool). After the merge, `sangsoe stage record --pr <n> --stage merge|dev|prod --sha <sha> --recorder <name>` (the `stage_record` tool) records each stage a flow's deploy steps wait on. See decision 171.
+**Evidence.** Someone other than the pull request's author records each run at the current head: `sangsoe evidence record --pr <n> --head <head> --kind test|run|ui|dev --exit-code <n> --not-verified <what> --recorder <name>` (agents use the `evidence_record` tool). After the merge, `sangsoe stage record --pr <n> --stage merge|dev|prod --sha <sha> --recorder <name>` (the `stage_record` tool) records each stage a flow's deploy steps wait on. See decision 171. Under Claude Code (a session or a `!` line), `sangsoe evidence record`, `sangsoe stage record` and `sangsoe review record` refuse with `recorder_is_author` when run from a checkout on the pull request's branch or head, so the session that wrote the pull request cannot record its own review, evidence or stages; the lead or the owner records them from another folder (decision 227).
 
 ## Layout
 
