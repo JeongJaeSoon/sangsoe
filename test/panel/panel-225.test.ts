@@ -82,6 +82,20 @@ test("(11) an empty cell takes no room in a card: the next value flows to the le
   assert.doesNotMatch(NARROW, /visibility: hidden/);
 });
 
+test("(11) an item card's head names its state in a badge; the wide column keeps the mark, a group row keeps its mark", () => {
+  const rows = ov().inProgress.rows;
+  const ready = rows.find((r) => r.cells[0]?.text === "🟢" && !r.id.startsWith("lead:"));
+  const blocked = rows.find((r) => r.cells[0]?.text === "🚧" && !r.id.startsWith("lead:"));
+  assert.ok(ready && blocked, "the world has a 🟢 and a 🚧 item");
+  const html = renderStage(one);
+  assert.match(rowOf(html, ready.id), /^<tr[^>]*><td><span class="mk">🟢<\/span><span class="badge st">준비됨<\/span><\/td>/);
+  assert.match(rowOf(html, blocked.id), /^<tr[^>]*><td><span class="mk">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
+  assert.match(rowOf(html, "lead:api-migration"), /^<tr[^>]*><td>🚧<\/td>/);
+  assert.match(rule(WIDE, ".tbl .st"), /display: none;/);
+  assert.match(rule(NARROW, ".tbl .st"), /display: inline-block;/);
+  assert.match(rule(NARROW, ".tbl .mk"), /display: none;/);
+});
+
 test("(4) the detail view's header and its back line stay together at the top while the page scrolls", () => {
   const bar = rule(STYLE, ".bar");
   for (const d of ["position: sticky;", "top: 0;"]) assert.ok(bar.includes(d), d);
