@@ -106,7 +106,7 @@ test("(11) an item card's head names its state in a badge; the wide column shows
   assert.match(rowOf(html, ready.id), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🟢<\/span><span class="badge st">준비됨<\/span><\/td>/);
   assert.match(rowOf(html, blocked.id), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
   assert.match(rowOf(html, "lead:api-migration"), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
-  assert.match(rule(NARROW, ".tbl tr.lead .st"), /display: none;/);
+  assert.match(rule(NARROW, ".tbl tr.lead .st"), /clip-path: inset\(50%\);/);
   assert.doesNotMatch(rule(WIDE, ".tbl .st"), /display: none;/);
   assert.match(rule(NARROW, ".tbl .st"), /display: inline-block;/);
   assert.match(rule(NARROW, ".tbl .mk"), /display: none;/);

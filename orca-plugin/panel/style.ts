@@ -272,9 +272,9 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl tr.lead td.title { display: flex; align-items: center; }
   /* A group head is one line: who and how long show on the item cards under it. */
   .tbl tr.lead td[data-l], .tbl tr.lead td.brk { display: none; }
-  /* Its count badge already says how many are blocked, so the head keeps the bare mark (decision 225). */
+  /* The head line keeps the bare mark decision 225 (11) drew; its word stays for screen readers. */
   .tbl tr.lead .mk { display: inline; }
-  .tbl tr.lead .st { display: none; }
+  .tbl tr.lead .st { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .tbl tr.lead .go { display: inline; flex: none; margin-left: auto; padding-left: var(--s3); color: var(--link); font-size: var(--text-xs); font-weight: 500; }
   .tbl tr.lead:hover .go, .tbl tr.lead:focus-visible .go { text-decoration: underline; text-underline-offset: 2px; }
   .tbl td.acts { flex: 1 0 100%; display: flex; gap: var(--s2); margin: var(--s2) 0 0; }
