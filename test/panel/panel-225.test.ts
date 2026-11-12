@@ -103,9 +103,9 @@ test("(11) an item card's head names its state in a badge; the wide column shows
   const blocked = rows.find((r) => r.cells[0]?.text === "🚧" && !r.id.startsWith("lead:"));
   assert.ok(ready && blocked, "the world has a 🟢 and a 🚧 item");
   const html = renderStage(one);
-  assert.match(rowOf(html, ready.id), /^<tr[^>]*><td><span class="mk">🟢<\/span><span class="badge st">준비됨<\/span><\/td>/);
-  assert.match(rowOf(html, blocked.id), /^<tr[^>]*><td><span class="mk">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
-  assert.match(rowOf(html, "lead:api-migration"), /^<tr[^>]*><td><span class="mk">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
+  assert.match(rowOf(html, ready.id), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🟢<\/span><span class="badge st">준비됨<\/span><\/td>/);
+  assert.match(rowOf(html, blocked.id), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
+  assert.match(rowOf(html, "lead:api-migration"), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
   assert.match(rule(NARROW, ".tbl tr.lead .st"), /display: none;/);
   assert.doesNotMatch(rule(WIDE, ".tbl .st"), /display: none;/);
   assert.match(rule(NARROW, ".tbl .st"), /display: inline-block;/);

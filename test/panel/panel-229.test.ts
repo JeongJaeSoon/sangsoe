@@ -44,10 +44,14 @@ test("a card with someone in 누가 still reads 누가 <who> <age>", () => {
   assert.match(whoOf("워커 —"), /class="who"[^>]*><span class="badge">워커<\/span><\/td>$/);
 });
 
-test("every 누가 cell the panel labels holds a who badge", () => {
+test("every 누가 cell is a who badge, an age cell with no label, or an empty cell", () => {
   for (const v of [one, grp]) {
-    const cells = renderStage(v).match(/<td data-l="누가" class="who"[^>]*>.*?<\/td>/g) ?? [];
-    for (const c of cells) assert.match(c, /<span class="badge">[^<]+<\/span>/, c);
+    const cells = renderStage(v).match(/<td data-l="누가".*?<\/td>/g) ?? [];
+    assert.ok(cells.length > 0);
+    for (const c of cells) {
+      const ok = /^<td data-l="누가" class="(?:who"[^>]*><span class="badge">[^<]+<\/span>|age">\d+[mhd]<\/td>$|nil">)/.test(c);
+      assert.ok(ok, c);
+    }
   }
 });
 
@@ -56,7 +60,8 @@ test("the wide state column shows each reading's mark with its word, the narrow 
     const mark = READING_LABEL[r].split(" ")[0] ?? "";
     const rows = ov().inProgress.rows.map((x) => (x.id === "i026" ? { ...x, cells: x.cells.map((c, i) => (i === 0 ? { text: mark } : c)) } : x));
     const cell = /^<tr[^>]*><td>(.*?)<\/td>/.exec(rowOf(renderStage(withRows(rows)), "i026"))?.[1] ?? "";
-    assert.match(cell, new RegExp(`^<span class="mk">${mark}</span><span class="badge[^"]* st">[^<]+</span>$`, "u"), `${r}: ${cell}`);
+    // The word is read aloud once: the mark beside it is hidden from screen readers.
+    assert.match(cell, new RegExp(`^<span class="mk" aria-hidden="true">${mark}</span><span class="badge[^"]* st">[^<]+</span>$`, "u"), `${r}: ${cell}`);
   }
   assert.doesNotMatch(rule(WIDE, ".tbl .st"), /display: none;/, "the word shows in the wide column too");
   assert.match(rule(NARROW, ".tbl .mk"), /display: none;/);
@@ -64,7 +69,7 @@ test("the wide state column shows each reading's mark with its word, the narrow 
 });
 
 test("a group row's state cell in the wide table says its word too; its narrow head keeps the mark", () => {
-  assert.match(rowOf(renderStage(one), "lead:api-migration"), /^<tr[^>]*><td><span class="mk">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
+  assert.match(rowOf(renderStage(one), "lead:api-migration"), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
   assert.match(rule(NARROW, ".tbl tr.lead .mk"), /display: inline;/);
   assert.match(rule(NARROW, ".tbl tr.lead .st"), /display: none;/);
 });

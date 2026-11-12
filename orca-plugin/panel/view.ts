@@ -213,7 +213,7 @@ const STATE_WORD: Readonly<Record<string, string>> = {
 function markHtml(c: Cell): string {
   const word = STATE_WORD[c.text];
   if (!word || c.link) return cellHtml(c);
-  return `<span class="mk">${esc(c.text)}</span>${badge(word, TONE[c.text] ?? "", "st")}`;
+  return `<span class="mk" aria-hidden="true">${esc(c.text)}</span>${badge(word, TONE[c.text] ?? "", "st")}`;
 }
 
 /** The core's "N건·막힘 M" (core/brief/build.ts) as one badge; a text it cannot read stays as written. */
