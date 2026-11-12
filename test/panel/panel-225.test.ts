@@ -77,7 +77,7 @@ test("(7) a who with no time ('워커 —') or no one ('— —', '—') draws n
   assert.equal(cellOf("— 17h"), '<span class="age">17h</span>');
   assert.equal(cellOf("— —"), "");
   const item = renderStage({ ...grp, model: { stage: 3, now: "", id: "i026", title: "x", state: "🔄", flags: "", who: "—", priority: "P2", chain: { title: "체인", count: 0, columns: [], rows: [] } } as ItemDetail });
-  assert.match(item, /<p class="sumline">누가 — · /);
+  assert.match(item, /<p class="sumline">누가 — ·/);
 });
 
 test("(3) the middle text takes the freed width, at most two lines then an ellipsis, its full text in the title", () => {

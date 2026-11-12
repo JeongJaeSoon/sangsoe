@@ -219,9 +219,9 @@ const COL_CLASS: Readonly<Record<string, string>> = { PR: "pr", 다음: "mid", "
 
 // "리뷰어 20m" → who as a badge, the time apart; "— 17h" has no who.
 function whoHtml(text: string): string {
-  const m = /^(.*\S)\s+(\d+[mhd])$/.exec(text);
+  const m = /^(.*\S)\s+(\d+[mhd]|—)$/.exec(text);
   const who = m ? (m[1] ?? "") : text;
-  const age = m ? `<span class="age">${esc(m[2] ?? "")}</span>` : "";
+  const age = m && m[2] !== "—" ? `<span class="age">${esc(m[2] ?? "")}</span>` : "";
   return `${who === "—" ? "" : badge(who)}${age}`;
 }
 
@@ -732,7 +732,7 @@ function item(m: ItemDetail): string {
   const rows = m.chain.rows.map((r) => rowHtml(m.chain, r, { idCol: true }));
   return [
     `<h1>${esc(m.state)} <span class="id">${esc(m.id)}</span> ${esc(m.title)} ${esc(m.flags)}</h1>`,
-    `<p class="sumline">누가 ${badge(m.who)} · <span class="pri">${esc(m.priority)}</span></p>`,
+    `<p class="sumline">누가 ${m.who === "—" ? "—" : badge(m.who)} ·<span class="pri">${esc(m.priority)}</span></p>`,
     section("chain", m.chain, rows),
   ].join("");
 }
