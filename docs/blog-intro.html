@@ -285,9 +285,9 @@ svg .halo{fill:var(--card)}
 
 <p><strong>③ 멈춤 감지.</strong> 워커가 오래 조용하면 <code>orca-monitor</code>가 Orca가 알려 주는 마지막 출력·활동 시각으로 판정한다(그 필드의 뜻은 6절). 멈췄다고 보면 워커, 그 일을 쥔 리드, 오케스트레이터 순서로 한 번씩 깨운다. 같은 세션을 두 번 깨우지 않고, 깨웠는데 읽히지 않으면 한 단계 위로 올린다. 위로 올라가도 풀리지 않는 것, 곧 오너만 답할 수 있는 질문은 결정(🙋)으로 열린다. 한 번 답한 결정은 닫히고, 같은 질문은 다시 만들어지지 않는다. 기다리던 워커에게는 답이 Orca 메시지로 간다.</p>
 
-<p><strong>④ PR과 확인.</strong> 워커가 PR을 열고 독립 리뷰에서 더 고칠 것이 없으면 <code>sangsoe land</code>(MCP tool로도 부른다)를 부른다. 이 함수가 먼저 <strong>검증 등급이 요구하는 증거</strong>가 머지할 커밋에 있는지 본다(아래 5절 표). 없으면 거부한다. 통과하면 저장소 설정이 자동 머지 조건 네 가지를 모두 만족할 때만 머지를 예약한다. 하나라도 거짓이면 예약하지 않고 "승인되면 머지"로 남긴다. 작성자 말고는 승인할 계정이 없는 저장소는 설정으로 켜면, 기록된 독립 리뷰 판정과 초록 검사를 승인 대신 세어 바로 머지한다(결정 158). 작성자는 어느 쪽이든 보고하고 스스로 끝난다. 머지하는 길은 이 하나뿐이다.</p>
+<p><strong>④ PR과 확인.</strong> 워커가 PR을 열고 독립 리뷰에서 더 고칠 것이 없으면 <code>sangsoe land</code>(MCP tool로도 부른다)를 부른다. 이 함수가 먼저 <strong>검증 등급이 요구하는 증거</strong>가 머지할 커밋에 있는지 본다(아래 5절 표). 없으면 거부한다. 통과하면 저장소 설정이 자동 머지 조건 네 가지를 모두 만족할 때만 머지를 예약한다. 하나라도 거짓이면 예약하지 않고 "승인되면 머지"로 남긴다. 작성자 말고는 승인할 계정이 없는 저장소는 설정으로 켜면, 기록된 독립 리뷰 판정과 초록 검사를 승인 대신 세어 바로 머지한다(결정 158). 작성자는 어느 쪽이든 보고하고 스스로 끝난다. 쌓은 PR 은 base 가 바뀐 뒤에 받은 리뷰만 세고(결정 215), 이미 머지된 아래 PR 의 브랜치에는 머지하지 않는다(결정 216). 머지하는 길은 이 하나뿐이다. 예외는 CI 가 없는 저장소 하나다: 검사가 하나도 없으면 <code>sangsoe land</code> 는 거부한 채로 두고, 오케스트레이터가 diff 와 커밋을 확인해 그 커밋에 맞춘 일반 머지를 한다(결정 226).</p>
 
-<p><strong>⑤ 머지 확인.</strong> 머지 뒤에 <code>pr-monitor</code>가 GitHub이 머지로 표시했는지, 머지 커밋이 main에 들어갔는지를 둘 다 읽는다. 둘 다 참일 때만 <code>pr-monitor</code>가 그 Task를 <code>completed</code>로 닫고, 항목이 ✅ 완료가 된다. 증거 없이 닫힌 항목은 🔍로 표시되어 리드가 다시 본다. main의 CI가 빨개지면 🚨와 함께 다른 PR의 머지를 막는다.</p>
+<p><strong>⑤ 머지 확인.</strong> 머지 뒤에 <code>pr-monitor</code>가 GitHub이 머지로 표시했는지, 머지 커밋이 main에 들어갔는지를 둘 다 읽는다. 둘 다 참일 때만 <code>pr-monitor</code>가 그 Task를 <code>completed</code>로 닫고, 항목이 ✅ 완료가 된다. 증거 없이 닫힌 항목은 🔍로 표시되어 리드가 다시 본다. PR이 머지 없이 닫힌 항목은 🚧로 남고, 다시 열지 않을 것이면 오너나 리드가 <code>sangsoe item retire</code>(MCP tool <code>item_retire</code>)로 거둬 🗑️ 취소가 된다(결정 223). main의 CI가 빨개지면 🚨와 함께 다른 PR의 머지를 막는다.</p>
 
 <p><strong>⑥ 정리(REAPER).</strong> 끝난 일이 남긴 worktree, 브랜치, Docker 자원을 치우는 라운드다. 먼저 후보를 <strong>표시</strong>하고, 조건을 만족한 것만 <strong>정리</strong>한다.</p>
 
@@ -325,22 +325,23 @@ svg .halo{fill:var(--card)}
 
 <h3>설치</h3>
 
-<p>지금 안정판은 <code>v0.1.0</code> 이다. 아래 절차는 저장소 <code>README.md</code> 의 Install · Update · Uninstall 과 같다.</p>
+<p>지금 안정판은 <code>v0.1.4</code> 이다. 아래 절차는 저장소 <code>README.md</code> 의 Install · Update · Uninstall 과 같다.</p>
 
 <p>설치 길은 하나다. Homebrew가 코어와 매니페스트 둘(<code>.claude-plugin/plugin.json</code>과 <code>orca-plugin.json</code>)이 든 트리 하나를 깔고, <code>sangsoe install</code>이 그 트리를 각 호스트의 공식 명령으로 Claude Code plugin과 Orca plugin에 등록한다(결정 90·108). 필요한 것은 macOS 의 Homebrew, Claude Code, Orca, 인증된 <code>gh</code> 다. 사람이 순서대로 실행한다.</p>
 
 <ol>
 <li><code>brew install JeongJaeSoon/tap/sangsoe</code> 다음 <code>sangsoe --version</code>. <code>sangsoe &lt;버전&gt;</code> 을 출력한다.</li>
-<li><code>sangsoe install</code>: 두 plugin 을 등록하고 <code>sangsoe doctor</code> 를 돌린다. 다시 불러도 된다. 처음에는 <code>claude: added marketplace sangsoe → …/libexec</code> · <code>claude: installed sangsoe@sangsoe</code> · <code>orca: loaded, approval waits — fingerprint ap1-…; next: sangsoe plugin approve</code> 를 출력한다. 뒤따르는 doctor 행에서 <code>FAIL orca plugin: local.sangsoe waits for approval</code> 은 예상된 것이고 <code>warn orca-plugin-version</code> 이 함께 나올 수 있다. 둘 다 고칠 명령으로 <code>sangsoe plugin approve</code> 를 적는다.</li>
+<li><code>sangsoe install</code>: 두 plugin 을 등록하고 <code>sangsoe doctor</code> 를 돌린다. 다시 불러도 된다. 처음에는 <code>claude: added marketplace sangsoe → …/libexec</code> · <code>claude: installed sangsoe@sangsoe</code> · <code>orca: loaded, approval waits — fingerprint ap1-…; next: sangsoe plugin approve</code> 를 출력한다. 뒤따르는 doctor 행에서 <code>FAIL orca plugin: local.sangsoe waits for approval</code> 은 예상된 것이고 <code>warn orca-plugin-version</code> 이 함께 나올 수 있다. 둘 다 고칠 명령으로 <code>sangsoe plugin approve</code> 를 적는다. <code>warn permissions: 0 of 16 …</code> 도 예상된 것이고 고칠 명령은 다음 단계다.</li>
+<li><code>sangsoe install --permissions</code>: sangsoe 세션이 권한 질문에서 멈추지 않도록 <code>permissions.allow</code> 규칙 16개(sangsoe MCP tool 규칙 하나와 세션이 부르는 Orca 명령마다 하나)를 Claude 프로필의 <code>settings.json</code> 에 더한다. <code>git push</code>·<code>gh pr merge</code>·<code>rm</code>·<code>brew</code> 를 허락하는 규칙은 없다. diff 를 보이고 <code>Add these 16 rules? [y/N]</code> 를 묻고, 빠진 것만 쓰고 백업을 남기며, 두 번째 실행은 아무것도 쓰지 않는다. Claude Code 의 <code>!</code> 줄에는 답할 터미널이 없어 diff 만 보이고 1 로 끝나며 마지막 줄에 <code>sangsoe install --permissions --yes</code> 를 적는다. diff 를 읽고 그 줄을 친다(결정 221·224).</li>
 <li><code>sangsoe plugin approve</code>: 세 가지가 참일 때만 Orca plugin 을 켠다. 그 빌드의 PR 이 Act-on 0 인 독립 리뷰를 받았고 이 머신에 <code>sangsoe review record --pr &lt;n&gt; --head &lt;sha 40자&gt; --act-on 0 --reviewer &lt;이름&gt;</code> 로 기록돼 있을 것(결정 111), 설치된 폴더의 내용이 빌드 커밋과 리뷰된 head 둘 다와 같을 것(결정 105), Orca 가 이 폴더의 <code>local.sangsoe</code> 를 정확히 물을 것. 먼저 <code>--dry-run</code> 으로 각 검사와 부를 <code>orca plugin enable</code> 명령을 본다. 성공하면 <code>recorded plugin_approved (seq N)</code> 와 <code>enabled</code> 를 출력한다.</li>
 <li><code>sangsoe doctor</code> 가 모든 행에 <code>ok</code> 를 내고 0 으로 끝난다. 예외는 <code>reaper-config</code> 의 <code>notice</code> 행 하나다: 설정 파일에 <code>reaper</code> 칸이 없으면 REAPER 는 표시만 하고 정리하지 않는다(결정 153). <code>sangsoe install</code> 은 이 칸을 쓰지 않는다.</li>
 </ol>
 
 <p><b>갱신.</b> <code>brew upgrade sangsoe</code> → <code>sangsoe install</code> → 새 빌드의 리뷰 기록(<code>sangsoe review record</code>) → <code>sangsoe plugin approve</code> → <code>sangsoe doctor</code>. 버전마다 Cellar 폴더가 따로이고 Orca 가 승인을 그 폴더에 묶으므로(결정 122), 갱신할 때마다 새 리뷰 기록과 새 승인이 든다. 이전 버전의 기록은 이어지지 않는다. 승인은 Orca plugin 이 돌리는 코어까지 덮는다: 릴리스가 <code>core/</code> 사본을 <code>orca-plugin/vendor/</code> 에 싣고 plugin 은 그 사본만 연다(결정 152). 같은 버전을 다시 까는 것(<code>brew reinstall sangsoe</code> 뒤 <code>sangsoe install</code>)은 새 승인이 필요 없다.</p>
 
-<p><b>제거.</b> <code>sangsoe uninstall</code> 다음 <code>brew uninstall sangsoe</code>. 어느 쪽도 데이터(<code>~/.local/share/sangsoe</code>)와 설정(<code>~/.config/sangsoe</code>)을 지우지 않는다.</p>
+<p><b>제거.</b> <code>sangsoe uninstall</code> 다음 <code>brew uninstall sangsoe</code>. uninstall 은 sangsoe 가 더했다고 기록한 allow 규칙만 뺀다(<code>permissions: removed N rules sangsoe added from …</code>). 그래서 uninstall 을 거쳐 사전 릴리스에서 안정판으로 갈아탔으면 <code>sangsoe install --permissions</code> 를 다시 한다. 어느 쪽도 데이터(<code>~/.local/share/sangsoe</code>)와 설정(<code>~/.config/sangsoe</code>)을 지우지 않는다.</p>
 
-<p>오너는 <code>permissions.allow</code>에 <code>sangsoe plugin approve</code> 한 줄만 넣는다. <code>orca plugin enable</code> 자체는 넣지 않는다. 그래야 에이전트가 다른 plugin을 승인하거나 조건을 우회하지 못한다.</p>
+<p><code>orca plugin enable</code> 은 어느 allow 규칙에도 넣지 않고, <code>install --permissions</code> 가 더하는 16개에도 <code>sangsoe plugin approve</code> 는 없다. 승인은 오너가 친다. 그래야 에이전트가 다른 plugin을 승인하거나 조건을 우회하지 못한다.</p>
 
 <h3>자주 부르는 것</h3>
 
@@ -357,19 +358,19 @@ svg .halo{fill:var(--card)}
 </tbody>
 </table>
 
-<p>에이전트(오케스트레이터, 리드, 워커)는 Bash로 CLI를 부르지 않고 <strong>MCP tool만</strong> 쓴다. 인자의 타입이 정해져 있고, 거부 오류가 글자가 아니라 구조로 오기 때문이다. 쓰는 tool은 열네 개다. 항목 만들기, 의존 더하기·빼기·펼치기, 결정 열기·답하기, 세션 시작이 일곱 개의 행동이고, 여기에 land 요청 하나와 기록 여섯(인계 저장, 리뷰 의뢰 기록, 리뷰 판정 기록, 만든 자원 기록, 검증 증거 기록, 배포 단계 기록)이 더해진다. 상태 전환은 Orca 의 Task 명령을 그대로 쓴다(결정 160). 읽기는 tool이 아니라 resource 넷(현황 1단계, 시작할 수 있는 항목, 모델 선택 표, 항목 이력)으로 열린다. CLI는 MCP를 못 쓰는 호출자(hook, 사람 터미널, CI)용으로 얇게만 둔다.</p>
+<p>에이전트(오케스트레이터, 리드, 워커)는 Bash로 CLI를 부르지 않고 <strong>MCP tool만</strong> 쓴다. 인자의 타입이 정해져 있고, 거부 오류가 글자가 아니라 구조로 오기 때문이다. 쓰는 tool은 열여섯 개다. 항목 만들기·거두기(머지 없이 닫힌 PR 의 완료 항목, 결정 223), 의존 더하기·빼기·펼치기, 흐름 단계 건너뛰기, 결정 열기·답하기, 세션 시작이 아홉 개의 행동이고, 여기에 land 요청 하나와 기록 여섯(인계 저장, 리뷰 의뢰 기록, 리뷰 판정 기록, 만든 자원 기록, 검증 증거 기록, 배포 단계 기록)이 더해진다. 상태 전환은 Orca 의 Task 명령을 그대로 쓴다(결정 160). 읽기는 tool이 아니라 resource 넷(현황 1단계, 시작할 수 있는 항목, 모델 선택 표, 항목 이력)으로 열린다. CLI는 MCP를 못 쓰는 호출자(hook, 사람 터미널, CI)용으로 얇게만 둔다.</p>
 
 <h3>패널이 보여 주는 것</h3>
 
 <p>패널은 읽는 도구이고, 같은 모델을 <code>sangsoe brief</code>도 쓴다.</p>
 
 <ol>
-<li><strong>현황</strong>: 맨 위에 <code>✅ 완료 · 🔄 진행 중 · 남은 것 · 🚧 막힌 것</code> 건수 한 줄, 그 아래 표 네 절(결정 필요 · 지금 오너가 할 일 · 진행 중 · 보류). 리드, 카드, PR, 워커가 한 행씩이다. 오너가 해야 하는 행은 배경색 없이 🚧 마커와 절 건수로 가리키고, 표 행은 모두 같은 높이다.</li>
-<li><strong>묶음 상세</strong>: 항목, 세션, PR을 상태별로 한 줄씩. 선행 → 후속은 SVG 그림으로, 크리티컬 패스는 번호로 보이고, 아직 못 시작한 일은 "왜 준비되지 않았나" 표가 막는 선행과 해야 할 일을 보여 준다. 넓은 화면은 왼쪽에 그래프와 그 아래 간선 범례, 오른쪽에 같은 높이의 표 넷(더 길면 안에서 스크롤)이고, 360px 은 그래프, 범례, 표 순으로 쌓인다.</li>
+<li><strong>현황</strong>: 맨 위에 <code>✅ 완료 · 🔄 진행 중 · 남은 것 · 🚧 막힌 것</code> 건수 한 줄, 그 아래 표 네 절(결정 필요 · 지금 오너가 할 일 · 열린 항목 · 보류). 셋째 절의 이름은 건수 줄의 🔄 진행 중과 헷갈리지 않게 "열린 항목" 이다(결정 222). 리드, 카드, PR, 워커가 한 행씩이다. 오너가 해야 하는 행은 배경색 없이 🚧 마커와 절 건수로 가리키고, 표 행은 모두 같은 높이다.</li>
+<li><strong>묶음 상세</strong>: 항목, 세션, PR을 상태별로 한 줄씩. 선행 → 후속은 SVG 그림으로, 크리티컬 패스는 번호로 보이고, 🚧 로 세는 항목은 모두 "왜 준비되지 않았나" 표에 무엇을 기다리는지 한 행 이상을 갖는다(결정 218). 머리의 "열린 N건" 은 진행 중 · 막힘 · 남은 것의 합이고 ✅ 는 따로 센다. 넓은 화면은 표마다 열 역할이 너비를 정하고, 좁은 패널에서는 표의 행 하나가 테두리 있는 카드 하나다(결정 220). 간선 범례는 접혀서 시작한다.</li>
 <li><strong>항목 상세</strong>: 오너가 한 말에서 시작해 분류, 전환, 증거, 연결된 PR과 결정까지.</li>
 </ol>
 
-<p>패널 맨 위에는 Orca 자신의 패널처럼 머리 행(새로 고침 · 터미널에서 전체 현황 · 더 보기)과 <code>전체 · 할 일 · 진행 중</code> 탭이 있고, 비어 있는 절은 한 줄로 접힌다. Orca 상태 표시줄에는 이름표와 같은 건수의 짧은 꼴(<code>✨ SANGSOE  🚧 2 · 결정 2 · 🔄 5</code>)이 뜨고, 오너가 할 일이 있으면 붉게 바뀐다.</p>
+<p>패널 맨 위에는 Orca 자신의 패널처럼 머리 행(새로 고침 · 터미널에서 전체 현황 · 더 보기)과 <code>전체 · 할 일 · 열린 항목</code> 탭이 있고, 비어 있는 절은 한 줄로 접힌다. 톤도 Orca 의 패널을 따라 배경은 모두 흰색이고 강조는 1px 연한 테두리와 둥근 모서리뿐이다(결정 222). 다음 릴리스(v0.1.5)는 위 틈을 없애고 머리를 고정하며 상태·사람·묶음의 수를 배지로 보인다(결정 225, main 에는 이미 있다). Orca 상태 표시줄에는 이름표와 같은 건수의 짧은 꼴(<code>✨ SANGSOE | 🚧 2 | 결정 2 | 🔄 5</code>)이 뜨고, 막힌 일이나 오너가 할 일이 있거나 재시작이 밀렸으면 붉게 바뀐다.</p>
 
 <p>상태는 📅 예정 · 🟢 준비됨 · 🔄 진행 중 · ⏳ 검증 대기 · 🚧 막힘(누가 막는지 괄호에 적는다) · ⏸️ 보류 · ✅ 완료 · 🗑️ 취소, 플래그는 🙋 결정 필요 · 🚨 오류·멈춤 · 🔍 근거 부족이다. 이모지는 이 뜻 외에는 쓰지 않는다. 패널, 상태 표시줄, <code>sangsoe todo</code>의 "내가 할 일" 숫자는 같은 계산에서 나오므로 어디서 봐도 같다.</p>
 

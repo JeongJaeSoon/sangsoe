@@ -6,7 +6,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 - **옛 시험 파일**(`test_*.py`·`*.test.tsx`)은 그 대상의 행에 함께 적는다. 옛 코드는 옮기지 않았고 시험은 다시 쓸 명세로만 읽었다(port-plan 1절).
 - `test/migrate/port-map.test.ts` 가 `test/fixtures/migrate/agent-skills-entries.txt` 의 모든 항목이 이 표에 있는지, 경로가 있는지, DROP·GAP 에 이유가 있는지 센다.
 
-집계: 행 88 · 경로 51 · PR 0 · 단위 6 · DROP 27 · GAP 8 (한 행이 경로와 PR 을 함께 가지면 둘 다 센다).
+집계: 행 89 · 경로 51 · PR 0 · 단위 6 · DROP 28 · GAP 8 (한 행이 경로와 PR 을 함께 가지면 둘 다 센다).
 
 ## skills
 
@@ -18,7 +18,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 | `skills/deliver-ticket` | `claude-plugin/skills/deliver-ticket/SKILL.md`, `core/land/`, `core/verify/` | 남김: 계획·시험·독립 리뷰·V0–V3 증거·land·`merge_ready`. 버림: 직접 머지와 티켓 도구 단계(결정 93) |
 | `skills/reflect` | `claude-plugin/skills/reflect/SKILL.md`, `core/store/views/item_timeline.ts` | 남김: 세 리뷰어 교훈과 `item_timeline` 측정. 버림: 교훈 원장 파일(재료는 event 와 리뷰 원문) |
 | `skills/reap-resources` | `claude-plugin/skills/reap-resources/SKILL.md`, U18 | 남김: 당사자 몫과 REAPER 보고 처리. 버림: 목록·판정·정리 절차(토큰 X 인 REAPER 라운드, U18 이 짓는다) |
-| `skills/skills-config` | `claude-plugin/skills/setup/SKILL.md`, `core/install/` | 남김: `sangsoe install`·`doctor`·`plugin approve`·`uninstall` 을 가리키기. 버림: 설정 파일 쓰기 |
+| `skills/skills-config` | `claude-plugin/skills/setup/SKILL.md`, `core/install/`, `core/install/permissions.ts` | 남김: `sangsoe install`·`doctor`·`plugin approve`·`uninstall` 을 가리키기, `permissions.allow` 규칙 더하기는 `sangsoe install --permissions` 로(sangsoe 세션이 부르는 16개만, diff·y/N·백업, 터미널이 없으면 `--yes` 줄을 적고 끝냄, `uninstall` 이 기록한 것만 뺌, 결정 221·224). 버림: 그 밖의 설정 쓰기(`agent-skills.json` 값, autoMode 규칙, 다른 allow 규칙) |
 | `skills/setup-pc` | `claude-plugin/skills/setup/SKILL.md`, `cli/commands/install.ts`, `cli/commands/doctor.ts` | 남김: 설치·점검. 버림: dry-run 스크립트와 `agent-skills.json` 키(결정 90), 이 PC 에서 다른 PC 를 다루는 일(cross-PC, 결정 203) |
 | `skills/brief` | `claude-plugin/skills/brief/SKILL.md`, `claude-plugin/skills/todo/SKILL.md`, `core/brief/`, `cli/commands/brief.ts`, `cli/commands/todo.ts` | 남김: 렌더러 출력을 그대로 보내기, 78칸 표. 바꿈: 세 단계와 `todo`(결정 89, 128) |
 | `skills/watch-prs` | U16 | pr-monitor(머지 확인·main 감시). 아직 PR 없음 |
@@ -79,7 +79,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 | `scripts/card.py`, `scripts/test_card.py` | `core/start/`, `test/lineage/start.test.ts` | `worker-start` 로만 시작, 대체 시작 없음(결정 94). 버림: 카드 행·nudge |
 | `scripts/end_check.py`, `scripts/test_end_check.py` | `claude-plugin/skills/end-session/SKILL.md` | 끝나도 되는지 실제 출력으로 판정하는 규칙만 skill 에 남았다 |
 | `scripts/sync.py`, `scripts/test_sync.py` | `cli/commands/install.ts`, `core/install/` | 설치 갱신과 버전 일치(R-23). reload 방송은 `sangsoe install` 뒤 Orca·Claude Code 의 다시 읽기에 맡긴다 |
-| `scripts/setup.py`, `scripts/test_setup.py`, `scripts/bootstrap.py`, `scripts/recommended-settings.json` | `core/install/`, `cli/commands/install.ts`, `cli/commands/doctor.ts`, `cli/commands/uninstall.ts` | `brew install` + `sangsoe install` 두 명령(결정 90). 버림: 권장 설정 쓰기(사람의 설정은 sangsoe 가 쓰지 않는다) |
+| `scripts/setup.py`, `scripts/test_setup.py`, `scripts/bootstrap.py`, `scripts/recommended-settings.json` | `core/install/`, `cli/commands/install.ts`, `cli/commands/doctor.ts`, `cli/commands/uninstall.ts` | `brew install` + `sangsoe install` 두 명령(결정 90). 버림: 권장 설정 쓰기. 결정 221 뒤로 sangsoe 가 쓰는 사람의 설정은 `sangsoe install --permissions` 가 더하는 allow 규칙뿐이다 |
 | `scripts/catalog`, `scripts/test_catalog_coverage.py`, `scripts/test_catalog_stale.py` | DROP | 번역 카탈로그를 두지 않는다(R-22). skill 목록은 plugin 매니페스트가 정본이다 |
 | `scripts/ci_forbidden_terms.py`, `scripts/ci_tests.py`, `scripts/test_ci.py`, `scripts/test_public_shapes.py`, `scripts/test_script_modes.py`, `scripts/test_intent.py` | `.github/workflows/ci.yml`, `test/layout.test.ts`, `test/hooks-registered.test.ts` | CI 세 job(결정 100). 실행 비트·hook 경로는 `hooks-registered`, plist 금지는 `layout`. GAP 은 요구 집계(R-01·R-11)에 적었다 |
 | `scripts/skill_tokens.py`, `scripts/skill_budget.json`, `scripts/test_skill_tokens.py` | GAP | 스킬 토큰 예산은 개념만 넘어왔고(port-plan 2.4) 측정과 상한 시험이 아직 없다 |
@@ -107,6 +107,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 | pr_watch | U16 | pr-monitor |
 | jobs | U17 | queue-monitor |
 | stages, stage_auto, fleet, dash, units | `core/brief/`, `orca-plugin/panel/` | 뷰와 패널 |
+| dash 의 PC 부하 그래프 카드 | DROP | 지금은 짓지 않는다: 결정 11 과 D-10 이 그래프 페이지를 버렸고 부하는 압박 게이트·resource-monitor·`capacity` 가 판정한다. LATER: 오너(2026-11-12)가 v0.1.4 뒤에 event 기반 부하 수준 띠를 먼저 두기로 했다. 그 띠를 짓는 단위에서 그래프 카드가 더 필요한지 다시 본다 |
 | board, holds, order, order_close, tidy, autowake, autoqueue, patrol, selfcheck, acks, sent, ask, rowstate, cutover, orca_migrate, dash_demo, agent_signal, compactions, turn_cost, token_usage, flow, overlap_table, pr_stats, mailbox_guard, skill_usage | DROP | port-plan 2.2 가 하나씩 이유를 적었다 |
 
 ## bin
