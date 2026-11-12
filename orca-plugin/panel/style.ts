@@ -223,6 +223,7 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl col.c-acts { width: 200px; }
   /* A state column says its mark and its word (decision 229); an id-led table keeps 64px. */
   .tbl:not(.gt):has(.st) th:first-child, .tbl:not(.gt):has(.st) td:first-child { width: 104px; }
+  .tbl .mk { vertical-align: middle; }
   .tbl .mk + .st { margin-left: var(--s1); }
   .tbl tr.lead td { background: var(--tint-2); }
   .tbl:not(:has(tr.lead)) tbody tr:nth-child(even of :where(:not(.other))) td { background: var(--tint-1); }
