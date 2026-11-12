@@ -239,9 +239,11 @@ function rowHtml(t: Table, r: Row, o: RowOpts = {}): string {
     .map((c, i) => {
       const name = t.columns[i + 2]?.name ?? "";
       const role = COL_CLASS[name] ?? "";
-      const cls = isNil(c) ? "nil" : role;
-      const tip = isNil(c) || role === "age" ? "" : ` title="${esc(c.text)}"`;
-      const body = role === "who" && !isNil(c) ? whoHtml(c.text) : cellHtml(c);
+      const who = role === "who" && !isNil(c) ? whoHtml(c.text) : null;
+      const nil = isNil(c) || who === "";
+      const cls = nil ? "nil" : role;
+      const tip = nil || role === "age" ? "" : ` title="${esc(c.text)}"`;
+      const body = nil ? cellHtml({ text: "—" }) : (who ?? cellHtml(c));
       return `<td data-l="${esc(name)}"${cls ? ` class="${cls}"` : ""}${tip}>${body}</td>`;
     })
     .join("");
@@ -732,7 +734,7 @@ function item(m: ItemDetail): string {
   const rows = m.chain.rows.map((r) => rowHtml(m.chain, r, { idCol: true }));
   return [
     `<h1>${esc(m.state)} <span class="id">${esc(m.id)}</span> ${esc(m.title)} ${esc(m.flags)}</h1>`,
-    `<p class="sumline">누가 ${m.who === "—" ? "—" : badge(m.who)} ·<span class="pri">${esc(m.priority)}</span></p>`,
+    `<p class="sumline">누가 ${m.who === "—" ? "—" : badge(m.who)} · <span class="pri">${esc(m.priority)}</span></p>`,
     section("chain", m.chain, rows),
   ].join("");
 }

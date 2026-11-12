@@ -73,13 +73,14 @@ test("(7) a long who value is cut with an ellipsis inside its badge and keeps it
 test("(7) a who with no time ('워커 —') or no one ('— —', '—') draws no '—' badge", () => {
   const cellOf = (text: string) => {
     const rows = ov().inProgress.rows.map((r) => (r.id === "i026" ? { ...r, cells: r.cells.map((c, i) => (i === 4 ? { text } : c)) } : r));
-    return /<td data-l="누가"[^>]*>(.*?)<\/td>/.exec(rowOf(renderStage(withRows(rows)), "i026"))?.[1] ?? "";
+    return /<td data-l="누가".*?<\/td>/.exec(rowOf(renderStage(withRows(rows)), "i026"))?.[0] ?? "";
   };
-  assert.equal(cellOf("워커 —"), '<span class="badge">워커</span>');
-  assert.equal(cellOf("— 17h"), '<span class="age">17h</span>');
-  assert.equal(cellOf("— —"), "");
+  assert.match(cellOf("워커 —"), /class="who"[^>]*><span class="badge">워커<\/span><\/td>$/);
+  assert.match(cellOf("— 17h"), /class="who"[^>]*><span class="age">17h<\/span><\/td>$/);
+  // No one and no time: an empty cell, hidden in a card like any other.
+  assert.match(cellOf("— —"), /^<td data-l="누가" class="nil"><span class="dash">—<\/span><\/td>$/);
   const item = renderStage({ ...grp, model: { stage: 3, now: "", id: "i026", title: "x", state: "🔄", flags: "", who: "—", priority: "P2", chain: { title: "체인", count: 0, columns: [], rows: [] } } as ItemDetail });
-  assert.match(item, /<p class="sumline">누가 — ·/);
+  assert.match(item, /<p class="sumline">누가 — · <span class="pri">P2<\/span>/);
 });
 
 test("(3) the middle text takes the freed width, at most two lines then an ellipsis, its full text in the title", () => {
@@ -180,7 +181,11 @@ test("(10) wide tables keep each cell on one line: fixed columns, ellipsis, the 
 test("(10) wide rows read apart: group rows on a light tint, other rows striped, all inside the white page", () => {
   assert.match(rule(WIDE_ONLY, ".tbl tr.lead td"), /background: var\(--tint-2\);/);
   // A decision's answer form is a hidden row of its own; the stripes count only the decision rows.
-  assert.match(rule(WIDE_ONLY, ".tbl:not(:has(tr.lead)) tbody tr:nth-child(even of :not(.other)) td"), /background: var\(--tint-1\);/);
+  // `:where` keeps the stripe at the hover rule's weight, so the later hover still wins on a striped row.
+  assert.match(rule(WIDE_ONLY, ".tbl:not(:has(tr.lead)) tbody tr:nth-child(even of :where(:not(.other))) td"), /background: var\(--tint-1\);/);
+  const stripe = WIDE_ONLY.indexOf("tr:nth-child(even of");
+  const hover = WIDE_ONLY.indexOf(".tbl:not(:has(tr.lead)) tbody tr:hover td");
+  assert.ok(stripe >= 0 && hover > stripe, "hover comes after the stripe");
   assert.match(STYLE, /--tint-1: color-mix\(in oklab, var\(--ink\) \d%, var\(--paper\)\);/);
   // The page, the cards and the narrow panel stay white (decision 222).
   assert.doesNotMatch(NARROW, /--tint/);
