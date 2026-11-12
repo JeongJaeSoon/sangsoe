@@ -552,9 +552,11 @@
 |---|---|---|---|
 | 213 | design.html §오너가 보는 것 2단계 행(목록이고 순서가 아니다, 패널 순서는 시안), 글의 요약 수치·최근 전환 없음 | 고침 | `cli/commands/brief.ts:30` |
 | 213 | design.html §현황 보고는 표 네 절: 완료 목록은 `--done` 일 때만 표 | 고침 | `cli/commands/brief.ts:36` |
+| 213 ② | 부록 §현황 1단계 행의 접기: 건수 줄이 ✅ 를 세고 맨 아래 줄은 기간 길이만 | 고침 | `core/brief/render.ts:56` |
 | 213 · 218 · 220 | 부록 §패널 화면 group.html 행(순서, 🚧 마다 왜 행, 열린 N건, 접힌 범례, 좁은 패널 카드) | 고침 | `core/graph/ready.ts:85` `holdOf` |
 | 215 | design.html §의존 관리 `stacked_on` 행: base 변경 뒤 리뷰만 센다, `rereview_needed` | 고침 | `core/land/land.ts:505` |
 | 215 | 부록 실패 표 `retarget_approval` · `graph sync` 행 | 이미(`9556001`) | 같은 줄 |
+| 215 | 부록 완료 조건 land 항목의 예 "base 변경 뒤 patch-id 가 같으면 판정 승계" | 고침 | `core/land/land.ts:505` |
 | 215 · 216 | design.html 흐름 3, blog ④, 부록 land 카드: `rereview_needed` · `base_unrecorded` · `base_merged` | 고침 | `core/land/land.ts:204`, `:214` |
 | 216 | 부록 event 표·용어집 §9 의 `pr_reopened`, 부록 상태 대응표 ✅ 행, `graph sync` 행 | 고침(`test/spec-names.test.ts` 의 허용 줄 둘을 뺐다) | `core/detect/pr/round.ts:254` |
 | 216 ③ | 항목이 자기 Run 을 적는다(읽기만 바뀜) | 고칠 대목 없음: 페이지가 읽는 Run 을 말하지 않는다 | `core/brief/load.ts` `briefRuns` |
@@ -563,13 +565,16 @@
 | 218 | design.html 크리티컬 패스 정의(PR 마디, 머지 대기 완료 Task), §오너가 보는 것 2단계 행, blog 묶음 상세 | 고침 | `core/graph/critical.ts` `itemGraph` |
 | 219 | design.html 감지 층 행(hook 이 재리뷰 항목을 만든다), §의존 관리, 부록 실패 표·`graph sync` 행의 "queue round 가 만든다" | 고침 | `core/session/record.ts:40`, `core/graph/own-run.ts:40`, `core/detect/queue/round.ts:193` |
 | 219 | 부록 §패널 화면: 경로 줄은 한 번, 뒤로는 메모리에서 | 고침 | `orca-plugin/panel/view.ts` |
+| 219 (8) | 상태 표시줄의 꼴 `✨ SANGSOE \| 🚧 N \| 결정 N \| 🔄 N` 과 `danger` 조건: design.html 화면 표·패널 문단, blog, 용어집 | 고침 | `core/brief/panel.ts:57` `statusBarItem` |
+| 219 (6) | 게이트 없는 결정은 버튼 없는 깨진 행 | 고칠 대목 없음: 페이지는 결정 버튼을 일반으로만 말한다 | `orca-plugin/panel/view.ts` |
 | 220 | design.html §오너가 보는 것 패널 문단, 부록 §패널 화면, blog 묶음 상세 | 고침 | `orca-plugin/panel/style.ts` |
-| 222 | 현황 셋째 절과 탭 "열린 항목": design.html · 부록 | 이미(`8215e9f`) | `core/brief/render.ts:12` |
-| 222 | blog-intro.html:367 · :372 의 "진행 중" 절과 탭 | 고침 | `orca-plugin/panel/view.ts:331` |
+| 222 | 현황 셋째 절과 탭 "열린 항목": design.html · 부록 | 이미(`8215e9f`) | `core/brief/build.ts:241` |
+| 222 | blog 패널 목록과 탭 줄의 "진행 중" 절과 탭 | 고침 | `core/brief/build.ts:241`, `orca-plugin/panel/view.ts:321` |
+| 222 ③ | 부록 §좁은 폭: 카드 머리의 제목은 한 줄 말줄임(전체 글은 `title`) | 고침 | `orca-plugin/panel/view.ts:245` |
 | 222 | 흰 배경·1px 테두리 톤, 좁은 패널의 행마다 카드: design.html · 부록 · blog | 고침 | `orca-plugin/panel/style.ts` |
-| 221 · 224 | design.html §설치와 호출 경로의 승인 행, blog 설치·제거, 부록 §남는 파일: `install --permissions`, "permissions.allow 에 한 줄만" | 고침 | `core/install/permissions.ts:11`, `:215` |
+| 221 · 224 | design.html §설치와 호출 경로의 승인 행, blog 설치·제거, 부록 §남는 파일, 용어집 plugin 승인 행: `install --permissions`, "permissions.allow 에 한 줄만" | 고침 | `core/install/permissions.ts:11`, `:215` |
 | 221 | README Uninstall 의 `permissions: removed N rules …` 줄 | 고침 | `core/install/install.ts:181`, `core/install/permissions.ts:321` |
-| 223 | design.html #mcp 15 → 16, 부록 #mcp, blog 열네 → 열여섯 | 고침(`TOOLS_NOT_IN_DESIGN` 을 비웠다) | `claude-plugin/mcp/tools/item_retire.ts` |
+| 223 | design.html #mcp 15 → 16, 부록 #mcp(읽기 tool 을 더하면 17), blog 열네 → 열여섯 | 고침(`TOOLS_NOT_IN_DESIGN` 을 비웠다) | `claude-plugin/mcp/tools/item_retire.ts` |
 | 223 | design.html ✅ · 🗑️ 행, 크리티컬 패스, 부록 ✅ 대응·흐름 틀 `done_blockers`, 부록 event 표·용어집 §9 §11, blog ⑤ | 고침(허용 줄 셋을 뺐다) | `core/graph/ready.ts:81`, `core/owner/retire.ts:63` |
 | 225 | 패널의 위 틈·고정 머리·배지·한 줄 칸 | 메모: main 에 있고 v0.1.5 에 실린다. 세 페이지는 결정 222 의 꼴을 적고 225 를 한 문장으로 가리킨다 | `orca-plugin/panel/style.ts` |
 | 226 | design.html 역할 표 land 행·흐름 3, blog ④, 부록 land 카드의 "머지하는 길은 land 하나" | 고침(CI 없는 저장소의 예외를 적었다) | `core/land/land.ts:374` |

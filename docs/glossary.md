@@ -67,7 +67,7 @@
 | ⏸️ 보류 | 일부러 지금 안 한다. 재검토 trigger 가 있다 | `parked` | 연기, 나중에 |
 | ✅ 완료 | Orca Task 가 `completed` 다. (결정 175·178: PR 작성자의 `worker_done` 이 머지 전에 Task 를 닫으므로, 브리프는 그 PR 이 열려 있으면 🚧 막힘(리뷰어), 머지 없이 닫혔으면 🚧 막힘(리드, 읽기 `pr_closed`), 상태를 아직 못 읽었으면 ❔ 모름(읽기 `unknown`)으로 읽는다. 보기 전용이고 Orca 상태는 그대로다. 아래 문장의 "머지 확인 뒤에야 `completed`" 는 이것으로 바뀌었다.) PR 이 걸린 항목은 pr-monitor 의 머지 확인 뒤에야 `completed` 가 되고, PR 이 없는 항목은 받아들여진 `worker_done` 이나 리드·오케스트레이터의 닫기로, 오너 항목은 오너의 완료 버튼으로 `completed` 가 된다(그 항목에 `verify` 가 있으면 probe 통과 전까지 ⏳ 검증 대기, 결정 181). `close_suggested` 는 닫기 제안이지 완료가 아니고, REAPER 의 끝남 판정은 카드를 치워도 되는지이지 항목 상태가 아니다(결정 161). 머지 확인 말고는 sangsoe 의 감지기·스크립트·hook 이 항목을 닫지 않고, 증거 없이 `completed` 가 된 항목은 🔍 로 표시된다 | `done` | 끝남, 종료(항목에는) |
 | ⏳ 검증 대기 | 오너가 완료라고 한 오너 할 일인데 그 `verify` probe 가 아직 참을 보지 못했다(결정 181: 할 일은 검증으로 닫힌다). Orca Task 를 누가 닫았든 브리프·후속의 준비됨·`start_unit` 이 이렇게 읽고, probe 가 통과하면 ✅ 가 된다. 진행 중에 센다 | `pending_verify` | 완료(🔍), 오너 완료 |
-| 🗑️ 취소 | 하지 않기로 했다. 이유가 필수다 | `canceled` | 폐기, 삭제 |
+| 🗑️ 취소 | 하지 않기로 했다. 이유가 필수다. 머지 없이 닫힌 PR 의 완료 항목을 `item_retire` 로 거둔 것도 🗑️ 로 읽는다(결정 223) | `canceled` | 폐기, 삭제 |
 
 ## 3. 플래그 (상태 위에 0개 이상)
 
@@ -332,11 +332,11 @@
 | Claude Code plugin | Claude Code 가 읽는 plugin 매니페스트(`.claude-plugin/plugin.json`)로 싣는 쪽. 셋째 칸이고 Orca plugin 이 못 담는 것만 싣는다: hook·skill·MCP 서버(tools + resources)·agents 정의 | `.claude-plugin/plugin.json` | — |
 | 공유 코어 | 넷째 칸. 두 매니페스트가 같은 저장소 안에서 함께 부르는 코어 라이브러리(TS/Node)와 sqlite 파일 하나와 셸 호출자 전용 CLI. 에이전트는 MCP 만 쓴다 | — | 이중 코어 |
 | plugin worker | Orca plugin 의 `main` 코드. Orca 호스트의 별도 Node 프로세스로 사용자 계정 권한으로 돈다. monitor 의 타이머·이벤트 처리·패널 요청 처리를 맡는다. 역할 워커와 다른 것이다 | `main` · `trusted-worker` | — |
-| plugin 승인 | plugin worker 를 켜는 오너 승인. `sangsoe plugin approve` 코어 함수 하나로만 하고, 오너가 `permissions.allow` 에 이 명령 한 줄만 넣는다. 명령이 독립 리뷰 지적 0으로 main 에 머지된 버전인지, 폴더의 내용 해시(`contentHash`)가 main 의 빌드 커밋 트리와 리뷰된 head 트리와 같은지(결정 105, `orca plugin inspect` 는 지문을 주지 않는다), 대상이 sangsoe plugin 자신인지 검사하고 통과할 때만 `orca plugin enable --approve <지문>` 을 부르며 승인 event 를 남긴다. `orca plugin enable` 자체는 허용 목록에 두지 않는다. MCP tool 이 아닌 호출 경로 규칙의 예외다 | `plugin approve` · `orca plugin enable` · `orca plugin inspect` · `permissions.allow` | — |
+| plugin 승인 | plugin worker 를 켜는 오너 승인. `sangsoe plugin approve` 코어 함수 하나로만 하고, 오너가 직접 친다(`sangsoe install --permissions` 가 더하는 규칙 16개에 이 명령은 없다, 결정 221). 명령이 독립 리뷰 지적 0으로 main 에 머지된 버전인지, 폴더의 내용 해시(`contentHash`)가 main 의 빌드 커밋 트리와 리뷰된 head 트리와 같은지(결정 105, `orca plugin inspect` 는 지문을 주지 않는다), 대상이 sangsoe plugin 자신인지 검사하고 통과할 때만 `orca plugin enable --approve <지문>` 을 부르며 승인 event 를 남긴다. `orca plugin enable` 자체는 허용 목록에 두지 않는다. MCP tool 이 아닌 호출 경로 규칙의 예외다 | `plugin approve` · `orca plugin enable` · `orca plugin inspect` · `permissions.allow` | — |
 | 첫 빌드 시험 | 구현의 첫 단계가 돌리는 시험 T1~T6. 결과가 설계의 갈래를 정하고, 실패하면 정해 둔 대체가 적용된다: T1 worker 안 `node:sqlite` → 코어 프로세스를 CLI 로 부름 · T2 worker 타이머 → `orca automations --precheck` · T3 패널 그림 → 상태 표시줄과 `sangsoe brief` 출력 · T4 승인 뒤 자율 범위와 재승인 빈도 · T5 Dispatch 재시작 거부와 세 번 실패 차단(PR 작성자의 끝은 결정 175 가 `worker_done` 하나로 정했다). T6(결정 90) 경로 마켓플레이스 설치와 `brew upgrade` 뒤 갱신, hook PATH 의 `sangsoe`, 개발 폴더로 올린 Orca plugin 이 앱 재시작 뒤에도 남는지. 어느 것도 오너 결정을 기다리지 않는다 | `T1`~`T6` | 오너 결정 대기 |
 | Orca·Node 호스트 낱말 | 호스트가 정한 이름이라 sangsoe 가 바꾸지 않는 것: worker 가 돌리는 파일 형식 `.ts`, Orca plugin 매니페스트의 빈 칸 `mcpServers`, Node 의 내장 sqlite `node:sqlite`, command hook 만 갖는 실패 시 막기 `onFailure: "block"`, plugin 로컬 시험 `orca plugin test`, worktree 삭제 `orca worktree rm`, 입력을 받을 때까지 기다리는 `tui-idle`(대체 시작이 없어져 쓰지 않는다, 결정 94), Orca 가 돌려주는 거부·승인 코드 `approval_required`·`approval_stale`·`consumer_fenced`·`task_not_startable`·`task_id` | `approval_required` · `approval_stale` · `consumer_fenced` · `task_not_startable` · `task_id` · `.ts` · `mcpServers` · `node:sqlite` · `onFailure: "block"` · `orca plugin test` · `orca worktree rm` · `tui-idle` | — |
 | 패널 | Orca plugin 이 오른쪽 사이드바에 그리는 화면. 현황 세 단계·오너 할 일·결정 버튼을 낸다. 폭은 사이드바가 정한다. Orca 패널처럼 머리 행(새로 고침·터미널에서 전체 현황·더 보기)과 1단계의 탭(전체 · 할 일 · 열린 항목)을 두고 색은 Orca 테마 변수를 따른다(결정 169) | `panels` | 웹 화면, 페이지(패널을 가리킬 때) |
-| 상태 표시줄 항목 | Orca 상태 표시줄에 이름표와 건수 줄의 짧은 꼴(`✨ SANGSOE  🚧 2 · 결정 2 · 🔄 5`: 막힌 것 · 열린 결정 · 진행 중, 결정 170)을 올리는 항목. 숫자는 `BriefModel.summary`·`owner_todo` 에서 오고 따로 세지 않는다. 오너가 할 일이 있으면 `danger` 색이고 누르면 명령이 실행된다(패널 열기는 미확인, 결정 92) | `statusBarItems` · `statusBar.update` | 오너 할 일 수·🚨 항목 |
+| 상태 표시줄 항목 | Orca 상태 표시줄에 이름표와 건수 줄의 짧은 꼴(`✨ SANGSOE | 🚧 2 | 결정 2 | 🔄 5`: 막힌 것 · 열린 결정 · 진행 중, 재시작이 밀렸으면 `♻️ N`, 결정 170·219)을 올리는 항목. 숫자는 `BriefModel.summary`·`owner_todo` 에서 오고 따로 세지 않는다. 🚧 가 있거나 오너의 결정·할 일이 있거나 재시작이 밀렸으면 `danger` 색이고 누르면 명령이 실행된다(패널 열기는 미확인, 결정 92) | `statusBarItems` · `statusBar.update` | 오너 할 일 수·🚨 항목 |
 | 호출 경로 규칙 | 코어는 하나이고 에이전트(리드·워커·오케스트레이터)는 MCP 만 쓴다. Bash 로 CLI 를 부르지 않는다. CLI 는 셸에서만 도는 호출자 여섯 행(시작 hook·막는 hook·기록 hook·오너 전용 skill 의 상태 주입 줄·사람 터미널·시험·CI·승인 명령)용으로 얇게 둔다. plugin worker(패널 버튼·monitor 타이머)는 코어를 직접 import 한다 | — | — |
 | 폴백 웹 화면 | 패널로 안 되는 기능만 맡는 최소 웹 화면(같은 코어·같은 읽기 뷰, 새 수집기 없음). 지금은 범위가 비어 있어 두지 않는다 | — | 웹 대시보드 |
 | 외부 plugin | sangsoe 밖에서 만든 Orca plugin. Orca 에는 plugin 사이 공식 데이터 교환 경로가 없어서 sangsoe 는 기대지 않는다 | — | — |
@@ -435,7 +435,7 @@
 | 용어 | 정의 | 영문 식별자 | 쓰지 않는 말 |
 |---|---|---|---|
 | 현황 | 1단계 패널 화면. 표 네 절과 같은 열(결정 필요 · 지금 오너가 할 일 · 열린 항목 · 보류)을 행마다 한 블록으로 보인다. 오너가 해야 하는 행은 배경색을 입지 않고 🚧 마커와 절 건수가 신호다. 넓은 화면의 표 행은 모두 한 높이다(결정 92). 시안 파일은 `dashboard/hallmark-final/index.html`(hallmark 하나, 결정 92) | `index.html` | 메인, 대시보드 홈, `/#/fleet/brief` |
-| 묶음 상세 | 2단계 패널 화면. 한 묶음의 항목을 상태별로, 의존 그래프·크리티컬 패스와 함께. 넓은 화면은 왼쪽 열(그래프 + 그 아래 간선 종류 범례)이 높이를 정하고 오른쪽 열(표 넷)은 같은 높이에서 스크롤하며, 360px 은 그래프 · 범례 · 표 순으로 쌓는다(결정 92). 시안 파일은 `dashboard/hallmark-final/group.html` | `group.html` | — |
+| 묶음 상세 | 2단계 패널 화면. 한 묶음의 항목을 상태별로, 의존 그래프·크리티컬 패스와 함께. 넓은 화면은 왼쪽 열(그래프 + 그 아래 간선 종류 범례)이 높이를 정하고 오른쪽 열(표 넷)은 같은 높이에서 스크롤하며, 360px 은 그래프 · 범례 · 표 순으로 쌓는다(결정 92). 그래프 표는 열 역할이 너비를 정하고 좁은 패널에서는 테두리 카드로 접히며, 간선 범례는 접혀서 시작한다(결정 218 ⑤ · 220). 시안 파일은 `dashboard/hallmark-final/group.html` | `group.html` | — |
 | 항목 상세 | 3단계 패널 화면. 한 항목의 이력·증거·원문. 시안 파일은 `item.html` | `item.html` | — |
 | 내가 할 일 | `owner_todo` 뷰의 화면 이름. 패널 맨 위 띠이고, 결정에 답하는 버튼이 여기 있다 | `owner_todo` | 소유자 할 일 페이지, `owner.html`(폐기) |
 | 내 지시는 어디까지 갔나 | 현황 아래 접힘 구역. `owner_action` 최근 몇 건과 분류·항목 상태 | `owner_action` | — |
