@@ -145,6 +145,7 @@ export {
   STAGES,
   type StageRecordInput,
 } from "./land/record.ts";
+export { agentCheckout, type RecorderCheck, recorderRefusal } from "./land/recorder.ts";
 export { type TierOfPr, tierOfPr } from "./land/tier.ts";
 export { type EvidenceGap, evidenceGaps, mergedItemMark } from "./verify/evidence.ts";
 export {

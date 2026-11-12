@@ -1,4 +1,4 @@
-import { approveExec, type RecordPorts, recordStage, SANGSOE_REPO, Store } from "../../core/index.ts";
+import { agentCheckout, approveExec, type RecordPorts, recorderRefusal, recordStage, SANGSOE_REPO, Store } from "../../core/index.ts";
 import type { CommandArgs, CommandDef, Outcome } from "../contract.ts";
 
 const REQUIRED = ["pr", "stage", "sha", "recorder"] as const;
@@ -9,16 +9,21 @@ const STAGE_FIX = "check --pr (merged), --stage, --sha and --recorder (not the a
 export async function stageRecord(
   values: CommandArgs["values"],
   deps: RecordPorts = { exec: approveExec, openStore: () => Store.open() },
+  checkout: string | null = agentCheckout(),
 ): Promise<Outcome<string>> {
   const missing = REQUIRED.filter((o) => typeof values[o] !== "string");
   if (missing.length > 0) {
     return { ok: false, refusal: { code: "invalid_input", reason: `missing ${missing.map((o) => `--${o}`).join(", ")}`, fix: `sangsoe stage record ${USAGE}` } };
   }
   const text = (o: string) => String(values[o]);
+  const repo = typeof values.repo === "string" ? values.repo : SANGSOE_REPO;
+  const pr = /^[0-9]+$/.test(text("pr")) ? Number(text("pr")) : Number.NaN;
+  const refused = await recorderRefusal(deps.exec, { tool: "sangsoe stage record", repo, pr, head: null, what: "stages", refused: "stage_refused", fix: STAGE_FIX }, checkout);
+  if (refused) return refused;
   const r = await recordStage(
     {
-      repo: typeof values.repo === "string" ? values.repo : SANGSOE_REPO,
-      pr: /^[0-9]+$/.test(text("pr")) ? Number(text("pr")) : Number.NaN,
+      repo,
+      pr,
       stage: text("stage"),
       sha: text("sha"),
       recorder: text("recorder"),

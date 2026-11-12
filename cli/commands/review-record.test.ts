@@ -3,6 +3,9 @@ import { test } from "node:test";
 import { run } from "../main.ts";
 import { reviewRecord } from "./review-record.ts";
 
+// The owner's shell (decision 227), whatever shell runs the suite: these inputs never reach a checkout read.
+delete process.env.CLAUDECODE;
+
 const HEAD = "b".repeat(40);
 const untouched = {
   exec: async () => assert.fail("must not call gh"),

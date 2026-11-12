@@ -1,6 +1,5 @@
-import { approveExec, type RecordPorts, recordStage, SANGSOE_REPO, STAGES, Store } from "../../../core/index.ts";
+import { approveExec, type RecordPorts, recorderRefusal, recordStage, SANGSOE_REPO, STAGES, Store } from "../../../core/index.ts";
 import type { ToolDef } from "../contract.ts";
-import { recorderRefusal } from "../recorder.ts";
 
 // Word for word the CLI's fix, so both entrances return one Outcome for input that passes the schema;
 // a stage outside the enum is the server's invalid_input here and the core's stage_refused on the CLI.
@@ -27,7 +26,7 @@ export function stageRecordTool(ports: () => RecordPorts): ToolDef {
       const p = ports();
       const repo = typeof input.repo === "string" ? input.repo : SANGSOE_REPO;
       const pr = Number(input.pr);
-      const refused = await recorderRefusal(p.exec, { tool: "stage_record", repo, pr, head: null, what: "stages", refused: "stage_refused", fix: FIX });
+      const refused = await recorderRefusal(p.exec, { tool: "stage_record", repo, pr, head: null, what: "stages", refused: "stage_refused", fix: FIX }, process.cwd());
       if (refused) return refused;
       const r = await recordStage({ repo, pr, stage: String(input.stage), sha: String(input.sha), recorder: String(input.recorder) }, p);
       return r.ok ? { ok: true, value: r.note } : { ok: false, refusal: { code: "stage_refused", reason: r.note, fix: FIX } };
