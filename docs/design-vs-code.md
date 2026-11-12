@@ -578,5 +578,6 @@
 | 223 | design.html ✅ · 🗑️ 행, 크리티컬 패스, 부록 ✅ 대응·흐름 틀 `done_blockers`, 부록 event 표·용어집 §9 §11, blog ⑤ | 고침(허용 줄 셋을 뺐다) | `core/graph/ready.ts:81`, `core/owner/retire.ts:63` |
 | 225 | 패널의 위 틈·고정 머리·배지·한 줄 칸 | 메모: main 에 있고 v0.1.5 에 실린다. 세 페이지는 결정 222 의 꼴을 적고 225 를 한 문장으로 가리킨다 | `orca-plugin/panel/style.ts` |
 | 226 | design.html 역할 표 land 행·흐름 3, blog ④, 부록 land 카드의 "머지하는 길은 land 하나" | 고침(CI 없는 저장소의 예외를 적었다) | `core/land/land.ts:374` |
+| 227 | 결정 171 "쓰는 사람은 PR 을 쓴 세션이 아니다" 와 코드: 세션 검사는 MCP 기록 tool 에만 있고 CLI `sangsoe evidence record` 는 이름 비교만 한다(U92 의 #112 증거가 그 길로 세어졌다). design.html 흐름 3 land 문단, blog §MCP 문단, 부록 land 카드 | 결정 227 을 새로 적고 세 페이지에 0.1.4 의 모습과 v0.1.5 고침을 적었다(U93, 코드는 그대로). 위 문단의 "새 결정 번호는 쓰지 않았다" 는 U92 까지의 말이다 | `cli/commands/evidence-record.ts:23`, `core/land/record.ts:85`, `claude-plugin/mcp/tools/evidence_record.ts:35`, `core/verify/evidence.ts:15` |
 
 첫 빌드 시험 T1–T6 의 결과는 `test-outcomes.md` 의 행 하나씩이다(T1 · T2 · T3 · T4 · T6 통과). T5 는 "워커는 자기 Run 에 Task 를 만들지 못한다" 만 확인했고, 이중 시작 거부와 세 번 실패 차단은 미실행이다(그 표와 `smoke-run.md` 3절 모두 NOT VERIFIED. 스모크에서는 리드 Task id 가 빠져 앞 단계에서 거부됐다). 돌리려면 Run 을 쥔 리드 세션이 버리는 Task 하나를 `start_unit` 으로 두 번 시작하고(둘째가 거부되는지), 같은 Task 의 시작을 세 번 실패시켜 `loop_detected` 를 본다. 지금은 시작 함수가 Task 상태를 먼저 읽고 실패를 세어 스스로 거른다(결정 114, `test/lineage/start.test.ts`).
