@@ -2,6 +2,10 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+- **The panel's cards and tables fit their content.** The gap above the header is gone (the mount reused Orca's own `#root` instead of adding a second one), and on a detail screen the header and the `‹ 뒤로` line stay pinned together. In a narrow card an empty cell takes no room, so what follows moves left; the elapsed time sits at the card's right end; the next step gets the free width, up to two lines then `…`; who works on it is a badge cut with `…`. State words (`막힘`, `열림`, `진행 중`) are badges, a group's count is a badge beside its name (`막힘 2 / 10`), and `자세히 ›` sits at the right end of a narrow group row and is gone from wide tables, where the whole row stays clickable. A critical-path row with nothing under its head draws no divider. In a wide panel every table cell keeps one line and cuts with `…` (the full value is in its tooltip); group rows have a light tint and tables without groups are striped. The Orca plugin's content changed, so it needs re-approval (225).
+
 ## 0.1.4-rc.4 (pre-release)
 
 Everything since `v0.1.4-rc.3`: decisions 219, 220, 221, 222 and 223. A pre-release for the S6 re-run of what failed on rc.3 and of the panel, install and retire changes since; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.3.
