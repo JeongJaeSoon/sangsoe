@@ -114,7 +114,7 @@ A V3 change or one touching `protected_paths` still waits for the owner's approv
 }
 ```
 
-**Evidence.** Someone other than the pull request's author records each run at the current head: `sangsoe evidence record --pr <n> --head <head> --kind test|run|ui|dev --exit-code <n> --not-verified <what> --recorder <name>` (agents use the `evidence_record` tool). After the merge, `sangsoe stage record --pr <n> --stage merge|dev|prod --sha <sha> --recorder <name>` (the `stage_record` tool) records each stage a flow's deploy steps wait on. See decision 171.
+**Evidence.** Someone other than the pull request's author records each run at the current head: `sangsoe evidence record --pr <n> --head <head> --kind test|run|ui|dev --exit-code <n> --not-verified <what> --recorder <name>` (agents use the `evidence_record` tool). After the merge, `sangsoe stage record --pr <n> --stage merge|dev|prod --sha <sha> --recorder <name>` (the `stage_record` tool) records each stage a flow's deploy steps wait on. See decision 171. Under Claude Code (a session or a `!` line), `sangsoe evidence record`, `sangsoe stage record` and `sangsoe review record` refuse with `recorder_is_author` when run from a checkout on the pull request's branch or head, so the session that wrote the pull request cannot record its own review, evidence or stages; the lead or the owner records them from another folder (decision 227).
 
 ## Layout
 
