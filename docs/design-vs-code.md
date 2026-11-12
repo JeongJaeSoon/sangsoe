@@ -542,7 +542,7 @@
 | G35 | 머지 대기열 이탈 사유 분류와 merge_group 사전 점검이 없다 | LATER | land 가 머지 예약이라 대기열이 없다(결정 161 R-06). 저장소가 merge queue 를 켜면 |
 | G36 | chat-monitor 의 provider 를 꽂을 자리가 없고 `mention_new` 로 깨우지 않는다 | LATER | 공개 트리에는 채팅 provider 를 실을 수 없다. 오너가 채팅 감시를 켜려는 첫 경우에 provider 를 설정으로 받는 자리와 오케스트레이터 알림을 함께 짓는다 |
 
-## 8. 213–226 delta (P4 final)
+## 8. 213–227 delta (P4 final)
 
 위 1–7절은 결정 212 까지다. 그 뒤 결정 213–226 이 머지되는 동안 단위들은 두 페이지를 고치지 못했다. 이 절은 그 결정마다 `design.html` · `blog-intro.html` · `design-appendix.html`(과 용어집)에서 바뀐 대목을 찾아 처리를 적는다(U92). 코드의 `file:line` 은 `65e930f`(U91 머지, 결정 225) 기준이다. 결정 214 는 번호가 비어 있다(`decisions.md` 에 214 가 없고 어느 문서도 가리키지 않는다). 새 결정 번호는 쓰지 않았다: 코드와 다른 곳은 모두 글을 고쳐 맞췄다.
 
@@ -578,6 +578,6 @@
 | 223 | design.html ✅ · 🗑️ 행, 크리티컬 패스, 부록 ✅ 대응·흐름 틀 `done_blockers`, 부록 event 표·용어집 §9 §11, blog ⑤ | 고침(허용 줄 셋을 뺐다) | `core/graph/ready.ts:81`, `core/owner/retire.ts:63` |
 | 225 | 패널의 위 틈·고정 머리·배지·한 줄 칸 | 메모: main 에 있고 v0.1.5 에 실린다. 세 페이지는 결정 222 의 꼴을 적고 225 를 한 문장으로 가리킨다 | `orca-plugin/panel/style.ts` |
 | 226 | design.html 역할 표 land 행·흐름 3, blog ④, 부록 land 카드의 "머지하는 길은 land 하나" | 고침(CI 없는 저장소의 예외를 적었다) | `core/land/land.ts:374` |
-| 227 | 결정 171 "쓰는 사람은 PR 을 쓴 세션이 아니다" 와 코드: 세션 검사는 MCP 기록 tool 에만 있고 CLI `sangsoe evidence record` 는 이름 비교만 한다(U92 의 #112 증거가 그 길로 세어졌다). design.html 흐름 3 land 문단, blog §MCP 문단, 부록 land 카드 | 결정 227 을 새로 적고 세 페이지에 0.1.4 의 모습과 v0.1.5 고침을 적었다(U93, 코드는 그대로). 위 문단의 "새 결정 번호는 쓰지 않았다" 는 U92 까지의 말이다 | `cli/commands/evidence-record.ts:23`, `core/land/record.ts:85`, `claude-plugin/mcp/tools/evidence_record.ts:35`, `core/verify/evidence.ts:15` |
+| 227 | 결정 171 "쓰는 사람은 PR 을 쓴 세션이 아니다" 와 코드: 세션 검사는 MCP 기록 tool 에만 있고 CLI `sangsoe evidence record` 는 이름 비교만 한다(U92 의 #112 증거가 그 길로 세어졌다). design.html 흐름 3 land 문단, blog §MCP 문단, 부록 land 카드 | 결정 227 을 새로 적고 세 페이지에 0.1.4 의 모습과 v0.1.5 고침을 적었다(U93, 코드는 그대로). 위 문단의 "새 결정 번호는 쓰지 않았다" 와 `65e930f` 기준은 U92 까지의 말이고, 이 행의 줄은 `e20288f` 기준이다(두 커밋에서 그 코드는 같다) | `cli/commands/evidence-record.ts:23`, `core/land/record.ts:85`, `claude-plugin/mcp/tools/evidence_record.ts:35`, `core/verify/evidence.ts:15` |
 
-첫 빌드 시험 T1–T6 의 결과는 `test-outcomes.md` 의 행이다. 여섯 모두 통과다. T5 는 두 행이다: "워커는 자기 Run 에 Task 를 만들지 못한다"(U10)와, U93 이 Run 을 쥔 리드 세션에서 돌린 이중 시작 거부 · 세 번 실패 차단이다(`smoke-run.md` 3절 끝). 한 번 시작된 Task 는 실패 세기 앞에서 `already_dispatched` 로 멈추므로 버리는 항목 둘을 썼다. 컷오프 항목은 없는 저장소 선택자로 `worktree create` 를 세 번 실패시켜 `loop_detected{start_failed_3x}` 를 남겼고, 넷째는 `stopped` 였다. 이중 시작 항목은 둘째 호출이 `waiting already_dispatched` 였다. 코드는 결정 114 그대로다: 시작 함수가 Task 상태를 먼저 읽고(`core/start/start.ts:341`) 그 Task 의 세는 실패를 센다(`:316-334`).
+첫 빌드 시험 T1–T6 의 결과는 `test-outcomes.md` 의 행이다. 여섯 모두 통과다. T5 는 두 행이다: "워커는 자기 Run 에 Task 를 만들지 못한다"(U10)와, U93 이 Run 을 쥔 리드 세션에서 돌린 이중 시작 거부 · 세 번 실패 차단이다(`smoke-run.md` 3절 끝). 한 번 시작된 Task 는 실패 세기 앞에서 `already_dispatched` 로 멈추므로 버리는 항목 둘을 썼다. 컷오프 항목은 없는 저장소 선택자로 `worktree create` 를 세 번 실패시켜 `loop_detected{start_failed_3x}` 를 남겼고, 넷째는 `stopped` 였다. 이중 시작 항목은 둘째 호출이 `waiting already_dispatched` 였다. 코드는 결정 114 그대로다: 시작 함수는 `worker-start` 전에 그 Task 의 세는 실패를 세어 세 번이면 `stopped` 로 돌려주고(`core/start/start.ts:316-334`), 이어 Task 상태를 읽어 `dispatched` 이면 `already_dispatched` 로 돌려준다(`:341`).

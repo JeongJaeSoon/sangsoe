@@ -147,7 +147,7 @@ sangsoe monitor run pr --home <scratch> → written pr_merged (seq 61149), acts:
 
 land 는 branch protection 을 읽지 못한 세 점검을 막지 않고 verdict 로 머지했다(smoke 저장소에는 보호 규칙이 없다). `task-update completed` 는 워커의 `worker_done` 이 먼저 Task 를 닫아 "already completed" 로 끝났다. T5(끝난 Task 를 리드가 다시 `start_unit`)는 리드 Task id 를 넘기지 않아 `lineage_invalid`("lead 의 Task id 가 없어 Dispatch 를 읽을 수 없다")로 먼저 거부됐고, `dispatched` 거르기까지 가지 않았다.
 
-판정: PASS (머지 · `pr_merged` · `task-update` 길과 pr-monitor 의 private 저장소 실제 라운드. T5 는 NOT VERIFIED: 리드 Task id 누락으로 앞 단계에서 거부. 읽지 못한 branch protection 을 막지 않고 머지한 것은 finding: 보호 규칙이 있는 저장소에서는 열린 채 실패한다)
+판정: PASS (머지 · `pr_merged` · `task-update` 길과 pr-monitor 의 private 저장소 실제 라운드. T5 는 이 실행에서 NOT VERIFIED: 리드 Task id 누락으로 앞 단계에서 거부. 아래 T5 재실행에서 PASS. 읽지 못한 branch protection 을 막지 않고 머지한 것은 finding: 보호 규칙이 있는 저장소에서는 열린 채 실패한다)
 
 T5 재실행(2026-11-12, U93): 리드 세션이 stable 0.1.4 MCP 로 자기 Run 에서 돌렸다. 리드는 Dispatch 없는 Run 주인이라 `start_unit` 의 오케스트레이터 꼴(`role: orchestrator`, 자기 worktree, `taskId` 없음)로 불렀다. 버리는 항목은 둘이다: 한 번 시작된 Task 는 이후 `already_dispatched` 로 실패 세기 앞에서 멈추므로, 컷오프(B)와 이중 시작(A)을 한 Task 로 잴 수 없다.
 
