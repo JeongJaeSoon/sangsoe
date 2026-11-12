@@ -279,6 +279,13 @@ test("decision 228: with rules missing the one row still warns with its fix and 
     [`warn     permissions: ${m - 1} of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json: sangsoe's sessions may stop on permission prompts; sangsoe land is allowed (permissions.allow 0, autoMode.allow 1)${fix}`],
     r.lines.join("\n"),
   );
+
+  const noLand = await doctor(withSettings(fakeHost().host, DEFAULT_DIR, { permissions: { allow: [...SANGSOE_RULES.slice(1)] } }), ROOT, online());
+  assert.deepEqual(
+    settingsRows(noLand.lines),
+    [`warn     permissions: ${m - 1} of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json: sangsoe's sessions may stop on permission prompts, and auto mode may refuse a worker's land${fix}`],
+    noLand.lines.join("\n"),
+  );
 });
 
 test("decision 221: uninstall removes the rules sangsoe recorded adding, and says so", () => {

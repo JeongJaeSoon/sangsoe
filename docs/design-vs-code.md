@@ -17,12 +17,12 @@
 | 절 | 행 | implemented | partial | missing | cut | changed |
 |---|---|---|---|---|---|---|
 | 0. 오너의 고정 규칙 | 5 | 4 | 1 | 0 | 0 | 0 |
-| 1. 칸 배치 · Orca CLI · 설치 | 134 | 93 | 8 | 9 | 1 | 23 |
+| 1. 칸 배치 · Orca CLI · 설치 | 134 | 92 | 8 | 9 | 1 | 24 |
 | 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 84 | 11 | 2 | 6 | 12 |
 | 3. 데이터 · MCP · CLI · GRAPH | 81 | 55 | 6 | 1 | 3 | 16 |
 | 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 34 | 4 | 4 | 6 | 9 |
 | 5. 결정이 자르거나 바꾼 것 | 45 | 0 | 0 | 0 | 13 | 32 |
-| 합계 | 437 | 270 | 30 | 16 | 29 | 92 |
+| 합계 | 437 | 269 | 30 | 16 | 29 | 93 |
 
 `partial`·`missing` 46행은 갭 27개(`G1`–`G36` 에서 U77 이 고친 `G2`, U76 이 고친 `G13` `G16`, 결정 212 가 닫은 `G10`·`G11`·`G23`·`G29`, 결정 215 가 닫은 `G22`·`G31` 을 뺀 것)로 묶인다. 제안은 NOW 0 · LATER 23 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
 
@@ -115,8 +115,8 @@
 | doctor tree·node | README Install | implemented | `core/install/doctor.ts:59`, `core/install/doctor.ts:285` | offline 은 이것만 |
 | doctor claude·claude profile | README Claude profiles | implemented | `core/install/doctor.ts:146`, `core/install/doctor.ts:150` | |
 | doctor orca claude profile | README Claude profiles | implemented | `core/install/doctor.ts:96` | |
-| doctor land allow | README Install | changed (결정 228) | `core/install/doctor.ts:130`, `core/checks/land-allowed.ts:26` | 따로 행이 없다. `permissions` warn 행 끝에 land 가 다른 규칙으로 허락되는지 적는다. 설정은 쓰지 않는다 |
-| doctor permissions | README Install 2·5 | changed (결정 221·224·228) | `core/install/doctor.ts:129`, `core/install/permissions.ts:333` | N of M, 모자라면 warn. 고칠 말에 `!` 줄의 `--yes` 줄도 적는다(결정 224). 16 of 16 이면 land 도 덮는다(결정 228) |
+| doctor land allow | README Install | changed (결정 228) | `core/install/doctor.ts:130`, `core/checks/land-allowed.ts:26` | 따로 행이 없다. `permissions` warn 행 끝에 land 가 다른 규칙으로 허락되는지 적는다. 설정은 쓰지 않는다. 줄 번호는 U95 기준 |
+| doctor permissions | README Install 2·5 | changed (결정 221·224·228) | `core/install/doctor.ts:129`, `core/install/permissions.ts:333` | N of M, 모자라면 warn. 고칠 말에 `!` 줄의 `--yes` 줄도 적는다(결정 224). 16 of 16 이면 land 도 덮는다(결정 228). 줄 번호는 U95 기준 |
 | doctor claude marketplace | README Install | implemented | `core/install/doctor.ts:156` | 경로가 트리와 다르면 FAIL |
 | doctor orca plugin | README Install | implemented | `core/install/doctor.ts:172`, `core/install/doctor.ts:182` | 승인 대기는 FAIL |
 | doctor orca-plugin-version | README Install | implemented | `core/checks/orca-plugin-version.ts:26` | |
