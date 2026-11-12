@@ -195,6 +195,16 @@ export function stateBadge(text: string): string {
   return badge(word, TONE[m?.[1] ?? ""] ?? "") + (f ? ` ${esc(f[0].trim())}` : "");
 }
 
+// The words of core/contract/transitions.ts STATE_LABEL and views.ts READING_LABEL, by their mark.
+const STATE_WORD: Readonly<Record<string, string>> = { "📅": "예정", "🟢": "준비됨", "🔄": "진행 중", "🚧": "막힘", "⏸️": "보류", "✅": "완료", "🗑️": "취소", "⏳": "검증 대기" };
+
+// An item row's lead mark: the wide column keeps the mark, a narrow card's head shows the word as a badge.
+function markHtml(c: Cell): string {
+  const word = STATE_WORD[c.text];
+  if (!word || c.link) return cellHtml(c);
+  return `<span class="mk">${esc(c.text)}</span>${badge(word, TONE[c.text] ?? "", "st")}`;
+}
+
 /** The core's "N건·막힘 M" (core/brief/build.ts) as one badge; a text it cannot read stays as written. */
 function countBadge(text: string): string {
   const m = /^(\d+)건·막힘 (\d+)$/.exec(text);
@@ -220,7 +230,7 @@ function whoHtml(text: string): string {
 // An empty value keeps its cell, marked `nil`, so a wide table keeps its columns (decision 222 (20)).
 function rowHtml(t: Table, r: Row, o: RowOpts = {}): string {
   const [first, title, ...rest] = r.cells;
-  const lead = o.idCol ? `<span class="id">${esc(first?.text ?? "")}</span>` : cellHtml(first ?? { text: "—" });
+  const lead = o.idCol ? `<span class="id">${esc(first?.text ?? "")}</span>` : o.go ? cellHtml(first ?? { text: "—" }) : markHtml(first ?? { text: "—" });
   const go = o.go ? `<span class="go" aria-hidden="true">${esc(o.go)} ›</span>` : "";
   const count = o.count === undefined ? "" : countBadge(o.count);
   const titleText = (title ? (o.idCol ? cellHtml(title) : titleWithId(title)) : DASH) + count + go;

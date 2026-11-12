@@ -124,6 +124,7 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .tbl tr.lead td { font-weight: 600; border-top: 1px solid var(--rule-2); }
 /* A wide group row is clicked as a whole; only a narrow head line ends in 자세히 › (decision 225 (9)). */
 .tbl .go { display: none; }
+.tbl .st { display: none; }
 /* State, who and a group's count are badges (decision 225 (6)-(8)): a tone only where the state has one. */
 .badge { display: inline-block; max-width: 100%; padding: 0 6px; border: 1px solid var(--rule-2); border-radius: var(--r1); color: var(--ink-2); font-size: var(--text-xs); font-weight: 500; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .badge.t-bad { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 45%, var(--paper)); background: color-mix(in oklab, var(--bad) 8%, var(--paper)); }
@@ -242,6 +243,8 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl td { display: block; height: auto; padding: 0; border: 0; font-size: var(--text-sm); line-height: 16px; color: var(--ink-2); min-width: 0; width: auto; }
   .tbl:not(.gt) td:first-child, .tbl:not(.gt) td.title, .tbl td.hd { order: -2; }
   .tbl:not(.gt) td:first-child { flex: none; width: auto; }
+  .tbl .mk { display: none; }
+  .tbl .st { display: inline-block; }
   .tbl td.title { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-base); line-height: 20px; color: var(--ink); font-weight: 600; }
   .tbl td.brk { order: -1; display: block; flex: 0 0 100%; height: 0; margin-top: var(--s1); }
   /* A value wraps inside its own column with its label, never cut: a decision's recommendation is
