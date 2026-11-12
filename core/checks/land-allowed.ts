@@ -19,10 +19,11 @@ export function landAllowRules(settings: unknown): LandAllow {
   };
 }
 
-/** One doctor line's detail: where a rule was found, or that none was. */
-export function landAllowDetail(dir: string, a: LandAllow | undefined): { found: boolean; detail: string } {
-  if (!a) return { found: false, detail: `${dir}/settings.json is missing or not JSON: no allow rule for sangsoe land read` };
-  const n = a.permissions.length + a.autoMode.length;
-  if (n === 0) return { found: false, detail: `${dir}/settings.json has no allow rule for sangsoe land (permissions.allow, autoMode.allow)` };
-  return { found: true, detail: `${dir}/settings.json allows sangsoe land: permissions.allow ${a.permissions.length}, autoMode.allow ${a.autoMode.length}` };
+/**
+ * Decision 228: the tail of doctor's `permissions` warn row. A full row needs no tail: sangsoe's
+ * own MCP server rule already lets land through.
+ */
+export function landAllowClause(a: LandAllow | undefined): string {
+  if (!a || a.permissions.length + a.autoMode.length === 0) return ", and auto mode may refuse a worker's land";
+  return `; sangsoe land is allowed (permissions.allow ${a.permissions.length}, autoMode.allow ${a.autoMode.length})`;
 }

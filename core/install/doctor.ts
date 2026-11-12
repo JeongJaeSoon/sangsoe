@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { FULL_SHA, SANGSOE_REPO } from "../approve/approve.ts";
 import { resolveCommit } from "../approve/ports.ts";
 import { type CheckContext, type CheckResult, DOCTOR_CHECKS, type PluginBuild, runChecks } from "../checks/index.ts";
-import { landAllowDetail, landAllowRules } from "../checks/land-allowed.ts";
+import { landAllowClause, landAllowRules } from "../checks/land-allowed.ts";
 import type { Exec } from "../contract/orca.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
@@ -27,7 +27,7 @@ import {
   UNREADABLE,
   userPlugin,
 } from "./host.ts";
-import { PERMISSIONS_DOCTOR_FIX, PERMISSIONS_FIX, permissionsRow } from "./permissions.ts";
+import { PERMISSIONS_DOCTOR_FIX, permissionsRow } from "./permissions.ts";
 import { stageCore } from "./stage.ts";
 
 // `warn` and `notice` print their fix but leave the exit code alone, as at the start.
@@ -115,7 +115,7 @@ function orcaProfileCheck(host: Host, root: string, current: ClaudeProfile): Che
   return { state: "ok", name, detail: `Orca starts sessions with ${where}: ${PLUGIN_ID} ${p.version}, sangsoe enabled` };
 }
 
-// Decisions 198 and 221: read-only, never `fail`. The profile Orca starts workers with is the one that matters.
+// Decisions 198, 221 and 228: one read-only row, never `fail`. The profile Orca starts workers with is the one that matters.
 function settingsChecks(host: Host, current: ClaudeProfile): Check[] {
   const dir = orcaProfile(host)?.dir ?? current.dir;
   const path = join(dir, "settings.json");
@@ -126,20 +126,9 @@ function settingsChecks(host: Host, current: ClaudeProfile): Check[] {
     settings = undefined;
   }
   const perms = permissionsRow(path, settings);
-  const land = landAllowDetail(dir, settings === undefined ? undefined : landAllowRules(settings));
-  return [
-    perms.all
-      ? { state: "ok", name: "permissions", detail: perms.detail }
-      : { state: "warn", name: "permissions", detail: `${perms.detail}: sangsoe's sessions may stop on permission prompts`, fix: PERMISSIONS_DOCTOR_FIX },
-    land.found
-      ? { state: "ok", name: "land allow", detail: land.detail }
-      : {
-          state: "notice",
-          name: "land allow",
-          detail: `${land.detail}: auto mode may refuse a worker's land`,
-          fix: `${PERMISSIONS_FIX} adds the rule for sangsoe's MCP tools; doctor writes no settings`,
-        },
-  ];
+  if (perms.all) return [{ state: "ok", name: "permissions", detail: perms.detail }];
+  const land = landAllowClause(settings === undefined ? undefined : landAllowRules(settings));
+  return [{ state: "warn", name: "permissions", detail: `${perms.detail}: sangsoe's sessions may stop on permission prompts${land}`, fix: PERMISSIONS_DOCTOR_FIX }];
 }
 
 // The plugin row itself is the start check `claude-plugin-version`.
