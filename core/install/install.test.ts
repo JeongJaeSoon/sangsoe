@@ -253,7 +253,7 @@ test("decision 198: doctor reads Orca's profile for a sangsoe land allow rule, a
 test("decision 221: doctor warns with the fix when sangsoe's rules are missing, and both settings rows are ok once they are present", async () => {
   const missing = await doctor(fakeHost().host, ROOT, online());
   const m = SANGSOE_RULES.length;
-  const warn = new RegExp(`^warn +permissions: 0 of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json \\(missing or not JSON\\).* — fix: sangsoe install --permissions$`);
+  const warn = new RegExp(`^warn +permissions: 0 of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json \\(missing or not JSON\\).* — fix: sangsoe install --permissions \\(from a Claude Code ! line: read the diff it prints, then run sangsoe install --permissions --yes\\)$`);
   assert.ok(missing.lines.some((l) => warn.test(l)), missing.lines.join("\n"));
 
   const { host } = fakeHost();

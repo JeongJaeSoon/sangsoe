@@ -676,3 +676,35 @@ store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (1
 닫기: #11 · #12 머지(`sangsoe land`), #13 닫음, 원격 `s6r2/*` 삭제, 열린 PR 0. 리드 Run 의 Task 다섯(재리뷰 항목 둘 포함) completed, 워커 셋 `released`, 리드 worker_done 뒤 `released`.
 
 남은 것: NOW-3(b) 의 깨움 전송과 그 실패를 남기지 않는 act 보고는 다음 고침이 다룬다. 정식 0.1.4 는 그 고침의 rc 뒤로 미룬다.
+
+### S6 세 번째 재실행 기록 (2026-11-12 JST, 설치본 0.1.4-rc.4)
+
+결정 219–223 을 설치본에서 잰다: 리드 세션 자신의 hook 이 만드는 재리뷰 항목(NOW-3(b), 219), O3 회귀, 패널 (6)–(20) 과 상태 줄(219 · 220 · 222), `install --permissions`(221), `item retire`(223).
+
+설치: 버전 PR #107(머지 5a70af24) 에 서명 태그 `v0.1.4-rc.4`, release run 의 smoke 가 `ok tree: … (sangsoe 0.1.4-rc.4)`, pre-release. tap PR 40 은 CodeRabbit 이 상태를 하나도 올리지 않아 `sangsoe land` 가 `checks_missing` 으로 거부했고, 오케스트레이터가 diff 와 asset sha256 을 확인하고 일반 머지했다(65d0a167). `brew upgrade sangsoe-rc` → `sangsoe 0.1.4-rc.4`, `sangsoe install` → `approval waits — fingerprint ap1-9d194835…`, `plugin approve --dry-run` 세 점검 ok, 내용 `75881722…`. 오너가 approve, `sangsoe doctor` 종료 코드 0 과 `orca plugin: local.sangsoe 0.1.4-rc.4, running`.
+
+`install --permissions`: 터미널 없이 부르면 diff(allow 16줄 추가, 지우는 줄 없음)만 보이고 `no terminal to ask on; nothing written` 으로 끝난다. 그 diff 를 오케스트레이터에게 보냈고, 오너가 나중에 직접 돌렸다(백업 `settings.json.sangsoe-backup`). 뒤의 doctor 는 `permissions: 16 of 16`. `land allow` 행은 사라지지 않고 `permissions.allow 2` 로 남는다(이전 규칙과 새 규칙 둘).
+
+고정물(새로, 둘): A #14 `s6r3/a` → `main`, B #15 `s6r3/b` → `s6r3/a`. 오케스트레이터 Run `run_a86f175dd77a`(리드 항목 i026), 리드 Run `run_60651478dbb8`(i027 · i028, `lead: lead:s6r3`). 리드는 queue 라운드도 `graph sync` 도 돌리지 않았다.
+
+| # | 본 것 | 판정 |
+|---|---|---|
+| O3 | 오케스트레이터가 `worktreeId` 없이 `start_unit` → `started`, worktree 는 smoke 저장소의 것. 리드의 `run-current` 는 처음 null(오케스트레이터 Run 을 물려받지 않음)이었고, 리드가 만든 자기 Run `run_60651478dbb8` 뒤로는 그 Run | PASS |
+| 워커 | 워커 둘이 PR 이 열린 채 worker_done(succeeded), Task 둘 completed | 관찰 |
+| 패널 (6) | 게이트 없는 d001 이 버튼 없는 빨간 행 | PASS |
+| 패널 표 · 카드 | 너비 720 은 열 역할로 나눈 표, 640 · 360 은 행마다 카드 하나 | PASS |
+| 패널 현황 | 셋째 절이 `열린 항목 6`(묶음 넷의 행) | PASS |
+| 묶음 상세 | `sangsoe brief lead:s6r3`: `열린 2건·막힘 2`, 크리티컬 패스 `i027 → i028`, 왜 행 둘(i027 자기 PR, i028 ← i027 `stacked_on`). `stacked_on` 은 PR 이 열리고 약 2분 뒤 queue 라운드가 만들었다 | PASS |
+| 상태 줄 | `panel.brief` 의 status: `✨ SANGSOE \| 🚧 5 \| 결정 1 \| 🔄 1`, tone `danger`. 오너의 화면 캡처(rc.4, 10:01)에서 Orca 아래 막대의 같은 글이 빨간 tone 으로 보이고, 위 패널은 `열린 항목 6` 의 카드다 | PASS, VERIFIED by the owner's screen capture (rc.4) |
+| 묶음 상세 화면 | `orca plugin shot --act` 는 html 패널이라 거부. 오너의 화면 캡처(rc.4, 10:03)에서 `lead:s6r3` 상세의 의존 그래프(i027 → `stacked_on`), 크리티컬 패스 i027 → i028, 스택 PR 체인 1층 #14 · 2층 #15, `왜 준비되지 않았나 2` 머리가 보인다 | VERIFIED by the owner's screen capture (rc.4) |
+| NOW-3(b) | #14 머지(오케스트레이터의 일반 머지, 아래), #15 retarget 01:08:10Z(GitHub timeline) → `pr_base_changed` 01:08:56(타이머). 리드가 쉬는 11분 동안 항목 없음, 타이머 act 0 · `notified` 0(219 ③ ④ 그대로). 01:20:25 재리뷰 판정을 리드에게 보냄(219 의 깨움) → 01:20:27 리드 Run 에 `item_created` i029 `re-review jeongjaesoon/sangsoe-smoke#15` 와 `i029 → i028 blocks`. 리드의 손 동작 없음 | PASS |
+| 10 | 리드가 #15 head 에 기록 → land dry-run 이 `rereview_needed` 를 내지 않는다. 머지 뒤 리드가 `task-update --status completed` 로 i029 를 닫았다 | PASS |
+| retire | `sangsoe item retire` i017 · i018(`lead:s6r`) · i023(`lead:s6r2`) → `retired`. 현황 🚧 5 → 1, 두 묶음이 열린 묶음에서 빠졌다. S6r3 를 닫은 뒤 현황 `묶음 0 · 🚧 0`, 상태 줄 `🚧 0 \| 결정 1 \| 🔄 0` | PASS |
+
+머지 길: smoke 저장소와 tap 에 CI 가 없고 CodeRabbit 이 이날 상태를 올리지 않아, #14 · #15 의 `sangsoe land` 가 `checks_missing` 으로 거부했다. 기록된 리뷰가 있는 head 를 오케스트레이터가 `--merge --match-head-commit` 으로 일반 머지했다(#14 46a996b7, #15 89df6d37).
+
+재리뷰 항목은 스스로 닫히지 않는다. 결정 215 ③ 에서 그것은 Orca Task 하나이고, `land` 와 pr-monitor 는 그 상태를 읽지 않고 event 로 판정한다. 자기 PR 이 없어 pr-monitor 의 머지 뒤 닫기(결정 212)에도 걸리지 않고, 리뷰 기록으로 닫는 길도 없다. 설계가 뜻한 길은 리드가 그 항목에 워커를 띄우고 그 워커가 리뷰를 기록하고 `land` 를 다시 부른 뒤 worker_done 으로 닫는 것이다. 이번처럼 리드가 판정을 직접 기록하면(결정 111 · 162: 작성자는 자기 PR 의 판정을 기록하지 못해 리드에게 보낸다) 항목은 머지 뒤에도 🟢 `시작` 으로 남고, `orchestrate` skill 은 그것을 닫으라고 말하지 않는다. 분류: LATER. 잘못 머지되는 일은 없고 남는 것은 할 일 없는 🟢 행 하나다. 고칠 길은 기록된 판정이 그 항목을 닫게 하거나 skill 에 닫기 한 줄을 더하는 것이다.
+
+작은 것(LATER): 넓은 표에서 묶음 이름이 토큰 안에서 줄바꿈된다(`lead:s6r` / `3`). i026 의 누가 칸이 터미널 handle 원문이다. 처음 찍은 720 샷이 빈 화면이었고 다시 찍으니 그려졌다. 리드가 대기 턴을 끝낼 때마다 HIGH stop 에스컬레이션이 났다(네 번). 리드의 guard hook 이 foreground `orca orchestration check --wait` 를 막는다.
+
+닫기: #14 · #15 머지, 원격 `s6r3/*` 삭제, 열린 PR 0. 리드 Run 의 Task 셋(재리뷰 항목 포함) completed, 워커 둘 `released`, 리드 worker_done 뒤 `released`. `sangsoe doctor` 종료 코드 0, notice 둘(reaper-config, model-table) 말고 모두 ok.

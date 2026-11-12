@@ -9,6 +9,7 @@ import {
   installPermissions,
   type PermissionOptions,
   permissionsRow,
+  permissionsYesLine,
   realFiles,
   removePermissions,
   SANGSOE_RULES,
@@ -148,12 +149,34 @@ test("decision 221: without a terminal and without --yes it shows the diff and w
   const r = await installPermissions(t.host, opts({}));
   assert.equal(r.code, 1);
   assert.match(r.lines.join("\n"), /^\+ {6}"mcp__plugin_sangsoe_sangsoe",$/m);
-  assert.match(r.lines.at(-1) ?? "", /no terminal to ask on; nothing written.*--yes/);
+  assert.match(r.lines.at(-1) ?? "", /no terminal to ask on.*nothing was written.*--yes/);
   assert.equal(readFileSync(t.settings, "utf8"), ORIGINAL);
 
   const w = await installPermissions(t.host, opts({ yes: true }));
   assert.equal(w.code, 0, w.lines.join("\n"));
   assert.deepEqual(JSON.parse(readFileSync(t.settings, "utf8")).permissions.allow.slice(2), SANGSOE_RULES);
+});
+
+test("decision 224: without a terminal (a Claude Code ! line) the last line is the exact --yes command, with the same scope", async () => {
+  for (const [scope, line] of [
+    ["user", "sangsoe install --permissions --yes"],
+    ["project", "sangsoe install --permissions --yes --scope project"],
+    ["local", "sangsoe install --permissions --yes --scope local"],
+  ] as const) {
+    const t = tempHome();
+    const project = join(t.home, "repo");
+    const target = scope === "user" ? t.settings : join(project, ".claude", scope === "project" ? "settings.json" : "settings.local.json");
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, ORIGINAL);
+    const r = await installPermissions(t.host, opts({ scope, cwd: project }));
+    assert.equal(r.code, 1, scope);
+    assert.match(r.lines.join("\n"), new RegExp(`^--- ${target}\n\\+\\+\\+ ${target}\n@@ `, "m"), scope);
+    assert.equal(r.lines.at(-1), `permissions: no terminal to ask on, so nothing was written. Read the diff above, then run: ${line}`);
+    assert.equal(permissionsYesLine(scope), line);
+    assert.equal(readFileSync(target, "utf8"), ORIGINAL, scope);
+    assert.ok(!existsSync(t.state), scope);
+    assert.ok(!existsSync(`${target}.sangsoe-backup`), scope);
+  }
 });
 
 test("decision 221: a rule the owner already had is not recorded as sangsoe's and survives uninstall", async () => {
@@ -334,7 +357,13 @@ test("decision 221: doctor's row counts the rules present", () => {
 test("decision 221: the README's install step quotes the current rule count", () => {
   const readme = readFileSync(new URL("../../README.md", import.meta.url), "utf8");
   const m = SANGSOE_RULES.length;
-  for (const quote of [`0 of ${m} sangsoe rules present`, `Add these ${m} rules? [y/N]`, `${m} of ${m} sangsoe rules present`]) assert.ok(readme.includes(quote), quote);
+  for (const quote of [
+    `0 of ${m} sangsoe rules present`,
+    `Add these ${m} rules? [y/N]`,
+    `${m} of ${m} sangsoe rules present`,
+    "no terminal to ask on, so nothing was written. Read the diff above, then run: sangsoe install --permissions --yes",
+  ])
+    assert.ok(readme.includes(quote), quote);
 });
 
 test("decision 221: the rules are narrow: no push, merge, rm, brew, or bare orca/sangsoe Bash", () => {

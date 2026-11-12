@@ -97,8 +97,8 @@
 | install Orca 프로필에도 등록 | README Claude profiles | changed (결정 167) | `core/install/install.ts:122`, `core/install/host.ts:108` | account list 를 읽는다 |
 | install Orca dev load | design.html 설치 | implemented | `core/install/install.ts:43`, `core/install/install.ts:48` | 3 이면 지문과 approve 안내 |
 | install 끝의 doctor | design.html 설치 | implemented | `core/install/install.ts:129` | doctor 종료 코드를 낸다 |
-| install --permissions | README Install 3 | changed (결정 221) | `cli/commands/install.ts:20`, `core/install/permissions.ts:11`, `core/install/permissions.ts:177` | 빠진 규칙만, diff·y/N·원자적 쓰기·백업, 두 번째는 변화 없음. 두 프로필(결정 167) |
-| uninstall 이 권한 규칙을 되돌림 | README Install 3 | changed (결정 221) | `core/install/install.ts:181`, `core/install/permissions.ts:263` | sangsoe 가 기록한 규칙 중 같은 글자로 남은 것만 |
+| install --permissions | README Install 3 | changed (결정 221·224) | `cli/commands/install.ts:20`, `core/install/permissions.ts:11`, `core/install/permissions.ts:183`, `core/install/permissions.ts:215` | 빠진 규칙만, diff·y/N·원자적 쓰기·백업, 두 번째는 변화 없음. 두 프로필(결정 167). 터미널이 없으면(Claude Code 의 `!` 줄) diff 뒤 같은 범위의 `--yes` 줄을 적고 쓰지 않는다(결정 224) |
+| uninstall 이 권한 규칙을 되돌림 | README Install 3 | changed (결정 221) | `core/install/install.ts:181`, `core/install/permissions.ts:271` | sangsoe 가 기록한 규칙 중 같은 글자로 남은 것만 |
 | formula · post_install 없음 | design.html 설치 | partial | `core/install/host.ts:46` | G9 — formula 는 별도 탭 저장소라 이 저장소에서 확인할 수 없다. 여기는 트리 경로 환경 변수를 받는 쪽만 있다 |
 | approve 세 조건 | design.html 설치, README Install | implemented | `core/approve/approve.ts:140`, `core/approve/approve.ts:174` | 켜기 직전 해시 재측정 |
 | approve 기록 event | design.html 설치 | implemented | `core/approve/approve.ts:199`, `core/approve/approve.ts:212` | store 를 먼저 연다(결정 123) |
@@ -116,7 +116,7 @@
 | doctor claude·claude profile | README Claude profiles | implemented | `core/install/doctor.ts:146`, `core/install/doctor.ts:150` | |
 | doctor orca claude profile | README Claude profiles | implemented | `core/install/doctor.ts:96` | |
 | doctor land allow | README Install | implemented | `core/install/doctor.ts:119` | notice, 설정은 쓰지 않는다. 고칠 명령은 `sangsoe install --permissions`(결정 221) |
-| doctor permissions | README Install 2·5 | changed (결정 221) | `core/install/doctor.ts:119`, `core/install/permissions.ts:325` | N of M, 모자라면 warn |
+| doctor permissions | README Install 2·5 | changed (결정 221·224) | `core/install/doctor.ts:133`, `core/install/permissions.ts:333` | N of M, 모자라면 warn. 고칠 말에 `!` 줄의 `--yes` 줄도 적는다(결정 224) |
 | doctor claude marketplace | README Install | implemented | `core/install/doctor.ts:156` | 경로가 트리와 다르면 FAIL |
 | doctor orca plugin | README Install | implemented | `core/install/doctor.ts:172`, `core/install/doctor.ts:182` | 승인 대기는 FAIL |
 | doctor orca-plugin-version | README Install | implemented | `core/checks/orca-plugin-version.ts:26` | |
@@ -258,10 +258,11 @@
 | 저장소 위생과 설치 | design-appendix 게이트와 원칙 | implemented | `test/hooks-registered.test.ts:23` | |
 | 게이트가 담은 가정 여섯 | design-appendix 게이트가 담은 가정 | implemented | `core/gates/pressure.ts:20`, `core/approve/review-verdict.ts:74` | 가정을 다시 재는 절차는 코드 밖 |
 | 패널 index 현황 | design-appendix 패널 화면 | partial | `orca-plugin/panel/view.ts:180` | G21 — "내 지시는 어디까지 갔나" 접힘 구역이 없다. 결정 225: 좁은 카드의 빈 칸은 자리를 차지하지 않고(`orca-plugin/panel/style.ts:259`), 다음은 남는 폭에 두 줄, 누가는 배지와 오른쪽 끝의 경과(`orca-plugin/panel/view.ts:211`), 묶음의 수는 제목 옆 배지 "막힘 M / N"(`orca-plugin/panel/view.ts:199`) |
-| 패널 group 묶음 상세 | design-appendix 패널 화면 | changed (결정 218·220) | `orca-plugin/panel/view.ts:495`, `orca-plugin/panel/view.ts:612` | G13 고침(U76, 결정 213): SVG DAG 와 시안의 절 순서. 결정 218: 브레드크럼은 지금 화면을 한 번(`orca-plugin/panel/view.ts:710`, 같은 행 두 번 누르기는 쌓지 않음 `orca-plugin/panel/view.ts:89`), 간선 범례는 접혀서 시작(`orca-plugin/panel/view.ts:599`). 결정 220: 그래프 표는 열 역할(짧은 것·항목·긴 글)이 너비를 정하고(`orca-plugin/panel/view.ts:535`, `orca-plugin/panel/style.ts:195`), 좁은 패널에서는 행 하나가 id 와 상태를 제목 줄로 단 카드 하나다(`orca-plugin/panel/view.ts:551`, `orca-plugin/panel/style.ts:230`). 제목은 화면 > 절 > 절 안의 표 세 단계(`orca-plugin/panel/style.ts:95`). 결정 222: 좁은 패널의 카드 규칙은 모든 표의 것이고(`orca-plugin/panel/style.ts:207`), 지표 칸은 테두리 카드다(`orca-plugin/panel/style.ts:123`). 결정 225: 넓은 표는 `colgroup` 으로 열 너비를 정하고 칸마다 한 줄 말줄임(`orca-plugin/panel/view.ts:259`, `orca-plugin/panel/style.ts:224`), 몸이 빈 그래프 카드는 머리 아래 선이 없고(`orca-plugin/panel/view.ts:635`), 상태 말은 배지(`orca-plugin/panel/view.ts:189`) |
+| 패널 group 묶음 상세 | design-appendix 패널 화면 | changed (결정 218·220) | `orca-plugin/panel/view.ts:495`, `orca-plugin/panel/view.ts:612` | G13 고침(U76, 결정 213): SVG DAG 와 시안의 절 순서. 결정 218: 브레드크럼은 지금 화면을 한 번(`orca-plugin/panel/view.ts:710`, 같은 행 두 번 누르기는 쌓지 않음 `orca-plugin/panel/view.ts:89`), 간선 범례는 접혀서 시작(`orca-plugin/panel/view.ts:599`). 결정 220: 그래프 표는 열 역할(짧은 것·항목·긴 글)이 너비를 정하고(`orca-plugin/panel/view.ts:535`, `orca-plugin/panel/style.ts:195`), 좁은 패널에서는 행 하나가 id 와 상태를 제목 줄로 단 카드 하나다(`orca-plugin/panel/view.ts:551`, `orca-plugin/panel/style.ts:230`). 제목은 화면 > 절 > 절 안의 표 세 단계(`orca-plugin/panel/style.ts:95`). 결정 222: 좁은 패널의 카드 규칙은 모든 표의 것이고(`orca-plugin/panel/style.ts:207`), 지표 칸은 테두리 카드다(`orca-plugin/panel/style.ts:123`). 결정 225: 넓은 표는 `colgroup` 으로 열 너비를 정하고 칸마다 한 줄 말줄임(`orca-plugin/panel/view.ts:269`, `orca-plugin/panel/style.ts:217`), 몸이 빈 그래프 카드는 머리 아래 선이 없고(`orca-plugin/panel/view.ts:635`), 상태 말은 배지(`orca-plugin/panel/view.ts:189`) |
 | 패널 item 항목 상세 | design-appendix 패널 화면 | changed (결정 136) | `orca-plugin/panel/view.ts:578` | 버튼은 추천대로·다른 답·완료 셋. 대화 기록 위치는 G14 |
 | 패널 zoom | design-appendix 패널 화면 | missing | `orca-plugin/panel/view.ts:600` | G15 |
-| 패널 머리 행과 탭 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:607`, `orca-plugin/panel/view.ts:626` | 결정 169. 결정 225: 머리와 경로 줄은 함께 고정되고(`orca-plugin/panel/view.ts:798`, `orca-plugin/panel/style.ts:72`), 패널은 Orca 페이지의 `#root` 를 쓴다(`orca-plugin/panel/index.ts:46`) || 패널 버튼 | design-appendix 패널 화면 | changed (결정 136) | `orca-plugin/panel/requests.ts:13`, `orca-plugin/panel/view.ts:194` | "확인함" 대신 "완료" |
+| 패널 머리 행과 탭 | design-appendix 패널 화면 | implemented | `orca-plugin/panel/view.ts:607`, `orca-plugin/panel/view.ts:626` | 결정 169. 결정 225: 머리와 경로 줄은 함께 고정되고(`orca-plugin/panel/view.ts:798`, `orca-plugin/panel/style.ts:72`), 패널은 Orca 페이지의 `#root` 를 쓴다(`orca-plugin/panel/index.ts:46`) |
+| 패널 버튼 | design-appendix 패널 화면 | changed (결정 136) | `orca-plugin/panel/requests.ts:13`, `orca-plugin/panel/view.ts:194` | "확인함" 대신 "완료" |
 | 패널 다시 읽기 | design-appendix 패널 화면 | changed (결정 205) | `orca-plugin/main.ts:94`, `orca-plugin/panel/refresh.ts:9` | 새 seq 뒤 몇 초 안에 |
 | 세 단계 정렬 | design-appendix 현황 세 단계 | implemented | `core/brief/build.ts:179`, `core/brief/build.ts:307` | |
 | 세 단계 3 항목 상세 | design-appendix 현황 세 단계 | partial | `core/brief/build.ts:544` | G14 |
