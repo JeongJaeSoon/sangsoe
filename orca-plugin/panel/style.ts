@@ -124,7 +124,6 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .tbl tr.lead td { font-weight: 600; border-top: 1px solid var(--rule-2); }
 /* A wide group row is clicked as a whole; only a narrow head line ends in 자세히 › (decision 225 (9)). */
 .tbl .go { display: none; }
-.tbl .st { display: none; }
 /* State, who and a group's count are badges (decision 225 (6)-(8)): a tone only where the state has one. */
 .badge { display: inline-block; max-width: 100%; padding: 0 6px; border: 1px solid var(--rule-2); border-radius: var(--r1); color: var(--ink-2); font-size: var(--text-xs); font-weight: 500; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .badge.t-bad { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 45%, var(--paper)); background: color-mix(in oklab, var(--bad) 8%, var(--paper)); }
@@ -222,6 +221,10 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl col.c-short { width: 7.5em; }
   .tbl col.c-state { width: 8.5em; }
   .tbl col.c-acts { width: 200px; }
+  /* A state column says its mark and its word (decision 229); an id-led table keeps 64px. */
+  .tbl:not(.gt):has(.st) th:first-child, .tbl:not(.gt):has(.st) td:first-child { width: 104px; }
+  .tbl .mk { vertical-align: middle; }
+  .tbl .mk + .st { margin-left: var(--s1); }
   .tbl tr.lead td { background: var(--tint-2); }
   .tbl:not(:has(tr.lead)) tbody tr:nth-child(even of :where(:not(.other))) td { background: var(--tint-1); }
   .tbl:not(:has(tr.lead)) tbody tr:hover td { background: var(--paper-2); }
@@ -269,6 +272,9 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl tr.lead td.title { display: flex; align-items: center; }
   /* A group head is one line: who and how long show on the item cards under it. */
   .tbl tr.lead td[data-l], .tbl tr.lead td.brk { display: none; }
+  /* The head line keeps the bare mark decision 225 (11) drew; its word stays for screen readers. */
+  .tbl tr.lead .mk { display: inline; }
+  .tbl tr.lead .st { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .tbl tr.lead .go { display: inline; flex: none; margin-left: auto; padding-left: var(--s3); color: var(--link); font-size: var(--text-xs); font-weight: 500; }
   .tbl tr.lead:hover .go, .tbl tr.lead:focus-visible .go { text-decoration: underline; text-underline-offset: 2px; }
   .tbl td.acts { flex: 1 0 100%; display: flex; gap: var(--s2); margin: var(--s2) 0 0; }

@@ -2,6 +2,10 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+- **The panel shows no field label without its value (229).** A narrow card whose 누가 has no one, only a time, printed `누가 29h`, so the time read as the person; it now shows the time alone at the card's right end, where a decision's or to-do's elapsed time sits. A card with someone still reads `누가 <who> <time>`. In a wide panel the state column of 열린 항목, the on-hold table and a group's item tables shows each mark with its word (`🚧 막힘`, the same words as the narrow badges), group rows included; screen readers read the word once. `❔` gets the word `읽기 전` in both widths. The Orca plugin's content changed, so it needs re-approval at rc.2.
+
 ## 0.1.5-rc.1 (pre-release)
 
 Everything since `v0.1.4`: decisions 225, 227 and 228. A pre-release for checking the panel and doctor on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.4.
