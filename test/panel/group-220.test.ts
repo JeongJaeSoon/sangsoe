@@ -39,21 +39,20 @@ test("(14) the first column of a graph table is not held to the 64px id column",
   assert.match(WIDE, /\.tbl:not\(\.gt\) th:first-child, \.tbl:not\(\.gt\) td:first-child \{ width: 64px; \}/);
 });
 
-test("(14) graph cells wrap at words, never inside an id or a Hangul word", () => {
+// Decision 225 (10) replaced the wide wrapping with fixed columns cut to one line; a card still wraps at words.
+test("(14) graph cells in a card wrap at words, never inside an id or a Hangul word", () => {
   const td = rule(WIDE, ".tbl.gt td");
   assert.match(td, /overflow-wrap: break-word;/);
   assert.match(td, /word-break: keep-all;/);
-  assert.match(rule(WIDE, ".tbl.gt td.nw"), /white-space: nowrap; width: 1%;/);
-  assert.match(rule(WIDE, ".tbl.gt td.it"), /min-width: \d+em;/);
-  assert.match(rule(WIDE, ".tbl.gt td.tx"), /min-width: \d+em;/);
 });
 
-test("(14) the role widths hold only in a wide panel, so a narrow card's title cells are not squeezed to 1%", () => {
+test("(14) the role widths hold only in a wide panel, so a narrow card's title cells are not squeezed", () => {
   const wideOnly = /@container panel \(min-width: 720px\) \{([^@]*?)\n\}/s.exec(STYLE)?.[1] ?? "";
-  for (const sel of [".tbl.gt td.nw", ".tbl.gt td.it", ".tbl.gt td.tx"]) {
-    assert.ok(rule(wideOnly, sel), `${sel} sits in the wide-only block`);
+  for (const sel of [".tbl col.c-step", ".tbl col.c-kind", ".tbl col.c-short", ".tbl col.c-state"]) {
+    assert.match(rule(wideOnly, sel), /width: /, `${sel} sits in the wide-only block`);
     assert.equal(rule(WIDE.replace(wideOnly, ""), sel), "", `${sel} is not a rule at every width`);
   }
+  assert.match(html, /<table class="tbl gt"><colgroup><col class="c-step"><col class="c-item"><col class="c-state"><col class="c-text"><\/colgroup>/);
 });
 
 test("(14) the four tables give each column one role: short cells nowrap, item cells and the long text take the width", () => {
@@ -80,7 +79,8 @@ test("(15) every card of the four tables opens with a title line: the item id, t
       assert.ok(head.length > 0, `${name}: no title cell`);
       const line = head.map((c) => c.text).join(" ");
       assert.match(line, /i\d{3}/, `${name}: ${line}`);
-      assert.match(line, /📅|🟢|🔄|🚧|⏳|✅|⏸️|🗑️|❓/u, `${name}: ${line} names no state`);
+      // A state is its marker, or since decision 225 (6) its word in a badge.
+      assert.match(line, /📅|🟢|🔄|🚧|⏳|✅|⏸️|🗑️|❓|예정|준비됨|진행 중|막힘|보류|완료|취소|검증 대기/u, `${name}: ${line} names no state`);
       const brk = r.findIndex((c) => c.cls === "brk");
       assert.ok(brk > 0, `${name}: no rule under the title line`);
     }

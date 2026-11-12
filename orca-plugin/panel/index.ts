@@ -37,13 +37,26 @@ declare const orca: Frame;
 
 type Reply<T> = { ok: true; value: T } | { ok: false; refusal: { code: string; reason: string; fix: string } };
 
+type RootDoc = { getElementById(id: string): HTMLElement | null; createElement(tag: "div"): HTMLElement; body: { append(e: HTMLElement): void } };
+
+/**
+ * Orca's generated page for a .ts entry already holds `<div id="root">` (decision 225 (1)): a second
+ * one appended after it left the first empty, padded by #root's own bottom space above the header.
+ */
+export function panelRoot(doc: RootDoc): HTMLElement {
+  const own = doc.getElementById("root");
+  if (own) return own;
+  const root = doc.createElement("div");
+  root.id = "root";
+  doc.body.append(root);
+  return root;
+}
+
 function mount(): void {
   const style = document.createElement("style");
   style.textContent = STYLE;
   document.head.append(style);
-  const root = document.createElement("div");
-  root.id = "root";
-  document.body.append(root);
+  const root = panelRoot(document);
 
   let stack: Target[] = [];
   let tab: Tab = "all";

@@ -51,9 +51,9 @@ test("(2)(7) the 누가 cell is a badge for who and the elapsed time apart, the 
   assert.match(i026, /<td data-l="누가" class="who" title="워커 2h"><span class="badge">워커<\/span><span class="age">2h<\/span><\/td>/);
   // Who unknown: no empty badge, the time alone.
   assert.match(rowOf(html, "i031"), /<td data-l="누가" class="who" title="— 17h"><span class="age">17h<\/span><\/td>/);
-  const who = rule(NARROW, ".tbl td.who");
+  const who = rule(NARROW, ".tbl:not(.gt) td.who");
   for (const d of ["flex: none;", "margin-left: auto;"]) assert.ok(who.includes(d), d);
-  assert.match(rule(NARROW, ".tbl td.age, .tbl .who .age"), /margin-left: auto;/);
+  assert.match(rule(NARROW, ".tbl:not(.gt) td.age, .tbl .who .age"), /margin-left: auto;/);
   // The decision and to-do tables' 경과 column is the same time, at the same edge.
   const rows = ov().decisions.rows.length > 0 ? ov().decisions.rows : [];
   if (rows.length > 0) assert.match(rowOf(html, rows[0]?.id ?? ""), /<td data-l="경과" class="age">/);
@@ -71,9 +71,9 @@ test("(7) a long who value is cut with an ellipsis inside its badge and keeps it
 test("(3) the middle text takes the freed width, at most two lines then an ellipsis, its full text in the title", () => {
   const html = renderStage(one);
   assert.match(rowOf(html, "i033"), /<td data-l="다음" class="mid" title="키 도착 확인">/);
-  const mid = rule(NARROW, ".tbl td.mid");
+  const mid = rule(NARROW, ".tbl:not(.gt) td.mid");
   for (const d of ["flex: 1 1 0;", "-webkit-line-clamp: 2;", "overflow: hidden;"]) assert.ok(mid.includes(d), d);
-  const pr = rule(NARROW, ".tbl td.pr");
+  const pr = rule(NARROW, ".tbl:not(.gt) td.pr");
   for (const d of ["white-space: nowrap;", "text-overflow: ellipsis;"]) assert.ok(pr.includes(d), d);
 });
 

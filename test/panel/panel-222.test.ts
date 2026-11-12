@@ -40,12 +40,13 @@ test("(20) an empty value is marked, hidden in a card, and a card with no meta v
   const html = renderStage(one);
   const lead = rowOf(html, "lead:api-migration");
   assert.match(lead, /<td data-l="PR" class="nil">/);
-  assert.match(rule(NARROW, ".tbl td.nil"), /visibility: hidden;/);
+  // Decision 225 (11): an empty cell now takes no room in a card, so what follows flows left.
+  assert.match(rule(NARROW, ".tbl td.nil"), /display: none;/);
   const t = m().inProgress;
   const empty = t.rows.map((r) => (r.id === "i037" ? { ...r, cells: r.cells.map((c, i) => (i < 2 ? c : { text: "—" })) } : r));
   const bare = rowOf(renderStage({ ...one, model: { ...m(), inProgress: { ...t, rows: empty } } }), "i037");
   assert.match(bare, /^<tr data-id="i037" class="[^"]*\bbare\b/);
-  assert.match(rule(NARROW, ".tbl tr.bare td[data-l]:not(.num), .tbl tr.bare td.brk"), /display: none;/);
+  assert.match(rule(NARROW, ".tbl tr.bare td[data-l], .tbl tr.bare td.brk"), /display: none;/);
   // The wide 64px id column must not reach into a card (its selector outranks a plain .tbl td).
   assert.match(rule(NARROW, ".tbl:not(.gt) td:first-child"), /width: auto;/);
 });
@@ -64,9 +65,9 @@ test("(17)(18) a narrow list row is one card: a one-line head (state, id, title,
   for (const d of ["nowrap", "ellipsis"]) assert.ok(!meta.includes(d), d);
   assert.match(meta, /overflow-wrap: anywhere;/);
   assert.match(rowOf(html, "i033"), /<td class="title" title="i033 스테이징 키 발급">/, "the cut title keeps its full text");
-  // The group's count rides the head line: its cell keeps its wide column and moves up in a card.
-  assert.match(rowOf(html, "lead:api-migration"), /<td data-l="다음" class="num">10건·막힘 2<\/td>/);
-  assert.match(rule(NARROW, ".tbl:not(.gt) td:first-child, .tbl:not(.gt) td.title, .tbl td.num, .tbl td.hd"), /order: -2;/);
+  // The group's count rides the head line, since decision 225 (8) as a badge beside the group's title.
+  assert.match(rowOf(html, "lead:api-migration"), /<td class="title"[^>]*>api-migration<span class="pri">P0<\/span><span class="badge t-bad cnt"[^>]*>막힘 2 \/ 10<\/span>/);
+  assert.match(rule(NARROW, ".tbl:not(.gt) td:first-child, .tbl:not(.gt) td.title, .tbl td.hd"), /order: -2;/);
   assert.match(rule(NARROW, ".tbl td.brk"), /order: -1;/);
   assert.equal(rule(NARROW, ".tbl tr.item"), "", "no indent for an item under its group");
   assert.match(rule(NARROW, ".tbl tr.lead"), /border-color: transparent;/, "a group row heads its cards, it is not one more card");
@@ -74,10 +75,11 @@ test("(17)(18) a narrow list row is one card: a one-line head (state, id, title,
 });
 
 test("(tone) white everywhere: a fill only for hover, the chosen tab and an open menu; the summary and figures are bordered cards", () => {
-  const fills = [...STYLE.matchAll(/([^{}]*)\{[^}]*background:\s*var\(--(?:paper-2|paper-3|accent-soft)\)/g)].map((x) => (x[1] ?? "").trim());
+  const fills = [...STYLE.matchAll(/([^{}]*)\{[^}]*background:\s*var\(--(?:paper-2|paper-3|accent-soft|tint-1|tint-2)\)/g)].map((x) => (x[1] ?? "").trim());
   assert.ok(fills.length > 0);
   assert.match(STYLE, /^:root \{[^}]*--h-paper: oklch\(100% 0 0\);/m, "outside Orca the light paper is white too");
-  for (const sel of fills) assert.match(sel, /:hover|aria-selected="true"|\[open\]/, sel);
+  // Decision 225 (10) adds two: a wide table's group rows and its striped rows.
+  for (const sel of fills) assert.match(sel, /:hover|aria-selected="true"|\[open\]|tr\.lead td|nth-child\(even\)/, sel);
   assert.match(rule(STYLE, ".sumline"), /border: 1px solid var\(--rule\); border-radius: var\(--r3\);/);
   assert.match(rule(STYLE, ".figs"), /border: 1px solid var\(--rule\); border-radius: var\(--r3\);/);
   const h2 = rule(STYLE, ".sec-h h2");

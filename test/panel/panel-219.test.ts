@@ -38,7 +38,8 @@ test("(7) header, tab row, breadcrumb and content share one side gutter", () => 
   assert.match(rule(".top"), /padding: 0 var\(--gx\);/);
   assert.match(rule(".seg"), /margin: var\(--s2\) var\(--gx\) 0;/);
   assert.match(rule("main"), /padding: var\(--s2\) var\(--gx\) 0;/);
-  assert.match(rule(".crumbs"), /margin: var\(--s2\) var\(--gx\) 0;/);
+  // The back line sits in the sticky bar under the header (decision 225 (4)): its gutter is padding.
+  assert.match(rule(".crumbs"), /padding: var\(--s2\) var\(--gx\);/);
 });
 
 test("(9) the trail is left-aligned and back sits at the row's right end", async () => {
