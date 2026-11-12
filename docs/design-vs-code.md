@@ -570,7 +570,7 @@
 | 220 | design.html §오너가 보는 것 패널 문단, 부록 §패널 화면, blog 묶음 상세 | 고침 | `orca-plugin/panel/style.ts` |
 | 222 | 현황 셋째 절과 탭 "열린 항목": design.html · 부록 | 이미(`8215e9f`) | `core/brief/build.ts:241` |
 | 222 | blog 패널 목록과 탭 줄의 "진행 중" 절과 탭 | 고침 | `core/brief/build.ts:241`, `orca-plugin/panel/view.ts:321` |
-| 222 ③ | 부록 §좁은 폭: 카드 머리의 제목은 한 줄 말줄임(전체 글은 `title`) | 고침 | `orca-plugin/panel/view.ts:245` |
+| 222 ③ | 부록 §좁은 폭: 카드 머리의 제목은 한 줄 말줄임(전체 글은 `title`) | 고침 | `orca-plugin/panel/view.ts:254`, `orca-plugin/panel/style.ts:249` |
 | 222 | 흰 배경·1px 테두리 톤, 좁은 패널의 행마다 카드: design.html · 부록 · blog | 고침 | `orca-plugin/panel/style.ts` |
 | 221 · 224 | design.html §설치와 호출 경로의 승인 행, blog 설치·제거, 부록 §남는 파일, 용어집 plugin 승인 행: `install --permissions`, "permissions.allow 에 한 줄만" | 고침 | `core/install/permissions.ts:11`, `:215` |
 | 221 | README Uninstall 의 `permissions: removed N rules …` 줄 | 고침 | `core/install/install.ts:181`, `core/install/permissions.ts:321` |
