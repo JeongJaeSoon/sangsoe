@@ -557,9 +557,9 @@
 | 215 | 부록 실패 표 `retarget_approval` · `graph sync` 행 | 이미(`9556001`) | 같은 줄 |
 | 215 · 216 | design.html 흐름 3, blog ④, 부록 land 카드: `rereview_needed` · `base_unrecorded` · `base_merged` | 고침 | `core/land/land.ts:204`, `:214` |
 | 216 | 부록 event 표·용어집 §9 의 `pr_reopened`, 부록 상태 대응표 ✅ 행, `graph sync` 행 | 고침(`test/spec-names.test.ts` 의 허용 줄 둘을 뺐다) | `core/detect/pr/round.ts:254` |
-| 216 ③ | 항목이 자기 Run 을 적는다(읽기만 바뀜) | 해당 대목 없음: 페이지가 읽는 Run 을 말하지 않는다 | `core/brief/load.ts` `briefRuns` |
+| 216 ③ | 항목이 자기 Run 을 적는다(읽기만 바뀜) | 고칠 대목 없음: 페이지가 읽는 Run 을 말하지 않는다 | `core/brief/load.ts` `briefRuns` |
 | 217 ② | design.html 흐름 1: 오케스트레이터는 `worktreeId` 를 비워도 된다 | 고침 | `core/start/lineage.ts:47` |
-| 217 ① | 타이머가 리드 Run 을 깨운다 | 해당 대목 없음(결정 219 가 버렸다) | — |
+| 217 ① | 타이머가 리드 Run 을 깨운다 | 고칠 대목 없음(페이지에 실린 적이 없고 결정 219 가 버렸다) | — |
 | 218 | design.html 크리티컬 패스 정의(PR 마디, 머지 대기 완료 Task), §오너가 보는 것 2단계 행, blog 묶음 상세 | 고침 | `core/graph/critical.ts` `itemGraph` |
 | 219 | design.html 감지 층 행(hook 이 재리뷰 항목을 만든다), §의존 관리, 부록 실패 표·`graph sync` 행의 "queue round 가 만든다" | 고침 | `core/session/record.ts:40`, `core/graph/own-run.ts:40`, `core/detect/queue/round.ts:193` |
 | 219 | 부록 §패널 화면: 경로 줄은 한 번, 뒤로는 메모리에서 | 고침 | `orca-plugin/panel/view.ts` |
