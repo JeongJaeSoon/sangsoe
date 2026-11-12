@@ -251,6 +251,7 @@
 | | 머지 가능 | `pr_ready_to_merge` | — |
 | | 머지됨 | `pr_merged` | — |
 | | 머지 없이 닫힘 | `pr_closed` | — |
+| | 머지 없이 닫혔던 PR 이 다시 열림(pr-monitor, 닫힘마다 한 번. 결정 216). store 와 GRAPH 는 그 PR 을 다시 열린 PR 로 읽는다 | `pr_reopened` | — |
 | | 쌓은 PR 의 base 가 바뀜 | `pr_base_changed` | — |
 | | CI 실패 | `ci_failed` | — |
 | | pr-monitor 가 머지 뒤 그 sha 의 push CI 를 읽고 쓰는 기록({repo, sha, run ids}). 재실행 1회로 flake 를 가르고 새 push 로 취소된 run 은 빨강이 아니다 | `main_green` · `main_red` | — |
@@ -274,6 +275,7 @@
 | | land 요청 결과: 판정이 통과해 머지를 예약했거나 "승인되면 머지"를 남겼다 · 거부되었거나 예약·대기열이 실패했다 | `land_requested` · `land_failed` | land_done(머지됐다는 사실은 `pr_merged`) |
 | | 만든 쪽이 남기는 자원 기록. `kind` 에는 프로세스 · worktree · 터미널 · compose · 증거 파일 위치와 Docker 넷(컨테이너 · 볼륨 · 네트워크 · 이미지)이 온다 | `resource` | — |
 | | 항목의 부가 정보를 붙임·바꿈, 상태를 바꾼 함수가 Orca 호출 뒤에 남기는 이력(원본은 Orca Task 이고 이 줄은 기록이다) | `item_created` · `item_extra_set` · `item_transition` | item_state |
+| | 머지 없이 닫힌 PR 의 완료 항목을 거둠({task, by, reason}, 항목마다 한 줄). Orca 에는 쓰지 않고 그 항목은 🗑️ 취소로 읽힌다(결정 223) | `item_retired` | — |
 | | 우선순위 지정 | `priority_set` | — |
 | | 간선 더함·뺌 | `edge_added` · `edge_removed` | — |
 | | 흐름 틀 펼침·단계 건너뜀(건너뜀은 `flow_step_skip`·`sangsoe graph skip`, 이유 필수. 결정 195) | `flow_expanded` · `flow_step_skipped` | — |
@@ -412,6 +414,7 @@
 | graph sync | 감지 사실로 간선 충족을 갱신한다 | `sangsoe graph sync` | — |
 | decision | 결정을 열거나 답을 기록한다. 열 때 재질문 게이트를 지난다. MCP 의 `decision_open`·`decision_answer` tool 과 같은 함수다 | `sangsoe decision add` · `sangsoe decision answer` | — |
 | item new | 항목 하나를 만든다 | `sangsoe item new` | — |
+| item retire | 머지 없이 닫힌 PR 의 완료 항목을 거둔다. MCP 의 `item_retire` tool 과 같은 함수다(결정 223) | `sangsoe item retire <iNNN> --reason <글> --by <누가>` | — |
 | priority | 우선순위를 정한다 | `sangsoe priority set` | — |
 | owner-text redact | 원문을 지운다(오너 승인 필요) | `sangsoe owner-text redact` | — |
 | hook | Claude Code hook 의 입구. PreToolUse 한 번의 게이트 판정이나 기록 hook 하나를 표준 입력으로 받는다. `--replay` 는 실제 명령 모음으로 게이트를 잰다 | `sangsoe hook` | — |

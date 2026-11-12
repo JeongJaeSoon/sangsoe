@@ -541,3 +541,37 @@
 | G34 | 거부 수집 뷰와 설정 차이 뷰가 없다 | LATER | reflect 가 거부를 묶어 세야 하는 첫 회고 |
 | G35 | 머지 대기열 이탈 사유 분류와 merge_group 사전 점검이 없다 | LATER | land 가 머지 예약이라 대기열이 없다(결정 161 R-06). 저장소가 merge queue 를 켜면 |
 | G36 | chat-monitor 의 provider 를 꽂을 자리가 없고 `mention_new` 로 깨우지 않는다 | LATER | 공개 트리에는 채팅 provider 를 실을 수 없다. 오너가 채팅 감시를 켜려는 첫 경우에 provider 를 설정으로 받는 자리와 오케스트레이터 알림을 함께 짓는다 |
+
+## 8. 213–226 delta (P4 final)
+
+위 1–7절은 결정 212 까지다. 그 뒤 결정 213–226 이 머지되는 동안 단위들은 두 페이지를 고치지 못했다. 이 절은 그 결정마다 `design.html` · `blog-intro.html` · `design-appendix.html`(과 용어집)에서 바뀐 대목을 찾아 처리를 적는다(U92). 코드의 `file:line` 은 `65e930f`(U91 머지, 결정 225) 기준이다. 결정 214 는 번호가 비어 있다(`decisions.md` 에 214 가 없고 어느 문서도 가리키지 않는다). 새 결정 번호는 쓰지 않았다: 코드와 다른 곳은 모두 글을 고쳐 맞췄다.
+
+처리: `고침` 이 단위에서 글을 코드에 맞췄다 · `이미` 앞 단위가 main 에서 고쳤다(커밋) · `메모` v0.1.4 밖이라 결정 번호와 함께 적어만 두었다.
+
+| 결정 | 바뀐 대목 | 처리 | 코드 |
+|---|---|---|---|
+| 213 | design.html §오너가 보는 것 2단계 행(목록이고 순서가 아니다, 패널 순서는 시안), 글의 요약 수치·최근 전환 없음 | 고침 | `cli/commands/brief.ts:30` |
+| 213 | design.html §현황 보고는 표 네 절: 완료 목록은 `--done` 일 때만 표 | 고침 | `cli/commands/brief.ts:36` |
+| 213 · 218 · 220 | 부록 §패널 화면 group.html 행(순서, 🚧 마다 왜 행, 열린 N건, 접힌 범례, 좁은 패널 카드) | 고침 | `core/graph/ready.ts:85` `holdOf` |
+| 215 | design.html §의존 관리 `stacked_on` 행: base 변경 뒤 리뷰만 센다, `rereview_needed` | 고침 | `core/land/land.ts:505` |
+| 215 | 부록 실패 표 `retarget_approval` · `graph sync` 행 | 이미(`9556001`) | 같은 줄 |
+| 215 · 216 | design.html 흐름 3, blog ④, 부록 land 카드: `rereview_needed` · `base_unrecorded` · `base_merged` | 고침 | `core/land/land.ts:204`, `:214` |
+| 216 | 부록 event 표·용어집 §9 의 `pr_reopened`, 부록 상태 대응표 ✅ 행, `graph sync` 행 | 고침(`test/spec-names.test.ts` 의 허용 줄 둘을 뺐다) | `core/detect/pr/round.ts:254` |
+| 216 ③ | 항목이 자기 Run 을 적는다(읽기만 바뀜) | 해당 대목 없음: 페이지가 읽는 Run 을 말하지 않는다 | `core/brief/load.ts` `briefRuns` |
+| 217 ② | design.html 흐름 1: 오케스트레이터는 `worktreeId` 를 비워도 된다 | 고침 | `core/start/lineage.ts:47` |
+| 217 ① | 타이머가 리드 Run 을 깨운다 | 해당 대목 없음(결정 219 가 버렸다) | — |
+| 218 | design.html 크리티컬 패스 정의(PR 마디, 머지 대기 완료 Task), §오너가 보는 것 2단계 행, blog 묶음 상세 | 고침 | `core/graph/critical.ts` `itemGraph` |
+| 219 | design.html 감지 층 행(hook 이 재리뷰 항목을 만든다), §의존 관리, 부록 실패 표·`graph sync` 행의 "queue round 가 만든다" | 고침 | `core/session/record.ts:40`, `core/graph/own-run.ts:40`, `core/detect/queue/round.ts:193` |
+| 219 | 부록 §패널 화면: 경로 줄은 한 번, 뒤로는 메모리에서 | 고침 | `orca-plugin/panel/view.ts` |
+| 220 | design.html §오너가 보는 것 패널 문단, 부록 §패널 화면, blog 묶음 상세 | 고침 | `orca-plugin/panel/style.ts` |
+| 222 | 현황 셋째 절과 탭 "열린 항목": design.html · 부록 | 이미(`8215e9f`) | `core/brief/render.ts:12` |
+| 222 | blog-intro.html:367 · :372 의 "진행 중" 절과 탭 | 고침 | `orca-plugin/panel/view.ts:331` |
+| 222 | 흰 배경·1px 테두리 톤, 좁은 패널의 행마다 카드: design.html · 부록 · blog | 고침 | `orca-plugin/panel/style.ts` |
+| 221 · 224 | design.html §설치와 호출 경로의 승인 행, blog 설치·제거, 부록 §남는 파일: `install --permissions`, "permissions.allow 에 한 줄만" | 고침 | `core/install/permissions.ts:11`, `:215` |
+| 221 | README Uninstall 의 `permissions: removed N rules …` 줄 | 고침 | `core/install/install.ts:181`, `core/install/permissions.ts:321` |
+| 223 | design.html #mcp 15 → 16, 부록 #mcp, blog 열네 → 열여섯 | 고침(`TOOLS_NOT_IN_DESIGN` 을 비웠다) | `claude-plugin/mcp/tools/item_retire.ts` |
+| 223 | design.html ✅ · 🗑️ 행, 크리티컬 패스, 부록 ✅ 대응·흐름 틀 `done_blockers`, 부록 event 표·용어집 §9 §11, blog ⑤ | 고침(허용 줄 셋을 뺐다) | `core/graph/ready.ts:81`, `core/owner/retire.ts:63` |
+| 225 | 패널의 위 틈·고정 머리·배지·한 줄 칸 | 메모: main 에 있고 v0.1.5 에 실린다. 세 페이지는 결정 222 의 꼴을 적고 225 를 한 문장으로 가리킨다 | `orca-plugin/panel/style.ts` |
+| 226 | design.html 역할 표 land 행·흐름 3, blog ④, 부록 land 카드의 "머지하는 길은 land 하나" | 고침(CI 없는 저장소의 예외를 적었다) | `core/land/land.ts:374` |
+
+첫 빌드 시험 T1–T6 의 결과는 `test-outcomes.md` 의 행 하나씩이다(T1 · T2 · T3 · T4 · T6 통과). T5 는 "워커는 자기 Run 에 Task 를 만들지 못한다" 만 확인했고, 이중 시작 거부와 세 번 실패 차단은 미실행이다(그 표와 `smoke-run.md` 3절 모두 NOT VERIFIED. 스모크에서는 리드 Task id 가 빠져 앞 단계에서 거부됐다). 돌리려면 Run 을 쥔 리드 세션이 버리는 Task 하나를 `start_unit` 으로 두 번 시작하고(둘째가 거부되는지), 같은 Task 의 시작을 세 번 실패시켜 `loop_detected` 를 본다. 지금은 시작 함수가 Task 상태를 먼저 읽고 실패를 세어 스스로 거른다(결정 114, `test/lineage/start.test.ts`).
