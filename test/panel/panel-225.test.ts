@@ -68,6 +68,18 @@ test("(7) a long who value is cut with an ellipsis inside its badge and keeps it
   for (const d of ["white-space: nowrap;", "overflow: hidden;", "text-overflow: ellipsis;", "max-width:"]) assert.ok(badge.includes(d), d);
 });
 
+test("(7) a who with no time ('워커 —') or no one ('— —', '—') draws no '—' badge", () => {
+  const cellOf = (text: string) => {
+    const rows = ov().inProgress.rows.map((r) => (r.id === "i026" ? { ...r, cells: r.cells.map((c, i) => (i === 4 ? { text } : c)) } : r));
+    return /<td data-l="누가"[^>]*>(.*?)<\/td>/.exec(rowOf(renderStage(withRows(rows)), "i026"))?.[1] ?? "";
+  };
+  assert.equal(cellOf("워커 —"), '<span class="badge">워커</span>');
+  assert.equal(cellOf("— 17h"), '<span class="age">17h</span>');
+  assert.equal(cellOf("— —"), "");
+  const item = renderStage({ ...grp, model: { stage: 3, now: "", id: "i026", title: "x", state: "🔄", flags: "", who: "—", priority: "P2", chain: { title: "체인", count: 0, columns: [], rows: [] } } as ItemDetail });
+  assert.match(item, /<p class="sumline">누가 — · /);
+});
+
 test("(3) the middle text takes the freed width, at most two lines then an ellipsis, its full text in the title", () => {
   const html = renderStage(one);
   assert.match(rowOf(html, "i033"), /<td data-l="다음" class="mid" title="키 도착 확인">/);
