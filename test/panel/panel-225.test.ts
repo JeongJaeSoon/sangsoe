@@ -66,6 +66,8 @@ test("(7) a long who value is cut with an ellipsis inside its badge and keeps it
   assert.match(cell, new RegExp(`<td data-l="누가" class="who" title="${term} 43m"><span class="badge">${term}</span><span class="age">43m</span></td>`));
   const badge = rule(STYLE, ".who .badge");
   for (const d of ["white-space: nowrap;", "overflow: hidden;", "text-overflow: ellipsis;", "max-width:"]) assert.ok(badge.includes(d), d);
+  // A badge in the meta line fits the line's 16px with its border, so a card with one is no taller.
+  assert.match(rule(NARROW, ".tbl td[data-l] .badge"), /line-height: 14px;/);
 });
 
 test("(7) a who with no time ('워커 —') or no one ('— —', '—') draws no '—' badge", () => {

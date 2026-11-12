@@ -244,6 +244,7 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl:not(.gt) td:first-child, .tbl:not(.gt) td.title, .tbl td.hd { order: -2; }
   .tbl:not(.gt) td:first-child { flex: none; width: auto; }
   .tbl .mk { display: none; }
+  .tbl td[data-l] .badge { line-height: 14px; }
   .tbl .st { display: inline-block; }
   .tbl td.title { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-base); line-height: 20px; color: var(--ink); font-weight: 600; }
   .tbl td.brk { order: -1; display: block; flex: 0 0 100%; height: 0; margin-top: var(--s1); }
