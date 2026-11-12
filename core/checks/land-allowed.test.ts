@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { landAllowDetail, landAllowRules } from "./land-allowed.ts";
+import { landAllowClause, landAllowRules } from "./land-allowed.ts";
 
 test("decision 198: the allow rules that let sangsoe land through, in either place and either form", () => {
   const s = {
@@ -21,8 +21,8 @@ test("decision 198: the allow rules that let sangsoe land through, in either pla
   assert.deepEqual(landAllowRules({ permissions: { allow: "Bash(sangsoe land:*)" } }), { permissions: [], autoMode: [] }, "not a list reads as none");
 });
 
-test("the doctor detail says where a rule was found, or that none was; a missing file is not 'none found'", () => {
-  assert.equal(landAllowDetail("/p", { permissions: ["x"], autoMode: [] }).found, true);
-  assert.match(landAllowDetail("/p", { permissions: [], autoMode: [] }).detail, /no allow rule/);
-  assert.match(landAllowDetail("/p", undefined).detail, /missing or not JSON/);
+test("decision 228: the warn row's land clause counts the rules found, or says auto mode may refuse land", () => {
+  assert.equal(landAllowClause({ permissions: ["x"], autoMode: [] }), "; sangsoe land is allowed (permissions.allow 1, autoMode.allow 0)");
+  assert.match(landAllowClause({ permissions: [], autoMode: [] }), /auto mode may refuse a worker's land$/);
+  assert.match(landAllowClause(undefined), /auto mode may refuse a worker's land$/);
 });
