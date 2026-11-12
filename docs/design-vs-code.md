@@ -115,8 +115,8 @@
 | doctor tree·node | README Install | implemented | `core/install/doctor.ts:59`, `core/install/doctor.ts:285` | offline 은 이것만 |
 | doctor claude·claude profile | README Claude profiles | implemented | `core/install/doctor.ts:146`, `core/install/doctor.ts:150` | |
 | doctor orca claude profile | README Claude profiles | implemented | `core/install/doctor.ts:96` | |
-| doctor land allow | README Install | implemented | `core/install/doctor.ts:119` | notice, 설정은 쓰지 않는다. 고칠 명령은 `sangsoe install --permissions`(결정 221) |
-| doctor permissions | README Install 2·5 | changed (결정 221·224) | `core/install/doctor.ts:133`, `core/install/permissions.ts:333` | N of M, 모자라면 warn. 고칠 말에 `!` 줄의 `--yes` 줄도 적는다(결정 224) |
+| doctor land allow | README Install | changed (결정 228) | `core/install/doctor.ts:130`, `core/checks/land-allowed.ts:26` | 따로 행이 없다. `permissions` warn 행 끝에 land 가 다른 규칙으로 허락되는지 적는다. 설정은 쓰지 않는다 |
+| doctor permissions | README Install 2·5 | changed (결정 221·224·228) | `core/install/doctor.ts:129`, `core/install/permissions.ts:333` | N of M, 모자라면 warn. 고칠 말에 `!` 줄의 `--yes` 줄도 적는다(결정 224). 16 of 16 이면 land 도 덮는다(결정 228) |
 | doctor claude marketplace | README Install | implemented | `core/install/doctor.ts:156` | 경로가 트리와 다르면 FAIL |
 | doctor orca plugin | README Install | implemented | `core/install/doctor.ts:172`, `core/install/doctor.ts:182` | 승인 대기는 FAIL |
 | doctor orca-plugin-version | README Install | implemented | `core/checks/orca-plugin-version.ts:26` | |
