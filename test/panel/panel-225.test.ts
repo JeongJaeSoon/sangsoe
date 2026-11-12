@@ -49,8 +49,8 @@ test("(2)(7) the 누가 cell is a badge for who and the elapsed time apart, the 
   const html = renderStage(one);
   const i026 = rowOf(html, "i026");
   assert.match(i026, /<td data-l="누가" class="who" title="워커 2h"><span class="badge">워커<\/span><span class="age">2h<\/span><\/td>/);
-  // Who unknown: no empty badge, the time alone.
-  assert.match(rowOf(html, "i031"), /<td data-l="누가" class="who" title="— 17h"><span class="age">17h<\/span><\/td>/);
+  // Who unknown: no empty badge, the time alone as an age cell (decision 229: no 누가 label).
+  assert.match(rowOf(html, "i031"), /<td data-l="누가" class="age">17h<\/td>/);
   const who = rule(NARROW, ".tbl:not(.gt) td.who");
   for (const d of ["flex: none;", "margin-left: auto;"]) assert.ok(who.includes(d), d);
   assert.match(rule(NARROW, ".tbl:not(.gt) td.age, .tbl .who .age"), /margin-left: auto;/);
@@ -76,7 +76,7 @@ test("(7) a who with no time ('워커 —') or no one ('— —', '—') draws n
     return /<td data-l="누가".*?<\/td>/.exec(rowOf(renderStage(withRows(rows)), "i026"))?.[0] ?? "";
   };
   assert.match(cellOf("워커 —"), /class="who"[^>]*><span class="badge">워커<\/span><\/td>$/);
-  assert.match(cellOf("— 17h"), /class="who"[^>]*><span class="age">17h<\/span><\/td>$/);
+  assert.equal(cellOf("— 17h"), '<td data-l="누가" class="age">17h</td>');
   // No one and no time: an empty cell, hidden in a card like any other.
   assert.match(cellOf("— —"), /^<td data-l="누가" class="nil"><span class="dash">—<\/span><\/td>$/);
   const item = renderStage({ ...grp, model: { stage: 3, now: "", id: "i026", title: "x", state: "🔄", flags: "", who: "—", priority: "P2", chain: { title: "체인", count: 0, columns: [], rows: [] } } as ItemDetail });
@@ -97,7 +97,7 @@ test("(11) an empty cell takes no room in a card: the next value flows to the le
   assert.doesNotMatch(NARROW, /visibility: hidden/);
 });
 
-test("(11) an item card's head names its state in a badge; the wide column keeps the mark, a group row keeps its mark", () => {
+test("(11) an item card's head names its state in a badge; the wide column shows mark and word (decision 229), a group head keeps its mark", () => {
   const rows = ov().inProgress.rows;
   const ready = rows.find((r) => r.cells[0]?.text === "🟢" && !r.id.startsWith("lead:"));
   const blocked = rows.find((r) => r.cells[0]?.text === "🚧" && !r.id.startsWith("lead:"));
@@ -105,8 +105,9 @@ test("(11) an item card's head names its state in a badge; the wide column keeps
   const html = renderStage(one);
   assert.match(rowOf(html, ready.id), /^<tr[^>]*><td><span class="mk">🟢<\/span><span class="badge st">준비됨<\/span><\/td>/);
   assert.match(rowOf(html, blocked.id), /^<tr[^>]*><td><span class="mk">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
-  assert.match(rowOf(html, "lead:api-migration"), /^<tr[^>]*><td>🚧<\/td>/);
-  assert.match(rule(WIDE, ".tbl .st"), /display: none;/);
+  assert.match(rowOf(html, "lead:api-migration"), /^<tr[^>]*><td><span class="mk">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
+  assert.match(rule(NARROW, ".tbl tr.lead .st"), /display: none;/);
+  assert.doesNotMatch(rule(WIDE, ".tbl .st"), /display: none;/);
   assert.match(rule(NARROW, ".tbl .st"), /display: inline-block;/);
   assert.match(rule(NARROW, ".tbl .mk"), /display: none;/);
 });

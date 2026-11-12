@@ -195,10 +195,21 @@ export function stateBadge(text: string): string {
   return badge(word, TONE[m?.[1] ?? ""] ?? "") + (f ? ` ${esc(f[0].trim())}` : "");
 }
 
-// The words of core/contract/transitions.ts STATE_LABEL and views.ts READING_LABEL, by their mark.
-const STATE_WORD: Readonly<Record<string, string>> = { "📅": "예정", "🟢": "준비됨", "🔄": "진행 중", "🚧": "막힘", "⏸️": "보류", "✅": "완료", "🗑️": "취소", "⏳": "검증 대기" };
+// The words of core/contract/transitions.ts STATE_LABEL and views.ts READING_LABEL, by their mark;
+// ❔'s label is a sentence, so its badge says it short.
+const STATE_WORD: Readonly<Record<string, string>> = {
+  "📅": "예정",
+  "🟢": "준비됨",
+  "🔄": "진행 중",
+  "🚧": "막힘",
+  "⏸️": "보류",
+  "✅": "완료",
+  "🗑️": "취소",
+  "⏳": "검증 대기",
+  "❔": "읽기 전",
+};
 
-// An item row's lead mark: the wide column keeps the mark, a narrow card's head shows the word as a badge.
+// A row's lead mark and its word as a badge: the wide column shows both, a narrow card's head the badge.
 function markHtml(c: Cell): string {
   const word = STATE_WORD[c.text];
   if (!word || c.link) return cellHtml(c);
@@ -217,12 +228,12 @@ function countBadge(text: string): string {
 // width, the PR stays one line, and who and the elapsed time end the card.
 const COL_CLASS: Readonly<Record<string, string>> = { PR: "pr", 다음: "mid", "다시 볼 조건": "mid", 누가: "who", 경과: "age", 기간: "age" };
 
-// "리뷰어 20m" → who as a badge, the time apart; "— 17h" has no who.
-function whoHtml(text: string): string {
+// "리뷰어 20m" → who and the time apart; "— 17h" has no who, "워커 —" no time.
+function whoParts(text: string): { who: string; age: string } {
   const m = /^(.*\S)\s+(\d+[mhd]|—)$/.exec(text);
   const who = m ? (m[1] ?? "") : text;
-  const age = m && m[2] !== "—" ? `<span class="age">${esc(m[2] ?? "")}</span>` : "";
-  return `${who === "—" ? "" : badge(who)}${age}`;
+  const age = m && m[2] !== "—" ? (m[2] ?? "") : "";
+  return { who: who === "—" ? "" : who, age };
 }
 
 // Column 0 is the ID or state marker, column 1 the title; the rest carry their column name as the
@@ -230,7 +241,7 @@ function whoHtml(text: string): string {
 // An empty value keeps its cell, marked `nil`, so a wide table keeps its columns (decision 222 (20)).
 function rowHtml(t: Table, r: Row, o: RowOpts = {}): string {
   const [first, title, ...rest] = r.cells;
-  const lead = o.idCol ? `<span class="id">${esc(first?.text ?? "")}</span>` : o.go ? cellHtml(first ?? { text: "—" }) : markHtml(first ?? { text: "—" });
+  const lead = o.idCol ? `<span class="id">${esc(first?.text ?? "")}</span>` : markHtml(first ?? { text: "—" });
   const go = o.go ? `<span class="go" aria-hidden="true">${esc(o.go)} ›</span>` : "";
   const count = o.count === undefined ? "" : countBadge(o.count);
   const titleText = (title ? (o.idCol ? cellHtml(title) : titleWithId(title)) : DASH) + count + go;
@@ -238,12 +249,14 @@ function rowHtml(t: Table, r: Row, o: RowOpts = {}): string {
   const tds = rest
     .map((c, i) => {
       const name = t.columns[i + 2]?.name ?? "";
-      const role = COL_CLASS[name] ?? "";
-      const who = role === "who" && !isNil(c) ? whoHtml(c.text) : null;
-      const nil = isNil(c) || who === "";
+      const who = COL_CLASS[name] === "who" && !isNil(c) ? whoParts(c.text) : null;
+      // A label names a value: a 누가 with only the time is a 경과 cell, no 누가 label before it.
+      const role = who && !who.who ? "age" : (COL_CLASS[name] ?? "");
+      const nil = isNil(c) || (who !== null && !who.who && !who.age);
       const cls = nil ? "nil" : role;
       const tip = nil || role === "age" ? "" : ` title="${esc(c.text)}"`;
-      const body = nil ? cellHtml({ text: "—" }) : (who ?? cellHtml(c));
+      const whoBody = who && (who.who ? `${badge(who.who)}${who.age ? `<span class="age">${esc(who.age)}</span>` : ""}` : esc(who.age));
+      const body = nil ? cellHtml({ text: "—" }) : whoBody || cellHtml(c);
       return `<td data-l="${esc(name)}"${cls ? ` class="${cls}"` : ""}${tip}>${body}</td>`;
     })
     .join("");
