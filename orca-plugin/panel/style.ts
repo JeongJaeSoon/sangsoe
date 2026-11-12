@@ -223,7 +223,7 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl col.c-state { width: 8.5em; }
   .tbl col.c-acts { width: 200px; }
   .tbl tr.lead td { background: var(--tint-2); }
-  .tbl:not(:has(tr.lead)) tbody tr:nth-child(even) td { background: var(--tint-1); }
+  .tbl:not(:has(tr.lead)) tbody tr:nth-child(even of :not(.other)) td { background: var(--tint-1); }
   .tbl:not(:has(tr.lead)) tbody tr:hover td { background: var(--paper-2); }
 }
 @container panel (min-width: 900px) {
