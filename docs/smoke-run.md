@@ -695,8 +695,8 @@ store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (1
 | 패널 표 · 카드 | 너비 720 은 열 역할로 나눈 표, 640 · 360 은 행마다 카드 하나 | PASS |
 | 패널 현황 | 셋째 절이 `열린 항목 6`(묶음 넷의 행) | PASS |
 | 묶음 상세 | `sangsoe brief lead:s6r3`: `열린 2건·막힘 2`, 크리티컬 패스 `i027 → i028`, 왜 행 둘(i027 자기 PR, i028 ← i027 `stacked_on`). `stacked_on` 은 PR 이 열리고 약 2분 뒤 queue 라운드가 만들었다 | PASS |
-| 상태 줄 | `panel.brief` 의 status: `✨ SANGSOE \| 🚧 5 \| 결정 1 \| 🔄 1`, tone `danger`. 화면 위 모양은 Orca 창의 접근성 권한이 없어 읽지 못했다 | PASS (글), NOT VERIFIED (화면) |
-| 묶음 상세 화면 | html 패널이라 `orca plugin shot --act` 가 거부 | NOT VERIFIED |
+| 상태 줄 | `panel.brief` 의 status: `✨ SANGSOE \| 🚧 5 \| 결정 1 \| 🔄 1`, tone `danger`. 오너의 화면 캡처(rc.4, 10:01)에서 Orca 아래 막대의 같은 글이 빨간 tone 으로 보이고, 위 패널은 `열린 항목 6` 의 카드다 | PASS, VERIFIED by the owner's screen capture (rc.4) |
+| 묶음 상세 화면 | `orca plugin shot --act` 는 html 패널이라 거부. 오너의 화면 캡처(rc.4, 10:03)에서 `lead:s6r3` 상세의 의존 그래프(i027 → `stacked_on`), 크리티컬 패스 i027 → i028, 스택 PR 체인 1층 #14 · 2층 #15, `왜 준비되지 않았나 2` 머리가 보인다 | VERIFIED by the owner's screen capture (rc.4) |
 | NOW-3(b) | #14 머지(오케스트레이터의 일반 머지, 아래), #15 retarget 01:08:10Z(GitHub timeline) → `pr_base_changed` 01:08:56(타이머). 리드가 쉬는 11분 동안 항목 없음, 타이머 act 0 · `notified` 0(219 ③ ④ 그대로). 01:20:25 재리뷰 판정을 리드에게 보냄(219 의 깨움) → 01:20:27 리드 Run 에 `item_created` i029 `re-review jeongjaesoon/sangsoe-smoke#15` 와 `i029 → i028 blocks`. 리드의 손 동작 없음 | PASS |
 | 10 | 리드가 #15 head 에 기록 → land dry-run 이 `rereview_needed` 를 내지 않는다. 머지 뒤 리드가 `task-update --status completed` 로 i029 를 닫았다 | PASS |
 | retire | `sangsoe item retire` i017 · i018(`lead:s6r`) · i023(`lead:s6r2`) → `retired`. 현황 🚧 5 → 1, 두 묶음이 열린 묶음에서 빠졌다. S6r3 를 닫은 뒤 현황 `묶음 0 · 🚧 0`, 상태 줄 `🚧 0 \| 결정 1 \| 🔄 0` | PASS |
