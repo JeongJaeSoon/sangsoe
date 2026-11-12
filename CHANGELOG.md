@@ -2,7 +2,15 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
-## Unreleased
+## 0.1.5-rc.1 (pre-release)
+
+Everything since `v0.1.4`: decisions 225, 227 and 228. A pre-release for checking the panel and doctor on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.4.
+
+### Upgrading from 0.1.4
+
+- **Re-approve.** The core and the Orca plugin's content (`orca-plugin/` and the vendored core) changed since 0.1.4, so the Orca plugin waits for approval again. Record the review of the build with `sangsoe review record`, then run `sangsoe plugin approve`, as the README's Update section says.
+
+### Changes
 
 - **Doctor states the permission and land facts in one row (228).** After `sangsoe install --permissions`, doctor printed `permissions: 16 of 16 …` and then a `land allow` row saying the same file allows `sangsoe land`: the 16 rules include `mcp__plugin_sangsoe_sangsoe`, which already allows the `land` tool. The `land allow` row is gone. When rules are missing, the `permissions` warn row ends with whether `sangsoe land` is still allowed by another rule (`permissions.allow`, `autoMode.allow`) or that auto mode may refuse a worker's land, and keeps its `sangsoe install --permissions` fix. The core changed, so the Orca plugin's vendored core changes too and needs re-approval.
 - **The session that wrote a PR cannot record its evidence, review or stages from the command line either (227).** `sangsoe evidence record`, `sangsoe review record` and `sangsoe stage record` now run the same session check as the MCP recording tools, one core function for all six. When Claude Code started the process (`CLAUDECODE` is set), the folder the command runs in is the session's checkout; if it holds the PR's branch or head, the command refuses with `recorder_is_author`, writes nothing, and `land` keeps saying `evidence_missing` or `review_missing`. A shell without `CLAUDECODE`, such as the owner's terminal, is not checked. A Claude Code `!` line has `CLAUDECODE` set, so the owner who records there does it from a folder not on the PR's branch; a folder that is no git checkout records, where the MCP tools refuse it. The core changed, so the Orca plugin's vendored core changes too and needs re-approval.
