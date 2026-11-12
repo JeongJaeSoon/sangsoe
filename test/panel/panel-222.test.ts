@@ -79,7 +79,7 @@ test("(tone) white everywhere: a fill only for hover, the chosen tab and an open
   assert.ok(fills.length > 0);
   assert.match(STYLE, /^:root \{[^}]*--h-paper: oklch\(100% 0 0\);/m, "outside Orca the light paper is white too");
   // Decision 225 (10) adds two: a wide table's group rows and its striped rows.
-  for (const sel of fills) assert.match(sel, /:hover|aria-selected="true"|\[open\]|tr\.lead td|nth-child\(even\)/, sel);
+  for (const sel of fills) assert.match(sel, /:hover|aria-selected="true"|\[open\]|tr\.lead td|nth-child\(even of :not\(\.other\)\)/, sel);
   assert.match(rule(STYLE, ".sumline"), /border: 1px solid var\(--rule\); border-radius: var\(--r3\);/);
   assert.match(rule(STYLE, ".figs"), /border: 1px solid var\(--rule\); border-radius: var\(--r3\);/);
   const h2 = rule(STYLE, ".sec-h h2");

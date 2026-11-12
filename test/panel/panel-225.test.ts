@@ -165,7 +165,8 @@ test("(10) wide tables keep each cell on one line: fixed columns, ellipsis, the 
 
 test("(10) wide rows read apart: group rows on a light tint, other rows striped, all inside the white page", () => {
   assert.match(rule(WIDE_ONLY, ".tbl tr.lead td"), /background: var\(--tint-2\);/);
-  assert.match(rule(WIDE_ONLY, ".tbl:not(:has(tr.lead)) tbody tr:nth-child(even) td"), /background: var\(--tint-1\);/);
+  // A decision's answer form is a hidden row of its own; the stripes count only the decision rows.
+  assert.match(rule(WIDE_ONLY, ".tbl:not(:has(tr.lead)) tbody tr:nth-child(even of :not(.other)) td"), /background: var\(--tint-1\);/);
   assert.match(STYLE, /--tint-1: color-mix\(in oklab, var\(--ink\) \d%, var\(--paper\)\);/);
   // The page, the cards and the narrow panel stay white (decision 222).
   assert.doesNotMatch(NARROW, /--tint/);
