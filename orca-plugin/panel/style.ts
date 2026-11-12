@@ -54,6 +54,9 @@ export const STYLE = `
   --pop-ink: var(--orca-popover-foreground, var(--h-ink));
   --focus: var(--orca-ring, var(--h-focus));
   --bad: var(--orca-destructive, var(--h-bad));
+  /* Wide-table row tints (decision 225 (10)): a step off the paper, never a band across the page. */
+  --tint-1: color-mix(in oklab, var(--ink) 3%, var(--paper));
+  --tint-2: color-mix(in oklab, var(--ink) 6%, var(--paper));
 }
 * { box-sizing: border-box; }
 html, body { overflow-x: clip; }
@@ -65,7 +68,9 @@ code { font-family: var(--font-mono); font-size: var(--text-xs); }
 h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: break-word; min-width: 0; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 #root { padding: 0 0 var(--s4); container: panel / inline-size; }
-.top { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: var(--s2); height: 36px; padding: 0 var(--gx); border-bottom: 1px solid var(--rule); background: var(--paper); }
+/* The header, and a detail screen's back line under it, stay at the top together (decision 225 (4)). */
+.bar { position: sticky; top: 0; z-index: 2; background: var(--paper); }
+.top { display: flex; align-items: center; gap: var(--s2); height: 36px; padding: 0 var(--gx); border-bottom: 1px solid var(--rule); background: var(--paper); }
 .brand { display: inline-flex; align-items: center; gap: var(--s2); font-weight: 600; font-size: var(--text-base); white-space: nowrap; }
 .brand .ic { width: 16px; height: 16px; color: var(--muted); }
 .brand small { color: var(--muted); font-weight: 400; font-size: var(--text-xs); }
@@ -86,7 +91,7 @@ details.menu { position: relative; }
 .seg .count { font-weight: 400; color: var(--muted); }
 main { padding: var(--s2) var(--gx) 0; }
 main[data-view="todo"] [data-tab="prog"], main[data-view="prog"] [data-tab="todo"] { display: none; }
-.crumbs { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); color: var(--muted); font-size: var(--text-sm); margin: var(--s2) var(--gx) 0; }
+.crumbs { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); color: var(--muted); font-size: var(--text-sm); padding: var(--s2) var(--gx); border-bottom: 1px solid var(--rule); }
 .crumbs .back { flex: none; margin-left: auto; }
 .trail { display: flex; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; min-width: 0; }
 .trail li + li::before { content: "›"; margin: 0 var(--s1); }
@@ -112,13 +117,22 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .tbl td { height: 40px; padding: var(--s1) var(--s3); border-bottom: 1px solid var(--rule); vertical-align: middle; overflow-wrap: anywhere; line-height: 20px; }
 .tbl th:first-child, .tbl td:first-child { padding-left: var(--s1); }
 .tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child { width: 64px; }
-.tbl tbody tr:hover { background: var(--paper-2); }
+.tbl tbody tr:hover td { background: var(--paper-2); }
 .tbl tr[data-nav] { cursor: pointer; }
 .tbl .id { white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); margin-right: var(--s1); }
 .tbl td.title { font-weight: 500; }
 .tbl tr.lead td { font-weight: 600; border-top: 1px solid var(--rule-2); }
-.tbl .go { float: right; margin-left: var(--s2); color: var(--link); font-size: var(--text-xs); font-weight: 500; white-space: nowrap; }
-.tbl tr.lead:hover .go, .tbl tr.lead:focus-visible .go { text-decoration: underline; text-underline-offset: 2px; }
+/* A wide group row is clicked as a whole; only a narrow head line ends in 자세히 › (decision 225 (9)). */
+.tbl .go { display: none; }
+.tbl .st { display: none; }
+/* State, who and a group's count are badges (decision 225 (6)-(8)): a tone only where the state has one. */
+.badge { display: inline-block; max-width: 100%; padding: 0 6px; border: 1px solid var(--rule-2); border-radius: var(--r1); color: var(--ink-2); font-size: var(--text-xs); font-weight: 500; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.badge.t-bad { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 45%, var(--paper)); background: color-mix(in oklab, var(--bad) 8%, var(--paper)); }
+.badge.t-run { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 45%, var(--paper)); background: color-mix(in oklab, var(--accent) 8%, var(--paper)); }
+.badge.t-done, .badge.t-gone { color: var(--muted); }
+.badge.cnt { margin-left: var(--s2); }
+.who .badge { min-width: 0; max-width: min(14em, calc(100% - 3.5em)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who .age { margin-left: var(--s2); color: var(--muted); }
 .hint0 { margin: 0 0 var(--s3); padding: var(--s2) var(--s3); border: 1px dashed var(--rule-2); border-radius: var(--r2); color: var(--ink-2); font-size: var(--text-sm); }
 .figs { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin: 0 0 var(--s4); padding: var(--s2) var(--s3); border: 1px solid var(--rule); border-radius: var(--r3); }
 .figs div { min-width: 0; }
@@ -195,10 +209,22 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
    the table squeeze a column to one glyph; keep-all keeps a Hangul word whole. */
 .tbl.gt td { overflow-wrap: break-word; word-break: keep-all; }
 .tbl.gt .hs { display: none; }
+/* Wide tables (decision 225 (10)): fixed columns, every cell one line cut with an ellipsis (its title
+   keeps the whole value), short graph columns by role and the item and text columns sharing the rest.
+   Group rows sit on a light tint; a table without them is striped, so each row reads apart. */
 @container panel (min-width: 720px) {
-  .tbl.gt td.nw { white-space: nowrap; width: 1%; }
-  .tbl.gt td.it { min-width: 8em; }
-  .tbl.gt td.tx { min-width: 10em; }
+  .tbl { table-layout: fixed; }
+  .tbl td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tbl td.acts { overflow: visible; }
+  .tbl col.c-step { width: 48px; }
+  .tbl col.c-line { width: 72px; }
+  .tbl col.c-kind { width: 9em; }
+  .tbl col.c-short { width: 7.5em; }
+  .tbl col.c-state { width: 8.5em; }
+  .tbl col.c-acts { width: 200px; }
+  .tbl tr.lead td { background: var(--tint-2); }
+  .tbl:not(:has(tr.lead)) tbody tr:nth-child(even of :where(:not(.other))) td { background: var(--tint-1); }
+  .tbl:not(:has(tr.lead)) tbody tr:hover td { background: var(--paper-2); }
 }
 @container panel (min-width: 900px) {
   .gwrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -211,31 +237,44 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl { display: block; }
   .tbl tbody { display: flex; flex-direction: column; gap: var(--s2); }
   .tbl thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .tbl tr { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--s2); padding: var(--s2) var(--s3); border: 1px solid var(--rule); border-radius: var(--r3); }
+  .tbl colgroup { display: none; }
+  .tbl tr { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--s3); padding: var(--s2) 10px; border: 1px solid var(--rule); border-radius: var(--r3); }
   .tbl tr.broken { border-color: var(--bad); }
   .tbl td { display: block; height: auto; padding: 0; border: 0; font-size: var(--text-sm); line-height: 16px; color: var(--ink-2); min-width: 0; width: auto; }
-  .tbl:not(.gt) td:first-child, .tbl:not(.gt) td.title, .tbl td.num, .tbl td.hd { order: -2; }
+  .tbl:not(.gt) td:first-child, .tbl:not(.gt) td.title, .tbl td.hd { order: -2; }
   .tbl:not(.gt) td:first-child { flex: none; width: auto; }
+  .tbl .mk { display: none; }
+  .tbl td[data-l] .badge { line-height: 14px; }
+  .tbl .st { display: inline-block; }
   .tbl td.title { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-base); line-height: 20px; color: var(--ink); font-weight: 600; }
   .tbl td.brk { order: -1; display: block; flex: 0 0 100%; height: 0; margin-top: var(--s1); }
   /* A value wraps inside its own column with its label, never cut: a decision's recommendation is
      what its answer button sends, and a meta value has no other place to be read in full. */
   .tbl:not(.gt) td[data-l] { flex: 1 1 0; overflow-wrap: anywhere; }
   .tbl td[data-l]::before { content: attr(data-l); color: var(--muted); margin-right: var(--s1); font-size: var(--text-xs); }
-  .tbl:not(.gt) td.num { flex: none; color: var(--muted); }
-  .tbl td.num::before { content: none; }
-  .tbl td.nil { visibility: hidden; }
-  .tbl.gt td.nil { display: none; }
-  .tbl tr.bare td[data-l]:not(.num), .tbl tr.bare td.brk { display: none; }
+  /* Decision 225 (2)(3)(7): the PR stays one line, the middle text takes what is left for at most two
+     lines, and who (a cut badge) and the elapsed time end the meta line at the card's right edge. */
+  .tbl:not(.gt) td.pr { flex: 0 1 auto; max-width: 10em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tbl:not(.gt) td.mid { flex: 1 1 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  .tbl:not(.gt) td.who { flex: none; display: flex; align-items: center; margin-left: auto; max-width: 55%; }
+  .tbl:not(.gt) td.age, .tbl .who .age { flex: none; margin-left: auto; padding-left: var(--s2); color: var(--muted); }
+  .tbl td.age::before { content: none; }
+  /* An empty cell takes no room, so the next value flows left (decision 225 (11)). */
+  .tbl td.nil { display: none; }
+  .tbl tr.bare td[data-l], .tbl tr.bare td.brk { display: none; }
   /* A group row heads its item cards instead of being one more card beside them. */
   .tbl tr.lead { margin-top: var(--s3); padding: var(--s1) 0 0; border-color: transparent; }
   .tbl tr.lead:first-child { margin-top: 0; }
   .tbl tr.lead td { border: 0; }
-  .tbl tr.lead td.nil { display: none; }
+  .tbl tr.lead td.title { display: flex; align-items: center; }
+  /* A group head is one line: who and how long show on the item cards under it. */
+  .tbl tr.lead td[data-l], .tbl tr.lead td.brk { display: none; }
+  .tbl tr.lead .go { display: inline; flex: none; margin-left: auto; padding-left: var(--s3); color: var(--link); font-size: var(--text-xs); font-weight: 500; }
+  .tbl tr.lead:hover .go, .tbl tr.lead:focus-visible .go { text-decoration: underline; text-underline-offset: 2px; }
   .tbl td.acts { flex: 1 0 100%; display: flex; gap: var(--s2); margin: var(--s2) 0 0; }
   .tbl td.acts:empty { display: none; }
   .tbl td.acts .btn { flex: 1 1 0; min-width: 0; height: 32px; margin: 0; }
-  .tbl tbody tr:hover { background: none; }
+  .tbl tbody tr:hover td { background: none; }
   .sec-h .hint { display: none; }
   /* Seven figure cells wrap as 4 + 3, never one cell alone on a line (decision 219 (13)). */
   .figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2) var(--s3); }
@@ -244,10 +283,12 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
      rule; every other cell is a label | value line on one 72px label column. */
   .tbl.gt { margin-top: var(--s2); }
   .tbl.gt td, .tbl.gt td:first-child { flex: 0 0 100%; display: block; position: relative; width: auto; min-width: 0; min-height: 20px; margin: 0; padding: 2px 0 2px 72px; font-size: var(--text-sm); line-height: 16px; color: var(--ink); white-space: normal; }
+  .tbl.gt td.nil { display: none; }
   .tbl.gt tr.broken td { color: var(--bad); }
   .tbl.gt td[data-l]::before { position: absolute; left: 0; top: 2px; margin: 0; }
   .tbl.gt td.hd { order: -2; flex: 0 1 auto; padding: 0; font-size: var(--text-base); line-height: 20px; font-weight: 600; }
   .tbl.gt td.hd::before { content: none; }
+  .tbl.gt tr.headonly td.brk { display: none; }
   .tbl.gt td.brk { order: -1; flex: 0 0 100%; min-height: 0; height: 0; padding: 0; margin: var(--s1) 0; border-bottom: 1px solid var(--rule); }
   .tbl.gt .hs { display: inline; margin-left: var(--s2); color: var(--ink-2); font-size: var(--text-sm); font-weight: 400; }
   .tbl.gt td > svg { margin-top: 4px; }

@@ -56,11 +56,12 @@ test("group summary tiles: 우선순위, 진행, 막힘, 남은 것 with its spl
 test("최근 전환, 크리티컬 패스 (상태 · 단계 이름), 스택 PR 체인, 릴리스 묶음, 끊긴 선행 and 간선 N are drawn", () => {
   const html = renderStage(group);
   assert.match(sectionOf(html, "recent"), /최근 전환 <span class="count">5<\/span>/);
-  assert.match(html, /<h3>크리티컬 패스<\/h3><table class="tbl gt"><thead><tr><th>단계<\/th><th>항목<\/th><th>상태<\/th><th>단계 이름<\/th>/);
-  assert.match(html, /<td data-l="단계 이름" class="tx">deploy_prod, 오너 게이트<\/td>/);
-  assert.match(html, /<h3>스택 PR 체인<\/h3>.*<td data-l="층" class="nw hd">3층<\/td>/s);
-  assert.match(html, /<h3>릴리스 묶음 ship-batch · i001<\/h3>.*<td data-l="단계" class="kind nw hd">머지<\/td>/s);
-  assert.match(html, /<h3>끊긴 선행<\/h3>.*<tr data-id="i043" class="broken"><td data-l="항목" class="it hd"><span class="id">i043<\/span>후속 테스트 PR/s);
+  // Decision 225 (10): each graph table carries its column roles, and a cut cell keeps its value in a title.
+  assert.match(html, /<h3>크리티컬 패스<\/h3><table class="tbl gt"><colgroup>(?:<col[^>]*>)+<\/colgroup><thead><tr><th>단계<\/th><th>항목<\/th><th>상태<\/th><th>단계 이름<\/th>/);
+  assert.match(html, /<td data-l="단계 이름" class="tx"[^>]*>deploy_prod, 오너 게이트<\/td>/);
+  assert.match(html, /<h3>스택 PR 체인<\/h3>.*<td data-l="층" class="nw hd"[^>]*>3층<\/td>/s);
+  assert.match(html, /<h3>릴리스 묶음 ship-batch · i001<\/h3>.*<td data-l="단계" class="kind nw hd"[^>]*>머지<\/td>/s);
+  assert.match(html, /<h3>끊긴 선행<\/h3>.*<tr data-id="i043" class="broken"><td data-l="항목" class="it hd"[^>]*><span class="id">i043<\/span>후속 테스트 PR/s);
   assert.match(sectionOf(html, "edges"), /간선 <span class="count">11<\/span>/);
 });
 
@@ -82,10 +83,11 @@ test("왜 준비되지 않았나: 항목 is the item with its title, 막는 선�
   assert.doesNotMatch(why, /class="title"/);
   assert.match(
     why,
-    /<td data-l="항목" class="it hd"><span class="id">i043<\/span>후속 테스트 PR<span class="hs">[^<]*<\/span><\/td><td class="brk" aria-hidden="true"><\/td><td data-l="막는 선행" class="it"><span class="id">i027<\/span>캐시 도입<\/td><td data-l="간선 종류" class="kind nw">blocks<\/td>/,
+    /<td data-l="항목" class="it hd"[^>]*><span class="id">i043<\/span>후속 테스트 PR<span class="hs"><span class="badge">예정<\/span><\/span><\/td><td class="brk" aria-hidden="true"><\/td><td data-l="막는 선행" class="it"[^>]*><span class="id">i027<\/span>캐시 도입<\/td><td data-l="간선 종류" class="kind nw"[^>]*>blocks<\/td>/,
   );
   assert.match(why, /<tr data-id="i043" class="broken">/);
-  const states = [...why.matchAll(/data-l="선행 상태" class="nw">([^<]*)</g)].map((x) => x[1] ?? "");
+  // The state word is a badge (decision 225 (6)).
+  const states = [...why.matchAll(/data-l="선행 상태" class="nw"[^>]*>(?:<span class="badge[^"]*">)?([^<]*)</g)].map((x) => x[1] ?? "");
   assert.ok(states.length > 0 && states.every((s) => /\p{L}/u.test(s)), `bare marker in 선행 상태: ${states.join(" | ")}`);
 });
 

@@ -176,27 +176,78 @@ function cellHtml(c: Cell): string {
   return c.link ? `<a href="${esc(c.link)}" target="_blank" rel="noreferrer">${body}</a>` : body;
 }
 
-/** `num`: the index among the cells after the title of a number that rides the card's head line. */
-type RowOpts = { cls?: string; nav?: Target; acts?: string; idCol?: boolean; go?: string; label?: string; num?: number };
+/** `count`: a group row's "N건·막힘 M", drawn as a badge beside its title (decision 225 (8)). */
+type RowOpts = { cls?: string; nav?: Target; acts?: string; idCol?: boolean; go?: string; label?: string; count?: string };
 
 const isNil = (c: Cell) => c.text === "—" && !c.link;
+
+const TONE: Readonly<Record<string, string>> = { "🚧": "t-bad", "🔄": "t-run", "⏳": "t-run", "✅": "t-done", "🗑️": "t-gone" };
+const badge = (text: string, tone = "", extra = "", title = "") =>
+  `<span class="${["badge", tone, extra].filter(Boolean).join(" ")}"${title ? ` title="${esc(title)}"` : ""}>${esc(text)}</span>`;
+
+/** "🔄 진행 중 🚨" → a badge toned by its marker, the flags after it; a bare marker stays as it is. */
+export function stateBadge(text: string): string {
+  const m = /^(\p{Extended_Pictographic}️?)\s*/u.exec(text);
+  const rest = text.slice(m?.[0].length ?? 0);
+  const f = /(?:\s*\p{Extended_Pictographic}️?)+$/u.exec(rest);
+  const word = (f ? rest.slice(0, f.index) : rest).trim();
+  if (!word) return esc(text);
+  return badge(word, TONE[m?.[1] ?? ""] ?? "") + (f ? ` ${esc(f[0].trim())}` : "");
+}
+
+// The words of core/contract/transitions.ts STATE_LABEL and views.ts READING_LABEL, by their mark.
+const STATE_WORD: Readonly<Record<string, string>> = { "📅": "예정", "🟢": "준비됨", "🔄": "진행 중", "🚧": "막힘", "⏸️": "보류", "✅": "완료", "🗑️": "취소", "⏳": "검증 대기" };
+
+// An item row's lead mark: the wide column keeps the mark, a narrow card's head shows the word as a badge.
+function markHtml(c: Cell): string {
+  const word = STATE_WORD[c.text];
+  if (!word || c.link) return cellHtml(c);
+  return `<span class="mk">${esc(c.text)}</span>${badge(word, TONE[c.text] ?? "", "st")}`;
+}
+
+/** The core's "N건·막힘 M" (core/brief/build.ts) as one badge; a text it cannot read stays as written. */
+function countBadge(text: string): string {
+  const m = /^(\d+)건·막힘 (\d+)$/.exec(text);
+  if (!m) return badge(text, "", "cnt");
+  const title = `${m[1]}건 중 막힘 ${m[2]}`;
+  return Number(m[2]) > 0 ? badge(`막힘 ${m[2]} / ${m[1]}`, "t-bad", "cnt", title) : badge(`${m[1]}건`, "", "cnt", title);
+}
+
+// A column's name sets how its cell sits in a card (decision 225): the middle text takes the freed
+// width, the PR stays one line, and who and the elapsed time end the card.
+const COL_CLASS: Readonly<Record<string, string>> = { PR: "pr", 다음: "mid", "다시 볼 조건": "mid", 누가: "who", 경과: "age", 기간: "age" };
+
+// "리뷰어 20m" → who as a badge, the time apart; "— 17h" has no who.
+function whoHtml(text: string): string {
+  const m = /^(.*\S)\s+(\d+[mhd]|—)$/.exec(text);
+  const who = m ? (m[1] ?? "") : text;
+  const age = m && m[2] !== "—" ? `<span class="age">${esc(m[2] ?? "")}</span>` : "";
+  return `${who === "—" ? "" : badge(who)}${age}`;
+}
 
 // Column 0 is the ID or state marker, column 1 the title; the rest carry their column name as the
 // 360px label (decision 89: a narrow panel folds each row into one card, no column is dropped).
 // An empty value keeps its cell, marked `nil`, so a wide table keeps its columns (decision 222 (20)).
 function rowHtml(t: Table, r: Row, o: RowOpts = {}): string {
   const [first, title, ...rest] = r.cells;
-  const lead = o.idCol ? `<span class="id">${esc(first?.text ?? "")}</span>` : cellHtml(first ?? { text: "—" });
+  const lead = o.idCol ? `<span class="id">${esc(first?.text ?? "")}</span>` : o.go ? cellHtml(first ?? { text: "—" }) : markHtml(first ?? { text: "—" });
   const go = o.go ? `<span class="go" aria-hidden="true">${esc(o.go)} ›</span>` : "";
-  const titleText = go + (title ? (o.idCol ? cellHtml(title) : titleWithId(title)) : DASH);
+  const count = o.count === undefined ? "" : countBadge(o.count);
+  const titleText = (title ? (o.idCol ? cellHtml(title) : titleWithId(title)) : DASH) + count + go;
   const full = [o.idCol ? first?.text : "", (title?.text ?? "").replace(/^└ /, "")].filter(Boolean).join(" ");
   const tds = rest
     .map((c, i) => {
-      const cls = i === o.num ? "num" : isNil(c) ? "nil" : "";
-      return `<td data-l="${esc(t.columns[i + 2]?.name ?? "")}"${cls ? ` class="${cls}"` : ""}>${cellHtml(c)}</td>`;
+      const name = t.columns[i + 2]?.name ?? "";
+      const role = COL_CLASS[name] ?? "";
+      const who = role === "who" && !isNil(c) ? whoHtml(c.text) : null;
+      const nil = isNil(c) || who === "";
+      const cls = nil ? "nil" : role;
+      const tip = nil || role === "age" ? "" : ` title="${esc(c.text)}"`;
+      const body = nil ? cellHtml({ text: "—" }) : (who ?? cellHtml(c));
+      return `<td data-l="${esc(name)}"${cls ? ` class="${cls}"` : ""}${tip}>${body}</td>`;
     })
     .join("");
-  const bare = rest.length > 0 && rest.every((c, i) => i === o.num || isNil(c));
+  const bare = rest.length > 0 && rest.every(isNil);
   const cls = [o.cls, bare ? "bare" : ""].filter(Boolean).join(" ");
   const nav = o.nav ? ` data-nav="${attr(o.nav)}" tabindex="0"${o.label ? ` aria-label="${esc(o.label)}"` : ""}` : "";
   const acts = o.acts === undefined ? "" : `<td class="acts">${o.acts}</td>`;
@@ -210,9 +261,14 @@ function titleWithId(c: Cell): string {
   return `<span class="id">${esc(m[1] ?? "")}</span>${cellHtml({ ...c, text: m[2] ?? "" })}`;
 }
 
+// A wide table's columns are fixed (decision 225 (10)): the title takes what the others leave, each
+// other column a share by the core's width budget, so a cell stays on one line and is cut.
 function tableHtml(t: Table, rows: string[], acts: boolean): string {
   const head = t.columns.map((c) => `<th>${esc(c.name)}</th>`).join("") + (acts ? '<th><span class="sr">버튼</span></th>' : "");
-  return `<table class="tbl"><thead><tr>${head}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  const col = (c: Column, i: number) =>
+    i === 0 ? (c.max > 4 ? `<col style="width:calc(${c.max}ch + 16px)">` : "<col>") : i === 1 ? "<col>" : `<col style="width:${c.max * 1.25}%">`;
+  const cols = t.columns.map(col).join("") + (acts ? '<col class="c-acts">' : "");
+  return `<table class="tbl"><colgroup>${cols}</colgroup><thead><tr>${head}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
 
 // An empty section is its heading line alone, count 0 and "없음" on the same line (decision 169).
@@ -249,7 +305,9 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
   const progress = m.inProgress.rows.map((r) => {
     if (r.id.startsWith("lead:")) {
       const group = r.cells[1]?.text ?? "";
-      return rowHtml(m.inProgress, r, { cls: "lead", nav: { group }, go: "자세히", label: `${group} 묶음 자세히`, num: 1 });
+      const count = r.cells[3]?.text ?? "";
+      const cells = r.cells.map((c, i) => (i === 3 ? { text: "—" } : c));
+      return rowHtml(m.inProgress, { ...r, cells }, { cls: "lead", nav: { group }, go: "자세히", label: `${group} 묶음 자세히`, count });
     }
     if (/^i\d{3,}$/.test(r.id)) return rowHtml(m.inProgress, r, { cls: "item", nav: { item: r.id } });
     return rowHtml(m.inProgress, r, { cls: "item" });
@@ -547,8 +605,8 @@ export function dagSvg(m: Pick<GroupDetail, "edges" | "criticalPath"> & Pick<Gro
  * A column's role sets its width rule in every graph table (decision 220 (14)): short cells stay on
  * one line, item cells (an id, its title) and the long text share the rest.
  */
-type Role = "step" | "kind" | "short" | "item" | "text";
-const ROLE_CLASS: Record<Role, string> = { step: "nw", kind: "kind nw", short: "nw", item: "it", text: "tx" };
+type Role = "step" | "kind" | "short" | "state" | "item" | "text";
+const ROLE_CLASS: Record<Role, string> = { step: "nw", kind: "kind nw", short: "nw", state: "nw", item: "it", text: "tx" };
 
 // Graph tables label every cell (hallmark's .gt), so a folded row never runs a name into its meaning.
 type GtOpts = {
@@ -572,24 +630,31 @@ function gtTable(t: Table, o: GtOpts): string {
       const cls = `${ROLE_CLASS[role]}${o.head?.includes(i) ? " hd" : ""}${isNil(cell) ? " nil" : ""}`;
       const word = o.stateOf?.[0] === i ? o.labels?.get(r.cells[o.stateOf[1]]?.text ?? "") : undefined;
       const c = word?.startsWith(cell.text) ? { ...cell, text: word } : cell;
-      const open = `<td data-l="${name}" class="${cls}">`;
+      const titled = role === "item" && o.titles?.has(c.text) ? { ...c, text: `${c.text} ${o.titles.get(c.text)}` } : c;
+      // A wide cell is cut to one line (decision 225 (10)); its title keeps the whole value.
+      const tip = role === "step" || isNil(c) ? "" : ` title="${esc(titled.text)}"`;
+      const open = `<td data-l="${name}" class="${cls}"${tip}>`;
       if (role === "step") return `${open}<span class="step">${esc(c.text)}</span></td>`;
       if (role === "kind") return `${open}${esc(c.text)}</td>`;
-      const titled = role === "item" && o.titles?.has(c.text) ? { ...c, text: `${c.text} ${o.titles.get(c.text)}` } : c;
+      if (role === "state") return `${open}${isNil(c) ? DASH : stateBadge(c.text)}</td>`;
       const body = /^i\d{3,} /.test(titled.text) ? titleWithId(titled) : cellHtml(titled);
       return `${open}${body}${o.head?.includes(i) ? headState(c.text, r, o) : ""}</td>`;
     });
-    // The title line's rule in a narrow card; hidden in a wide table.
+    // The title line's rule in a narrow card; hidden in a wide table. A row with nothing under its
+    // title line draws neither the rule nor an empty body (decision 225 (5)).
+    const headOnly = (o.head?.length ?? 0) > 0 && r.cells.every((c, i) => o.head?.includes(i) || isNil(c));
     if (o.head?.length) tds.splice(Math.max(...o.head) + 1, 0, '<td class="brk" aria-hidden="true"></td>');
-    return `<tr data-id="${esc(r.id)}"${r.broken ? ' class="broken"' : ""}>${tds.join("")}</tr>`;
+    const cls = [r.broken ? "broken" : "", headOnly ? "headonly" : ""].filter(Boolean).join(" ");
+    return `<tr data-id="${esc(r.id)}"${cls ? ` class="${cls}"` : ""}>${tds.join("")}</tr>`;
   });
-  return `<table class="tbl gt"><thead><tr>${head}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  const cols = t.columns.map((_, i) => `<col class="c-${o.roles[i] ?? "text"}">`).join("");
+  return `<table class="tbl gt"><colgroup>${cols}</colgroup><thead><tr>${head}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
 
 function headState(text: string, r: Row, o: GtOpts): string {
   const s = o.states?.get(/^(i\d{3,})\b/.exec(text)?.[1] ?? "");
   if (!s || r.cells.some((c, i) => o.head?.includes(i) && c.text.includes(s.mark))) return "";
-  return `<span class="hs">${esc(s.label)}</span>`;
+  return `<span class="hs">${stateBadge(s.label)}</span>`;
 }
 
 function gtSection(id: string, t: Table, body: string, hint = ""): string {
@@ -621,7 +686,7 @@ function legend(): string {
       ([cls, name, v]) => `<tr><td data-l="선 모양" class="nw hd">${line(cls)}</td><td data-l="간선" class="nw hd">${name}</td><td class="brk" aria-hidden="true"></td><td data-l="뜻" class="tx">${esc(v)}</td></tr>`,
     ),
   ];
-  return `<details class="legend"><summary>간선 종류</summary><table class="tbl gt"><thead><tr><th>선 모양</th><th>간선</th><th>뜻</th></tr></thead><tbody>${rows.join("")}</tbody></table></details>`;
+  return `<details class="legend"><summary>간선 종류</summary><table class="tbl gt"><colgroup><col class="c-line"><col class="c-kind"><col></colgroup><thead><tr><th>선 모양</th><th>간선</th><th>뜻</th></tr></thead><tbody>${rows.join("")}</tbody></table></details>`;
 }
 
 function group(m: GroupDetail): string {
@@ -640,8 +705,8 @@ function group(m: GroupDetail): string {
       ? '<p class="empty">간선 없음</p>'
       : `${nodes.length > 0 ? dagSvg({ edges: m.edges, criticalPath: m.criticalPath, nodes, brokenEdges: m.brokenEdges ?? [] }, `${m.lead} 의존 그래프.${m.criticalPath.length > 0 ? ` 크리티컬 패스는 ${m.criticalPath.join(", ")} 순서.` : ""}`) : ""}${refLine}${legend()}`;
   const side = [
-    m.critical ? sub(m.critical, gtTable(m.critical, { roles: ["step", "item", "short", "text"], head: [0, 1, 2] })) : "",
-    m.stack ? sub(m.stack, gtTable(m.stack, { roles: ["short", "short", "item", "short"], head: [0, 2, 3] })) : "",
+    m.critical ? sub(m.critical, gtTable(m.critical, { roles: ["step", "item", "state", "text"], head: [0, 1, 2] })) : "",
+    m.stack ? sub(m.stack, gtTable(m.stack, { roles: ["short", "short", "item", "state"], head: [0, 2, 3] })) : "",
     ...(m.release ?? []).map((t) => sub(t, gtTable(t, { roles: ["kind", "text", "item"], head: [0] }))),
     m.broken ? sub(m.broken, gtTable(m.broken, { roles: ["item", "item", "text"], head: [0], titles, states })) : "",
   ].join("");
@@ -653,7 +718,7 @@ function group(m: GroupDetail): string {
     gtSection(
       "why",
       m.why,
-      gtTable(m.why, { roles: ["item", "item", "kind", "short", "text"], head: [0], titles, states, stateOf: [3, 1], labels }),
+      gtTable(m.why, { roles: ["item", "item", "kind", "state", "text"], head: [0], titles, states, stateOf: [3, 1], labels }),
       "<code>sangsoe graph why</code>",
     ),
     // An edge's card is titled by the item it holds back.
@@ -669,7 +734,7 @@ function item(m: ItemDetail): string {
   const rows = m.chain.rows.map((r) => rowHtml(m.chain, r, { idCol: true }));
   return [
     `<h1>${esc(m.state)} <span class="id">${esc(m.id)}</span> ${esc(m.title)} ${esc(m.flags)}</h1>`,
-    `<p class="sumline">누가 ${esc(m.who)} · <span class="pri">${esc(m.priority)}</span></p>`,
+    `<p class="sumline">누가 ${m.who === "—" ? "—" : badge(m.who)} · <span class="pri">${esc(m.priority)}</span></p>`,
     section("chain", m.chain, rows),
   ].join("");
 }
@@ -736,10 +801,13 @@ export function renderStage(
   pending: ReadonlySet<string> = new Set(),
 ): string {
   const m = v.model;
-  const nav = m.stage === 1 ? tabs(m, tab) : backLine(placeTrail(m));
   const body = m.stage === 1 ? overview(m, v.todo, pending) : m.stage === 2 ? group(m) : item(m);
-  return `${header(v.fresh ?? null, at)}${nav}<main data-view="${m.stage === 1 ? tab : "all"}">${body}</main>`;
+  // A detail screen's back line stays with the header while the page scrolls (decision 225 (4)).
+  const top = bar(header(v.fresh ?? null, at), m.stage === 1 ? "" : backLine(placeTrail(m)));
+  return `${top}${m.stage === 1 ? tabs(m, tab) : ""}<main data-view="${m.stage === 1 ? tab : "all"}">${body}</main>`;
 }
+
+const bar = (head: string, nav: string) => `<div class="bar">${head}${nav}</div>`;
 
 /**
  * A reading that failed (decision 198): the header and, below 현황, the back line stay, then one Korean
@@ -748,7 +816,7 @@ export function renderStage(
 export function renderError(r: Refusal, crumbs: readonly string[] = [], at: Target = {}): string {
   const nav = crumbs.length > 0 ? backLine(crumbs) : "";
   const line = `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorLine(r))} <button type="button" class="link" data-refresh>새로 고침</button></p>`;
-  return `${header(null, at)}${nav}<main data-view="all">${line}</main>`;
+  return `${bar(header(null, at), nav)}<main data-view="all">${line}</main>`;
 }
 
 /**

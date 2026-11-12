@@ -73,7 +73,7 @@ test("a refusal is one short Korean line with the raw text in its title; the hea
 
   const nf = { code: "not_found", reason: "no open group api-migration", fix: "go back to 현황" };
   const html = renderError(nf, ["현황", "api-migration"], { group: "api-migration" });
-  assert.match(html, /^<header class="top">/, "the header row stays");
+  assert.match(html, /^<div class="bar"><header class="top">/, "the header row stays");
   assert.match(html, /data-back/, "the way back stays");
   assert.match(html, /data-refresh/);
   const text = html.replace(/<[^>]+>/g, " ");
