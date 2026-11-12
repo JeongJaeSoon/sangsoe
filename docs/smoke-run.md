@@ -149,6 +149,20 @@ land 는 branch protection 을 읽지 못한 세 점검을 막지 않고 verdict
 
 판정: PASS (머지 · `pr_merged` · `task-update` 길과 pr-monitor 의 private 저장소 실제 라운드. T5 는 NOT VERIFIED: 리드 Task id 누락으로 앞 단계에서 거부. 읽지 못한 branch protection 을 막지 않고 머지한 것은 finding: 보호 규칙이 있는 저장소에서는 열린 채 실패한다)
 
+T5 재실행(2026-11-12, U93): 리드 세션이 stable 0.1.4 MCP 로 자기 Run 에서 돌렸다. 리드는 Dispatch 없는 Run 주인이라 `start_unit` 의 오케스트레이터 꼴(`role: orchestrator`, 자기 worktree, `taskId` 없음)로 불렀다. 버리는 항목은 둘이다: 한 번 시작된 Task 는 이후 `already_dispatched` 로 실패 세기 앞에서 멈추므로, 컷오프(B)와 이중 시작(A)을 한 Task 로 잴 수 없다.
+
+```
+B 1–3 start_unit {task: B, repo: "name:t5-no-such-repo"} → orca_error "worktree create 실패 (repo_not_found: repo_not_found)"
+      저장소: signal{start_refused, orca_error, target worker-start} + escalation{to: owner} 한 쌍씩 ×3, 셋째 뒤 loop_detected{start_failed_3x}
+B 4   같은 호출 → {"kind":"stopped","why":"start_failed_3x"}
+B 5   repo 없이 → {"kind":"stopped","why":"start_failed_3x"}
+A 1   start_unit {task: A} → {"kind":"started", dispatchId, worktreeId}
+A 2   바로 같은 호출 → {"kind":"waiting","why":"already_dispatched"}
+정리  A: worker-release · worktree rm → ok. B: task-update failed/cancelled → ok. item retire A·B → not_retirable(결정 223 ③)
+```
+
+첫 호출은 rc.3 에서 뜬 MCP 서버라 `server_stale` 로 거부됐고 세지 않았다(결정 211). 리드 세션을 다시 띄운 뒤 위 차례로 돌렸다. 판정: T5 PASS(이중 시작 거부 · 3회 컷오프 · Task 마다 세기).
+
 ### 리허설(rc.4)
 
 설치본(rc.4)의 land 는 smoke PR(`JeongJaeSoon/sangsoe-smoke#1`, private)을 읽지 못했다:
@@ -365,7 +379,7 @@ terminal.send: 0줄
 | C3 · C4 | U7(+U11·U16) · U7 | 없음 |
 | C5 · C6 | U8·U14(+…) · U8 | C6 의 `term_` 주소 거부는 실제 Orca 에서 한 번 봄(`[gate:report-address]`) |
 | C7 | U9 | 없음 |
-| C9 | U10 | `unit_lineage_complete` 실제 Orca 녹색(항목 1). T5 는 미실행 |
+| C9 | U10 | `unit_lineage_complete` 실제 Orca 녹색(항목 1). T5 는 U93 이 리드 Run 에서 PASS(3절) |
 | C10 | U12 | `raw_start_refused` 실제 거부 1(항목 2). `[gate:delegate]` 가 `orca worktree current` 를 막는 오탐 1 |
 | C11 | U13 | 리드의 역할 줄이 `worker` 로 적힘(항목 1) |
 | C12 | U14 | 없음 |

@@ -426,7 +426,7 @@ svg .halo{fill:var(--card)}
 <li>worker 타이머가 정해진 간격으로 감시자를 돌린다 (T2 통과. Orca 자동화의 <code>--precheck</code> 대체는 쓰지 않는다)</li>
 <li>패널이 Orca 안에서 그려진다 (T3 통과)</li>
 <li>승인 뒤 worker 가 자율로 돌고, 재승인은 능력·명령·실행 단계가 바뀔 때만 든다 (T4 통과)</li>
-<li>Dispatch 를 가진 워커는 자기 Run 에 Task 를 만들 수 없다. 이중 시작 거부와 세 번 실패 차단은 미실행이라 시작 함수가 스스로 거른다 (T5, 결정 114)</li>
+<li>Dispatch 를 가진 워커는 자기 Run 에 Task 를 만들 수 없다. 이중 시작 거부와 세 번 실패 차단은 시작 함수가 스스로 거르고, Run 을 쥔 리드 세션에서 둘 다 확인했다 (T5, 결정 114)</li>
 <li><code>--force</code> 없는 <code>worktree rm</code> 은 더러운 worktree 를 지우지 않지만 푸시 안 된 커밋은 막지 않아, REAPER 가 먼저 검사한다. archive hook 의 동작은 미실행 (P6 부분 통과)</li>
 <li>활동 시각 필드는 일하는 세션에서 움직이지 않아, 멈춤 판정은 마지막 출력 시각을 쓴다 (P10)</li>
 </ul>
