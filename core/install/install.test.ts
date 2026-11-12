@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createFakeOrca, type FakeReply } from "../../test/fake-orca/index.ts";
 import type { CheckContext, PluginBuild } from "../checks/index.ts";
+import { landAllowRules } from "../checks/land-allowed.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { doctor, realCheckContext, realPluginBuild } from "./doctor.ts";
 import { type Host, type Marketplace, type RunResult, realHost, sangsoeOrca, treeRoot } from "./host.ts";
@@ -241,28 +242,43 @@ test("doctor fails a disabled plugin and warns on a missing one in Orca's select
   }
 });
 
-test("decision 198: doctor reads Orca's profile for a sangsoe land allow rule, as a notice it never fails on", async () => {
-  const { host, calls } = fakeHost({ orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: [{ id: "sangsoe@sangsoe", version: V, scope: "user", enabled: true }] } } });
+const settingsRows = (lines: readonly string[]) => lines.filter((l) => /^\S+ +(permissions|land allow): /.test(l));
+
+function withSettings(host: Host, dir: string, settings: unknown): Host {
+  const read = host.readText;
+  host.readText = (p) => (p === join(dir, "settings.json") ? JSON.stringify(settings) : read(p));
+  return host;
+}
+
+test("decision 228: after install --permissions, doctor states the permission and land facts in one row", async () => {
+  const m = SANGSOE_RULES.length;
+  assert.ok(landAllowRules({ permissions: { allow: [...SANGSOE_RULES] } }).permissions.length > 0, "sangsoe's rules allow land, so the full row covers it");
+  // The live profile after U82: the 16 rules beside an older land rule the owner had added.
+  const host = withSettings(fakeHost().host, DEFAULT_DIR, { permissions: { allow: ["Bash(sangsoe land:*)", ...SANGSOE_RULES] } });
   const r = await doctor(host, ROOT, online());
-  const row = r.lines.find((l) => /^notice +land allow: /.test(l));
-  assert.ok(row?.includes(`${ORCA_DIR}/settings.json`), r.lines.join("\n"));
-  assert.match(row ?? "", /doctor writes no settings/);
-  assert.ok(!calls.some((c) => /\b(config|settings)\b.*\bset\b/.test(c)), "nothing is written");
+  assert.deepEqual(settingsRows(r.lines), [`ok       permissions: ${m} of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json`], r.lines.join("\n"));
 });
 
-test("decision 221: doctor warns with the fix when sangsoe's rules are missing, and both settings rows are ok once they are present", async () => {
-  const missing = await doctor(fakeHost().host, ROOT, online());
+test("decision 228: with rules missing the one row still warns with its fix and says whether land is allowed", async () => {
   const m = SANGSOE_RULES.length;
-  const warn = new RegExp(`^warn +permissions: 0 of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json \\(missing or not JSON\\).* — fix: sangsoe install --permissions \\(from a Claude Code ! line: read the diff it prints, then run sangsoe install --permissions --yes\\)$`);
-  assert.ok(missing.lines.some((l) => warn.test(l)), missing.lines.join("\n"));
+  const fix = " — fix: sangsoe install --permissions (from a Claude Code ! line: read the diff it prints, then run sangsoe install --permissions --yes)";
 
-  const { host } = fakeHost();
-  const read = host.readText;
-  const settings = JSON.stringify({ permissions: { allow: [...SANGSOE_RULES] } });
-  host.readText = (p) => (p === join(DEFAULT_DIR, "settings.json") ? settings : read(p));
-  const r = await doctor(host, ROOT, online());
-  assert.ok(r.lines.includes(`ok       permissions: ${m} of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json`), r.lines.join("\n"));
-  assert.ok(r.lines.some((l) => /^ok +land allow: /.test(l)), r.lines.join("\n"));
+  const { host, calls } = fakeHost({ orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: [{ id: "sangsoe@sangsoe", version: V, scope: "user", enabled: true }] } } });
+  const missing = await doctor(host, ROOT, online());
+  assert.deepEqual(
+    settingsRows(missing.lines),
+    [`warn     permissions: 0 of ${m} sangsoe rules present in ${ORCA_DIR}/settings.json (missing or not JSON): sangsoe's sessions may stop on permission prompts, and auto mode may refuse a worker's land${fix}`],
+    missing.lines.join("\n"),
+  );
+  assert.ok(!calls.some((c) => /\b(config|settings)\b.*\bset\b/.test(c)), "nothing is written");
+
+  const partial = withSettings(fakeHost().host, DEFAULT_DIR, { permissions: { allow: [...SANGSOE_RULES.slice(1)] }, autoMode: { allow: ["Allow sangsoe land for workers"] } });
+  const r = await doctor(partial, ROOT, online());
+  assert.deepEqual(
+    settingsRows(r.lines),
+    [`warn     permissions: ${m - 1} of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json: sangsoe's sessions may stop on permission prompts; sangsoe land is allowed (permissions.allow 0, autoMode.allow 1)${fix}`],
+    r.lines.join("\n"),
+  );
 });
 
 test("decision 221: uninstall removes the rules sangsoe recorded adding, and says so", () => {
