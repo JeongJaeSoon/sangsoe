@@ -27,7 +27,7 @@ import {
   UNREADABLE,
   userPlugin,
 } from "./host.ts";
-import { PERMISSIONS_FIX, permissionsRow } from "./permissions.ts";
+import { PERMISSIONS_DOCTOR_FIX, PERMISSIONS_FIX, permissionsRow } from "./permissions.ts";
 import { stageCore } from "./stage.ts";
 
 // `warn` and `notice` print their fix but leave the exit code alone, as at the start.
@@ -130,7 +130,7 @@ function settingsChecks(host: Host, current: ClaudeProfile): Check[] {
   return [
     perms.all
       ? { state: "ok", name: "permissions", detail: perms.detail }
-      : { state: "warn", name: "permissions", detail: `${perms.detail}: sangsoe's sessions may stop on permission prompts`, fix: PERMISSIONS_FIX },
+      : { state: "warn", name: "permissions", detail: `${perms.detail}: sangsoe's sessions may stop on permission prompts`, fix: PERMISSIONS_DOCTOR_FIX },
     land.found
       ? { state: "ok", name: "land allow", detail: land.detail }
       : {
