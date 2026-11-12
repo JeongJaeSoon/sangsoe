@@ -1,6 +1,5 @@
-import { approveExec, EVIDENCE_KINDS, type RecordPorts, recordEvidence, SANGSOE_REPO, Store } from "../../../core/index.ts";
+import { approveExec, EVIDENCE_KINDS, type RecordPorts, recordEvidence, recorderRefusal, SANGSOE_REPO, Store } from "../../../core/index.ts";
 import type { ToolDef } from "../contract.ts";
-import { recorderRefusal } from "../recorder.ts";
 
 // Word for word the CLI's fix, so both entrances return one Outcome for input that passes the schema;
 // a kind outside the enum is the server's invalid_input here and the core's evidence_refused on the CLI.
@@ -32,7 +31,7 @@ export function evidenceRecordTool(ports: () => RecordPorts): ToolDef {
       const repo = typeof input.repo === "string" ? input.repo : SANGSOE_REPO;
       const pr = Number(input.pr);
       const head = String(input.head_sha);
-      const refused = await recorderRefusal(p.exec, { tool: "evidence_record", repo, pr, head, what: "evidence", refused: "evidence_refused", fix: FIX });
+      const refused = await recorderRefusal(p.exec, { tool: "evidence_record", repo, pr, head, what: "evidence", refused: "evidence_refused", fix: FIX, noCheckout: "refuse" }, process.cwd());
       if (refused) return refused;
       const r = await recordEvidence(
         {

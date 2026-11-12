@@ -3,7 +3,7 @@ import { rmSync } from "node:fs";
 import { after, test } from "node:test";
 import { landTool } from "../../claude-plugin/mcp/tools/land.ts";
 import type { GhClient, GhResponse, LandDeps } from "../../core/index.ts";
-import { expectSameViaBothEntrances, viaMcp } from "../boundaries/both-entrances.ts";
+import { expectSameViaBothEntrances, viaCli, viaMcp } from "../boundaries/both-entrances.ts";
 import { HEAD, openStore, PR_BRANCH, REPO, reset, world } from "./world.ts";
 
 // Decisions 111, 158, 162: a lead records an independent verdict through MCP, and land's verdict
@@ -78,6 +78,54 @@ test("the session whose checkout holds the PR is refused before GitHub's author 
   assert.equal(byCommit.ok ? "" : byCommit.refusal.code, "recorder_is_author", "a detached checkout at the PR's head wrote it too");
   assert.ok(!world.calls.some((c) => c.includes("@tsv")), "core's record was never reached");
   assert.deepEqual(verdicts(), []);
+});
+
+// Decision 227: the CLI is an agent session when Claude Code set CLAUDECODE; this suite runs the
+// owner's shell unless a test says otherwise, whatever shell started it.
+delete process.env.CLAUDECODE;
+async function asAgent<T>(f: () => Promise<T>): Promise<T> {
+  process.env.CLAUDECODE = "1";
+  try {
+    return await f();
+  } finally {
+    delete process.env.CLAUDECODE;
+  }
+}
+const cliArgv = (reviewer = "claude") => ["review", "record", "--repo", REPO, "--pr", "12", "--head", HEAD, "--act-on", "0", "--reviewer", reviewer];
+
+test("decision 227: `sangsoe review record` from the PR's author session is refused, so land still has no verdict", async () => {
+  reset();
+  for (const session of [{ sha: "c".repeat(40), branch: PR_BRANCH }, { sha: HEAD, branch: "HEAD" }]) {
+    world.session = session;
+    const r = await asAgent(() => viaCli(cliArgv(), dirs));
+    assert.equal(r.ok ? "" : r.refusal.code, "recorder_is_author", JSON.stringify(r));
+    assert.match(r.ok ? "" : r.refusal.fix, /sends the reviewed head, the reviewer and the evidence to its lead/);
+  }
+  world.session = { sha: "c".repeat(40), branch: PR_BRANCH };
+  const both = await asAgent(() =>
+    expectSameViaBothEntrances({ tool: "review_record", input: { repo: REPO, pr: 12, head_sha: HEAD, act_on: 0, reviewer: "claude" }, argv: cliArgv(), dirs }),
+  );
+  assert.equal(both.ok ? "" : both.refusal.code, "recorder_is_author");
+  assert.deepEqual(verdicts(), []);
+
+  const s = openStore();
+  for (const kind of ["test", "run"]) {
+    s.append({ type: "evidence", source: "test", subject: "acme/api#12", actor: "worker:u31", payload: { kind, head_sha: HEAD, exit_code: 0, not_verified: ["prod"] } });
+  }
+  s.close();
+  const landed = await landTool(() => landDeps([])).handler({ repo: REPO, pr: 12, dry_run: true });
+  assert.equal(landed.ok ? "" : landed.refusal.code, "review_missing", JSON.stringify(landed));
+
+  world.session = { sha: "b".repeat(40), branch: "lead/program" };
+  assert.equal((await asAgent(() => viaCli(cliArgv(), dirs))).ok, true, "another session records");
+  world.session = { sha: "c".repeat(40), branch: PR_BRANCH };
+  world.calls = [];
+  assert.equal((await viaCli(cliArgv("codex"), dirs)).ok, true, "the owner's shell records");
+  assert.ok(!world.calls.some((c) => c.startsWith("git ")), "the owner's shell reads no checkout");
+  assert.deepEqual(
+    verdicts().map((v) => v.reviewer),
+    ["claude", "codex"],
+  );
 });
 
 test("a session with no readable checkout is refused, never taken for someone else", async () => {

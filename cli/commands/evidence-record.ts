@@ -1,4 +1,4 @@
-import { approveExec, type RecordPorts, recordEvidence, SANGSOE_REPO, Store } from "../../core/index.ts";
+import { agentCheckout, approveExec, type RecordPorts, recordEvidence, recorderRefusal, SANGSOE_REPO, Store } from "../../core/index.ts";
 import type { CommandArgs, CommandDef, Outcome } from "../contract.ts";
 
 const REQUIRED = ["pr", "head", "kind", "exit-code", "not-verified", "recorder"] as const;
@@ -10,6 +10,7 @@ const EVIDENCE_FIX = "check --pr, --head (the PR's current head), --kind, --not-
 export async function evidenceRecord(
   values: CommandArgs["values"],
   deps: RecordPorts = { exec: approveExec, openStore: () => Store.open() },
+  checkout: string | null = agentCheckout(),
 ): Promise<Outcome<string>> {
   const missing = REQUIRED.filter((o) => values[o] === undefined);
   if (missing.length > 0) {
@@ -20,11 +21,17 @@ export async function evidenceRecord(
   const nv = values["not-verified"];
   const path = opt("path");
   const sha256 = opt("sha256");
+  const repo = opt("repo") ?? SANGSOE_REPO;
+  const pr = /^[0-9]+$/.test(text("pr")) ? Number(text("pr")) : Number.NaN;
+  const head = text("head");
+  const what = { tool: "sangsoe evidence record", repo, pr, head, what: "evidence", refused: "evidence_refused", fix: EVIDENCE_FIX, noCheckout: "pass" } as const;
+  const refused = await recorderRefusal(deps.exec, what, checkout);
+  if (refused) return refused;
   const r = await recordEvidence(
     {
-      repo: opt("repo") ?? SANGSOE_REPO,
-      pr: /^[0-9]+$/.test(text("pr")) ? Number(text("pr")) : Number.NaN,
-      head: text("head"),
+      repo,
+      pr,
+      head,
       kind: text("kind"),
       exitCode: /^-?[0-9]+$/.test(text("exit-code")) ? Number(text("exit-code")) : Number.NaN,
       notVerified: (Array.isArray(nv) ? nv : [nv]).map(String),

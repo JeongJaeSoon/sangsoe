@@ -1,8 +1,10 @@
-import { type ApproveExec, approveExec, recordReviewVerdict, SANGSOE_REPO, Store } from "../../core/index.ts";
+import { agentCheckout, type ApproveExec, approveExec, recordReviewVerdict, recorderRefusal, SANGSOE_REPO, Store } from "../../core/index.ts";
 import type { CommandArgs, CommandDef, Outcome } from "../contract.ts";
 
 const REQUIRED = ["pr", "head", "act-on", "reviewer"] as const;
 const USAGE = "--pr <N> --head <sha> --act-on <N> --reviewer <name> [--repo <owner/name>]";
+// Word for word the review_record tool's fix, so both entrances return one Outcome.
+const REVIEW_FIX = "check --pr, --head (the PR's current head) and --reviewer (not the author)";
 
 type Deps = { exec: ApproveExec; openStore: () => Store };
 
@@ -11,6 +13,7 @@ type Deps = { exec: ApproveExec; openStore: () => Store };
 export async function reviewRecord(
   values: CommandArgs["values"],
   deps: Deps = { exec: approveExec, openStore: () => Store.open() },
+  checkout: string | null = agentCheckout(),
 ): Promise<Outcome<string>> {
   const missing = REQUIRED.filter((o) => typeof values[o] !== "string");
   if (missing.length > 0) {
@@ -21,19 +24,13 @@ export async function reviewRecord(
   }
   const text = (o: string) => String(values[o]);
   const num = (o: string) => (/^[0-9]+$/.test(text(o)) ? Number(text(o)) : Number.NaN);
-  const r = await recordReviewVerdict(
-    {
-      repo: typeof values.repo === "string" ? values.repo : SANGSOE_REPO,
-      pr: num("pr"),
-      head: text("head"),
-      actOn: num("act-on"),
-      reviewer: text("reviewer"),
-    },
-    deps,
-  );
-  return r.ok
-    ? { ok: true, value: r.note }
-    : { ok: false, refusal: { code: "review_refused", reason: r.note, fix: "check --pr, --head (the PR's current head) and --reviewer (not the author)" } };
+  const repo = typeof values.repo === "string" ? values.repo : SANGSOE_REPO;
+  const pr = num("pr");
+  const head = text("head");
+  const refused = await recorderRefusal(deps.exec, { tool: "sangsoe review record", repo, pr, head, what: "verdict", refused: "review_refused", fix: REVIEW_FIX, noCheckout: "pass" }, checkout);
+  if (refused) return refused;
+  const r = await recordReviewVerdict({ repo, pr, head, actOn: num("act-on"), reviewer: text("reviewer") }, deps);
+  return r.ok ? { ok: true, value: r.note } : { ok: false, refusal: { code: "review_refused", reason: r.note, fix: REVIEW_FIX } };
 }
 
 export default {

@@ -5,10 +5,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { recorderRefusal } from "../../claude-plugin/mcp/recorder.ts";
-import { type ApproveExec, approveExec } from "../../core/index.ts";
+import { type ApproveExec, agentCheckout, approveExec, recorderRefusal } from "../../core/index.ts";
 
-const A = { tool: "review_record", repo: "acme/api", pr: 12, head: "a".repeat(40), what: "verdict", refused: "review_refused", fix: "x" };
+const A = { tool: "review_record", repo: "acme/api", pr: 12, head: "a".repeat(40), what: "verdict", refused: "review_refused", fix: "x", noCheckout: "refuse" } as const;
 
 test("from / and from a folder outside every repo the recorder refuses in Korean and reads no PR", async () => {
   const plain = mkdtempSync(join(tmpdir(), "sangsoe-recorder-"));
@@ -32,7 +31,7 @@ test("from / and from a folder outside every repo the recorder refuses in Korean
   }
 });
 
-// The callers pass none: the MCP server starts in the session's folder, so its cwd is that folder.
+// The MCP tools pass the server's cwd: it starts in the session's folder.
 test("the checkout read names its folder with git -C", async () => {
   const calls: string[][] = [];
   const exec: ApproveExec = async (cmd, args) => {
@@ -42,4 +41,13 @@ test("the checkout read names its folder with git -C", async () => {
   };
   assert.equal(await recorderRefusal(exec, A, "/work/acme/api-lead"), undefined);
   assert.deepEqual(calls[0], ["git", "-C", "/work/acme/api-lead", "rev-parse", "HEAD", "--abbrev-ref", "HEAD"]);
+});
+
+// Decision 227: the CLI's session is the folder it runs in when Claude Code started it; the owner's shell has none.
+test("agentCheckout reads CLAUDECODE, and no checkout means no read", async () => {
+  assert.equal(agentCheckout({ CLAUDECODE: "1" }, "/work/acme/api"), "/work/acme/api");
+  assert.equal(agentCheckout({}, "/work/acme/api"), null);
+  assert.equal(agentCheckout({ CLAUDECODE: "" }, "/work/acme/api"), null);
+  const exec: ApproveExec = async () => assert.fail("the owner's shell reads nothing");
+  assert.equal(await recorderRefusal(exec, A, null), undefined);
 });
