@@ -182,6 +182,16 @@ test("an orchestrator Run whose run-show fails or whose live terminal has no pan
   }
 });
 
+test("an orchestrator resumed in a new terminal (run-show names the dead one) leaves the stalled lead untold, never told to itself", async () => {
+  const s = setup([lead(), { ...orch(), shown: "term_old" }]);
+  leadSpoke(s);
+  s.send(`run:${LEAD_RUN}`, T0 + MIN);
+  const r = await runMonitor("orca", s.deps(T0 + (N + 2) * MIN));
+  assert.equal(s.stalled().length, 1);
+  assert.deepEqual(s.w.sends, []);
+  assert.ok(r.unseen.some((u) => u.includes(LEAD_RUN)), r.unseen.join("\n"));
+});
+
 test("a dry run judges but sends nothing", async () => {
   const s = setup([lead(), orch()]);
   leadSpoke(s);

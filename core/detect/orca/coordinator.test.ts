@@ -142,4 +142,5 @@ test("recipientOf: the one other top Run, the stalled Run when it is the only to
   assert.equal(recipientOf("run_a", new Map([["run_a", lead], ["run_o", { pane: "p:o", handle: "term_o" }]])), undefined, "unknown Dispatch is no top");
   assert.equal(recipientOf("run_a", new Map([["run_a", lead], ["run_o", { unresolved: true }]])), undefined, "a live coordinator not placed is unknown");
   assert.equal(recipientOf("run_a", new Map([["run_a", lead], ["run_o", orch], ["run_g", {}]])), "run_o", "a Run with no live terminal is no top");
+  assert.equal(recipientOf("run_o", new Map([["run_o", orch], ["run_g", {}]])), undefined, "a Run with no live terminal may be a resumed orchestrator: no self-notice");
 });
