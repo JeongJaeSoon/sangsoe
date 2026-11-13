@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **One command brings back every session stopped on a lost login (246).** After signing in once with `/login`, `sangsoe recover auth` lists each session whose latest stop was a lost login and that has not ended a turn since (237): a Dispatch's stop, or the wait of a session holding none. For each one it shows the terminal it would send to, or why it skips it: the Dispatch has finished or its terminal is not live, or the session's worktree has no agent terminal or more than one. This dry run sends and records nothing. `sangsoe recover auth --send` sends each listed terminal one fixed line, through Orca's `terminal send`, asking the session to carry on. It records one `owner_action` per line it sent, keyed by the stop, so running it again sends nothing to a stop it already sent to. A send Orca refused is tried again on the next run. A send whose response was lost is retried only under Orca's request id; if it stays unknown, it is recorded as possibly delivered. The command exits 1 when an Orca read or a send fails, and `--db <path>` reads another store. A session that still holds the old token stops again. For a session holding no Dispatch, that second stop is the same open wait: its row says the line was already sent and names the restart that 237 describes. Only this command writes to a terminal. The Orca plugin still has no capability to do so (136).
+
 ## 0.1.6-rc.3 (pre-release)
 
 Everything since `v0.1.6-rc.2`: decisions 237 to 240 and a fix to the test of 219. A pre-release for checking the hooks and gates, the 리소스 section and doctor on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
