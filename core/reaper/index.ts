@@ -4,7 +4,15 @@ export { DOCKER_KINDS, type DockerKind, type DockerRef, type DockerState, docker
 export { branchOf, type Finished, judgeFinished, repoOf } from "./finished.ts";
 export { openReaper, openResources, type ReaperRunner } from "./open.ts";
 export {
+  BAND_MS,
+  type Band,
+  type BandState,
   diskKb,
+  loadBand,
+  RESOURCE_PARTS,
+  type ResourcePart,
+  type ResourcePartView,
+  readResourcePart,
   type OwnerReap,
   type OwnerReaped,
   ownerReap,
