@@ -22,6 +22,9 @@
     "Stop": [
       { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" stop", "timeout": 30 }] }
     ],
+    "StopFailure": [
+      { "matcher": "authentication_failed|oauth_org_not_allowed", "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" stop-failure", "timeout": 15 }] }
+    ],
     "Notification": [
       { "hooks": [{ "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/record.sh\" notification", "timeout": 15 }] }
     ],

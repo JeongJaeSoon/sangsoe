@@ -18,6 +18,9 @@ export interface SessionHookInput {
   readonly notification_type?: string;
   readonly trigger?: string;
   readonly reason?: string;
+  /** StopFailure: the API error type the turn ended on, and the error text itself. */
+  readonly error?: string;
+  readonly last_assistant_message?: string;
 }
 
 /** undefined for anything that is not a JSON object with a session id: the recorder then does nothing. */

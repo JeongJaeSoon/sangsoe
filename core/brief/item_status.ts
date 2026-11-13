@@ -137,7 +137,8 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     else if (e.type === "trigger_unclear") unclear.set(String(p.task), e.seq);
     if (ALARMS.has(e.type)) {
       const t = taskOf(e, prTask, dispatchTask);
-      if (t) alarms.set(t, new Map(alarms.get(t)).set(e.type, e.seq));
+      const name = e.type === "worker_dead" && p.cause === "auth" ? "worker_dead:auth" : e.type;
+      if (t) alarms.set(t, new Map(alarms.get(t)).set(name, e.seq));
     }
     if (e.type === "worker_idle") {
       const t = taskOf(e, prTask, dispatchTask);

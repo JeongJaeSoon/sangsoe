@@ -18,6 +18,7 @@ export const SESSION_HOOKS = [
   "session-start",
   "user-prompt-submit",
   "stop",
+  "stop-failure",
   "notification",
   "post-tool-use",
   "post-compact",
@@ -47,6 +48,9 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
       released(deps.store, { kind: "turn_ended", session: input.session_id }, "Stop");
       await workerIdle(deps, row, input);
       await syncOwnRun(deps, row.role, new Date().toISOString());
+      break;
+    case "stop-failure":
+      await lostLogin(deps, row, input);
       break;
     case "notification":
       await waitingHuman(deps, row, input);
@@ -181,6 +185,27 @@ const WAITS = new Set(["permission_prompt", "idle_prompt", "elicitation_dialog"]
  * queue-monitor's escalation, decision 91①). The tool is read from the text or left out; a repeat
  * notification for a wait still open writes nothing.
  */
+const SIGN_IN = new Set(["authentication_failed", "oauth_org_not_allowed"]);
+
+/**
+ * Decision 237: StopFailure on a lost login → waiting_human{cause auth} for a session holding no
+ * Dispatch, the sessions nothing else sees stopping. A dispatched one is left to Orca's stop mail.
+ * The wait is open until the session's next finished turn, so one stop is one wait.
+ */
+async function lostLogin(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
+  if (row.task || !SIGN_IN.has(input.error ?? "")) return;
+  const worktree = await liveWorktree(deps.orca, input.cwd);
+  if (openWaits(deps.store.events()).some((e) => e.payload.session === input.session_id && e.payload.cause === "auth")) return;
+  const n = deps.store.events({ type: "waiting_human" }).filter((e) => e.payload.session === input.session_id).length + 1;
+  const text = input.last_assistant_message;
+  deps.store.append({
+    type: "waiting_human",
+    source: "StopFailure",
+    dedupe_key: dedupeKey(EVENTS.waiting_human, input.session_id, String(n)),
+    payload: { session: input.session_id, cause: "auth", ...(text ? { excerpt: summarize(mask(text)) } : {}), ...(worktree ? { worktree } : {}) },
+  });
+}
+
 async function waitingHuman(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
   // A session holding a Dispatch is seen through Orca's needs-input mail alone (decision 196), which
   // Orca already delivers to the lead: one source per wait, and it holds with the plugin off.

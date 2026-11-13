@@ -39,6 +39,7 @@ const ALARM_NEXT: Readonly<Record<string, string>> = {
   ci_failed: "CI 수정",
   worker_stuck: "멈춤 확인",
   worker_dead: "재시작",
+  "worker_dead:auth": "재로그인",
   land_failed: "land 확인",
   loop_detected: "반복 확인",
   decision_untracked: "결정 연결",
@@ -95,7 +96,8 @@ function next(f: ItemFacts): string {
   else if (f.state === "ready") base = "시작";
   else if (f.state === "planned") base = "선행 대기";
   else if (f.idle) base = "워커가 다음 지시를 기다림";
-  const alarm = f.alarms[0];
+  // A session stopped on a lost login does nothing else until someone signs in (decision 237).
+  const alarm = f.alarms.includes("worker_dead:auth") ? "worker_dead:auth" : f.alarms[0];
   if (!alarm) return base;
   return `🚨 ${base === "—" ? (ALARM_NEXT[alarm] ?? alarm) : base}`;
 }
