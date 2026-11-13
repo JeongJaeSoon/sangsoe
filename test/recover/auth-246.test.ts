@@ -27,6 +27,8 @@ function fakeOrca(
     workers?: WorkerShow[];
     terminals?: Record<string, { handle: string; agentIdentity?: string }[]>;
     refuse?: boolean;
+    /** The first send meets an open menu: Orca types nothing (decision 86 ③). */
+    blocked?: boolean;
     /** A failure after the text may have been typed (a submit wait that timed out). */
     submitTimeout?: boolean;
     /** worktree ps comes back cut short. */
@@ -68,6 +70,9 @@ function fakeOrca(
     terminalSend: (a, w) => {
       calls.push(`terminalSend ${a.terminal}${w?.retryRequest ? ` retry ${w.retryRequest}` : ""}`);
       if (o.refuse) return Promise.resolve({ ok: false, error: { code: "terminal_handle_stale", message: "terminal_handle_stale" } });
+      if (o.blocked && sent.length === 0 && !calls.some((c, i) => i < calls.length - 1 && c.startsWith("terminalSend"))) {
+        return Promise.resolve({ ok: false, error: { code: "agent_prompt_blocked", message: "a menu is open" } });
+      }
       if (o.submitTimeout) return Promise.resolve({ ok: false, error: { code: "exit_1", message: "prompt not seen to start a turn" } });
       if (o.lost && !w?.retryRequest && !calls.some((c, i) => i < calls.length - 1 && c.startsWith("terminalSend"))) {
         return Promise.resolve({ ok: false, error: { code: "response_lost", message: "timed out" }, requestId: "req_1" });
@@ -305,6 +310,17 @@ test("246: a send that failed after it may have typed the line is recorded, and 
   const cli = await recover({ send: true }, orca as unknown as OrcaAdapter, ["auth"], () => store);
   assert.ok("lines" in cli);
   assert.equal(cli.code, 0, "a later run that only reports 이미 보냄 is not a failure");
+});
+
+test("246: a prompt Orca would not type over an open menu is retried on the next run", async () => {
+  const { store, dead } = world();
+  dead("ctx_a", "task_a", "auth");
+  const orca = fakeOrca({ workers: [worker("ctx_a", "task_a", "term_a")], blocked: true });
+  const r = await authRecover(store, orca, { send: true });
+  assert.equal(r.rows[0]?.verdict, "failed");
+  assert.equal(store.events({ type: "owner_action" }).length, 0);
+  await authRecover(store, orca, { send: true });
+  assert.equal(orca.sent.length, 1);
 });
 
 test("246: a cut-short worktree ps is unread, not a missing worktree", async () => {

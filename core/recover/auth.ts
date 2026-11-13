@@ -115,8 +115,12 @@ async function sessionTerminal(orca: AuthOrca, worktree: string | undefined, ps:
   return { terminal: null, why: agents.length === 0 ? "에이전트 터미널이 없음" : `에이전트 터미널이 ${agents.length}개라 고르지 않음` };
 }
 
-/** Refusals that come before any byte reaches the terminal: sangsoe's own argv check, an unknown handle. */
-const NOT_WRITTEN = new Set(["invalid_argument", "terminal_handle_stale", "terminal_not_found"]);
+/**
+ * Refusals that come before any byte reaches the terminal: sangsoe's own argv check, an unknown handle
+ * (`terminal_handle_stale` measured on `terminal show`), a prompt Orca would not type over an open menu
+ * (decision 86 ③).
+ */
+const NOT_WRITTEN = new Set(["invalid_argument", "terminal_handle_stale", "terminal_not_found", "agent_prompt_blocked"]);
 
 /**
  * Decision 60: any other failure may have typed the line (a submit wait that timed out included), so it
