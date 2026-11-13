@@ -77,6 +77,8 @@ export interface Overview {
   readonly onHold: Table | null;
   readonly doneDays: number;
   readonly evidenceShort: number;
+  /** Done items whose only record is an act_on 0 review (decision 236); not in evidenceShort. */
+  readonly reviewOnly: number;
   /** ✅ closed in the last `doneDays`, newest first: summary.done rows (decision 199). */
   readonly done: Table;
   /** Today's advisor calls and estimated cost (decision 200); absent on a day with none. */

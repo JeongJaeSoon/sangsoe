@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **근거 부족 counts what was recorded, and review-only items are counted apart (236).** Evidence recorded with `sangsoe evidence record` names the PR, not the item, and the brief read evidence only from rows that named the item, so every completed item with a PR read 🔍 근거 부족 however much was recorded on it. An item now reads passing evidence (exit code 0) on any PR it owns. A lead's item is no longer counted: its work is its children's. A completed item with no evidence but an Act-on 0 review on its PR reads 👀 리뷰만 있음 instead, and the brief's last line and the panel's footer show both numbers (`🔍 근거 부족 N · 👀 리뷰만 있음 M`). On one store the line went from 근거 부족 16 to 근거 부족 7 · 리뷰만 있음 6.
+
 ## 0.1.6-rc.1 (pre-release)
 
 Everything since `v0.1.5`: decisions 230 to 234. A pre-release for checking the panel, its 리소스 section and doctor on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
