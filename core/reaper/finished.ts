@@ -33,6 +33,7 @@ export type Finished =
   | { state: "unknown"; why: string };
 
 const FINISHED_OUTCOMES = new Set(["succeeded", "cancelled"]);
+export const NO_TRACE = "no PR and no Dispatch";
 
 /**
  * d119's finished judgment for one card. A PR on the card's branch wins: open is unfinished, merged
@@ -66,7 +67,7 @@ export async function judgeFinished(card: WorktreeRow, gh: GhClient, workers: re
     return { state: "unknown", why: `compare: ${cmp.kind}` };
   }
   const mine = workers.filter((w) => w.workspace === card.id);
-  if (mine.length === 0) return { state: "unknown", why: "no PR and no Dispatch" };
+  if (mine.length === 0) return { state: "unknown", why: NO_TRACE };
   if (!mine.every(settled)) return { state: "unfinished", why: "a Dispatch has not settled" };
   // worker-list is newest first.
   const last = mine[0];
