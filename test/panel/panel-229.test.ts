@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ITEM_READINGS, panelView, READING_LABEL } from "../../core/index.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
-import { type Overview, type PanelView, renderStage, type Row } from "../../orca-plugin/panel/view.ts";
+import { type Overview, type PanelView, renderStage, type Row, STATE_COL_PX } from "../../orca-plugin/panel/view.ts";
 import { groupWorld } from "../brief/group-world.ts";
 
 // Decision 229: no field label without its value, and the wide state column says its word.
@@ -85,7 +85,13 @@ test("a group row's state cell in the wide table says its word too; its narrow h
   for (const d of ["position: absolute;", "clip-path: inset(50%);"]) assert.ok(word.includes(d), d);
 });
 
-test("a wide table led by a state is wide enough for mark and word; an id-led table keeps its 64px", () => {
-  assert.match(rule(WIDE, ".tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child"), /width: 64px;/);
-  assert.match(rule(WIDE, ".tbl:not(.gt):has(.st) th:first-child, .tbl:not(.gt):has(.st) td:first-child"), /width: \d+px;/);
+test("a wide table led by a state is wide enough for mark and word; an id-led table keeps its own id width", () => {
+  // 64px until decision 230 padded the first cell 12px on both sides; 80px leaves a seven-glyph id 56px.
+  assert.match(rule(WIDE, ".tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child"), /width: 80px;/);
+  // The state column's width is its <col>, sized from the longest word (panel-spacing (5)); an id-led
+  // table with short ids keeps a bare first <col>, so the rule above sizes it.
+  const firstCol = (html: string, section: string) => /<colgroup>(<col[^>]*>)/.exec(html.slice(html.indexOf(`id="h-${section}"`)))?.[1];
+  assert.equal(firstCol(renderStage(one), "prog"), `<col style="width:${STATE_COL_PX}px">`);
+  const dec = { ...ov().decisions, count: 1, rows: [{ id: "d009", cells: ["d009", "x", "y", "z", "1h"].map((text) => ({ text })) }] };
+  assert.equal(firstCol(renderStage({ ...one, model: { ...ov(), decisions: dec } }), "dec"), "<col>");
 });

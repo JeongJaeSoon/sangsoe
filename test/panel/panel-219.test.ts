@@ -28,7 +28,7 @@ test("(6) a decision no gate carries is a broken record row with its id and no a
   assert.match(row.cells[1]?.text ?? "", /기록 깨짐/);
   const html = renderStage(v);
   const tr = /<tr data-id="d001"[^>]*>.*?<\/tr>/s.exec(html)?.[0] ?? "";
-  assert.match(tr, /class="broken"/);
+  assert.match(tr, /class="broken[ "]/);
   assert.doesNotMatch(tr, /data-act|data-other/, "nothing to answer");
   assert.doesNotMatch(html, /data-for="d001"/, "no answer form either");
 });
