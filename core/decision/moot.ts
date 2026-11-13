@@ -20,6 +20,8 @@ export interface DecisionMooted extends Released {
  * Decision 91③: closes an open decision whose cause is gone, without an answer. "tasks_closed" is
  * re-read here: every waiter Task but the carrier, at least one, must be completed or cancelled. The
  * caller (queue-monitor) has read "pr_closed" itself. Open gates of live Tasks resolve as `MOOT dNNN`.
+ * Decision 231: a decision with no waiter at all, carrier included, is a broken record (Orca refused its
+ * gate after decision_opened, decision 219); nothing waits on it, so it is moot with no Orca call.
  */
 export async function decisionMoot(deps: CoreDeps, input: DecisionMootInput): Promise<Result<DecisionMooted>> {
   const { store } = deps;
@@ -35,7 +37,7 @@ export async function decisionMoot(deps: CoreDeps, input: DecisionMootInput): Pr
   if (before.row.state === "open" && input.evidence.kind === "tasks_closed") {
     const waiters = before.waiters.filter((w) => !w.carrier);
     const reads = orcaReads(deps.orca);
-    let allClosed = waiters.length > 0;
+    let allClosed = before.waiters.length === 0 || waiters.length > 0;
     for (const w of waiters) {
       if (!w.run) {
         allClosed = false;
