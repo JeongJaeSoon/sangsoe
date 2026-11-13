@@ -148,6 +148,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
   let left = 0;
   let blocked = 0;
   let evidenceShort = 0;
+  let reviewOnly = 0;
   const groupRows = new Map<string, ItemFacts[]>();
   const held: ItemFacts[] = [];
   const closed: ItemFacts[] = [];
@@ -158,6 +159,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
         done++;
         closed.push(f);
         if (f.evidenceShort) evidenceShort++;
+        if (f.reviewOnly) reviewOnly++;
       }
       continue;
     }
@@ -244,6 +246,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     onHold: holdRows.length > 0 ? table("보류", COLS.onHold, holdRows) : null,
     doneDays,
     evidenceShort,
+    reviewOnly,
     done: doneTable(closed, foldFacts(input.events), doneDays),
     ...(today ? { advisorToday: today } : {}),
     ...(restart.length > 0 ? { restartDue: restart } : {}),
@@ -627,6 +630,7 @@ export function buildItem(input: BriefInput, alias: string, opts: BuildOptions =
     f.alarms.length > 0 ? "🚨" : "",
     f.unclear ? "⚠️" : "",
     f.evidenceShort ? "🔍" : "",
+    f.reviewOnly ? "👀" : "",
   ].join("");
   const model = modelLine(input, f.task);
   return {

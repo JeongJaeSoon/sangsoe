@@ -39,6 +39,8 @@ export interface ItemFacts {
   /** In progress and its worker_idle (decision 186) is newer than its last move: the 대기 line. */
   readonly idle: boolean;
   readonly evidenceShort: boolean;
+  /** Done, no evidence, but its PR has an act_on 0 review (decision 236); never also evidenceShort. */
+  readonly reviewOnly: boolean;
   readonly closedAt: string | null;
 }
 
@@ -100,6 +102,9 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
   const prTask = new Map<string, string>();
   const prOpen = new Map<string, string>();
   const evidence = new Set<string>();
+  const prEvidence = new Set<string>();
+  const prReviewed = new Set<string>();
+  const leads = new Set<string>();
   const alarms = new Map<string, Map<string, number>>();
   const unclear = new Map<string, number>();
   const moved = new Map<string, number>();
@@ -134,7 +139,13 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       if (t && prOpen.get(t) === p.pr) prOpen.delete(t);
       if (t && e.type === "pr_merged") mergedAt.set(t, e.ts);
     } else if (countsAsEvidence(e) && e.entity === "task" && e.entity_id) evidence.add(e.entity_id);
-    else if (e.type === "trigger_unclear") unclear.set(String(p.task), e.seq);
+    // Decision 236: `evidence record` names the PR in `subject` and no entity; the PR's item reads it.
+    else if (countsAsEvidence(e) && e.subject && p.exit_code === 0) prEvidence.add(e.subject.toLowerCase());
+    else if (e.type === "review_verdict" && p.act_on === 0) prReviewed.add(String(p.pr).toLowerCase());
+    else if (e.type === "unit_started" && e.entity === "task" && e.entity_id) {
+      if (p.kind === "lead") leads.add(e.entity_id);
+      else leads.delete(e.entity_id);
+    } else if (e.type === "trigger_unclear") unclear.set(String(p.task), e.seq);
     if (ALARMS.has(e.type)) {
       const t = taskOf(e, prTask, dispatchTask);
       const name = e.type === "worker_dead" && p.cause === "auth" ? "worker_dead:auth" : e.type;
@@ -187,6 +198,11 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       .filter(([type, seq]) => seq > last && (!prWait || PR_ALARMS.has(type)) && !(type === "review_commented" && answered))
       .map(([type]) => type);
     const undelivered = own.filter((d) => d.undelivered).map((d) => d.decision);
+    // Decision 236: a lead's item bundles its children's work and has no evidence of its own; a
+    // short item whose PR has an act_on 0 review reads 리뷰만 있음 instead of 근거 부족.
+    const evidenced = evidence.has(t.id) || ownsPr(t.id, prEvidence, prFacts);
+    const lacking = state === "done" && !leads.has(t.id) && (!evidenced || mergedMark(t.id, prFacts, input.events) === "unverified");
+    const reviewOnly = lacking && !evidenced && ownsPr(t.id, prReviewed, prFacts);
     const waitsOn: WaitsOn | null =
       state === "pr_closed"
         ? "lead"
@@ -215,12 +231,19 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       alarms: state === "done" || state === "cancelled" ? [] : standing,
       unclear: (unclear.get(t.id) ?? 0) > last,
       idle: state === "in_progress" && (idle.get(t.id) ?? 0) > last,
-      evidenceShort: state === "done" && (!evidence.has(t.id) || mergedMark(t.id, prFacts, input.events) === "unverified"),
+      evidenceShort: lacking && !reviewOnly,
+      reviewOnly,
       // A worker_done or a lead's task-update closes a Task with no item_transition (decision 175, S7).
       closedAt: state === "done" ? latest(closedAt.get(t.id) ?? mergedAt.get(t.id) ?? t.completedAt ?? null, verifiedAt ?? null) : null,
     });
   }
   return out;
+}
+
+/** Whether a PR the task owns (pr_opened.task) is in `refs`. */
+function ownsPr(task: string, refs: ReadonlySet<string>, g: Facts): boolean {
+  for (const p of g.prs.values()) if (p.tasks.has(task) && refs.has(p.pr.toLowerCase())) return true;
+  return false;
 }
 
 /**
