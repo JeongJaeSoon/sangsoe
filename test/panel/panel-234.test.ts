@@ -107,7 +107,7 @@ test("no reaper config or no trash command: those kinds are listed but never sen
 });
 
 test("reading, empty, failed, unread and stale each say so; an unread count is never 0", () => {
-  assert.match(renderResBody({ kind: "reading" }, NOW), /읽는 중…/);
+  assert.match(renderResBody({ kind: "reading", got: {} }, NOW), /읽는 중…/);
   const empty = view({ worktrees: { ok: true, value: { rows: [], markOnly: false, unseen: [] } }, tmp: { ok: true, value: { count: 0, kb: 0 } } });
   assert.match(renderResBody({ kind: "shown", view: empty }, NOW), /<p class="empty">정리할 것 없음<\/p>/);
   assert.match(renderResBody({ kind: "failed", refusal: { code: "core_old", reason: "x", fix: "y" } }, NOW), /리소스를 읽지 못했다\. <button type="button" class="link" data-res="refresh">/);

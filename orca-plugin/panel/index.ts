@@ -2,7 +2,7 @@
 // The sangsoe html panel (decision 92): three stages down and back, decision and 완료 buttons. Every
 // button is a plugin.request to the worker, which calls the core; the panel changes nothing itself.
 import { panelReads } from "./refresh.ts";
-import { type Reaped, RES_OPEN_KEY, type ResState, type ResView, reapTargets, renderResBody, renderResources, STALE_MS } from "./resources.ts";
+import { type Reaped, RES_OPEN_KEY, type ResState, readParts, reapTargets, renderResBody, renderResources, STALE_MS } from "./resources.ts";
 import { STYLE } from "./style.ts";
 import {
   type Act,
@@ -65,19 +65,27 @@ function mountResources(after: HTMLElement): void {
   after.after(box);
   let state: ResState = { kind: "idle" };
   let open = false;
+  let hours: 6 | 24 = 6;
   const draw = () => {
-    box.innerHTML = renderResources(state, open, Date.now());
+    box.innerHTML = renderResources(state, open, Date.now(), hours);
   };
   const body = () => {
     const el = box.querySelector<HTMLElement>(".res-body");
-    if (el) el.innerHTML = renderResBody(state, Date.now());
+    if (el) el.innerHTML = renderResBody(state, Date.now(), hours);
   };
   const failed = (e: unknown) => ({ ok: false as const, refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" } });
+  // Decision 235: three parts asked together, each painted as it comes.
   const read = async (result?: Reaped) => {
-    state = { kind: "reading", ...(state.kind === "shown" ? { last: state.view } : {}) };
+    state = { kind: "reading", got: {} };
     body();
-    const r = (await orca.plugin.request("panel.resources").catch(failed)) as Reply<ResView>;
-    state = r.ok ? { kind: "shown", view: r.value, ...(result ? { result } : {}) } : { kind: "failed", refusal: r.refusal };
+    const end = await readParts(
+      (input) => orca.plugin.request("panel.resources", input),
+      (s) => {
+        state = s;
+        body();
+      },
+    );
+    state = end.kind === "shown" && result ? { ...end, result } : end;
     body();
   };
   const run = async () => {
@@ -106,6 +114,9 @@ function mountResources(after: HTMLElement): void {
     const busy = state.kind === "reading" || (state.kind === "shown" && state.running === true);
     if (what === "refresh") {
       if (!busy) void read();
+    } else if (what === "h6" || what === "h24") {
+      hours = what === "h6" ? 6 : 24;
+      body();
     }
     else if (what === "run") void run();
     else if (state.kind === "shown" && (what === "ask" || what === "cancel")) {

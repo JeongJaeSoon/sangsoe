@@ -37,7 +37,7 @@ const parts = {
   },
   candidates: { part: "candidates", at: AT, worktrees: { ok: true, value: { rows: [], markOnly: false, unseen: [] } }, tmp: { ok: true, value: { count: 0, kb: 0 } }, trash: true },
 } as const;
-const ok = (p: PartName) => ({ ok: true as const, value: parts[p] });
+const ok = (p: PartName) => ({ ok: true as const, value: parts[p] as never });
 
 test("reading: each part says what is being read until it comes, and a part that came is drawn at once", () => {
   const none = renderResBody({ kind: "reading", got: {} }, NOW);
@@ -127,7 +127,7 @@ test("band: 6 hours by default, 24 on the switch; danger, ok and unknown each dr
   assert.match(six, /<svg class="band" viewBox="0 0 1000 8" preserveAspectRatio="none" role="img" aria-label="최근 6시간 부하: 위험 1시간, 보통 5시간">/);
   assert.match(six, /<rect class="s-danger" x="500" width="167" height="8"\/>/, "danger from -3h to -2h of six hours");
   assert.match(six, /<span>6시간 전<\/span><span>지금<\/span>/);
-  assert.match(six, /단계가 바뀐 때만 기록된다/);
+  assert.match(six, /단계 변화만 기록된다/);
   const day = renderResBody(view, NOW, 24);
   assert.match(day, /aria-label="최근 24시간 부하: 위험 1시간, 보통 9시간, 모름 14시간"/);
   assert.match(day, /<rect class="s-unknown" x="0" width="583" height="8"\/>/);
