@@ -34,9 +34,9 @@ function table(title: string): { cls: string; label: string; text: string }[][] 
 }
 const FOUR = ["크리티컬 패스", "왜 준비되지 않았나", "간선", "끊긴 선행"];
 
-test("(14) the first column of a graph table is not held to the 64px id column", () => {
-  assert.doesNotMatch(WIDE, /(^|\n)\.tbl th:first-child, \.tbl td:first-child \{[^}]*width: 64px/);
-  assert.match(WIDE, /\.tbl:not\(\.gt\) th:first-child, \.tbl:not\(\.gt\) td:first-child \{ width: 64px; \}/);
+test("(14) the first column of a graph table is not held to the id column's width (80px since decision 230)", () => {
+  assert.doesNotMatch(WIDE, /(^|\n)\s*\.tbl th:first-child, \.tbl td:first-child \{[^}]*width:/);
+  assert.match(WIDE, /\.tbl:not\(\.gt\) th:first-child, \.tbl:not\(\.gt\) td:first-child \{ width: 80px; \}/);
 });
 
 // Decision 225 (10) replaced the wide wrapping with fixed columns cut to one line; a card still wraps at words.

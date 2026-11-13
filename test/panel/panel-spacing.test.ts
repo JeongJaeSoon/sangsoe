@@ -46,6 +46,8 @@ test("(1) a card's state badge starts on the card's own inset, the same as its m
 test("(2) a wide cell on a tinted row keeps its side inset: the first column is padded like the rest", () => {
   const first = rule(WIDE_ONLY, ".tbl th:first-child, .tbl td:first-child");
   assert.match(first, /padding-left: var\(--s3\);/);
+  // The fixed id column keeps a seven-glyph id (w130381, 50px with its gap) whole inside both insets.
+  assert.match(rule(STYLE, ".tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child"), /width: 80px;/);
   // An id column that sizes itself makes room for both insets.
   const cols = ["ID", "할 일", "풀리는 일", "어디서", "경과"].map((name, i) => ({ name, max: i === 0 ? 8 : 6 }));
   const todo = { title: "할 일", count: 1, columns: cols, rows: [{ id: "act:1", cells: cols.map(() => ({ text: "x" })) }] };

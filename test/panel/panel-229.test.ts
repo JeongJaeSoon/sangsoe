@@ -85,10 +85,11 @@ test("a group row's state cell in the wide table says its word too; its narrow h
   for (const d of ["position: absolute;", "clip-path: inset(50%);"]) assert.ok(word.includes(d), d);
 });
 
-test("a wide table led by a state is wide enough for mark and word; an id-led table keeps its 64px", () => {
-  assert.match(rule(WIDE, ".tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child"), /width: 64px;/);
+test("a wide table led by a state is wide enough for mark and word; an id-led table keeps its own id width", () => {
+  // 64px until decision 230 padded the first cell 12px on both sides; 80px leaves a seven-glyph id 56px.
+  assert.match(rule(WIDE, ".tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child"), /width: 80px;/);
   // The state column's width is its <col>, sized from the longest word (panel-spacing (5)); an id-led
-  // table's first <col> stays bare, so the 64px rule above sizes it.
+  // table with short ids keeps a bare first <col>, so the rule above sizes it.
   const firstCol = (html: string, section: string) => /<colgroup>(<col[^>]*>)/.exec(html.slice(html.indexOf(`id="h-${section}"`)))?.[1];
   assert.equal(firstCol(renderStage(one), "prog"), `<col style="width:${STATE_COL_PX}px">`);
   const dec = { ...ov().decisions, count: 1, rows: [{ id: "d009", cells: ["d009", "x", "y", "z", "1h"].map((text) => ({ text })) }] };

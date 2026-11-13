@@ -116,7 +116,8 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .tbl th { text-align: left; font-weight: 500; font-size: var(--text-xs); line-height: 16px; color: var(--muted); padding: var(--s2) var(--s3); white-space: nowrap; border-bottom: 1px solid var(--rule); }
 .tbl td { height: 40px; padding: var(--s1) var(--s3); border-bottom: 1px solid var(--rule); vertical-align: middle; overflow-wrap: anywhere; line-height: 20px; }
 .tbl th:first-child, .tbl td:first-child { padding-left: var(--s1); }
-.tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child { width: 64px; }
+/* 56px for the id inside the wide cell's two 12px insets: a seven-glyph id ("w130381") and its gap (decision 230). */
+.tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child { width: 80px; }
 .tbl tbody tr:hover td { background: var(--paper-2); }
 .tbl tr[data-nav] { cursor: pointer; }
 .tbl .id { white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); margin-right: var(--s1); }
