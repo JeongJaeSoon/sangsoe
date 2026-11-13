@@ -9,6 +9,10 @@ Decision numbers refer to `docs/decisions.md`.
 - **A session stopped on a lost login reads as one, and the owner's list says how to recover (237).** When a session's turn ends on Claude Code's "Please run /login" (an `API Error: 403` or `401`, an invalid key, a revoked or expired login, or a goal cleared on failed authentication), the orca-monitor marks the Dispatch's stop with `cause: "auth"`, judged from the last turn line of Orca's stop mail only, so an older 403 left on screen above a later turn does not count. A session holding no Dispatch (an orchestrator, a Run's lead) is now seen too: a new `StopFailure` hook (matcher `authentication_failed|oauth_org_not_allowed`) records its wait, once per stop, released by its next finished turn. The item's 🚨 says 재로그인 before any other alarm, and the owner's list says: sign in once with `/login` in any session, then restart each stopped session with `claude --continue` (and enter `/goal` again if it was cleared). A running session keeps the token it loaded, so signing in alone does not wake it. The core and the Claude plugin's hooks changed, so the Orca plugin's vendored core changes too and needs re-approval.
 - The Orca plugin's content and its vendored core changed, so the plugin waits for approval again.
 
+### Fixes
+
+- **The panel's "back paints from memory" test no longer fails on a slow or fast machine (219).** It compared one cold render with the average of five core readings, so it failed whenever that render was slower. It now drives the panel with a stand-in page and checks that back paints the remembered screen before it asks for a fresh reading.
+
 ## 0.1.6-rc.2 (pre-release)
 
 What changed since `v0.1.6-rc.1`: decisions 235 and 236. A pre-release for checking the 리소스 section and the brief's evidence count on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
