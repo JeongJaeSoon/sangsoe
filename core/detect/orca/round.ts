@@ -124,13 +124,17 @@ async function readCoordinators(
   const busy = workers && !workers.truncated ? new Set(workers.rows.filter(isUnfinished).flatMap((w) => (w.terminal ? [w.terminal] : []))) : undefined;
   for (const run of namedRuns(inbox)) {
     if (signal.aborted) break;
-    const shown = value(await d.orca.runShow({ id: run }))?.coordinatorHandle;
+    const show = value(await d.orca.runShow({ id: run }));
+    const shown = show?.coordinatorHandle;
     const t = shown ? live.get(shown) : undefined;
     const pane = t?.tabId && t.leafId ? `${t.tabId}:${t.leafId}` : undefined;
     const mail = fromMail(inbox, run);
     const k = pane && panes.has(pane) && t ? { pane, handle: t.handle } : mail && live.has(mail.handle) ? mail : undefined;
-    coords.set(run, k ? { ...k, ...(busy ? { dispatch: busy.has(k.handle) } : {}) } : {});
-    calls.push(`coordinator run:${run}: ${k ? `${k.handle} pane ${k.pane}${k === mail ? " (from its mail)" : ""}, dispatch ${busy ? busy.has(k.handle) : "unknown"}` : "no live terminal"}`);
+    // An unplaced Run could be the orchestrator's, so no top is sure (the stalled Run would tell itself).
+    const unresolved = !k && (!show || t !== undefined);
+    coords.set(run, k ? { ...k, ...(busy ? { dispatch: busy.has(k.handle) } : {}) } : unresolved ? { unresolved: true } : {});
+    const found = k ? `${k.handle} pane ${k.pane}${k === mail ? " (from its mail)" : ""}, dispatch ${busy ? busy.has(k.handle) : "unknown"}` : undefined;
+    calls.push(`coordinator run:${run}: ${found ?? (unresolved ? (show ? `${shown} live but no ps pane` : "run-show not read") : "no live terminal")}`);
   }
   return { coords, calls };
 }

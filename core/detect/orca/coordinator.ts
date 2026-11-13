@@ -14,12 +14,17 @@ export type CoordinatorRead = {
   handle?: string;
   /** Whether a Dispatch's worker runs in that terminal; absent when the worker list was not read in full. */
   dispatch?: boolean;
+  /** The Run may have a live coordinator the round could not place: run-show failed, or its live terminal has no ps pane. */
+  unresolved?: true;
 };
 
 const at = (iso: string | undefined) => (iso ? Date.parse(iso) : Number.NaN);
 const isTime = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 
-/** Per Run, the oldest message to `run:<id>` still unread at least N minutes after Orca made it. */
+/**
+ * Per Run, the newest message to `run:<id>` still unread at least N minutes after Orca made it: an
+ * older one from before the coordinator's last turn must not hide one that came after it.
+ */
 export function oldUnread(inbox: readonly InboxMessage[], now: number, c: MonitorConfig): Map<string, InboxMessage> {
   const out = new Map<string, InboxMessage>();
   for (const m of inbox) {
@@ -27,7 +32,7 @@ export function oldUnread(inbox: readonly InboxMessage[], now: number, c: Monito
     if (m.handled || !m.to.startsWith("run:") || Number.isNaN(sent) || now - sent < minutes(c.stuckMinutes)) continue;
     const run = m.to.slice("run:".length);
     const before = out.get(run);
-    if (!before || sent < at(before.createdAt)) out.set(run, m);
+    if (!before || sent > at(before.createdAt)) out.set(run, m);
   }
   return out;
 }
@@ -58,7 +63,7 @@ const tops = (coords: ReadonlyMap<string, CoordinatorRead>) => [...coords].filte
  * is the only top (a stalled orchestrator). Anything else is no one: the row stands alone.
  */
 export function recipientOf(run: string, coords: ReadonlyMap<string, CoordinatorRead>): string | undefined {
-  if ([...coords.values()].some((k) => k.pane && k.dispatch === undefined)) return undefined;
+  if ([...coords.values()].some((k) => k.unresolved || (k.pane && k.dispatch === undefined))) return undefined;
   const all = tops(coords);
   const others = all.filter((r) => r !== run);
   if (others.length === 1) return others[0];

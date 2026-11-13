@@ -116,10 +116,10 @@ test("a full page that does not reach N minutes back is unseen", () => {
   assert.equal(judge(page, ps()).unseen.length, 1);
 });
 
-test("oldUnread keeps the oldest old unread mail per Run; namedRuns reads recipients and run_id", () => {
-  const first = mail("run:run_a", 80);
-  const box = [mail("run:run_a", 40), first, mail("run:run_b", 5), mail("dispatch:ctx_1", 90, { runId: "run_c" })];
-  assert.deepEqual([...oldUnread(box, NOW, C)].map(([r, m]) => [r, m.id]), [["run_a", first.id]]);
+test("oldUnread keeps the newest old unread mail per Run; namedRuns reads recipients and run_id", () => {
+  const newest = mail("run:run_a", 40);
+  const box = [mail("run:run_a", 80), newest, mail("run:run_a", N - 1), mail("run:run_b", 5), mail("dispatch:ctx_1", 90, { runId: "run_c" })];
+  assert.deepEqual([...oldUnread(box, NOW, C)].map(([r, m]) => [r, m.id]), [["run_a", newest.id]]);
   assert.deepEqual(namedRuns(box), ["run_a", "run_b", "run_c"]);
 });
 
