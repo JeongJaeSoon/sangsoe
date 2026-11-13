@@ -458,3 +458,20 @@ test("merge_confirm: true only when GitHub shows it merged and the merge commit 
   assert.equal((await mergeConfirm(base({ state: "closed", merged: false, merge_commit_sha: M }, "behind"), REPO, 12)).merged, false);
   assert.equal((await mergeConfirm(fakeGh({}), REPO, 12)).merged, false);
 });
+
+test("238: land holds a screen PR's ui evidence to the repository's rule, and only that repository's", async () => {
+  const screen = routes({ files: [{ filename: "web/panel.ts", patch: "@@ -1 +1 @@\n-a\n+b" }] });
+  const rule = { surface: ["orca-panel"], measures: ["first_read_ms", "scrolls", "hscroll"] };
+  const ruled = (repos: Record<string, typeof rule>) => () => ({ tier: { ...TIER, ui_evidence: repos }, protectedPaths: TIER.protected_paths });
+  const reasonOf = async (repos: Record<string, typeof rule>, observed?: string) => {
+    const h = harness(screen);
+    ready(h.store);
+    evidence(h.store, "ui", observed === undefined ? {} : { observed });
+    h.deps.config = ruled(repos);
+    const r = await land(input(), h.deps);
+    return r.ok ? "" : r.refusal.reason;
+  };
+  assert.match(await reasonOf({ [REPO]: rule }), /^evidence_missing:ui .*observed names no surface/);
+  assert.doesNotMatch(await reasonOf({ [REPO]: rule }, JSON.stringify({ surface: "orca-panel", first_read_ms: 900, scrolls: 0, hscroll: 0 })), /evidence_missing/);
+  assert.doesNotMatch(await reasonOf({ "acme/other": rule }), /evidence_missing/, "another repository's rule does not apply");
+});
