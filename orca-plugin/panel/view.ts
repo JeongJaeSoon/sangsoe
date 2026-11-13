@@ -197,7 +197,7 @@ export function stateBadge(text: string): string {
 
 // The words of core/contract/transitions.ts STATE_LABEL and views.ts READING_LABEL, by their mark;
 // ❔'s label is a sentence, so its badge says it short.
-const STATE_WORD: Readonly<Record<string, string>> = {
+export const STATE_WORD: Readonly<Record<string, string>> = {
   "📅": "예정",
   "🟢": "준비됨",
   "🔄": "진행 중",
@@ -216,11 +216,16 @@ function markHtml(c: Cell): string {
   return `<span class="mk" aria-hidden="true">${esc(c.text)}</span>${badge(word, TONE[c.text] ?? "", "st")}`;
 }
 
+const COUNT = /^(\d+)건·막힘 (\d+)$/;
+const countWords = (text: string): string => {
+  const m = COUNT.exec(text);
+  return m ? `${m[1]}건 중 막힘 ${m[2]}` : text;
+};
 /** The core's "N건·막힘 M" (core/brief/build.ts) as one badge; a text it cannot read stays as written. */
 function countBadge(text: string): string {
-  const m = /^(\d+)건·막힘 (\d+)$/.exec(text);
+  const m = COUNT.exec(text);
   if (!m) return badge(text, "", "cnt");
-  const title = `${m[1]}건 중 막힘 ${m[2]}`;
+  const title = countWords(text);
   return Number(m[2]) > 0 ? badge(`막힘 ${m[2]} / ${m[1]}`, "t-bad", "cnt", title) : badge(`${m[1]}건`, "", "cnt", title);
 }
 
@@ -236,6 +241,9 @@ function whoParts(text: string): { who: string; age: string } {
   return { who: who === "—" ? "" : who, age };
 }
 
+// An Orca terminal handle ("term_" and a UUID) is named by its first group; the cell's title keeps it whole.
+const shortWho = (who: string): string => /^(term_[0-9a-f]{8})-[0-9a-f-]+$/i.exec(who)?.[1] ?? who;
+
 // Column 0 is the ID or state marker, column 1 the title; the rest carry their column name as the
 // 360px label (decision 89: a narrow panel folds each row into one card, no column is dropped).
 // An empty value keeps its cell, marked `nil`, so a wide table keeps its columns (decision 222 (20)).
@@ -246,6 +254,7 @@ function rowHtml(t: Table, r: Row, o: RowOpts = {}): string {
   const count = o.count === undefined ? "" : countBadge(o.count);
   const titleText = (title ? (o.idCol ? cellHtml(title) : titleWithId(title)) : DASH) + count + go;
   const full = [o.idCol ? first?.text : "", (title?.text ?? "").replace(/^└ /, "")].filter(Boolean).join(" ");
+  const metaCls: string[] = [];
   const tds = rest
     .map((c, i) => {
       const name = t.columns[i + 2]?.name ?? "";
@@ -254,14 +263,18 @@ function rowHtml(t: Table, r: Row, o: RowOpts = {}): string {
       const role = who && !who.who ? "age" : (COL_CLASS[name] ?? "");
       const nil = isNil(c) || (who !== null && !who.who && !who.age);
       const cls = nil ? "nil" : role;
+      metaCls.push(cls);
       const tip = nil || role === "age" ? "" : ` title="${esc(c.text)}"`;
-      const whoBody = who && (who.who ? `${badge(who.who)}${who.age ? `<span class="age">${esc(who.age)}</span>` : ""}` : esc(who.age));
+      const whoBody = who && (who.who ? `${badge(shortWho(who.who))}${who.age ? `<span class="age">${esc(who.age)}</span>` : ""}` : esc(who.age));
       const body = nil ? cellHtml({ text: "—" }) : whoBody || cellHtml(c);
       return `<td data-l="${esc(name)}"${cls ? ` class="${cls}"` : ""}${tip}>${body}</td>`;
     })
     .join("");
   const bare = rest.length > 0 && rest.every(isNil);
-  const cls = [o.cls, bare ? "bare" : ""].filter(Boolean).join(" ");
+  // A card whose only meta value is a time has no meta line: the time ends its title line.
+  const shown = metaCls.filter((c) => c !== "nil");
+  const oneline = o.cls !== "lead" && shown.length > 0 && shown.every((c) => c === "age");
+  const cls = [o.cls, bare ? "bare" : "", oneline ? "oneline" : ""].filter(Boolean).join(" ");
   const nav = o.nav ? ` data-nav="${attr(o.nav)}" tabindex="0"${o.label ? ` aria-label="${esc(o.label)}"` : ""}` : "";
   const acts = o.acts === undefined ? "" : `<td class="acts">${o.acts}</td>`;
   return `<tr data-id="${esc(r.id)}"${cls ? ` class="${cls}"` : ""}${nav}><td>${lead}</td><td class="title" title="${esc(full)}">${titleText}</td><td class="brk" aria-hidden="true"></td>${tds}${acts}</tr>`;
@@ -275,11 +288,16 @@ function titleWithId(c: Cell): string {
 }
 
 // A wide table's columns are fixed (decision 225 (10)): the title takes what the others leave, each
-// other column a share by the core's width budget, so a cell stays on one line and is cut.
+// other column a share by the core's width budget, so a cell stays on one line and is cut. A state
+// column fits its longest word; 누가 keeps room for a short name and its time (decision 230).
 function tableHtml(t: Table, rows: string[], acts: boolean): string {
   const head = t.columns.map((c) => `<th>${esc(c.name)}</th>`).join("") + (acts ? '<th><span class="sr">버튼</span></th>' : "");
-  const col = (c: Column, i: number) =>
-    i === 0 ? (c.max > 4 ? `<col style="width:calc(${c.max}ch + 16px)">` : "<col>") : i === 1 ? "<col>" : `<col style="width:${c.max * 1.25}%">`;
+  const stateLed = t.rows.some((r) => STATE_WORD[r.cells[0]?.text ?? ""] !== undefined);
+  const first = (c: Column) =>
+    stateLed ? `<col style="width:${STATE_COL_PX}px">` : c.max > 4 ? `<col style="width:calc(${c.max}ch + 24px)">` : "<col>";
+  // A table column ignores a width that mixes % and a length (max(), calc()), so 누가 is a length alone.
+  const share = (c: Column) => `<col style="width:${COL_CLASS[c.name] === "who" ? "13.5em" : `${c.max * 1.25}%`}">`;
+  const col = (c: Column, i: number) => (i === 0 ? first(c) : i === 1 ? "<col>" : share(c));
   const cols = t.columns.map(col).join("") + (acts ? '<col class="c-acts">' : "");
   return `<table class="tbl"><colgroup>${cols}</colgroup><thead><tr>${head}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
@@ -320,7 +338,12 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
       const group = r.cells[1]?.text ?? "";
       const count = r.cells[3]?.text ?? "";
       const cells = r.cells.map((c, i) => (i === 3 ? { text: "—" } : c));
-      return rowHtml(m.inProgress, { ...r, cells }, { cls: "lead", nav: { group }, go: "자세히", label: `${group} 묶음 자세히`, count });
+      // The row's label replaces its cells for a screen reader, so it says the state and count too.
+      // Nothing blocked: say what the badge shows ("1건"), not a zero the screen never shows.
+      const n = COUNT.exec(count);
+      const said = n?.[2] === "0" ? `${n[1]}건` : countWords(count);
+      const label = [`${group} 묶음`, STATE_WORD[r.cells[0]?.text ?? ""], said, "자세히"].filter(Boolean).join(", ");
+      return rowHtml(m.inProgress, { ...r, cells }, { cls: "lead", nav: { group }, go: "자세히", label, count });
     }
     if (/^i\d{3,}$/.test(r.id)) return rowHtml(m.inProgress, r, { cls: "item", nav: { item: r.id } });
     return rowHtml(m.inProgress, r, { cls: "item" });
@@ -388,6 +411,13 @@ export function fitText(s: string, px: number): string {
   return `${out}…`;
 }
 export const NODE_TEXT_PX = NW - 12;
+
+/**
+ * A state-led wide table's first column (decision 229) fits its longest word: both 12px cell insets,
+ * the 13px mark (an emoji draws about 16px wide), its 4px gap, then the 11px badge's word with its
+ * 6px padding and 1px border on each side.
+ */
+export const STATE_COL_PX = 24 + 16 + 4 + Math.ceil(Math.max(...Object.values(STATE_WORD).map(textPx))) + 14;
 
 export type Pt = { x: number; y: number };
 export type DagBox = { id: string; x: number; y: number; layer: number };

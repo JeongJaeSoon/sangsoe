@@ -116,7 +116,8 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .tbl th { text-align: left; font-weight: 500; font-size: var(--text-xs); line-height: 16px; color: var(--muted); padding: var(--s2) var(--s3); white-space: nowrap; border-bottom: 1px solid var(--rule); }
 .tbl td { height: 40px; padding: var(--s1) var(--s3); border-bottom: 1px solid var(--rule); vertical-align: middle; overflow-wrap: anywhere; line-height: 20px; }
 .tbl th:first-child, .tbl td:first-child { padding-left: var(--s1); }
-.tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child { width: 64px; }
+/* 56px for the id inside the wide cell's two 12px insets: a seven-glyph id ("w130381") and its gap (decision 230). */
+.tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child { width: 80px; }
 .tbl tbody tr:hover td { background: var(--paper-2); }
 .tbl tr[data-nav] { cursor: pointer; }
 .tbl .id { white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); margin-right: var(--s1); }
@@ -130,7 +131,8 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .badge.t-run { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 45%, var(--paper)); background: color-mix(in oklab, var(--accent) 8%, var(--paper)); }
 .badge.t-done, .badge.t-gone { color: var(--muted); }
 .badge.cnt { margin-left: var(--s2); }
-.who .badge { min-width: 0; max-width: min(14em, calc(100% - 3.5em)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The badge's 11px em: 4em leaves the time beside it four glyphs at 13px ("119m", 34px) and its 8px gap. */
+.who .badge { min-width: 0; max-width: min(14em, calc(100% - 4em)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who .age { margin-left: var(--s2); color: var(--muted); }
 .hint0 { margin: 0 0 var(--s3); padding: var(--s2) var(--s3); border: 1px dashed var(--rule-2); border-radius: var(--r2); color: var(--ink-2); font-size: var(--text-sm); }
 .figs { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin: 0 0 var(--s4); padding: var(--s2) var(--s3); border: 1px solid var(--rule); border-radius: var(--r3); }
@@ -215,14 +217,16 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl { table-layout: fixed; }
   .tbl td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tbl td.acts { overflow: visible; }
+  /* Every wide row may sit on a tint, so the first cell keeps the same side inset as the others. */
+  .tbl th:first-child, .tbl td:first-child { padding-left: var(--s3); }
+  /* A 누가 with no one says so before its time; the column header alone would read the time as who. */
+  .tbl td.age[data-l="누가"]::before { content: "—"; color: var(--muted); margin-right: var(--s2); }
   .tbl col.c-step { width: 48px; }
   .tbl col.c-line { width: 72px; }
   .tbl col.c-kind { width: 9em; }
   .tbl col.c-short { width: 7.5em; }
   .tbl col.c-state { width: 8.5em; }
   .tbl col.c-acts { width: 200px; }
-  /* A state column says its mark and its word (decision 229); an id-led table keeps 64px. */
-  .tbl:not(.gt):has(.st) th:first-child, .tbl:not(.gt):has(.st) td:first-child { width: 104px; }
   .tbl .mk { vertical-align: middle; }
   .tbl .mk + .st { margin-left: var(--s1); }
   .tbl tr.lead td { background: var(--tint-2); }
@@ -245,7 +249,8 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl tr.broken { border-color: var(--bad); }
   .tbl td { display: block; height: auto; padding: 0; border: 0; font-size: var(--text-sm); line-height: 16px; color: var(--ink-2); min-width: 0; width: auto; }
   .tbl:not(.gt) td:first-child, .tbl:not(.gt) td.title, .tbl td.hd { order: -2; }
-  .tbl:not(.gt) td:first-child { flex: none; width: auto; }
+  /* The wide first-cell inset stays out of the card, so its badge starts on the card's own inset. */
+  .tbl:not(.gt) td:first-child { flex: none; width: auto; padding: 0; }
   .tbl .mk { display: none; }
   .tbl td[data-l] .badge { line-height: 14px; }
   .tbl .st { display: inline-block; }
@@ -265,6 +270,8 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   /* An empty cell takes no room, so the next value flows left (decision 225 (11)). */
   .tbl td.nil { display: none; }
   .tbl tr.bare td[data-l], .tbl tr.bare td.brk { display: none; }
+  .tbl tr.oneline td.brk { display: none; }
+  .tbl tr.oneline td.age { order: -2; }
   /* A group row heads its item cards instead of being one more card beside them. */
   .tbl tr.lead { margin-top: var(--s3); padding: var(--s1) 0 0; border-color: transparent; }
   .tbl tr.lead:first-child { margin-top: 0; }
