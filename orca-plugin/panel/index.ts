@@ -2,7 +2,7 @@
 // The sangsoe html panel (decision 92): three stages down and back, decision and 완료 buttons. Every
 // button is a plugin.request to the worker, which calls the core; the panel changes nothing itself.
 import { panelReads } from "./refresh.ts";
-import { type Reaped, RES_OPEN_KEY, type ResState, readParts, reapTargets, renderResBody, repaint, FOCUS_AFTER, renderResources, STALE_MS } from "./resources.ts";
+import { type Reaped, RES_OPEN_KEY, type ResState, readParts, reapTargets, renderResBody, repaint, FOCUS_AFTER, type Want, renderResources, STALE_MS } from "./resources.ts";
 import { STYLE } from "./style.ts";
 import {
   type Act,
@@ -69,7 +69,11 @@ function mountResources(after: HTMLElement): void {
   const draw = () => {
     box.innerHTML = renderResources(state, open, Date.now(), hours);
   };
-  let want: string | null = null;
+  let want: Want | null = null;
+  // A click anywhere else drops a press still waiting for its button.
+  document.addEventListener("pointerdown", (ev) => {
+    if (!box.contains(ev.target as Node)) want = null;
+  });
   const body = () => {
     const el = box.querySelector<HTMLElement>(".res-body");
     if (el) want = repaint(el, renderResBody(state, Date.now(), hours), document.activeElement, want);
@@ -113,9 +117,14 @@ function mountResources(after: HTMLElement): void {
     const el = (ev.target as Element).closest<HTMLElement>("[data-res]");
     if (!el) return;
     const what = el.getAttribute("data-res");
-    want = what ? (FOCUS_AFTER[what] ?? what) : null;
+    want = what ? { from: what, to: FOCUS_AFTER[what] ?? what } : null;
     const busy = state.kind === "reading" || (state.kind === "shown" && state.running === true);
-    if (what === "refresh") {
+    const stale = state.kind === "shown" && Date.now() - Date.parse(state.view.at) > STALE_MS;
+    if (what === "ask" && stale) {
+      // A view gone stale since it was drawn: read it again, as 정리 itself would.
+      want = { from: what, to: "refresh" };
+      if (!busy) void read();
+    } else if (what === "refresh") {
       if (!busy) void read();
     } else if (what === "h6" || what === "h24") {
       hours = what === "h6" ? 6 : 24;

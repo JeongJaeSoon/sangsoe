@@ -273,25 +273,31 @@ function partBlock<T>(r: Reply<T> | undefined, last: T | undefined, title: strin
   return r.ok ? draw(r.value) : `<h3>${title}</h3><p class="ep">${unread(r.refusal.reason)}</p>`;
 }
 
-type Paintable = Pick<Element, "contains" | "innerHTML"> & { querySelector(q: string): { focus(): void } | null };
+type Paintable = Pick<Element, "contains" | "innerHTML"> & { querySelector(q: string): { focus(o?: FocusOptions): void } | null };
+/** A press waiting for its focus target: `from` the button pressed, `to` where the keyboard should land. */
+export type Want = { from: string; to: string };
 
 /** Where the keyboard goes after a press whose button does not come back: 정리… opens the confirm, 취소 closes it, a reap ends on 새로 고침. */
 export const FOCUS_AFTER: Readonly<Record<string, string>> = { ask: "run", cancel: "ask", run: "refresh" };
 
 /**
- * Repainting replaces the buttons. The keyboard goes to `want` (set by a press) or else stays on the
- * button it was on, once that button is drawn enabled; until then the key is returned to try again on
- * the next paint. Focus that left the section for somewhere else is never taken back.
+ * Repainting replaces the buttons. The keyboard goes where the last press asked (`want.to`) or else
+ * stays on the button it was on, once that button is drawn enabled; until then `want` is returned to
+ * try again on the next paint. A button the user moved to since the press wins over the press, and
+ * focus that left the section for somewhere else is never taken back.
  */
-export function repaint(el: Paintable, html: string, active: Element | null, want: string | null = null): string | null {
+export function repaint(el: Paintable, html: string, active: Element | null, want: Want | null = null): Want | null {
   const inside = !!active && el.contains(active);
-  const key = want ?? (inside ? active?.getAttribute("data-res") : null) ?? null;
+  const on = inside ? (active?.getAttribute("data-res") ?? null) : null;
+  const moved = on !== null && want !== null && on !== want.from && on !== want.to;
+  const w = moved ? null : want;
+  const key = w?.to ?? on;
   const free = inside || !active || active.tagName === "BODY";
   el.innerHTML = html;
   if (!key || !free) return null;
   const to = el.querySelector(`[data-res="${key}"]:not(:disabled)`);
-  to?.focus();
-  return to ? null : key;
+  to?.focus({ preventScroll: true });
+  return to ? null : (w ?? { from: key, to: key });
 }
 
 /** The body inside the fold for one state; `now` decides 낡음, `hours` the band's span. */

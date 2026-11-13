@@ -198,7 +198,7 @@ test("band edges: no rows is all unknown; an episode opened before the window st
   const dropped = band([timer(60 * M), timer(35 * M), timer(5 * M)]);
   assert.equal(at(dropped, 40 * M), "ok", "25 minutes between rounds: one tick dropped, still watched");
   const gone = band([timer(80 * M), timer(40 * M)]);
-  assert.equal(at(gone, 45 * M), "unknown", "30 minutes after a round with none since: not watched");
+  assert.equal(at(gone, 45 * M), "unknown", "more than 30 minutes after a round with none since: not watched");
   assert.equal(at(gone, 55 * M), "ok");
 });
 

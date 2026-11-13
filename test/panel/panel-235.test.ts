@@ -173,18 +173,23 @@ test("a repaint keeps the keyboard on the button that had it, waits for a disabl
   assert.deepEqual(focused, ["h24"]);
 
   // 새로 고침 is drawn disabled while the read runs: the key waits, focus lands on it when it comes back.
-  assert.equal(repaint(el(true, []), "x", on("refresh"), "refresh"), "refresh");
-  assert.equal(repaint(el(false, ["refresh"]), "x", body, "refresh"), null);
+  const refresh = { from: "refresh", to: "refresh" };
+  assert.deepEqual(repaint(el(true, []), "x", on("refresh"), refresh), refresh);
+  assert.equal(repaint(el(false, ["refresh"]), "x", body, refresh), null);
   assert.deepEqual(focused, ["h24", "refresh"]);
 
   // 정리… opens the confirm: the press asks for the run button, which is there.
-  assert.equal(repaint(el(true, ["run", "cancel"]), "x", on("ask"), FOCUS_AFTER.ask ?? null), null);
+  assert.equal(repaint(el(true, ["run", "cancel"]), "x", on("ask"), { from: "ask", to: FOCUS_AFTER.ask ?? "" }), null);
   assert.deepEqual(focused, ["h24", "refresh", "run"]);
   assert.deepEqual(FOCUS_AFTER, { ask: "run", cancel: "ask", run: "refresh" });
 
-  assert.equal(repaint(el(false, ["refresh"]), "x", on("other"), "refresh"), null, "focus elsewhere on the page is left alone");
+  // The user tabbed to 6시간 while 새로 고침 waits: their button wins, and the wait is dropped.
+  assert.equal(repaint(el(true, ["h6"]), "x", on("h6"), refresh), null);
+  assert.deepEqual(focused, ["h24", "refresh", "run", "h6"]);
+
+  assert.equal(repaint(el(false, ["refresh"]), "x", on("other"), refresh), null, "focus elsewhere on the page is left alone");
   assert.equal(repaint(el(true, ["h6"]), "x", null), null);
-  assert.deepEqual(focused, ["h24", "refresh", "run"]);
+  assert.deepEqual(focused, ["h24", "refresh", "run", "h6"]);
 });
 
 const rule = (sel: string) => new RegExp(`(?:^|\\n)${sel.replace(/[.()[\]#>:]/g, "\\$&")} \\{[^}]*\\}`).exec(STYLE)?.[0] ?? "";
