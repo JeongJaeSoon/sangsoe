@@ -82,13 +82,15 @@ test("(4) a wide 누가 cell with no one says so before its time, never a bare a
 test("(5) a group row's label names its state and count, not only that it opens", () => {
   const html = renderStage(one);
   assert.match(rowOf(html, "lead:api-migration"), /aria-label="api-migration 묶음, 막힘, 10건 중 막힘 2, 자세히"/);
-  assert.match(rowOf(html, "lead:docs"), /aria-label="docs 묶음, 진행 중, 1건 중 막힘 0, 자세히"/);
+  // Nothing blocked: the label says what the badge shows, "1건".
+  assert.match(rowOf(html, "lead:docs"), /aria-label="docs 묶음, 진행 중, 1건, 자세히"/);
 });
 
 test("(5) the wide state column's width comes from the longest state word, not a measured constant", () => {
-  const longest = Math.max(...Object.values(STATE_WORD).map(textPx));
-  // Both cell insets, the mark, its gap and the badge (its padding and border around the word).
-  assert.ok(STATE_COL_PX >= 24 + 16 + 4 + longest + 14, String(STATE_COL_PX));
+  // Headless Chrome drew the widest state cell (⏳ and 검증 대기) as a 16px mark, a 4px gap and a 55px
+  // badge; the estimate covers it with both 12px insets, and the longest word is the one it is sized on.
+  assert.ok(STATE_COL_PX >= 24 + 16 + 4 + 55, String(STATE_COL_PX));
+  assert.equal(Object.values(STATE_WORD).reduce((a, b) => (textPx(b) > textPx(a) ? b : a)), "검증 대기");
   const html = renderStage(one);
   const prog = html.slice(html.indexOf('id="h-prog"'));
   assert.match(prog, new RegExp(`<colgroup><col style="width:${STATE_COL_PX}px">`));

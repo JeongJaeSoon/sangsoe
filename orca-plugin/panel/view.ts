@@ -339,7 +339,10 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
       const count = r.cells[3]?.text ?? "";
       const cells = r.cells.map((c, i) => (i === 3 ? { text: "—" } : c));
       // The row's label replaces its cells for a screen reader, so it says the state and count too.
-      const label = [`${group} 묶음`, STATE_WORD[r.cells[0]?.text ?? ""], countWords(count), "자세히"].filter(Boolean).join(", ");
+      // Nothing blocked: say what the badge shows ("1건"), not a zero the screen never shows.
+      const n = COUNT.exec(count);
+      const said = n?.[2] === "0" ? `${n[1]}건` : countWords(count);
+      const label = [`${group} 묶음`, STATE_WORD[r.cells[0]?.text ?? ""], said, "자세히"].filter(Boolean).join(", ");
       return rowHtml(m.inProgress, { ...r, cells }, { cls: "lead", nav: { group }, go: "자세히", label, count });
     }
     if (/^i\d{3,}$/.test(r.id)) return rowHtml(m.inProgress, r, { cls: "item", nav: { item: r.id } });

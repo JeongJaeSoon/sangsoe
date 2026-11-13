@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ITEM_READINGS, panelView, READING_LABEL } from "../../core/index.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
-import { type Overview, type PanelView, renderStage, type Row } from "../../orca-plugin/panel/view.ts";
+import { type Overview, type PanelView, renderStage, type Row, STATE_COL_PX } from "../../orca-plugin/panel/view.ts";
 import { groupWorld } from "../brief/group-world.ts";
 
 // Decision 229: no field label without its value, and the wide state column says its word.
@@ -87,6 +87,10 @@ test("a group row's state cell in the wide table says its word too; its narrow h
 
 test("a wide table led by a state is wide enough for mark and word; an id-led table keeps its 64px", () => {
   assert.match(rule(WIDE, ".tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child"), /width: 64px;/);
-  // The state column's width is its <col>, sized from the longest word (panel-spacing (5)).
-  assert.match(renderStage(one), /<colgroup><col style="width:\d+px">/);
+  // The state column's width is its <col>, sized from the longest word (panel-spacing (5)); an id-led
+  // table's first <col> stays bare, so the 64px rule above sizes it.
+  const firstCol = (html: string, section: string) => /<colgroup>(<col[^>]*>)/.exec(html.slice(html.indexOf(`id="h-${section}"`)))?.[1];
+  assert.equal(firstCol(renderStage(one), "prog"), `<col style="width:${STATE_COL_PX}px">`);
+  const dec = { ...ov().decisions, count: 1, rows: [{ id: "d009", cells: ["d009", "x", "y", "z", "1h"].map((text) => ({ text })) }] };
+  assert.equal(firstCol(renderStage({ ...one, model: { ...ov(), decisions: dec } }), "dec"), "<col>");
 });
