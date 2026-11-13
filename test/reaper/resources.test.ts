@@ -200,3 +200,29 @@ test("정리 without a trash command moves nothing, and no card list runs no rou
   assert.equal(out.tmp, null);
   assert.ok(existsSync(join(root, "sangsoe-hook-abc123")));
 });
+
+test("정리 reports only the listed cards, and a failing temp-folder half keeps what the round removed", async () => {
+  const out = await ownerReap(
+    {
+      run: async () =>
+        ({
+          reaped: ["worktree:inst-a", "container:c1"],
+          blocked: [],
+          unseen: ["not finished: inst-b: open"],
+          unknown: ["worktree:inst-other", "worktree:inst-b: rm busy", "worktree:inst-bb"],
+          mark_only: false,
+        }) as unknown as ReapReport,
+      exec: async () => ({ code: 0, stdout: "", stderr: "" }),
+      now: () => NOW,
+      tmpRoot: join(scratchDir("res-gone-"), "missing"),
+      uid: UID,
+      trashBin: "/usr/bin/trash",
+    },
+    { worktrees: ["inst-a", "inst-b"], tmp: true },
+  );
+  assert.deepEqual(out.reaped, ["worktree:inst-a", "container:c1"]);
+  assert.deepEqual(out.skipped.slice(0, 2), ["not finished: inst-b: open", "worktree:inst-b: rm busy"]);
+  assert.equal(out.skipped.length, 3);
+  assert.match(out.skipped[2] ?? "", /^임시 폴더를 읽지 못함: /);
+  assert.equal(out.tmp, null);
+});

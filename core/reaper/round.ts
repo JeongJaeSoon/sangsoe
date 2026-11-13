@@ -476,8 +476,8 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
       if (s.kind === "no_docker") r.docker_skipped = true;
       return composeRunning(card, s);
     },
-    // A checkout already gone holds nothing to lose: only its Orca registration is removed (decision 234).
-    (card, f) => (gone.has(card.id) && !existsSync(card.path) ? { ok: true } : preDelete(card, f, d.exec, d.gh)),
+    // A checkout already gone has no status to read; its HEAD must still be on GitHub (decision 234).
+    (card, f) => preDelete(card, f, d.exec, d.gh, gone.has(card.id) && !existsSync(card.path)),
   ];
   for (const { card, finished } of targets) {
     if (signal.aborted) {

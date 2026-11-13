@@ -55,15 +55,19 @@ test("a card with no PR and no Dispatch goes only when confirmed and pushed", as
   assert.deepEqual(r.blocked, [{ kind: "worktree", ref: local.instanceId, reason: "unpushed" }]);
 });
 
-test("a registration whose path is gone loses its Orca entry without a git check", async () => {
+test("a registration whose path is gone loses its Orca entry without git status, but an unpushed HEAD still blocks", async () => {
   const w = world();
   const repo = makeRepo("gone-base");
   const gone = card("gone", { path: join(scratch(), "no-such-dir"), head: repo.head });
-  w.orca.cards.push(gone);
-  startedBySangsoe(w, gone);
-  const r = await w.round({ confirmed: [gone.instanceId] });
-  assert.deepEqual(r.reaped, [`worktree:${gone.instanceId}`]);
-  assert.deepEqual(rms(w), [`worktreeRm id:${gone.id}`]);
+  const local = card("gone-local", { path: join(scratch(), "no-such-dir-2"), head: makeRepo("gone-local").head });
+  const headless = card("gone-headless", { path: join(scratch(), "no-such-dir-3"), head: "" });
+  w.orca.cards.push(gone, local, headless);
+  for (const c of [gone, local, headless]) startedBySangsoe(w, c);
+  w.gh.known.add(repo.head ?? "");
+  const r = await w.round({ confirmed: [gone.instanceId, local.instanceId, headless.instanceId] });
+  assert.deepEqual(r.reaped.sort(), [`worktree:${gone.instanceId}`, `worktree:${headless.instanceId}`].sort());
+  assert.deepEqual(r.blocked, [{ kind: "worktree", ref: local.instanceId, reason: "unpushed" }]);
+  assert.ok(!rms(w).some((x) => x.includes(local.id)));
 });
 
 test("no reaper config: a confirmed card is still not removed", async () => {

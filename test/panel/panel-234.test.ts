@@ -119,6 +119,22 @@ test("reading, empty, failed, unread and stale each say so; an unread count is n
   assert.match(renderResBody({ kind: "shown", view: view() }, Date.parse(AT) + STALE_MS + 1), /읽음, 낡음/);
 });
 
+test("a stale reading cannot be confirmed, and refresh waits while a 정리 runs", () => {
+  const late = Date.parse(AT) + STALE_MS + 1;
+  for (const confirm of [false, true]) {
+    const html = renderResBody({ kind: "shown", view: view(), confirm }, late);
+    assert.doesNotMatch(html, /data-res="(ask|run)"/);
+    assert.match(html, /새로 고친 뒤 정리한다/);
+  }
+  assert.match(renderResBody({ kind: "shown", view: view(), confirm: true, running: true }, NOW), /data-res="refresh" disabled/);
+  assert.doesNotMatch(renderResBody({ kind: "shown", view: view() }, NOW), /data-res="refresh" disabled/);
+});
+
+test("the result counts only worktrees as worktrees", () => {
+  const html = renderResBody({ kind: "shown", view: view(), result: { reaped: ["worktree:inst-a", "container:c1"], blocked: [], skipped: [], tmp: null } }, NOW);
+  assert.match(html, />worktree 1건 정리, Docker 1건 정리</);
+});
+
 test("the result of a 정리 shows right away, with the blocked ones in its title", () => {
   const html = renderResBody(
     { kind: "shown", view: view(), result: { reaped: ["worktree:inst-a"], blocked: [{ kind: "worktree", ref: "inst-b", reason: "uncommitted" }], skipped: [], tmp: { moved: 13_000, left: 0 } } },

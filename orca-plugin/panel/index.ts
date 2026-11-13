@@ -2,7 +2,7 @@
 // The sangsoe html panel (decision 92): three stages down and back, decision and 완료 buttons. Every
 // button is a plugin.request to the worker, which calls the core; the panel changes nothing itself.
 import { panelReads } from "./refresh.ts";
-import { type Reaped, RES_OPEN_KEY, type ResState, type ResView, reapTargets, renderResBody, renderResources } from "./resources.ts";
+import { type Reaped, RES_OPEN_KEY, type ResState, type ResView, reapTargets, renderResBody, renderResources, STALE_MS } from "./resources.ts";
 import { STYLE } from "./style.ts";
 import {
   type Act,
@@ -83,6 +83,7 @@ function mountResources(after: HTMLElement): void {
   const run = async () => {
     if (state.kind !== "shown" || state.running) return;
     const view = state.view;
+    if (Date.now() - Date.parse(view.at) > STALE_MS) return read();
     state = { ...state, running: true };
     body();
     const r = (await orca.plugin.request("panel.reap", reapTargets(view)).catch(failed)) as Reply<Reaped>;
@@ -102,7 +103,10 @@ function mountResources(after: HTMLElement): void {
     const el = (ev.target as Element).closest<HTMLElement>("[data-res]");
     if (!el) return;
     const what = el.getAttribute("data-res");
-    if (what === "refresh") void read();
+    const busy = state.kind === "reading" || (state.kind === "shown" && state.running === true);
+    if (what === "refresh") {
+      if (!busy) void read();
+    }
     else if (what === "run") void run();
     else if (state.kind === "shown" && (what === "ask" || what === "cancel")) {
       state = { ...state, confirm: what === "ask" };

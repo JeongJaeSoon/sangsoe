@@ -224,14 +224,20 @@ export async function ownerReap(d: OwnerReapDeps, a: OwnerReap): Promise<OwnerRe
     const r = await d.run({ trigger: "hint", confirmed: a.worktrees });
     out.reaped = r.reaped;
     out.blocked = r.blocked.filter((b) => b.kind !== "worktree" || a.worktrees.includes(b.ref));
-    out.skipped = [...r.unseen, ...r.unknown];
+    // The round also lists cards the owner did not name (unreadable roots elsewhere); the owner hears only of theirs.
+    const listed = (u: string) => !u.startsWith("worktree:") || a.worktrees.some((id) => u === `worktree:${id}` || u.startsWith(`worktree:${id}:`));
+    out.skipped = [...r.unseen, ...r.unknown.filter(listed)];
     if (r.mark_only) out.skipped.push("reaper config absent: no card removed");
   }
   if (a.tmp && d.trashBin) {
-    const before = tmpLeftovers(d.tmpRoot, d.now(), d.uid);
-    for (let i = 0; i < before.length; i += BATCH) await d.exec(d.trashBin, before.slice(i, i + BATCH));
-    const left = before.filter((p) => existsSync(p)).length;
-    out.tmp = { moved: before.length - left, left };
+    try {
+      const before = tmpLeftovers(d.tmpRoot, d.now(), d.uid);
+      for (let i = 0; i < before.length; i += BATCH) await d.exec(d.trashBin, before.slice(i, i + BATCH));
+      const left = before.filter((p) => existsSync(p)).length;
+      out.tmp = { moved: before.length - left, left };
+    } catch (e) {
+      out.skipped.push(`임시 폴더를 읽지 못함: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
   return out;
 }

@@ -117,7 +117,7 @@ export function reapTargets(v: ResView): { worktrees: string[]; tmp: boolean } {
   return { worktrees, tmp: v.trash && v.tmp.ok && v.tmp.value.count > 0 };
 }
 
-function candidates(v: ResView, s: Extract<ResState, { kind: "shown" }>): string {
+function candidates(v: ResView, s: Extract<ResState, { kind: "shown" }>, stale: boolean): string {
   const head = `<h3>정리 후보</h3>`;
   const rows: string[] = [];
   const notes: string[] = [];
@@ -144,14 +144,18 @@ function candidates(v: ResView, s: Extract<ResState, { kind: "shown" }>): string
   const act =
     total === 0
       ? ""
-      : s.confirm
+      : stale
+        ? `<p class="foot">5분 넘게 지난 읽음이다. 새로 고친 뒤 정리한다.</p>`
+        : s.confirm
         ? `<div class="confirm" role="group" aria-label="정리 확인"><p>위 ${total}건을 정리한다. worktree 는 Orca 가 지우기 전에 미커밋·미푸시·열린 PR·살아 있는 세션을 다시 보고, 폴더는 휴지통으로 간다.</p><button type="button" class="btn primary" data-res="run"${off}>${total}건 정리</button><button type="button" class="btn" data-res="cancel"${off}>취소</button></div>`
         : `<div class="res-acts"><button type="button" class="btn" data-res="ask">정리…</button></div>`;
   return `${head}${table}${notes.map((x) => `<p class="foot">${x}</p>`).join("")}${act}`;
 }
 
 function resultNote(r: Reaped): string {
-  const parts = [`worktree ${r.reaped.length}건 정리`];
+  const cards = r.reaped.filter((x) => x.startsWith("worktree:")).length;
+  const parts = [`worktree ${cards}건 정리`];
+  if (r.reaped.length > cards) parts.push(`Docker ${r.reaped.length - cards}건 정리`);
   if (r.tmp) parts.push(`임시 폴더 ${n(r.tmp.moved)}개 휴지통으로${r.tmp.left ? `, ${n(r.tmp.left)}개 남음` : ""}`);
   const blocked = r.blocked.map((b) => `${b.ref}: ${BLOCK[b.reason] ?? b.reason}`);
   const title = [...blocked, ...r.skipped].join("\n");
@@ -168,10 +172,12 @@ export function renderResBody(s: ResState, now: number): string {
   const v = s.kind === "reading" ? s.last : s.view;
   const age = v ? now - Date.parse(v.at) : 0;
   const stamp = s.kind === "reading" ? `<span class="fresh" aria-live="polite">읽는 중…</span>` : `<span class="fresh${age > STALE_MS ? " stale" : ""}">${esc(hhmm(v?.at ?? ""))} 읽음${age > STALE_MS ? ", 낡음" : ""}</span>`;
-  const tools = `<div class="res-h">${stamp}<button type="button" class="link" data-res="refresh"${s.kind === "reading" ? " disabled" : ""}>새로 고침</button></div>`;
+  const busy = s.kind === "reading" || (s.kind === "shown" && s.running === true);
+  const tools = `<div class="res-h">${stamp}<button type="button" class="link" data-res="refresh"${busy ? " disabled" : ""}>새로 고침</button></div>`;
   if (!v) return tools;
   const shown: Extract<ResState, { kind: "shown" }> = s.kind === "shown" ? s : { kind: "shown", view: v };
-  return `${tools}${shown.result ? resultNote(shown.result) : ""}${loadBlock(v)}${madeBlock(v)}${candidates(v, s.kind === "reading" ? { ...shown, running: true, confirm: false } : shown)}`;
+  const list = candidates(v, s.kind === "reading" ? { ...shown, running: true, confirm: false } : shown, s.kind === "shown" && age > STALE_MS);
+  return `${tools}${shown.result ? resultNote(shown.result) : ""}${loadBlock(v)}${madeBlock(v)}${list}`;
 }
 
 /** The whole section: a fold, closed unless the owner left it open. */
