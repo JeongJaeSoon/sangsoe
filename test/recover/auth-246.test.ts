@@ -33,8 +33,12 @@ function fakeOrca(
     submitTimeout?: boolean;
     /** worktree ps comes back cut short. */
     truncated?: boolean;
+    /** terminal list comes back cut short. */
+    listTruncated?: boolean;
     /** The first send's response is lost; request-show then answers this state. */
     lost?: "absent" | "completed";
+    /** The replay under the request id answers the request's own result: a refusal before writing. */
+    replayRefused?: boolean;
   } = {},
 ): Fake {
   const sent: Sent[] = [];
@@ -65,7 +69,7 @@ function fakeOrca(
     terminalList: (a) => {
       calls.push(`terminalList ${a.worktree}`);
       const id = a.worktree.replace(/^id:repo::\/w\//, "");
-      return ok({ rows: o.terminals?.[id] ?? [], truncated: false, omittedHostIds: [], nonLocal: { rows: 0 } } as never);
+      return ok({ rows: o.terminals?.[id] ?? [], truncated: o.listTruncated === true, omittedHostIds: [], nonLocal: { rows: 0 } } as never);
     },
     terminalSend: (a, w) => {
       calls.push(`terminalSend ${a.terminal}${w?.retryRequest ? ` retry ${w.retryRequest}` : ""}`);
@@ -77,6 +81,7 @@ function fakeOrca(
       if (o.lost && !w?.retryRequest && !calls.some((c, i) => i < calls.length - 1 && c.startsWith("terminalSend"))) {
         return Promise.resolve({ ok: false, error: { code: "response_lost", message: "timed out" }, requestId: "req_1" });
       }
+      if (o.replayRefused && w?.retryRequest) return Promise.resolve({ ok: false, error: { code: "terminal_handle_stale", message: "terminal_handle_stale" } });
       sent.push(a);
       return ok({ accepted: true });
     },
@@ -286,6 +291,30 @@ test("246: a lost response is replayed only under Orca's request id; when reques
   assert.equal(unknown.store.events({ type: "owner_action" }).length, 1, "it may have arrived, so the stop counts as sent");
   await authRecover(unknown.store, b, { send: true });
   assert.equal(b.calls.filter((c) => c.startsWith("terminalSend")).length, 1);
+});
+
+test("246: a lost response whose replay answers a refusal before writing is failed, not recorded, and tried again next run", async () => {
+  const { store, dead } = world();
+  dead("ctx_a", "task_a", "auth");
+  const orca = fakeOrca({ workers: [worker("ctx_a", "task_a", "term_a")], lost: "completed", replayRefused: true });
+  const r = await authRecover(store, orca, { send: true });
+  assert.equal(r.rows[0]?.verdict, "failed");
+  assert.equal(store.events({ type: "owner_action" }).length, 0);
+  const again = await authRecover(store, orca, { send: true });
+  assert.equal(again.rows[0]?.verdict, "sent", "the stop was not counted as sent, so the next run sends");
+  assert.equal(orca.sent.length, 1);
+});
+
+test("246: a cut-short terminal list is unread, even when the rows it shows hold one agent terminal", async () => {
+  const { store } = world();
+  store.append({ type: "waiting_human", source: "StopFailure", payload: { session: "sess_one", cause: "auth", worktree: "wt_one" } });
+  const orca = fakeOrca({ terminals: { wt_one: [{ handle: "term_one", agentIdentity: "claude" }] }, listTruncated: true });
+  const r = await authRecover(store, orca, { send: true });
+  assert.deepEqual(
+    r.rows.map((x) => [x.verdict, x.unread]),
+    [["skip", true]],
+  );
+  assert.equal(orca.sent.length, 0);
 });
 
 test("246: a Dispatch's auth wait followed by a finished turn is not picked, before the monitor releases it", async () => {
