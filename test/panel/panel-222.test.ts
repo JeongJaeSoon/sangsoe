@@ -22,7 +22,7 @@ const rowOf = (html: string, id: string) => new RegExp(`<tr data-id="${id}"[^>]*
 test("(16) a group row opens with 자세히 ›, and its label names the group", () => {
   const lead = rowOf(renderStage(one), "lead:api-migration");
   assert.match(lead, /<span class="go" aria-hidden="true">자세히 ›<\/span>/);
-  assert.match(lead, /aria-label="api-migration 묶음 자세히"/);
+  assert.match(lead, /aria-label="api-migration 묶음, [^"]*자세히"/);
   assert.doesNotMatch(renderStage(one), /묶음 상세 ›/);
 });
 

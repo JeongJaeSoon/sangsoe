@@ -87,5 +87,6 @@ test("a group row's state cell in the wide table says its word too; its narrow h
 
 test("a wide table led by a state is wide enough for mark and word; an id-led table keeps its 64px", () => {
   assert.match(rule(WIDE, ".tbl:not(.gt) th:first-child, .tbl:not(.gt) td:first-child"), /width: 64px;/);
-  assert.match(rule(WIDE, ".tbl:not(.gt):has(.st) th:first-child, .tbl:not(.gt):has(.st) td:first-child"), /width: \d+px;/);
+  // The state column's width is its <col>, sized from the longest word (panel-spacing (5)).
+  assert.match(renderStage(one), /<colgroup><col style="width:\d+px">/);
 });
