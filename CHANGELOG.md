@@ -6,7 +6,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ### Fixes
 
-- A panel button or shell command (an `owner_action` with no session) no longer marks a Dispatch's open wait (which names no session either) `입력 확인됨 · 재개 대기`, nor credits its release to the owner: a wait now matches the owner's words only on the session it names.
+- `awaitingResume` no longer counts a panel button (an `owner_action` with no session) as the owner answering a Dispatch's open wait, which names no session either: a wait now matches the owner's words only on the session it names.
 
 ## 0.1.6-rc.3 (pre-release)
 
