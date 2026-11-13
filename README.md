@@ -36,6 +36,8 @@ macOS with Homebrew, Claude Code, Orca and an authenticated `gh`. Run these in o
 
 Optional `grace_minutes` (default 30) and `min_gap_minutes` (default 10, the floor the grace shrinks to while the machine is under load) sit beside `protect`. Doctor then prints `ok       reaper-config: REAPER 정리 켜짐: 보호 0개, 유예 30분`. `sangsoe install` never writes this section.
 
+**Resources and cleanup.** The panel's last section, 리소스, is folded until you open it, and it stays as you left it. Opened or refreshed, it reads the machine's load (CPU per core, free memory and disk, and the resource monitor's last high-load notice), what sangsoe made (its worktrees and their size, their live terminals, claude and node processes, leftover temporary folders in `$TMPDIR`) and what cleanup would take. It reads nothing on a timer and keeps none of what it read. 정리… first lists every target; only the second button runs. Only worktrees sangsoe started are offered; another program's are never listed or removed. They go through the same REAPER checks as its own rounds, minus the two-round wait: one with uncommitted or unpushed work, an open pull request, an open Task or a live session stays, and nothing is removed without the `reaper` section above. A card with no pull request and no Dispatch, or one whose folder is already gone, goes only this way. Temporary folders older than an hour go to the trash (`/usr/bin/trash`; without it they stay). Processes are shown, never stopped. From a terminal, `sangsoe reap plan` prints the same reading, and `sangsoe reap run --only <id,...>` or `--tmp` runs the same cleanup on what you name.
+
 **Watched repositories.** The pr monitor reads pull requests only from the repositories in `watch.repos`. Until that list has one, doctor prints `notice   watch-repos: pr monitor 가 아무 저장소도 보지 않는다 …` and still exits 0. Add the repositories to the same file, then doctor prints `ok       watch-repos: pr monitor 가 저장소 1개를 본다`. `sangsoe install` never writes this setting.
 
 ```json
@@ -126,7 +128,7 @@ One repository, four slots (see `docs/architecture.md` for the full map):
 | `orca-plugin/` | Orca plugin: monitors, REAPER timer, panel | none |
 | `claude-plugin/` | Claude Code plugin: `hooks/` and `mcp/` (no tokens), `skills/` and `agents/` (token-using) | mixed |
 
-The Orca plugin's manifest (`orca-plugin/orca-plugin.json`) declares two read capabilities, `workspace:read` and `agent:read`. The worker also runs two writes that the declaration does not name: `orca terminal create` for the panel's open command (`orca-plugin/panel/requests.ts:54`), and `orca worktree rm` in REAPER rounds (`core/reaper/round.ts`, decision 86). The manifest is not yet changed to match them.
+The Orca plugin's manifest (`orca-plugin/orca-plugin.json`) declares two read capabilities, `workspace:read` and `agent:read`, and `storage:own`, where the panel keeps whether its 리소스 section is open (decision 234). The worker also runs two writes that the declaration does not name: `orca terminal create` for the panel's open command (`orca-plugin/panel/requests.ts:54`), and `orca worktree rm` in REAPER rounds (`core/reaper/round.ts`, decision 86). The manifest is not yet changed to match them.
 
 Orca CLI built-ins are called, not rebuilt. The design spec lives in `docs/` (`design.html` is the entry point).
 

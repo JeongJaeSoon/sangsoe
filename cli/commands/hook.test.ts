@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
 import { Store } from "../../core/index.ts";
+import { scratchDir } from "../../test/scratch.ts";
 
 // The hook as Claude Code runs it: a process with the call on stdin. Raw commands come from the fixture
 // (the repository scan for raw starts reads code files, and this is one).
@@ -34,7 +35,7 @@ const call = (note: string) => {
 };
 
 test("a raw start is denied on stdout and recorded as gate_denied with the command in a file", () => {
-  const home = mkdtempSync(join(tmpdir(), "sangsoe-hook-"));
+  const home = scratchDir("sangsoe-hook-");
   const r = hook(home, call("fallback start"));
   assert.equal(r.code, 0, r.stderr);
   const out = JSON.parse(r.stdout).hookSpecificOutput;
@@ -58,7 +59,7 @@ test("a raw start is denied on stdout and recorded as gate_denied with the comma
 // Decision 208: Claude Code lets a timed-out hook's call through, so a locked store must not hold the hook
 // near its 15 seconds. The deny stands unrecorded.
 test("a locked store still denies, well inside the hook's timeout", () => {
-  const home = mkdtempSync(join(tmpdir(), "sangsoe-hook-"));
+  const home = scratchDir("sangsoe-hook-");
   Store.open({ home }).close();
   const lock = new DatabaseSync(join(home, ".local", "share", "sangsoe", "sangsoe.db"));
   lock.exec("BEGIN EXCLUSIVE");
@@ -75,14 +76,14 @@ test("a locked store still denies, well inside the hook's timeout", () => {
 });
 
 test("a normal call prints nothing and records nothing", () => {
-  const home = mkdtempSync(join(tmpdir(), "sangsoe-hook-"));
+  const home = scratchDir("sangsoe-hook-");
   const r = hook(home, call("test suite"));
   assert.deepEqual([r.code, r.stdout], [0, ""]);
   assert.deepEqual(readdirSync(home), []);
 });
 
 test("unreadable input exits 2, a refusal", () => {
-  const home = mkdtempSync(join(tmpdir(), "sangsoe-hook-"));
+  const home = scratchDir("sangsoe-hook-");
   const r = hook(home, "not json");
   assert.equal(r.code, 2);
   assert.match(r.stderr, /not JSON/);
@@ -90,7 +91,7 @@ test("unreadable input exits 2, a refusal", () => {
 });
 
 test("a recording hook fails open: unreadable input or no Orca exits 0 and injects nothing", () => {
-  const home = mkdtempSync(join(tmpdir(), "sangsoe-hook-"));
+  const home = scratchDir("sangsoe-hook-");
   for (const input of ["not json", "{}", JSON.stringify({ cwd: "/" })]) {
     assert.deepEqual(Object.values(hook(home, input, ["hook", "session-start"])).slice(0, 2), [0, ""]);
   }

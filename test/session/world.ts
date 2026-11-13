@@ -1,8 +1,8 @@
-import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createOrcaAdapter, type CoreDeps, type ExecResult, type OrcaAdapter, Store } from "../../core/index.ts";
 import { createFakeOrca, type FakeReply } from "../fake-orca/index.ts";
+import { scratchDir } from "../scratch.ts";
 
 // A fake Orca for the recording hooks: one worktree whose Dispatch works a Task with a given spec, a
 // run-current answer, a Run mailbox, and the sends the hooks make.
@@ -47,7 +47,7 @@ const flag = (args: readonly string[], name: string) => {
 };
 
 export function createSessionWorld(o: { spec?: string; heldRun?: string | null; dispatched?: boolean; clock?: () => string } = {}): SessionWorld {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "sangsoe-session-")));
+  const dir = realpathSync(scratchDir("sangsoe-session-"));
   const sends: Sent[] = [];
   const mail: Mail[] = [];
   const runTasks = new Map<string, { id: string; status: string; title: string }[]>();

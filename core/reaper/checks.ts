@@ -106,22 +106,28 @@ export async function preDelete(
   finished: Extract<Finished, { state: "finished" }>,
   exec: Exec,
   gh: GhClient,
+  checkoutGone = false,
 ): Promise<Check> {
-  const status = await exec("git", ["-C", card.path, "status", "--porcelain=v1", "--untracked-files=all"]);
-  if (status.code !== 0) return { ok: false, unknown: "git status failed" };
-  if (status.stdout.trim() !== "") return { ok: false, blocked: "uncommitted" };
+  if (!checkoutGone) {
+    const status = await exec("git", ["-C", card.path, "status", "--porcelain=v1", "--untracked-files=all"]);
+    if (status.code !== 0) return { ok: false, unknown: "git status failed" };
+    if (status.stdout.trim() !== "") return { ok: false, blocked: "uncommitted" };
+  }
 
   // A squash merge leaves the card's own commits off every remote branch; the PR carrying HEAD is the proof.
   if (finished.carried) return OK;
 
   const repo = repoOf(card);
   const head = card.head;
+  // With no checkout and no HEAD there is nothing left to read; Orca keeps a branch with unpushed commits (P6).
+  if (checkoutGone && !head) return OK;
   if (!repo || !head) return { ok: false, unknown: "no repository or HEAD" };
   const known = await gh.get(`repos/${repo}/commits/${head}`);
   if (known.kind === "ok") return OK;
   if (known.kind !== "error" || (known.status !== 404 && known.status !== 422)) {
     return { ok: false, unknown: `commit lookup: ${known.kind}` };
   }
+  if (checkoutGone) return { ok: false, blocked: "unpushed" };
   // Never pushed. Same message at the branch tip on GitHub but another sha: amended or rebased after the push.
   const local = await exec("git", ["-C", card.path, "log", "-1", "--format=%B", head]);
   const tip = await gh.get<{ commit?: { message?: string } }>(

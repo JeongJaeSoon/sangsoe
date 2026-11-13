@@ -6,6 +6,8 @@ import { done, type Result, refuse } from "../notify/result.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { ownerDone } from "../owner/done.ts";
+import { openResources } from "../reaper/open.ts";
+import type { OwnerReap, OwnerReaped, ResourceView } from "../reaper/resources.ts";
 import { hashOf, mask, summarize } from "../session/mask.ts";
 import { Store } from "../store/store.ts";
 import { type BuildOptions, buildBrief, buildGroup, buildItem } from "./build.ts";
@@ -87,6 +89,8 @@ export interface PanelPorts {
   readonly load?: (now: string) => Promise<Result<BriefInput>>;
   /** Watches the store for new events; watchStore over the store file unless a test gives its own. */
   readonly watch?: (onChange: (seq: number) => void) => Result<{ close(): void }>;
+  /** The 리소스 section's read and confirmed 정리 (decision 234); openResources unless a test gives its own. */
+  readonly resources?: { read(): Promise<ResourceView>; reap(a: OwnerReap): Promise<OwnerReaped> };
 }
 
 /**
@@ -116,6 +120,10 @@ export interface PanelCore {
   worktree(target: PanelTarget): Promise<Result<{ readonly worktree: string }>>;
   /** Tells each new newest store seq until closed; the worker posts it to the open panels (decision 205). */
   watch(onChange: (seq: number) => void): Result<{ close(): void }>;
+  /** The 리소스 section, read only when the owner opens or refreshes it (decision 234). */
+  resources(): Promise<Result<ResourceView>>;
+  /** The confirmed 정리: the owner's press is recorded as an owner_action, then only the listed ids go. */
+  reap(a: OwnerReap): Promise<Result<OwnerReaped>>;
 }
 
 const NO_WORKTREE = "run the command in a terminal";
@@ -136,6 +144,7 @@ async function itemWorktree(orca: OrcaAdapter, input: BriefInput, alias: string)
 
 export function panelCore(ports: PanelPorts): PanelCore {
   const load = ports.load ?? ((now: string) => loadBriefInput({ now, orca: ports.orca }));
+  const res = () => ports.resources ?? openResources();
 
   async function answer(input: BriefInput, d: string, words: string | null): Promise<Result<PanelActed>> {
     let text = words?.trim() ?? "";
@@ -192,6 +201,17 @@ export function panelCore(ports: PanelPorts): PanelCore {
       return input.ok ? itemWorktree(ports.orca, input.value, target.item) : input;
     },
     watch: (onChange) => (ports.watch ?? watchStore)(onChange),
+    async resources() {
+      return done(await res().read());
+    },
+    async reap(a) {
+      if (a.worktrees.length === 0 && !a.tmp) return refuse("bad_input", "nothing to clean up", "press 정리 after the list shows something");
+      const said = `리소스 정리: worktree ${a.worktrees.length}${a.tmp ? ", 임시 폴더" : ""}`;
+      await ports.withStore(async (store) =>
+        store.appendOwnerAction({ type: "owner_action", source: "plugin:panel", payload: { origin: "button", summary: summarize(said), hash: hashOf(said) } }, said),
+      );
+      return done(await res().reap(a));
+    },
   };
 }
 

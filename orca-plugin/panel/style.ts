@@ -308,4 +308,37 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl.gt td.hd > svg { margin-top: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+/* The 리소스 section (decision 234): its own element under #root, so a panel repaint never touches an
+   open confirm list. One quiet fold; the gauges are the only drawing in it. */
+#res { padding: 0 var(--gx) var(--s4); border-top: 1px solid var(--rule); }
+#res .res-fold { margin: 0; }
+#res .res-fold > summary { padding: var(--s2) 0; border-bottom: 0; }
+#res .res-body { padding: 0 0 var(--s2); }
+#res h3 { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s3); }
+.res-h { display: flex; align-items: baseline; gap: var(--s3); justify-content: flex-end; }
+.res-h .stale { color: var(--bad); }
+.gauge { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; align-items: center; gap: var(--s3); min-height: 24px; font-size: var(--text-sm); }
+.g-l { color: var(--ink-2); white-space: nowrap; }
+/* White like the rest (decision 222): an outlined track; the fill takes its tone's text colour. */
+.g-bar { height: 8px; padding: 1px; border: 1px solid var(--rule-2); border-radius: 4px; overflow: hidden; color: var(--ink-2); }
+.g-bar i { display: block; height: 100%; border-radius: 2px; background: currentColor; }
+.g-bar i.t-warn { color: var(--accent); }
+.g-bar i.t-bad { color: var(--bad); }
+.g-v { min-width: 6.5em; text-align: right; white-space: nowrap; }
+.g-v.wide { grid-column: 2 / 4; }
+.g-v.t-bad { color: var(--bad); }
+.ep { margin: var(--s1) 0 0; font-size: var(--text-xs); color: var(--muted); }
+.ep.t-bad { color: var(--bad); }
+.unread { color: var(--bad); }
+/* One line per row at every width: a long name or reason is cut, its whole text in the cell's title. */
+.tbl.res { table-layout: fixed; }
+.tbl.res td { height: 32px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tbl.res th:first-child, .tbl.res td:first-child { width: auto; }
+.tbl.res .num { text-align: right; white-space: nowrap; width: 8em; }
+#res .empty { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--text-sm); }
+.res-acts { margin-top: var(--s3); }
+.confirm { margin-top: var(--s3); padding: var(--s3); border: 1px solid var(--rule-2); border-radius: var(--r3); font-size: var(--text-sm); }
+.confirm p { margin: 0 0 var(--s3); }
+.confirm .btn + .btn { margin-left: var(--s2); }
+#res .msg { margin: var(--s2) 0 0; }
 `;

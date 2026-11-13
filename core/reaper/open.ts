@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { sampleLoad } from "../capacity/capacity.ts";
 import { DEFAULT_MONITOR_CONFIG } from "../detect/monitor.ts";
 import { createGhClient, memoryGhCache } from "../gh/client.ts";
@@ -6,6 +8,7 @@ import { nodeExec } from "../orca/exec.ts";
 import { holdStore } from "../store/held.ts";
 import { Store } from "../store/store.ts";
 import { readReaperConfig } from "./config.ts";
+import { type OwnerReap, type OwnerReaped, ownerReap, readResources, type ResourceView, sangsoeWorktrees, TRASH_BIN } from "./resources.ts";
 import { type ReapOptions, type ReapReport, reapRound } from "./round.ts";
 
 export type ReaperRunner = { run(o?: ReapOptions): Promise<ReapReport>; close(): void };
@@ -35,4 +38,45 @@ export function openReaper(o: { dryRun?: boolean; dbPath?: string; home?: string
       ),
     );
   return { run, close: () => held.close() };
+}
+
+/** Decision 234: the panel's 리소스 read and its confirmed 정리, over the same REAPER and store. */
+export function openResources(o: { dbPath?: string; home?: string } = {}) {
+  const exec = nodeExec(60_000);
+  const base = { exec, now: () => Date.now(), tmpRoot: tmpdir(), uid: process.getuid?.() ?? -1, trashBin: existsSync(TRASH_BIN) ? TRASH_BIN : null };
+  const withRunner = async <T>(dryRun: boolean, fn: (r: ReaperRunner) => Promise<T>): Promise<T> => {
+    const runner = openReaper({ ...o, dryRun });
+    try {
+      return await fn(runner);
+    } finally {
+      runner.close();
+    }
+  };
+  return {
+    read: (): Promise<ResourceView> =>
+      withRunner(true, (plan) => {
+        const store = Store.open(o.dbPath ? { path: o.dbPath } : {});
+        return readResources({
+          ...base,
+          orca: createOrcaAdapter(exec),
+          events: (f) => store.events(f),
+          sample: () => sampleLoad(),
+          plan: (opts) => plan.run(opts),
+        }).finally(() => store.close());
+      }),
+    reap: (a: OwnerReap): Promise<OwnerReaped> =>
+      withRunner(false, (runner) =>
+        ownerReap(
+          {
+            ...base,
+            run: (opts) => runner.run(opts),
+            mine: () => {
+              const store = Store.open(o.dbPath ? { path: o.dbPath } : {});
+              return sangsoeWorktrees((f) => store.events(f), createOrcaAdapter(exec)).finally(() => store.close());
+            },
+          },
+          a,
+        ),
+      ),
+  };
 }

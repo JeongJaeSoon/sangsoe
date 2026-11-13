@@ -8,7 +8,7 @@
   "repository": "https://github.com/JeongJaeSoon/sangsoe",
   "engines": { "orca": ">=1.4.248" },
   "main": "main.ts",
-  "capabilities": [{ "kind": "workspace:read" }, { "kind": "agent:read" }],
+  "capabilities": [{ "kind": "workspace:read" }, { "kind": "agent:read" }, { "kind": "storage:own" }],
   "contributes": {
     "panels": [{ "id": "brief", "title": "sangsoe", "icon": "layers", "entry": "panel/index.ts", "ui": "html" }],
     "commands": [{ "id": "sangsoe.open", "title": "sangsoe: open panel" }],

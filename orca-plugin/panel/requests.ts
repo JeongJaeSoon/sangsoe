@@ -1,6 +1,7 @@
 // The worker's side of the panel: plugin.request handlers and status bar item B. Both forward to the
 // core's PanelCore (through core-link.ts) and pass its answer back; nothing is counted or written here.
 import type { PanelCore } from "../core-link.ts";
+import { MAX_REAP } from "./resources.ts";
 
 type Reply = { ok: true; value: unknown } | { ok: false; refusal: { code: string; reason: string; fix: string } };
 export type StatusItem = { text: string; tone: "neutral" | "danger"; tooltip: string };
@@ -17,6 +18,21 @@ export function parseAct(raw: unknown): { kind: "answer"; decision: string; choi
   if (a.choice === "recommended") return { kind: "answer", decision: a.decision, choice: "recommended" };
   if (typeof a.text === "string" && a.text.trim() !== "") return { kind: "answer", decision: a.decision, text: a.text.trim() };
   return null;
+}
+
+// REAPER's card instance ids; the panel sends back only ids a reading listed (decision 234).
+const CARD = /^[A-Za-z0-9._:-]{1,200}$/;
+const MAX_CARDS = MAX_REAP;
+
+/** The confirmed 정리 a panel may ask for; anything else is refused before the core is touched. */
+export function parseReap(raw: unknown): { worktrees: string[]; tmp: boolean } | null {
+  const a = (raw ?? {}) as Record<string, unknown>;
+  const ws = a.worktrees ?? [];
+  if (!Array.isArray(ws) || ws.length > MAX_CARDS || !ws.every((w) => typeof w === "string" && CARD.test(w))) return null;
+  if (a.tmp !== undefined && typeof a.tmp !== "boolean") return null;
+  const tmp = a.tmp === true;
+  if (ws.length === 0 && !tmp) return null;
+  return { worktrees: [...new Set(ws as string[])], tmp };
 }
 
 function target(raw: unknown): { group?: string; item?: string } {
@@ -115,6 +131,26 @@ export function panelHandlers(load: () => Promise<PanelCore | string>) {
       try {
         const c = await core();
         return isCore(c) ? await c.act(a) : c;
+      } catch (e) {
+        return thrown(e);
+      }
+    },
+    "panel.resources": async (): Promise<Reply> => {
+      try {
+        const c = await core();
+        if (!isCore(c)) return c;
+        return c.resources ? await c.resources() : refuse("core_old", "this core has no resource read", "update sangsoe");
+      } catch (e) {
+        return thrown(e);
+      }
+    },
+    "panel.reap": async (input: unknown): Promise<Reply> => {
+      const a = parseReap(input);
+      if (!a) return refuse("bad_input", "not a cleanup the panel listed", "refresh the 리소스 section");
+      try {
+        const c = await core();
+        if (!isCore(c)) return c;
+        return c.reap ? await c.reap(a) : refuse("core_old", "this core has no cleanup", "update sangsoe");
       } catch (e) {
         return thrown(e);
       }

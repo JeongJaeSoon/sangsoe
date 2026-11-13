@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { scratchDir } from "./scratch.ts";
 
 // R-01 (#459, #467): every path the plugin registers exists, and a script run directly has its exec bit.
 // The build maps a source file to dist/ by its extension, so dist/<x>.js stands for <x>.ts here.
@@ -50,7 +51,7 @@ const NODE_DIR = dirname(process.execPath);
 
 /** The hooks.json command as Claude Code runs it, in a scratch tree whose dist/cli/main.js is `cli`. */
 function runPreHook(o: { cli?: string; pluginRoot?: string; path?: string }) {
-  const tree = mkdtempSync(join(tmpdir(), "sangsoe-pre-"));
+  const tree = scratchDir("sangsoe-pre-");
   mkdirSync(join(tree, "claude-plugin", "hooks"), { recursive: true });
   writeFileSync(join(tree, "claude-plugin", "hooks", "pre-tool-use.sh"), readFileSync(at("hooks/pre-tool-use.sh")));
   if (o.cli !== undefined) {
@@ -113,7 +114,7 @@ test("the seven recording hooks run record.sh with their event and never block",
 });
 
 test("record.sh exits 0 even when the CLI it finds exits 2, and keeps its stdout", () => {
-  const tmp = mkdtempSync(join(tmpdir(), "sangsoe-record-"));
+  const tmp = scratchDir("sangsoe-record-");
   mkdirSync(join(tmp, "plugin"));
   mkdirSync(join(tmp, "bin"));
   // An older CLI on PATH that does not know the event: prints, then exits 2.

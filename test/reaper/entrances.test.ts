@@ -3,8 +3,11 @@ import { test } from "node:test";
 import { reap } from "../../cli/commands/reap.ts";
 import {
   type Exec,
+  type OwnerReap,
+  type OwnerReaped,
   parseReaperConfig,
   type ReapReport,
+  type ResourceView,
   recordResource,
   resourceRecord,
   Store,
@@ -69,6 +72,31 @@ test("`sangsoe reap run` passes --dry-run and --mark-only through, and refuses o
   assert.deepEqual(seen, [{ dryRun: true, trigger: "hint", markOnly: true }]);
   const bad = await reap(["sweep"], {}, fake);
   assert.equal(bad.ok, false);
+});
+
+test("decision 234: `sangsoe reap plan` reads, `run --only` / `--tmp` hand the named ids to the confirmed 정리", async () => {
+  const asked: unknown[] = [];
+  const res = () => ({
+    read: async () => {
+      asked.push("read");
+      return {} as ResourceView;
+    },
+    reap: async (a: OwnerReap) => {
+      asked.push(a);
+      return { reaped: [], blocked: [], skipped: [], tmp: null } as OwnerReaped;
+    },
+  });
+  const noRound = () => {
+    throw new Error("no plain round expected");
+  };
+  assert.ok((await reap(["plan"], {}, noRound, res)).ok);
+  assert.ok((await reap(["run"], { only: "inst-a, inst-b" }, noRound, res)).ok);
+  assert.ok((await reap(["run"], { tmp: true }, noRound, res)).ok);
+  assert.deepEqual(asked, ["read", { worktrees: ["inst-a", "inst-b"], tmp: false }, { worktrees: [], tmp: true }]);
+  for (const values of [{ only: "" }, { only: "a b;rm" }, { only: "inst-a", "dry-run": true }]) {
+    assert.equal((await reap(["run"], values, noRound, res)).ok, false, JSON.stringify(values));
+  }
+  assert.equal(asked.length, 3, "a refused call reaches nothing");
 });
 
 test("the reaper config: no section is absent (mark only), a malformed one is unreadable, minutes become ms", () => {

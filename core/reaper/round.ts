@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { judgeLoad, type LoadSample } from "../capacity/capacity.ts";
 import { dedupeKey, eventDef, type EventType, type StoredEvent } from "../contract/index.ts";
 import type { Exec, OrcaAdapter, WorkerRow, WorktreeRow } from "../contract/orca.ts";
@@ -8,7 +9,7 @@ import type { Appended, EventFilter } from "../store/store.ts";
 import { type Check, type BlockReason as CheckReason, evidenceInWorktree, openWork, preDelete } from "./checks.ts";
 import type { ReaperConfig, ReaperConfigRead } from "./config.ts";
 import { type DockerState, dockerState, sweepDocker } from "./docker.ts";
-import { branchOf, type Finished, judgeFinished, repoOf, withRemoteCase } from "./finished.ts";
+import { branchOf, type Finished, judgeFinished, NO_TRACE, repoOf, withRemoteCase } from "./finished.ts";
 import { composeRunning, listening, readStacks, type Stacks } from "./live.ts";
 import { blockedKey, dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
 
@@ -40,7 +41,30 @@ export type ReaperDeps = {
   intervalMs?: number;
 };
 
-export type ReapOptions = { trigger?: "timer" | "hint"; markOnly?: boolean; signal?: AbortSignal };
+export type ReapOptions = {
+  trigger?: "timer" | "hint";
+  markOnly?: boolean;
+  signal?: AbortSignal;
+  /**
+   * Decision 234: card instance ids the owner confirmed on the panel. Only these are judged, in this
+   * one round. The confirmation stands in for the two sightings and the grace, for "finished" on a
+   * card with no PR and no Dispatch, and for the git checks on a card whose path is gone; every other
+   * gate still runs and blocks.
+   */
+  confirmed?: readonly string[];
+  /** Decision 234: judge every candidate's finished state, removing nothing, so the panel can say why. */
+  explain?: boolean;
+};
+
+/** One candidate as the panel lists it (decision 234). `no_trace`: no PR and no Dispatch. */
+export type Judged = {
+  ref: string;
+  name: string;
+  path: string;
+  gone: boolean;
+  state: Finished["state"] | "no_trace";
+  why: string;
+};
 
 export type BlockReason = CheckReason | "in_use" | "archive_hook_failed" | "remote_host" | "config_unreadable" | "repo_unreadable";
 export type Blocked = { kind: string; ref: string; reason: BlockReason };
@@ -67,6 +91,8 @@ export type ReapReport = {
   missed: number;
   /** Setup shells start_unit recorded and this round closed after their units were released (decision 202). */
   shells_closed: string[];
+  /** Filled only when `explain` was asked. */
+  judged: Judged[];
   planned: Planned[];
 };
 
@@ -192,6 +218,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     docker_skipped: false,
     missed: missedSlots(rounds, now, d.intervalMs),
     shells_closed: [],
+    judged: [],
     planned: [],
   };
   const write = (e: Planned) => {
@@ -282,7 +309,8 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
 
   // Not a card removal, so mark-only rounds (by flag or by no config) close it too; a dry run does not,
   // nor does a round whose protect list could not be read.
-  if (typeof workers !== "string" && d.append && d.config.kind !== "unreadable") r.shells_closed = await closeReleasedShells(d, config, scope, workers);
+  // A confirmed round (decision 234) closes nothing the owner did not name.
+  if (typeof workers !== "string" && d.append && d.config.kind !== "unreadable" && !o.confirmed) r.shells_closed = await closeReleasedShells(d, config, scope, workers);
 
   const ps = await d.orca.worktreePs({});
   if (!ps.ok) rootFailed(`worktree ps: ${ps.error.code}`);
@@ -355,6 +383,15 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   r.marked = scope.filter((c) => marked.has(c.id)).map((c) => c.instanceId);
   const candidates = scope.filter((c) => !marked.has(c.id) && !unknown.has(c.id));
   r.candidates = candidates.map((c) => c.instanceId);
+  const workerRows = typeof workers === "string" ? [] : workers;
+  if (o.explain && r.roots_ok) {
+    for (const c of candidates) {
+      const f = await judgeFinished(c, d.gh, workerRows);
+      const state = f.state === "unknown" && f.why === NO_TRACE ? "no_trace" : f.state;
+      const why = f.state === "finished" ? (f.pr ? `PR #${f.pr.number}` : "Dispatch settled") : f.why;
+      r.judged.push({ ref: c.instanceId, name: c.displayName ?? branchOf(c), path: c.path, gone: !existsSync(c.path), state, why });
+    }
+  }
   if (!r.roots_ok || !config) return finish();
 
   // Candidate rows: first sighting `seen`, reached again (or no longer a clean candidate) `cleared`.
@@ -388,14 +425,25 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   // Targets: a candidate in two different rounds in a row, past the grace, and positively finished.
   const pressure = judgeLoad(d.sample()).level !== "ok";
   const grace = pressure ? config.minGapMs : config.graceMs;
-  const workerRows = typeof workers === "string" ? [] : workers;
   const targets: { card: WorktreeRow & { instanceId: string }; finished: Extract<Finished, { state: "finished" }> }[] = [];
+  const confirmed = o.confirmed ? new Set(o.confirmed) : null;
+  for (const id of confirmed ?? []) if (!isCandidate.has(id)) r.unseen.push(`not a candidate now: ${id}`);
+  const gone = new Set<string>();
   for (const c of candidates) {
-    const seen = firstSeen.get(c.instanceId);
-    if (!seen || seen.round >= round || now - seen.at < grace) continue;
-    const f = await judgeFinished(c, d.gh, workerRows);
+    if (confirmed) {
+      if (!confirmed.has(c.instanceId)) continue;
+    } else {
+      const seen = firstSeen.get(c.instanceId);
+      if (!seen || seen.round >= round || now - seen.at < grace) continue;
+    }
+    let f = await judgeFinished(c, d.gh, workerRows);
+    if (confirmed && !existsSync(c.path)) gone.add(c.id);
+    // Decision 234: only the owner's confirmation lets a card no PR or Dispatch speaks for, or one
+    // whose checkout is already gone, count as finished.
+    if (confirmed && f.state === "unknown" && (f.why === NO_TRACE || gone.has(c.id))) f = { state: "finished", carried: false, pr: null };
     if (f.state === "finished") targets.push({ card: c, finished: f });
     else if (f.state === "unknown") r.unseen.push(`finished? ${c.instanceId}: ${f.why}`);
+    else if (confirmed) r.unseen.push(`not finished: ${c.instanceId}: ${f.why}`);
   }
   r.targets = targets.map((t) => t.card.instanceId);
   if (o.markOnly || !d.append) return finish();
@@ -429,7 +477,8 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
       if (s.kind === "no_docker") r.docker_skipped = true;
       return composeRunning(card, s);
     },
-    (card, f) => preDelete(card, f, d.exec, d.gh),
+    // A checkout already gone has no status to read; its HEAD must still be on GitHub (decision 234).
+    (card, f) => preDelete(card, f, d.exec, d.gh, gone.has(card.id) && !existsSync(card.path)),
   ];
   for (const { card, finished } of targets) {
     if (signal.aborted) {
@@ -462,7 +511,11 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     if (c && !taskCard.has(w.taskId)) taskCard.set(w.taskId, c.instanceId);
   }
   const holds = dockerHolds(holdEvents(d.events));
-  const owned = [...holds.values()].filter((h) => h.held && reapedCards.has(taskCard.get(h.owner) ?? h.owner));
+  // A confirmed round sweeps only what the cards it removed now held (decision 234): earlier holds are the
+  // timer round's, and only this round can still map a Task-owned hold to its card.
+  const removedNow = new Set(r.reaped.filter((x) => x.startsWith("worktree:")).map((x) => x.slice("worktree:".length)));
+  const swept = confirmed ? removedNow : reapedCards;
+  const owned = [...holds.values()].filter((h) => h.held && swept.has(taskCard.get(h.owner) ?? h.owner));
   if (owned.length > 0 && !signal.aborted) {
     const s = await docker();
     // A Docker that does not answer keeps every hold for the next round.
