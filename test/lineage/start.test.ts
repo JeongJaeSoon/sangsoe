@@ -66,6 +66,8 @@ type Setup = {
   newTaskStatus?: string;
   /** The role line task-list --full shows on task_new's spec; worker by default. */
   existingRole?: string;
+  /** The first line of task_lead's spec in the orchestrator's Run; null leaves task_lead out of that list. */
+  requesterRoleLine?: string | null;
   /** What `dispatch-show --task task_new` answers after the start. */
   newDispatch?: "missing";
   taskList?: () => ExecResult;
@@ -119,10 +121,12 @@ function harness(s: Setup = {}) {
             }),
       "orchestration-run-current": ok({ runId: s.heldRun === undefined ? RUN : s.heldRun }),
       "orchestration-task-create": ok({ task: { id: NEW_TASK } }),
-      "orchestration-task-list": () =>
+      "orchestration-task-list": (args: readonly string[]) =>
         s.taskList
           ? s.taskList()
-          : ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t", spec: `sangsoe-role: ${s.existingRole ?? "worker"}\nbrief` }] }),
+          : flag(args, "run") === ORCH_RUN
+            ? ok({ tasks: s.requesterRoleLine === null ? [] : [{ id: "task_lead", status: "dispatched", title: "lead", spec: `${s.requesterRoleLine ?? "sangsoe-role: lead"}\nprogram brief` }] })
+            : ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t", spec: `sangsoe-role: ${s.existingRole ?? "worker"}\nbrief` }] }),
       "orchestration-worker-start": () => (s.workerStart ? s.workerStart() : ok({ dispatchId: "ctx_new", worktreeId: CHILD_TREE })),
       "worktree-create": ok({ worktree: { id: CHILD_TREE, path: CHILD_PATH, repoId: "repo-0001" } }),
       "terminal-list": ok({ terminals: [{ handle: SHELL, worktreeId: CHILD_TREE, executionHostId: "local" }], hostScope: { hostIds: ["local"], omittedHostIds: [] }, truncated: false }),
@@ -312,6 +316,87 @@ test("lineage_invalid: an unsettled Dispatch Orca cannot call live still gives a
 test("lineage_invalid: an unreadable worker-list is not a pass for the orchestrator", async () => {
   const h = harness({ replies: { "orchestration-worker-list": () => fail("runtime_unavailable") } });
   assertRefused(h, await start(h, request({ requester: orchestrator })), "lineage_invalid");
+});
+
+// ---- decision 243: a lead that holds its Run but has no Task ----
+
+/** A lead started outside start_unit: it holds its Run and runs in its worktree, with no Dispatch of its own. */
+const taskless: Requester = noTask;
+
+test("decision 243: a Task-less lead holding the Run starts a worker under its worktree; the rows name that Run", async () => {
+  const h = harness();
+  const out = await start(h, request({ requester: taskless }));
+  assert.equal(out.kind, "started", JSON.stringify(out));
+  assert.equal(flag(h.named("worktree create")[0] ?? [], "parent-worktree"), `id:${PARENT_TREE}`);
+  assert.equal(flag(h.called("worker-start")[0] ?? [], "run"), RUN);
+  assert.equal(h.called("worker-list").length, 2, "its worktree is scanned for a live Dispatch");
+  assert.ok(!h.called("dispatch-show").some((c) => flag(c, "task") === "task_lead"), "no Dispatch of its own to read");
+  assert.equal(h.store.events({ type: "item_created" })[0]?.payload.who, `lead:${RUN}`);
+  assert.equal(h.store.events({ type: "unit_started" })[0]?.payload.run, RUN);
+});
+
+test("decision 243: a Task-less lead starts no lead, and its refusal ends at the owner", async () => {
+  const h = harness();
+  const out = await start(h, request({ requester: taskless, childRole: "lead" }));
+  assertRefused(h, out, "lineage_invalid");
+  assert.match(out.kind === "refused" ? out.detail : "", /리드는 리드를 시작하지 않는다/);
+  assert.equal(out.kind === "refused" && out.escalatedTo, "owner");
+  assert.equal(h.called("send").length, 0);
+  assert.deepEqual(h.store.events({ type: "escalation" })[0]?.payload, { to: "owner", reason: "start_refused:lineage_invalid" });
+});
+
+test("decision 243: a session with a live Dispatch in its worktree cannot drop its Task to pass as a Task-less lead", async () => {
+  const live = harness({ liveDispatchInParent: true });
+  const out = await start(live, request({ requester: taskless }));
+  assertRefused(live, out, "lineage_invalid");
+  assert.match(out.kind === "refused" ? out.detail : "", /ctx_lead/);
+  const unread = harness({ replies: { "orchestration-worker-list": () => fail("runtime_unavailable") } });
+  assertRefused(unread, await start(unread, request({ requester: taskless })), "lineage_invalid");
+});
+
+test("decision 243: a Task-less lead must hold the Run and name the worktree it runs in", async () => {
+  for (const heldRun of [null, ORCH_RUN]) {
+    const h = harness({ heldRun });
+    assertRefused(h, await start(h, request({ requester: taskless })), "lineage_invalid");
+  }
+  const { worktreeId: _w, ...noTree } = taskless;
+  const bare = harness();
+  const r = await startUnit(ports(bare, () => 1, "/"), request({ requester: noTree, repo: "name:acme-web" }));
+  assertRefused(bare, r, "lineage_invalid");
+  assert.match(r.kind === "refused" ? r.detail : "", /worktree 없이 시작하는 것은 오케스트레이터뿐/);
+  const elsewhere = harness();
+  const e = await startUnit(ports(elsewhere, () => 1, "/home/dev/workspaces/api/feature-a"), request({ requester: taskless }));
+  assertRefused(elsewhere, e, "lineage_invalid");
+  assert.match(e.kind === "refused" ? e.detail : "", /작업 폴더/);
+});
+
+test("decision 243: a Task-less lead's worker sits at depth 1 under the depth setting", async () => {
+  const deep = harness();
+  assertRefused(deep, await start(deep, request({ requester: taskless, maxDepth: 0 })), "depth_exceeded");
+  const fits = harness();
+  assert.equal((await start(fits, request({ requester: taskless, maxDepth: 1 }))).kind, "started");
+});
+
+test("decision 243: MCP start_unit passes a lead with no taskId to the core", async () => {
+  const h = harness();
+  const r = await handle({ role: "lead", worktreeId: PARENT_TREE, runId: RUN, childRole: "worker", spec: "brief" }, ports(h));
+  assert.equal(r.ok && r.value.kind, "started", JSON.stringify(r));
+});
+
+test("decision 243 (다): a lead with a Task is a lead only if its Task's role line says so, read from its Dispatch's Run", async () => {
+  // A depth-1 worker holding a Run of its own would otherwise pass as a lead.
+  const worker = harness({ requesterRoleLine: "sangsoe-role: worker" });
+  const out = await start(worker, request());
+  assertRefused(worker, out, "lineage_invalid");
+  assert.match(out.kind === "refused" ? out.detail : "", /sangsoe-role/);
+  const read = worker.called("task-list").find((c) => flag(c, "run") === ORCH_RUN) ?? [];
+  assert.ok(read.includes("--full"), "the spec comes from task-list --full on the Dispatch's Run");
+  for (const s of [{ requesterRoleLine: null }, { requesterRoleLine: "program brief, no role line" }, { taskList: () => fail("runtime_unavailable") }]) {
+    const h = harness(s);
+    assertRefused(h, await start(h), "lineage_invalid");
+  }
+  const lead = harness();
+  assert.equal((await start(lead)).kind, "started");
 });
 
 test("depth_exceeded: an orchestrator does not start a lead that could not start workers", async () => {
