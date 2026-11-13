@@ -3,7 +3,7 @@
   "execution": "trusted-worker",
   "id": "sangsoe",
   "name": "sangsoe",
-  "version": "0.1.6-rc.2",
+  "version": "0.1.6-rc.3",
   "description": "Status bar, panel and timer-driven monitors for sangsoe, the orchestration layer for Claude Code sessions on Orca.",
   "repository": "https://github.com/JeongJaeSoon/sangsoe",
   "engines": { "orca": ">=1.4.248" },

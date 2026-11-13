@@ -2,7 +2,14 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
-## Unreleased
+## 0.1.6-rc.3 (pre-release)
+
+Everything since `v0.1.6-rc.2`: decisions 237 to 240 and a fix to the test of 219. A pre-release for checking the hooks and gates, the 리소스 section and doctor on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
+
+### Upgrading from 0.1.6-rc.2
+
+- **Re-approve.** The Orca plugin's content and its vendored core changed, so the plugin waits for approval again. It asks for no new capability. Have the review of the build recorded with `sangsoe review record` by someone other than the session that wrote its pull request, then run `sangsoe plugin approve`, as the README's Update section says.
+- **Restart every running session.** The Claude plugin has a new `StopFailure` hook (237), which a session loads when it starts, and the version changed, so a server started under 0.1.6-rc.2 refuses `start_unit` with `server_stale`: restart each session as 0.1.6-rc.1's Upgrading says.
 
 ### Changes
 
@@ -10,7 +17,6 @@ Decision numbers refer to `docs/decisions.md`.
 - **A repository can ask its UI evidence for a surface and measures (238).** The panel's 리소스 section passed a browser measurement and still failed in the real Orca panel, because a `ui` evidence row counted with no measurement in it. `verify_tier.ui_evidence` in `config.json` now names, per repository, the surfaces and measures its `ui` rows must carry; land counts such a row only when its `observed` is a JSON object with one of those surfaces and a number for each measure. `evidence_record` takes `observed` and `sangsoe evidence record` takes `--observed` to write it. A repository with no entry is checked as before. The `ui-review` and `deliver-ticket` skills say a host-app panel is measured in the real host.
 - **The raw-start guard leaves other programs' sessions alone (239).** `[gate:start]` refused a raw worker start in any session on the machine, so another program's lead using its own Orca commands was blocked. It now refuses only in a session that is sangsoe's: one started from a sangsoe agent, one sangsoe opened, or one whose Task sangsoe created. That holds for every start the guard knows, a detached `claude` included. When the store or the session's first prompt cannot be read it still refuses.
 - **What only the owner clears is recorded and listed (240).** `resource_record` and `sangsoe resource record` also take a checkout, a registration, a branch, a file or a process. These are never cleared by REAPER; the 리소스 section lists them under 기록됨·오너 손 with no button, and the session that recorded them releases them once it has.
-- The Claude plugin's hooks changed (a `StopFailure` hook, 237), and the Orca plugin's content and its vendored core changed, so the Orca plugin waits for approval again.
 
 ### Fixes
 
