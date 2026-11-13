@@ -20,6 +20,8 @@ export type ResView = {
     terminals: Reading<{ count: number }>;
     processes: Reading<{ claude: Usage; node: Usage }>;
     tmp: Reading<Usage>;
+    /** Decision 240; absent from an older core. */
+    recorded?: { kind: string; ref: string; owner: string; since: string }[];
   };
   worktrees: Reading<{ rows: ResRow[]; markOnly: boolean; unseen: string[] }>;
   tmp: Reading<Usage>;
@@ -203,7 +205,24 @@ function madeBlock(v: Pick<ResView, "made">): string {
   return (
     `<h3>sangsoe 가 만든 것</h3><table class="tbl res"><thead><tr><th>종류</th><th class="num">개수</th><th class="num">크기</th></tr></thead><tbody>` +
     rows.map(([k, c]) => `<tr><td>${k}</td>${c}</tr>`).join("") +
-    `</tbody></table><p class="foot">프로세스는 보여 주기만 한다. 끝내지 않는다.</p>`
+    `</tbody></table><p class="foot">프로세스는 보여 주기만 한다. 끝내지 않는다.</p>` +
+    ownedBlock(m.recorded ?? [])
+  );
+}
+
+const KIND: Record<string, string> = { checkout: "checkout", registration: "등록", branch: "브랜치", file: "파일", process: "프로세스" };
+
+/** Decision 240: what a session recorded and only its owner clears; there is nothing here to press. */
+function ownedBlock(rows: NonNullable<ResView["made"]["recorded"]>): string {
+  if (rows.length === 0) return "";
+  const tr = (r: (typeof rows)[number]) => {
+    const kind = KIND[r.kind] ?? r.kind;
+    return `<tr><td class="k">${esc(kind)}</td><td title="${esc(`${r.ref} · ${hhmm(r.since)}부터`)}">${esc(r.ref)}</td><td class="o" title="${esc(r.owner)}">${esc(r.owner)}</td></tr>`;
+  };
+  return (
+    `<h3>기록됨·오너 손</h3><table class="tbl res owned"><thead><tr><th class="k">종류</th><th>이름</th><th class="o">소유</th></tr></thead><tbody>` +
+    rows.map(tr).join("") +
+    `</tbody></table><p class="foot">sangsoe 는 이것을 치우지 않는다. 기록한 쪽이 내리고 released 로 남긴다.</p>`
   );
 }
 

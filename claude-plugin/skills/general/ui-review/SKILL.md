@@ -39,6 +39,11 @@ can pass every rule and still not work.
      element marked `data-ui-review-ignore` is skipped, with the reason in the result.
    - A page behind a login is measured only where a session already exists (an exported static
      page, a dev fixture); signing in is the human's step.
+   - A screen that lives inside a host app (a plugin panel) is measured in the real host with real
+     data; a browser render or a plugin screenshot is only a pre-check. When the repository's
+     verify-tier config names a surface and measures for its `ui` evidence (decision 238), the
+     evidence's `observed` (the evidence tool's `observed` field) is a JSON object with that surface
+     and a number for each measure.
    - A FAIL is a rule broken past its threshold. A WARN is a judgment call: decide each one and
      write why.
 3. **Walk the scenario** with [references/walkthrough.md](references/walkthrough.md): the user's
@@ -72,6 +77,7 @@ made on.
 
 - In a repository sangsoe manages, a PR that changes a screen is verification tier V3
   (decision 85), which asks for screenshots or a GIF and a lead's verdict on them. This table is
-  where that verdict starts; this skill does not take the screenshots or set the tier.
+  where that verdict starts; this skill does not take the screenshots or set the tier. Land
+  refuses a `ui` row that lacks the surface or a measure the config asks for.
 - Product-specific rules (one product's tokens, a team's layout choice) live in that product's
   repository, not here.

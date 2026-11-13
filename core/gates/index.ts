@@ -57,6 +57,8 @@ const AGENTS: Record<string, Role> = {
 // The opening Orca writes into every dispatched worker's first prompt.
 const PREAMBLE = /You are working inside Orca, a multi-agent IDE\.\s+You are a dispatched worker\b/;
 
+export const isSangsoeAgent = (agentType: string) => Object.hasOwn(AGENTS, agentType);
+
 /** A declared agent first; else a session whose first prompt is Orca's Dispatch preamble is a worker. */
 export function roleOf(agentType: string | undefined, firstPrompt: () => string | undefined): Role {
   if (agentType && AGENTS[agentType]) return AGENTS[agentType];

@@ -15,6 +15,7 @@ const factsAt = (load: ReturnType<typeof judgeLoad>): Facts => ({
   ownOpenPrs: () => undefined,
   readScript: () => undefined,
   doneBlockers: () => [],
+  sangsoe: () => true,
 });
 
 function homeWith(config: string | null): string {

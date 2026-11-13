@@ -19,7 +19,7 @@ description: "Use before a sangsoe worker or lead sends worker_done, or when the
 
 - 검증·프리뷰로 띄운 compose stack 은 `docker compose -p <project> down` 으로 내린다. `-v` 는 붙이지 않는다.
 - 프로세스는 이 세션이 띄우고 PID 를 기록한 것만 그 PID 로 끝낸다. 이름·패턴으로 고르는 kill 은 쓰지 않는다.
-- 남겨야 하는 자원은 이유와 기한을 `resource_record` 로 남긴다. 기록이 없는 자원은 REAPER 가 소유자를 몰라 치우지 못한다.
+- 남겨야 하는 자원은 이유와 기한을 `resource_record` 로 남긴다. 기록이 없는 자원은 REAPER 가 소유자를 몰라 치우지 못한다. Docker 가 아닌 것(checkout·등록·브랜치·파일·프로세스)은 패널의 "기록됨·오너 손" 에만 보이고 sangsoe 가 치우지 않는다. 내렸으면 `action: released` 로 남긴다(결정 240).
 - 임시 파일은 브리프가 정한 임시 폴더째 휴지통으로 옮긴다. 변수로 만든 경로를 `rm` 하지 않는다.
 - worktree 는 지우지 않는다. worker_done 전에 지우면 보고할 곳이 사라진다.
 
