@@ -1,5 +1,5 @@
 import { readFileSync, realpathSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { Host } from "./host.ts";
 
 /** The entry a plugin-launched sangsoe MCP server runs (decision 211). */
@@ -25,6 +25,8 @@ export function installedTree(entry: string): InstalledTree | null {
 }
 
 const PS = ["-axo", "pid=,etime=,args="];
+// lsof can hang on an unreachable network mount; the end of install must not.
+const TIMEOUT_MS = 10_000;
 
 export const RESTART_LINE =
   "restart each with claude --continue in its terminal (quit the session, then start it again in the same directory with the flags it was started with, such as --agent); /reload-plugins does not restart the server";
@@ -42,17 +44,18 @@ type Server = { pid: number; startedAt: number; entry: string };
 function servers(stdout: string, now: number): Server[] {
   const out: Server[] = [];
   for (const line of stdout.split("\n")) {
-    const [pid, etime, ...args] = line.trim().split(/\s+/);
-    const entry = args.find((a) => SERVER_ENTRY.test(a));
+    // Only `node <entry>`, as the plugin's .mcp.json launches it: an editor or pager open on server.ts is no server.
+    const [pid, etime, exe, entry] = line.trim().split(/\s+/);
     const ms = elapsedMs(etime ?? "");
-    if (entry && ms !== undefined && /^\d+$/.test(pid ?? "")) out.push({ pid: Number(pid), startedAt: now - ms, entry });
+    if (basename(exe ?? "") !== "node" || !entry || !SERVER_ENTRY.test(entry)) continue;
+    if (ms !== undefined && /^\d+$/.test(pid ?? "")) out.push({ pid: Number(pid), startedAt: now - ms, entry });
   }
   return out;
 }
 
 /** The working directory of each pid, from one `lsof` call; a pid lsof cannot read is missing. */
 function workingDirs(host: Host, pids: number[]): Map<number, string> {
-  const r = host.run("lsof", ["-a", "-d", "cwd", "-Fpn", "-p", pids.join(",")]);
+  const r = host.run("lsof", ["-a", "-d", "cwd", "-Fpn", "-p", pids.join(",")], undefined, TIMEOUT_MS);
   const dirs = new Map<number, string>();
   let pid: number | undefined;
   for (const line of r.stdout.split("\n")) {
@@ -73,7 +76,7 @@ export function staleSessions(
 ): string[] {
   const installed = deps.installed ?? installedTree;
   const now = (deps.now ?? Date.now)();
-  const ps = host.run("ps", PS, { LC_ALL: "C" });
+  const ps = host.run("ps", PS, { LC_ALL: "C" }, TIMEOUT_MS);
   if (ps.code !== 0) return [`stale sessions: cannot read \`ps ${PS.join(" ")}\`, so running sessions were not checked`];
   const stale = servers(ps.stdout, now).flatMap((s) => {
     const tree = installed(s.entry);

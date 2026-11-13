@@ -50,6 +50,8 @@ test("decision 247: two servers started before their install are two rows and on
     // Not a sangsoe server.
     `  104  1-00:00:00 ${NODE} /somewhere/else/server.js`,
     `  105     01:00:00 /bin/zsh -l`,
+    // An editor open on a checkout's server.ts: its install would read as gone, but it is no server.
+    `  106     10:00 /usr/bin/vim /home/u/src/sangsoe/claude-plugin/mcp/server.ts`,
   ].join("\n");
   const { host, calls } = processHost(ps, { 101: "/home/u/work/acme-api", 102: "/home/u/work/acme-web" });
   const lines = staleSessions(host, { installed, now: () => NOW });
