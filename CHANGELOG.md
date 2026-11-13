@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Fixes
+
+- A panel button or shell command (an `owner_action` with no session) no longer marks a Dispatch's open wait (which names no session either) `입력 확인됨 · 재개 대기`, nor credits its release to the owner: a wait now matches the owner's words only on the session it names.
+
 ## 0.1.6-rc.3 (pre-release)
 
 Everything since `v0.1.6-rc.2`: decisions 237 to 240 and a fix to the test of 219. A pre-release for checking the hooks and gates, the 리소스 section and doctor on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
