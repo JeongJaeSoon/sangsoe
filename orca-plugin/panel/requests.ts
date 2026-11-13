@@ -1,6 +1,7 @@
 // The worker's side of the panel: plugin.request handlers and status bar item B. Both forward to the
 // core's PanelCore (through core-link.ts) and pass its answer back; nothing is counted or written here.
 import type { PanelCore } from "../core-link.ts";
+import { MAX_REAP } from "./resources.ts";
 
 type Reply = { ok: true; value: unknown } | { ok: false; refusal: { code: string; reason: string; fix: string } };
 export type StatusItem = { text: string; tone: "neutral" | "danger"; tooltip: string };
@@ -21,7 +22,7 @@ export function parseAct(raw: unknown): { kind: "answer"; decision: string; choi
 
 // REAPER's card instance ids; the panel sends back only ids a reading listed (decision 234).
 const CARD = /^[A-Za-z0-9._:-]{1,200}$/;
-const MAX_CARDS = 200;
+const MAX_CARDS = MAX_REAP;
 
 /** The confirmed 정리 a panel may ask for; anything else is refused before the core is touched. */
 export function parseReap(raw: unknown): { worktrees: string[]; tmp: boolean } | null {

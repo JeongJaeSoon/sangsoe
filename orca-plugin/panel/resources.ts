@@ -111,9 +111,12 @@ function madeBlock(v: ResView): string {
   );
 }
 
+/** The most cards one `panel.reap` takes; the rest wait for the next 정리. */
+export const MAX_REAP = 200;
+
 /** What 정리 would take: the confirm list is exactly this. */
 export function reapTargets(v: ResView): { worktrees: string[]; tmp: boolean } {
-  const worktrees = v.worktrees.ok && !v.worktrees.value.markOnly ? v.worktrees.value.rows.map((r) => r.ref) : [];
+  const worktrees = v.worktrees.ok && !v.worktrees.value.markOnly ? v.worktrees.value.rows.slice(0, MAX_REAP).map((r) => r.ref) : [];
   return { worktrees, tmp: v.trash && v.tmp.ok && v.tmp.value.count > 0 };
 }
 
@@ -128,6 +131,9 @@ function candidates(v: ResView, s: Extract<ResState, { kind: "shown" }>, stale: 
       rows.push(`<tr><td class="title" title="${esc(`${r.name}: ${r.path}`)}">${esc(r.name)}</td><td title="${esc(why)}">${esc(why)}</td><td class="num">${size(r.kb)}</td></tr>`);
     }
     if (v.worktrees.value.markOnly) notes.push("reaper 설정이 없어 worktree 는 정리하지 않는다. sangsoe doctor 를 본다.");
+    else if (v.worktrees.value.rows.length > MAX_REAP) {
+      notes.push(`한 번에 worktree ${MAX_REAP}건까지 정리한다. 나머지 ${n(v.worktrees.value.rows.length - MAX_REAP)}건은 다음 정리에서.`);
+    }
   }
   if (!v.tmp.ok) notes.push(`임시 폴더를 ${unread(v.tmp.why)}.`);
   else if (v.tmp.value.count > 0) {

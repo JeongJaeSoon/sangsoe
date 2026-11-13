@@ -130,6 +130,17 @@ test("a stale reading cannot be confirmed, and refresh waits while a 정리 runs
   assert.doesNotMatch(renderResBody({ kind: "shown", view: view() }, NOW), /data-res="refresh" disabled/);
 });
 
+test("one 정리 sends at most as many cards as panel.reap accepts, and says the rest wait", () => {
+  const rows = Array.from({ length: 201 }, (_, i) => ({ ref: `inst-${i}`, name: `n${i}`, path: `/w/${i}`, gone: false, state: "finished", why: "PR #1", kb: 1 }));
+  const v = view({ worktrees: { ok: true, value: { rows, markOnly: false, unseen: [] } } });
+  const t = reapTargets(v);
+  assert.equal(t.worktrees.length, 200);
+  assert.ok(parseReap(t), "the handler takes what the panel sends");
+  const html = renderResBody({ kind: "shown", view: v, confirm: true }, NOW);
+  assert.match(html, /data-res="run">201건 정리</, "200 worktrees and the temp folders");
+  assert.match(html, /한 번에 worktree 200건까지 정리한다\. 나머지 1건은 다음 정리에서\./);
+});
+
 test("the result counts only worktrees as worktrees", () => {
   const html = renderResBody({ kind: "shown", view: view(), result: { reaped: ["worktree:inst-a", "container:c1"], blocked: [], skipped: [], tmp: null } }, NOW);
   assert.match(html, />worktree 1건 정리, Docker 1건 정리</);

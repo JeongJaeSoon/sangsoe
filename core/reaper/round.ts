@@ -511,7 +511,8 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   }
   const holds = dockerHolds(holdEvents(d.events));
   const owned = [...holds.values()].filter((h) => h.held && reapedCards.has(taskCard.get(h.owner) ?? h.owner));
-  if (owned.length > 0 && !signal.aborted) {
+  // The owner confirmed worktrees, not Docker ids they never saw: the timer round sweeps those (decision 234).
+  if (owned.length > 0 && !signal.aborted && !confirmed) {
     const s = await docker();
     // A Docker that does not answer keeps every hold for the next round.
     if (s.kind === "absent") r.docker_skipped = true;

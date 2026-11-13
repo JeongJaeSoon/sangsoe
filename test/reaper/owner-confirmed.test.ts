@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import type { WorktreeRow } from "../../core/index.ts";
-import { assertNeverForbidden, card as anyCard, dropScratch, finishedCard as anyFinished, makeRepo, scratch, startedBySangsoe, world } from "./harness.ts";
+import { recordResource, type WorktreeRow } from "../../core/index.ts";
+import { assertNeverForbidden, card as anyCard, dropScratch, finishedCard as anyFinished, makeRepo, rounds, scratch, startedBySangsoe, world } from "./harness.ts";
 
 after(dropScratch);
 
@@ -68,6 +68,22 @@ test("a registration whose path is gone loses its Orca entry without git status,
   assert.deepEqual(r.reaped.sort(), [`worktree:${gone.instanceId}`, `worktree:${headless.instanceId}`].sort());
   assert.deepEqual(r.blocked, [{ kind: "worktree", ref: local.instanceId, reason: "unpushed" }]);
   assert.ok(!rms(w).some((x) => x.includes(local.id)));
+});
+
+test("a confirmed round touches no Docker resource, not even one an earlier round left held", async () => {
+  const w = world();
+  finishedCard(w, "earlier");
+  recordResource(w.store, { kind: "volume", ref: "earlier_data", owner: "inst-earlier" });
+  w.docker.objects.set("earlier_data", { kind: "volume" });
+  w.docker.state = "absent";
+  await rounds(w, 3, 30);
+  assert.ok(w.types("reap_done").length === 0 || !w.types("reap_done").some((p) => p.ref === "earlier_data"));
+  w.docker.state = "up";
+  const c = finishedCard(w, "confirmed-only");
+  const r = await w.round({ confirmed: [c.instanceId] });
+  assert.deepEqual(r.reaped, [`worktree:${c.instanceId}`]);
+  assert.ok(w.docker.objects.has("earlier_data"), "the owner confirmed one worktree, not a volume they never saw");
+  assert.ok(!w.docker.calls.some((x) => / rm /.test(` ${x} `)), w.docker.calls.join("\n"));
 });
 
 test("no reaper config: a confirmed card is still not removed", async () => {
