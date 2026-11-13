@@ -56,6 +56,41 @@ export const holdEvents = (events: (f?: EventFilter) => StoredEvent[]) => [
   ...events({ type: "reap_blocked" }),
 ];
 
+/** Decision 240: what only its owner clears. Recorded so the owner sees it; REAPER never takes one. */
+export const OWNER_KINDS = ["checkout", "registration", "branch", "file", "process"] as const;
+export const isOwnerKind = (k: string) => (OWNER_KINDS as readonly string[]).includes(k);
+
+export type OwnerHold = { kind: string; ref: string; owner: string; held: boolean; gen: number; since: string };
+
+/** Folds owner-kind rows per kind, ref and owner: two owners of one branch are two holds, neither contested. */
+export function ownerHolds(events: readonly StoredEvent[]): Map<string, OwnerHold> {
+  const holds = new Map<string, OwnerHold>();
+  for (const e of [...events].sort((a, b) => a.seq - b.seq)) {
+    const p = e.payload as { action?: string; kind: string; ref: string; owner?: string };
+    if (e.type !== "resource" || !isOwnerKind(p.kind)) continue;
+    const owner = p.owner ?? "";
+    const k = `${p.kind}\n${p.ref}\n${owner}`;
+    const h = holds.get(k) ?? { kind: p.kind, ref: p.ref, owner, held: false, gen: 0, since: "" };
+    holds.set(k, h);
+    if (p.action === "created" && !h.held) Object.assign(h, { held: true, since: e.ts });
+    else if (p.action === "released" && h.held) Object.assign(h, { held: false, gen: h.gen + 1 });
+  }
+  return holds;
+}
+
+function recordOwnerKind(store: Appender, input: Required<ResourceInput>): Result<ResourceRecorded> {
+  const { kind, ref, owner, action } = input;
+  const hold = ownerHolds(store.events({ type: "resource" })).get(`${kind}\n${ref}\n${owner}`);
+  if (action === "released" && !hold?.held) return refusal(`${kind} ${ref} is not held by ${owner}`, "only the owner that recorded it releases it");
+  const a = store.append({
+    type: "resource",
+    source: "resource_record",
+    payload: { action, kind, owner, ref },
+    dedupe_key: resourceKey(kind, `${ref}\n${owner}`, action, hold?.gen ?? 0),
+  });
+  return { ok: true, value: { kind, ref, owner, action, seq: a.seq, inserted: a.inserted } };
+}
+
 const resourceKey = (kind: string, ref: string, action: string, gen: number) => {
   const def = eventDef("resource");
   if (!def) throw new Error("no event type resource");
@@ -71,13 +106,17 @@ const resourceKey = (kind: string, ref: string, action: string, gen: number) => 
 export function recordResource(store: Appender, input: ResourceInput): Result<ResourceRecorded> {
   const { kind, ref, owner } = input;
   const action = input.action ?? "created";
-  if (!isDockerKind(kind)) {
-    return refusal(`kind ${JSON.stringify(kind)}: REAPER sweeps only ${DOCKER_KINDS.join(", ")}`, "resource_record {kind: \"container\", ref, owner}");
+  if (!isDockerKind(kind) && !isOwnerKind(kind)) {
+    return refusal(
+      `kind ${JSON.stringify(kind)}: REAPER sweeps ${DOCKER_KINDS.join(", ")}; the owner clears ${OWNER_KINDS.join(", ")}`,
+      "resource_record {kind: \"container\", ref, owner}",
+    );
   }
   for (const [name, v] of [["ref", ref], ["owner", owner]] as const) {
-    if (typeof v !== "string" || v.trim() === "") return refusal(`${name} is empty`, `pass the Docker id as ref and the Task or worktree id as owner`);
+    if (typeof v !== "string" || v.trim() === "") return refusal(`${name} is empty`, `pass the id, name or path as ref and the Task or worktree id as owner`);
   }
   if (action !== "created" && action !== "released") return refusal(`action ${action}`, "action is created or released");
+  if (isOwnerKind(kind)) return recordOwnerKind(store, { kind, ref, owner, action });
   const holdOf = () => dockerHolds(holdEvents((f) => store.events(f))).get(`${kind}\n${ref}`);
   const hold = holdOf();
   if (action === "released" && (!hold?.held || hold.owner !== owner)) {

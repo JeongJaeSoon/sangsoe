@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { renderResBody, type ResView } from "../../orca-plugin/panel/resources.ts";
+import { type ResView, renderResBody } from "../../orca-plugin/panel/resources.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
 
 // Decision 240: what the owner recorded and only the owner clears is listed under 기록됨·오너 손,

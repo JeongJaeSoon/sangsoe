@@ -2,7 +2,7 @@
 // branch, a file, a process). The 리소스 section lists them as 기록됨·오너 손; REAPER never takes them.
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { type Exec, readResourcePart, recordResource, type ReapReport, type ResourceDeps, Store } from "../../core/index.ts";
+import { type Exec, type ReapReport, type ResourceDeps, readResourcePart, recordResource, Store } from "../../core/index.ts";
 import { scratchDir } from "../scratch.ts";
 import { assertNeverForbidden, dropScratch, finishedCard, rounds, world } from "./harness.ts";
 
