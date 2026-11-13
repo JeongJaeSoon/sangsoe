@@ -88,6 +88,9 @@ export type TerminalRow = {
   worktreeId?: string;
   executionHostId?: string;
   agentIdentity?: string;
+  /** `<tabId>:<leafId>` is the `paneKey` of this terminal's agent in `worktree ps` (measured 2026-11-14). */
+  tabId?: string;
+  leafId?: string;
 };
 
 export type WorktreePsRow = {
@@ -192,6 +195,10 @@ export type InboxMessage = {
   payload?: InboxPayload;
   /** Orca's `created_at` (ISO time), when sent: how long a message has sat unread. */
   createdAt?: string;
+  /** Orca's `run_id`: the Run the message belongs to. */
+  runId?: string;
+  /** Orca's `sender_pane_key`: the `worktree ps` paneKey of the terminal that sent it. */
+  senderPane?: string;
 };
 
 export type WorkerRow = {
@@ -349,7 +356,7 @@ export interface OrcaAdapter {
    */
   worktreeCreate(a: { name: string; parent?: string; repo?: string }): Promise<OrcaResult<{ id: string; path: string; repoId?: string }>>;
   /** Live terminals of one worktree; an agent's carries `agentIdentity`, the plain shell create opens does not. */
-  terminalList(a: { worktree: string }): Promise<OrcaResult<LocalRows<TerminalRow>>>;
+  terminalList(a: { worktree?: string }): Promise<OrcaResult<LocalRows<TerminalRow>>>;
   /** One terminal by its handle, never `--all` (decision 202): only a handle start_unit recorded. */
   terminalClose(a: { terminal: string }): Promise<OrcaResult<Receipt>>;
   /** The repo's setup script as Orca holds it (`hookSettings.scripts.setup`); "" when none. */

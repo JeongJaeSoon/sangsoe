@@ -1,10 +1,10 @@
 import { dedupeKey, dedupeSegment, EVENTS } from "../../contract/index.ts";
-import type { GateRow, LocalRows, OrcaResult, WorkerRow, WorkerShow } from "../../contract/orca.ts";
+import type { GateRow, InboxMessage, LocalRows, OrcaResult, WorkerRow, WorkerShow, WorktreePsRow } from "../../contract/orca.ts";
 import type { Act, MonitorDeps, Planned, Reading } from "../monitor.ts";
 import { runAbove, sendNotice } from "../notice.ts";
 
 type Notice = Parameters<typeof sendNotice>[1];
-import { INBOX_PAGE, orchestratorRunOf } from "./coordinator.ts";
+import { type CoordinatorRead, fromMail, INBOX_PAGE, namedRuns, oldUnread, recipientOf } from "./coordinator.ts";
 import { isUnfinished, judgeOrca, keepLastRead, type Observed, ORCA_EVENT_TYPES, observe } from "./judge.ts";
 import { readRefusalHead, refusalPath } from "./mail.ts";
 
@@ -86,49 +86,89 @@ export async function orcaRound(d: MonitorDeps, signal: AbortSignal): Promise<Re
     if (recorded.has(dedupeKey(EVENTS.refusal_report, dispatch, m.id))) continue;
     refusals.set(path, await readRefusal(path));
   }
-  const reads = { ps: value(ps), workers: workerRows, shows, runs, gates, inbox: mail, events, refusals };
+  // A dry run reads the coordinators even with no old mail, so its report shows whom it would judge.
+  const wanted = mail && !signal.aborted && (!d.append || oldUnread(mail, d.now(), d.config).size > 0);
+  const coordinators = wanted ? await readCoordinators(d, mail, value(ps), signal) : { coords: new Map(), calls: [] };
+  const reads = { ps: value(ps), workers: workerRows, shows, runs, gates, inbox: mail, events, refusals, coordinators: coordinators.coords };
   const reading = judgeOrca(reads, d.now(), d.config, previous);
   if (!signal.aborted) previous = keepLastRead(previous, observe(reads));
   const raise = await wakeRaises(d, reading.planned, signal);
-  const stalls = stallNotices(d, reading.planned);
+  const stalls = stallNotices(d, reading.planned, coordinators.coords);
   return {
     ...reading,
     unseen: [...reading.unseen, ...raise.unseen, ...stalls.unseen],
     acts: [...(reading.acts ?? []), ...raise.acts, ...stalls.acts],
+    calls: [...(reading.calls ?? []), ...coordinators.calls],
   };
 }
 
 /**
- * Decision 245: one notice per coordinator stall, to the orchestrator's Run (its own Run when the
- * orchestrator is the one stalled), keyed by the stall's row so a later round is notify's "already".
+ * Decision 245: the coordinator of every Run the inbox page names, from Orca only. `run-show`'s
+ * handle when it is a live terminal whose pane `worktree ps` shows, else the terminal the Run's own
+ * mail to its Dispatches came from (`fromMail`). A Dispatch's worker in that terminal makes it no
+ * coordinator of this kind; a worker list cut short leaves that unknown.
  */
-function stallNotices(d: MonitorDeps, planned: readonly Planned[]): { acts: Act[]; unseen: string[] } {
-  const stalls = planned.flatMap((e) => {
-    const p = e.payload as { run?: string; session?: string };
-    return e.type === "run_stalled" && p.run && p.session ? [{ run: p.run, session: p.session, key: e.dedupe_key ?? p.run }] : [];
-  });
-  if (stalls.length === 0) return { acts: [], unseen: [] };
-  const orch = orchestratorRunOf(d.events({ type: "session_started" }));
-  if (!orch) return { acts: [], unseen: stalls.map((s) => `orchestrator Run unknown: run_stalled ${s.run} written only`) };
-  const acts = stalls.map(({ run, session, key }): Act => {
-    return {
-      what: `tell orchestrator run:${orch}: run ${run} stalled`,
+async function readCoordinators(
+  d: MonitorDeps,
+  inbox: readonly InboxMessage[],
+  ps: LocalRows<WorktreePsRow> | null,
+  signal: AbortSignal,
+): Promise<{ coords: Map<string, CoordinatorRead>; calls: string[] }> {
+  const coords = new Map<string, CoordinatorRead>();
+  const calls: string[] = [];
+  const list = value(await d.orca.terminalList({}));
+  if (!list) return { coords, calls: ["coordinators: terminal list not read"] };
+  const live = new Map(list.rows.map((t) => [t.handle, t]));
+  const panes = new Set((ps?.rows ?? []).flatMap((row) => (row.agents ?? []).map((a) => a.paneKey)));
+  const workers = await pages(d, signal, RUN_PAGES * 2);
+  const busy = workers && !workers.truncated ? new Set(workers.rows.filter(isUnfinished).flatMap((w) => (w.terminal ? [w.terminal] : []))) : undefined;
+  for (const run of namedRuns(inbox)) {
+    if (signal.aborted) break;
+    const shown = value(await d.orca.runShow({ id: run }))?.coordinatorHandle;
+    const t = shown ? live.get(shown) : undefined;
+    const pane = t?.tabId && t.leafId ? `${t.tabId}:${t.leafId}` : undefined;
+    const mail = fromMail(inbox, run);
+    const k = pane && panes.has(pane) && t ? { pane, handle: t.handle } : mail && live.has(mail.handle) ? mail : undefined;
+    coords.set(run, k ? { ...k, ...(busy ? { dispatch: busy.has(k.handle) } : {}) } : {});
+    calls.push(`coordinator run:${run}: ${k ? `${k.handle} pane ${k.pane}${k === mail ? " (from its mail)" : ""}, dispatch ${busy ? busy.has(k.handle) : "unknown"}` : "no live terminal"}`);
+  }
+  return { coords, calls };
+}
+
+/**
+ * Decision 245: one notice per coordinator stall, keyed by the stall's row so a later round is
+ * notify's "already". Its first line names the Run and the coordinator, so a wrong recipient knows.
+ */
+function stallNotices(d: MonitorDeps, planned: readonly Planned[], coords: ReadonlyMap<string, CoordinatorRead>): { acts: Act[]; unseen: string[] } {
+  const acts: Act[] = [];
+  const unseen: string[] = [];
+  for (const e of planned) {
+    const p = e.payload as { run?: string; coordinator?: string };
+    if (e.type !== "run_stalled" || !p.run || !p.coordinator) continue;
+    const { run, coordinator } = p;
+    const to = recipientOf(run, coords);
+    if (!to) {
+      unseen.push(`orchestrator Run not single: run_stalled ${run} written only`);
+      continue;
+    }
+    acts.push({
+      what: `tell run:${to}: run ${run} stalled`,
       wake: true,
       run: async (dd) => ({
         ...(await sendNotice(dd, {
-          key: { target: run, dedupe_key: `notify:${dedupeSegment(run)}:${dedupeSegment(key)}` },
+          key: { target: run, dedupe_key: `notify:${dedupeSegment(run)}:${dedupeSegment(e.dedupe_key ?? run)}` },
           to: "orchestrator",
-          chain: { orchestratorRun: orch },
+          chain: { orchestratorRun: to },
           subject: `⏸ run_stalled: ${run}`,
-          body: `Mail to run:${run} has sat unread ${d.config.stuckMinutes}+ minutes since its coordinator session ${session} last ended a turn.`,
+          body: `run:${run} coordinator ${coordinator} stalled.\nMail to that Run has sat unread ${d.config.stuckMinutes}+ minutes and its coordinator has not worked since it arrived.`,
           msgType: "status",
           source: "orca-monitor",
         })),
         planned: [],
       }),
-    };
-  });
-  return { acts, unseen: [] };
+    });
+  }
+  return { acts, unseen };
 }
 
 const TIER_SUFFIX = /:(worker|lead|orchestrator)$/;

@@ -1,6 +1,5 @@
-import { dedupeKey, EVENTS, type StoredEvent } from "../../contract/index.ts";
-import type { InboxMessage } from "../../contract/orca.ts";
-import { toSessionRow } from "../../session/session.ts";
+import { dedupeKey, EVENTS } from "../../contract/index.ts";
+import type { InboxMessage, LocalRows, WorktreePsRow } from "../../contract/orca.ts";
 import { type MonitorConfig, minutes, type Planned } from "../monitor.ts";
 
 const SOURCE = "orca-monitor";
@@ -8,64 +7,115 @@ const SOURCE = "orca-monitor";
 /** The inbox page the round reads: the newest messages across every recipient. */
 export const INBOX_PAGE = 100;
 
-/** Store rows the coordinator judgment reads besides the Orca reads. */
-export const COORDINATOR_EVENT_TYPES = ["session_started", "turn_ended"] as const;
+/** What the round read about one Run's coordinator, from Orca alone. */
+export type CoordinatorRead = {
+  /** The `worktree ps` paneKey of its live terminal; absent when no live terminal was found. */
+  pane?: string;
+  handle?: string;
+  /** Whether a Dispatch's worker runs in that terminal; absent when the worker list was not read in full. */
+  dispatch?: boolean;
+};
 
-type Coordinator = { session: string; started: StoredEvent };
+const at = (iso: string | undefined) => (iso ? Date.parse(iso) : Number.NaN);
+const isTime = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 
-/** Each Run's latest session_started row, by the Run it held at start. */
-function latestByRun(events: readonly StoredEvent[]): Map<string, Coordinator> {
-  const out = new Map<string, Coordinator>();
-  for (const e of events) {
-    if (e.type !== "session_started") continue;
-    const run = toSessionRow(e).heldRun;
-    if (run && typeof e.payload.session === "string") out.set(run, { session: e.payload.session, started: e });
+/** Per Run, the oldest message to `run:<id>` still unread at least N minutes after Orca made it. */
+export function oldUnread(inbox: readonly InboxMessage[], now: number, c: MonitorConfig): Map<string, InboxMessage> {
+  const out = new Map<string, InboxMessage>();
+  for (const m of inbox) {
+    const sent = at(m.createdAt);
+    if (m.handled || !m.to.startsWith("run:") || Number.isNaN(sent) || now - sent < minutes(c.stuckMinutes)) continue;
+    const run = m.to.slice("run:".length);
+    const before = out.get(run);
+    if (!before || sent < at(before.createdAt)) out.set(run, m);
   }
   return out;
 }
 
-/** The orchestrator's Run: the Run its latest session holding no Dispatch held at start. */
-export function orchestratorRunOf(events: readonly StoredEvent[]): string | undefined {
-  const rows = events.filter((e) => e.type === "session_started").map(toSessionRow);
-  return rows.filter((r) => r.role === "orchestrator" && !r.task && r.heldRun).at(-1)?.heldRun;
+/** Every Run the page names: a recipient `run:<id>` or the message's own Run. */
+export function namedRuns(inbox: readonly InboxMessage[]): string[] {
+  const runs = inbox.flatMap((m) => [...(m.to.startsWith("run:") ? [m.to.slice("run:".length)] : []), ...(m.runId ? [m.runId] : [])]);
+  return [...new Set(runs)];
 }
 
-const at = (iso: string | undefined) => (iso ? Date.parse(iso) : Number.NaN);
+/**
+ * The Run's coordinator as its own mail shows it: the terminal and pane of the newest message of
+ * that Run a terminal sent to one of the Run's Dispatches. Used when `run-show`'s coordinator
+ * handle is no live terminal (measured 2026-11-14: a coordinator that resumed in a new terminal
+ * keeps the old handle there, and a background terminal's list row names no ps pane).
+ */
+export function fromMail(inbox: readonly InboxMessage[], run: string): { pane: string; handle: string } | undefined {
+  const own = inbox.filter((m) => m.runId === run && m.from.startsWith("term_") && m.to.startsWith("dispatch:") && m.senderPane);
+  const m = own.sort((a, b) => at(b.createdAt) - at(a.createdAt))[0];
+  return m?.senderPane ? { pane: m.senderPane, handle: m.from } : undefined;
+}
+
+/** The live coordinators holding no Dispatch: the tops of the Run tree. */
+const tops = (coords: ReadonlyMap<string, CoordinatorRead>) => [...coords].filter(([, k]) => k.pane && k.dispatch === false).map(([run]) => run);
 
 /**
- * Decision 245: a Run whose coordinator holds no Dispatch (the orchestrator, a Task-less lead) and
- * whose mail Orca still shows unread N minutes after it arrived, with no turn ended since, is
- * stalled. One row per stall: the key names the coordinator's last turn end, so its next turn
- * re-arms it. Facts read: Orca's read flag and created_at, the store's session_started and
- * turn_ended rows; never screen text (decision 87).
+ * Who hears of a stall of `run`: the one other top Run (the orchestrator's), or `run` itself when it
+ * is the only top (a stalled orchestrator). Anything else is no one: the row stands alone.
  */
-export function judgeCoordinators(inbox: readonly InboxMessage[] | null, events: readonly StoredEvent[], now: number, c: MonitorConfig, planned: Planned[], unseen: string[]): void {
+export function recipientOf(run: string, coords: ReadonlyMap<string, CoordinatorRead>): string | undefined {
+  if ([...coords.values()].some((k) => k.pane && k.dispatch === undefined)) return undefined;
+  const all = tops(coords);
+  const others = all.filter((r) => r !== run);
+  if (others.length === 1) return others[0];
+  return others.length === 0 && all.includes(run) ? run : undefined;
+}
+
+/**
+ * Decision 245: a Run whose coordinator holds no Dispatch is stalled when Orca shows mail to that
+ * Run unread N minutes after it arrived, and the coordinator's agent in `worktree ps` has not
+ * worked since before that mail (not working, no wait, state started before the mail). One row
+ * per stall: the key names the agent's state start, so its next turn re-arms it. Orca's fields
+ * only: no screen text (decision 87), no store rows.
+ */
+export function judgeCoordinators(
+  inbox: readonly InboxMessage[] | null,
+  coords: ReadonlyMap<string, CoordinatorRead>,
+  ps: LocalRows<WorktreePsRow> | null,
+  now: number,
+  c: MonitorConfig,
+  planned: Planned[],
+  unseen: string[],
+): void {
   if (!inbox) return;
   const n = minutes(c.stuckMinutes);
   const oldest = Math.min(...inbox.map((m) => at(m.createdAt)).filter((t) => !Number.isNaN(t)));
   if (inbox.length >= INBOX_PAGE && oldest > now - n) {
     unseen.push(`coordinator mail: the inbox page reaches back less than ${c.stuckMinutes} minutes`);
   }
-  const coordinators = latestByRun(events);
-  const lastTurn = new Map<string, StoredEvent>();
-  for (const e of events) if (e.type === "turn_ended" && typeof e.payload.session === "string") lastTurn.set(e.payload.session, e);
-
-  const stalled = new Set<string>();
-  for (const m of inbox) {
-    if (m.handled || !m.to.startsWith("run:")) continue;
-    const run = m.to.slice("run:".length);
-    const k = coordinators.get(run);
-    const sent = at(m.createdAt);
-    if (!k || stalled.has(run) || toSessionRow(k.started).task || Number.isNaN(sent) || now - sent < n) continue;
-    const end = lastTurn.get(k.session) ?? k.started;
-    if (sent <= Date.parse(end.ts)) continue;
-    stalled.add(run);
-    const episode = end.type === "turn_ended" ? `turn-${end.seq}` : `start-${end.seq}`;
+  const agents = new Map((ps?.rows ?? []).flatMap((row) => (row.agents ?? []).map((a) => [a.paneKey, a] as const)));
+  for (const [run, mail] of oldUnread(inbox, now, c)) {
+    const k = coords.get(run);
+    if (!k?.pane || !k.handle) {
+      unseen.push(`coordinator of run:${run}: no live terminal`);
+      continue;
+    }
+    if (k.dispatch === undefined) {
+      unseen.push(`coordinator of run:${run}: worker list not read in full`);
+      continue;
+    }
+    if (k.dispatch) continue;
+    const agent = ps ? agents.get(k.pane) : undefined;
+    if (!agent) {
+      unseen.push(`coordinator of run:${run}: no ps agent row`);
+      continue;
+    }
+    if (agent.state === "working" || (agent.agentWait !== null && agent.agentWait !== undefined)) continue;
+    const since = agent.stateStartedAt;
+    if (!isTime(since) || since > now) {
+      unseen.push(`coordinator of run:${run}: no state time`);
+      continue;
+    }
+    if (at(mail.createdAt) <= since) continue;
     planned.push({
       type: "run_stalled",
       source: SOURCE,
-      payload: { run, session: k.session },
-      dedupe_key: dedupeKey(EVENTS.run_stalled, run, "coordinator", k.session, episode),
+      payload: { run, coordinator: k.handle },
+      dedupe_key: dedupeKey(EVENTS.run_stalled, run, "coordinator", k.pane, String(since)),
     });
   }
 }

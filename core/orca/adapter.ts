@@ -144,6 +144,8 @@ export function inboxRow(row: Json): InboxMessage {
     ...(typeof row.body === "string" ? { body: row.body } : {}),
     ...(Object.keys(payload).length > 0 ? { payload } : {}),
     ...(typeof row.created_at === "string" ? { createdAt: row.created_at } : {}),
+    ...(typeof row.run_id === "string" ? { runId: row.run_id } : {}),
+    ...(typeof row.sender_pane_key === "string" ? { senderPane: row.sender_pane_key } : {}),
   };
 }
 

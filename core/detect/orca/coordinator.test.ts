@@ -1,101 +1,134 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { StoredEvent } from "../../contract/index.ts";
-import type { InboxMessage } from "../../contract/orca.ts";
+import type { InboxMessage, LocalRows, WorktreePsAgent, WorktreePsRow } from "../../contract/orca.ts";
 import { DEFAULT_MONITOR_CONFIG as C, minutes, type Planned } from "../monitor.ts";
-import { INBOX_PAGE, judgeCoordinators, orchestratorRunOf } from "./coordinator.ts";
+import { type CoordinatorRead, fromMail, INBOX_PAGE, judgeCoordinators, namedRuns, oldUnread, recipientOf } from "./coordinator.ts";
 
-// Decision 245: a coordinator holding no Dispatch is stalled when its Run's mail sits unread N
-// minutes after that session's last turn end. Orca's read flag and created_at plus the store's own
-// session_started and turn_ended rows are the whole input: no screen text (decision 87).
+// Decision 245: a Run whose coordinator holds no Dispatch is stalled when its mail sits unread N
+// minutes and that coordinator's agent in `worktree ps` has not worked since the mail arrived.
+// Orca's fields only: the read flag, created_at, the ps agent's state and stateStartedAt. No screen
+// text (decision 87), no store rows.
 
 const NOW = Date.parse("2026-11-14T12:00:00Z");
-const ago = (m: number) => new Date(NOW - minutes(m)).toISOString();
+const ago = (m: number) => NOW - minutes(m);
+const iso = (ms: number) => new Date(ms).toISOString();
 const N = C.stuckMinutes;
 
-let seq = 0;
-const ev = (type: string, ts: string, payload: Record<string, unknown>, more: Partial<StoredEvent> = {}): StoredEvent =>
-  ({ seq: ++seq, ts, type, source: "t", target: null, entity: null, entity_id: null, subject: null, dedupe_key: null, payload, ...more }) as unknown as StoredEvent;
-const started = (session: string, run: string, ts: string, more: { role?: string; task?: string } = {}) =>
-  ev("session_started", ts, { session, role: more.role ?? "lead", model: "m" }, {
-    target: `run:${run}`,
-    ...(more.task ? { entity: "task", entity_id: more.task, subject: "run:run_up" } : {}),
-  });
-const turn = (session: string, ts: string) => ev("turn_ended", ts, { session });
-const mail = (to: string, createdAt: string, handled = false, id = `msg_${++seq}`): InboxMessage => ({ id, type: "worker_done", from: "dispatch:ctx_1", to, subject: "s", handled, createdAt });
+let n = 0;
+const mail = (to: string, sentAgo: number, more: Partial<InboxMessage> = {}): InboxMessage => ({
+  id: `msg_${++n}`,
+  type: "worker_done",
+  from: "dispatch:ctx_1",
+  to,
+  subject: "s",
+  handled: false,
+  createdAt: iso(ago(sentAgo)),
+  ...more,
+});
+const agent = (pane: string, a: Partial<WorktreePsAgent>): WorktreePsAgent => ({ paneKey: pane, state: "done", agentType: "claude", agentWait: null, ...a });
+const ps = (...agents: WorktreePsAgent[]): LocalRows<WorktreePsRow> => ({
+  rows: [{ worktreeId: "w", repo: "api", path: "/w", branch: "b", isMainWorktree: false, isArchived: false, liveTerminalCount: 1, unverifiableTerminalCount: 0, status: "idle", agents }],
+  nonLocal: { rows: 0, hostIds: [] },
+  omittedHostIds: [],
+  truncated: false,
+});
+const lead: CoordinatorRead = { pane: "tab_l:leaf_l", handle: "term_lead", dispatch: false };
+const orch: CoordinatorRead = { pane: "tab_o:leaf_o", handle: "term_orch", dispatch: false };
+const coords = new Map([
+  ["run_a", lead],
+  ["run_o", orch],
+]);
 
-function judge(inbox: InboxMessage[] | null, events: StoredEvent[]) {
+function judge(inbox: InboxMessage[] | null, rows: LocalRows<WorktreePsRow> | null, k: ReadonlyMap<string, CoordinatorRead> = coords) {
   const planned: Planned[] = [];
   const unseen: string[] = [];
-  judgeCoordinators(inbox, events, NOW, C, planned, unseen);
+  judgeCoordinators(inbox, k, rows, NOW, C, planned, unseen);
   return { planned, unseen };
 }
 
-test("mail unread N minutes after the coordinator's last turn end: one run_stalled for its Run", () => {
-  const events = [started("s_lead", "run_a", ago(120)), turn("s_lead", ago(90))];
-  const r = judge([mail("run:run_a", ago(N + 5))], events);
+test("mail unread N minutes after the coordinator went idle: one run_stalled naming the Run and its coordinator", () => {
+  const r = judge([mail("run:run_a", N + 5)], ps(agent(lead.pane ?? "", { stateStartedAt: ago(90) })));
   assert.deepEqual(
     r.planned.map((e) => [e.type, e.payload]),
-    [["run_stalled", { run: "run_a", session: "s_lead" }]],
+    [["run_stalled", { run: "run_a", coordinator: "term_lead" }]],
   );
-  assert.match(String(r.planned[0]?.dedupe_key), /^run_stalled:run_a:coordinator:s_lead:/);
+  assert.equal(r.planned[0]?.dedupe_key, `run_stalled:run_a:coordinator:tab_l%3Aleaf_l:${ago(90)}`);
 });
 
-test("a later round of the same stall plans the same key, so the store keeps one row", () => {
-  const events = [started("s_lead", "run_a", ago(120)), turn("s_lead", ago(90))];
-  const box = [mail("run:run_a", ago(N + 5))];
-  const a = judge(box, events).planned[0]?.dedupe_key;
-  const b = judge([...box, mail("run:run_a", ago(N + 1))], events).planned[0]?.dedupe_key;
+test("more mail in the same stall is the same key; a turn after it re-arms with a new key", () => {
+  const idle = ps(agent(lead.pane ?? "", { stateStartedAt: ago(90) }));
+  const a = judge([mail("run:run_a", 60)], idle).planned[0]?.dedupe_key;
+  const b = judge([mail("run:run_a", 60), mail("run:run_a", N + 1)], idle).planned[0]?.dedupe_key;
   assert.ok(a);
-  assert.equal(a, b, "more mail in the same stall is the same episode");
+  assert.equal(a, b);
+  const later = judge([mail("run:run_a", 40)], ps(agent(lead.pane ?? "", { stateStartedAt: ago(50) }))).planned[0]?.dedupe_key;
+  assert.ok(later && later !== a);
 });
 
-test("a turn that ends after the mail clears it; the next stall after that turn is a new key", () => {
-  const events = [started("s_lead", "run_a", ago(120)), turn("s_lead", ago(90))];
-  const first = judge([mail("run:run_a", ago(60))], events).planned[0]?.dedupe_key;
-  const took = [...events, turn("s_lead", ago(50))];
-  assert.deepEqual(judge([mail("run:run_a", ago(60))], took).planned, [], "a session that takes a turn is not stalled");
-  const again = judge([mail("run:run_a", ago(60)), mail("run:run_a", ago(45))], took).planned[0]?.dedupe_key;
-  assert.ok(first && again && first !== again, "re-arms after the next turn");
+test("a coordinator that took a turn after the mail, is working, or waits on a person is not stalled", () => {
+  const box = [mail("run:run_a", 60)];
+  assert.deepEqual(judge(box, ps(agent(lead.pane ?? "", { stateStartedAt: ago(50) }))).planned, [], "idle since after the mail");
+  assert.deepEqual(judge(box, ps(agent(lead.pane ?? "", { state: "working", stateStartedAt: ago(90) }))).planned, [], "a long turn is not a stall");
+  const wait = agent(lead.pane ?? "", { state: "waiting", stateStartedAt: ago(90), agentWait: { state: "permission" } });
+  assert.deepEqual(judge(box, ps(wait)).planned, [], "waiting_human covers it");
 });
 
-test("a session that reads its mail, or mail younger than N, is not stalled", () => {
-  const events = [started("s_lead", "run_a", ago(120)), turn("s_lead", ago(90))];
-  assert.deepEqual(judge([mail("run:run_a", ago(60), true)], events).planned, []);
-  assert.deepEqual(judge([mail("run:run_a", ago(N - 1))], events).planned, []);
+test("mail read, younger than N, or without created_at is no stall", () => {
+  const idle = ps(agent(lead.pane ?? "", { stateStartedAt: ago(90) }));
+  assert.deepEqual(judge([mail("run:run_a", 60, { handled: true })], idle).planned, []);
+  assert.deepEqual(judge([mail("run:run_a", N - 1)], idle).planned, []);
+  const { createdAt: _, ...bare } = mail("run:run_a", 60);
+  assert.deepEqual(judge([bare], idle).planned, []);
+  assert.deepEqual(judge([mail("dispatch:ctx_9", 60)], idle).planned, [], "a Dispatch's mail is not a Run's");
 });
 
-test("without a turn record the session's start is its last turn end", () => {
-  const events = [started("s_orch", "run_o", ago(120), { role: "orchestrator" })];
-  assert.equal(judge([mail("run:run_o", ago(60))], events).planned.length, 1);
-  assert.deepEqual(judge([mail("run:run_o", ago(130))], events).planned, [], "mail older than the session is not this session's stall");
+test("a coordinator holding a Dispatch is left to Orca's stop mail; what was not seen is unseen, not quiet", () => {
+  const idle = ps(agent(lead.pane ?? "", { stateStartedAt: ago(90) }));
+  const box = [mail("run:run_a", 60)];
+  assert.deepEqual(judge(box, idle, new Map([["run_a", { ...lead, dispatch: true }]])), { planned: [], unseen: [] });
+  const noWorkers = new Map<string, CoordinatorRead>([["run_a", { pane: "tab_l:leaf_l", handle: "term_lead" }]]);
+  const cases: [ReadonlyMap<string, CoordinatorRead>, LocalRows<WorktreePsRow> | null][] = [
+    [new Map(), idle],
+    [noWorkers, idle],
+    [coords, ps()],
+    [coords, null],
+    [coords, ps(agent(lead.pane ?? "", {}))],
+  ];
+  for (const [k, rows] of cases) {
+    const r = judge(box, rows, k);
+    assert.deepEqual(r.planned, []);
+    assert.equal(r.unseen.length, 1, r.unseen.join("\n"));
+  }
+  assert.deepEqual(judge(null, idle), { planned: [], unseen: [] }, "judgeWakes already reports the inbox unread");
 });
 
-test("only the Run's latest coordinator counts, and only when it holds no Dispatch", () => {
-  const dispatched = [started("s_lead", "run_a", ago(120), { task: "task_lead" })];
-  assert.deepEqual(judge([mail("run:run_a", ago(60))], dispatched).planned, [], "Orca's stop mail covers a Dispatch holder");
-  const replaced = [started("s_old", "run_a", ago(200)), started("s_new", "run_a", ago(40))];
-  assert.deepEqual(judge([mail("run:run_a", ago(60))], replaced).planned, [], "mail before the new session started");
-  assert.deepEqual(judge([mail("run:run_b", ago(60)), mail("dispatch:ctx_9", ago(60))], replaced).planned, [], "no sangsoe coordinator for run_b; a Dispatch's mail is not a Run's");
+test("a full page that does not reach N minutes back is unseen", () => {
+  const page = Array.from({ length: INBOX_PAGE }, () => mail("run:run_z", 1, { handled: true }));
+  assert.equal(judge(page, ps()).unseen.length, 1);
 });
 
-test("mail with no created_at is not judged; an unread inbox is unseen", () => {
-  const events = [started("s_lead", "run_a", ago(120))];
-  const { createdAt: _, ...bare } = mail("run:run_a", ago(60));
-  assert.deepEqual(judge([bare], events).planned, []);
-  assert.deepEqual(judge(null, events), { planned: [], unseen: [] }, "judgeWakes already reports the inbox unread");
+test("oldUnread keeps the oldest old unread mail per Run; namedRuns reads recipients and run_id", () => {
+  const first = mail("run:run_a", 80);
+  const box = [mail("run:run_a", 40), first, mail("run:run_b", 5), mail("dispatch:ctx_1", 90, { runId: "run_c" })];
+  assert.deepEqual([...oldUnread(box, NOW, C)].map(([r, m]) => [r, m.id]), [["run_a", first.id]]);
+  assert.deepEqual(namedRuns(box), ["run_a", "run_b", "run_c"]);
 });
 
-test("a full page that does not reach N minutes back is unseen, not quiet", () => {
-  const events = [started("s_lead", "run_a", ago(120))];
-  const page = Array.from({ length: INBOX_PAGE }, () => mail("run:run_z", ago(1), true));
-  const r = judge(page, events);
-  assert.deepEqual(r.planned, []);
-  assert.equal(r.unseen.length, 1);
+test("fromMail: the newest terminal and pane that sent the Run's mail to one of its Dispatches", () => {
+  const box = [
+    mail("dispatch:ctx_1", 30, { runId: "run_a", from: "term_x", senderPane: "old:pane" }),
+    mail("dispatch:ctx_2", 10, { runId: "run_a", from: "term_y", senderPane: "new:pane" }),
+    mail("run:run_a", 5, { runId: "run_a", from: "term_w", senderPane: "worker:pane" }),
+    mail("dispatch:ctx_3", 1, { runId: "run_b", from: "term_z", senderPane: "other:pane" }),
+  ];
+  assert.deepEqual(fromMail(box, "run_a"), { pane: "new:pane", handle: "term_y" });
+  assert.equal(fromMail(box, "run_q"), undefined);
 });
 
-test("the orchestrator's Run is the Run its latest Task-less session held", () => {
-  assert.equal(orchestratorRunOf([started("s_lead", "run_a", ago(5))]), undefined);
-  const events = [started("s_o1", "run_o1", ago(100), { role: "orchestrator" }), started("s_o2", "run_o2", ago(10), { role: "orchestrator" }), started("s_lead", "run_a", ago(5))];
-  assert.equal(orchestratorRunOf(events), "run_o2");
+test("recipientOf: the one other top Run, the stalled Run when it is the only top, else no one", () => {
+  assert.equal(recipientOf("run_a", coords), "run_o");
+  assert.equal(recipientOf("run_o", new Map([["run_o", orch]])), "run_o");
+  assert.equal(recipientOf("run_a", new Map([...coords, ["run_b", { pane: "p:b", handle: "term_b", dispatch: false }]])), undefined);
+  assert.equal(recipientOf("run_a", new Map([...coords, ["run_d", { pane: "p:d", handle: "term_d", dispatch: true }]])), "run_o", "a dispatched lead is no top");
+  assert.equal(recipientOf("run_a", new Map([["run_a", lead], ["run_o", { pane: "p:o", handle: "term_o" }]])), undefined, "unknown Dispatch is no top");
 });
