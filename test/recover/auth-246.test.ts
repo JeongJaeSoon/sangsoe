@@ -27,6 +27,10 @@ function fakeOrca(
     workers?: WorkerShow[];
     terminals?: Record<string, { handle: string; agentIdentity?: string }[]>;
     refuse?: boolean;
+    /** A failure after the text may have been typed (a submit wait that timed out). */
+    submitTimeout?: boolean;
+    /** worktree ps comes back cut short. */
+    truncated?: boolean;
     /** The first send's response is lost; request-show then answers this state. */
     lost?: "absent" | "completed";
   } = {},
@@ -54,7 +58,7 @@ function fakeOrca(
         liveTerminalCount: (o.terminals?.[id] ?? []).length,
         agents: [],
       }));
-      return ok({ rows, truncated: false, omittedHostIds: [], nonLocal: { rows: 0 } } as never);
+      return ok({ rows, truncated: o.truncated === true, omittedHostIds: [], nonLocal: { rows: 0 } } as never);
     },
     terminalList: (a) => {
       calls.push(`terminalList ${a.worktree}`);
@@ -63,7 +67,8 @@ function fakeOrca(
     },
     terminalSend: (a, w) => {
       calls.push(`terminalSend ${a.terminal}${w?.retryRequest ? ` retry ${w.retryRequest}` : ""}`);
-      if (o.refuse) return Promise.resolve({ ok: false, error: { code: "terminal_gone", message: "no such terminal" } });
+      if (o.refuse) return Promise.resolve({ ok: false, error: { code: "terminal_handle_stale", message: "terminal_handle_stale" } });
+      if (o.submitTimeout) return Promise.resolve({ ok: false, error: { code: "exit_1", message: "prompt not seen to start a turn" } });
       if (o.lost && !w?.retryRequest && !calls.some((c, i) => i < calls.length - 1 && c.startsWith("terminalSend"))) {
         return Promise.resolve({ ok: false, error: { code: "response_lost", message: "timed out" }, requestId: "req_1" });
       }
@@ -278,6 +283,47 @@ test("246: a lost response is replayed only under Orca's request id; when reques
   assert.equal(b.calls.filter((c) => c.startsWith("terminalSend")).length, 1);
 });
 
+test("246: a Dispatch's auth wait followed by a finished turn is not picked, before the monitor releases it", async () => {
+  const { store, dead, idle } = world();
+  dead("ctx_a", "task_a", "auth");
+  store.append({ type: "waiting_human", source: "orca-monitor", entity: "task", entity_id: "task_a", payload: { dispatch: "ctx_a", cause: "auth" } });
+  idle("task_a");
+  const orca = fakeOrca({ workers: [worker("ctx_a", "task_a", "term_a")] });
+  const r = await authRecover(store, orca, { send: true });
+  assert.deepEqual(r.rows, []);
+  assert.equal(orca.sent.length, 0);
+});
+
+test("246: a send that failed after it may have typed the line is recorded, and the next run sends nothing", async () => {
+  const { store, dead } = world();
+  dead("ctx_a", "task_a", "auth");
+  const orca = fakeOrca({ workers: [worker("ctx_a", "task_a", "term_a")], submitTimeout: true });
+  const r = await authRecover(store, orca, { send: true });
+  assert.equal(r.rows[0]?.verdict, "undetermined");
+  await authRecover(store, orca, { send: true });
+  assert.equal(orca.calls.filter((c) => c.startsWith("terminalSend")).length, 1);
+  const cli = await recover({ send: true }, orca as unknown as OrcaAdapter, ["auth"], () => store);
+  assert.ok("lines" in cli);
+  assert.equal(cli.code, 0, "a later run that only reports 이미 보냄 is not a failure");
+});
+
+test("246: a cut-short worktree ps is unread, not a missing worktree", async () => {
+  const { store } = world();
+  store.append({ type: "waiting_human", source: "StopFailure", payload: { session: "sess_one", cause: "auth", worktree: "wt_one" } });
+  const orca = fakeOrca({ terminals: { wt_one: [{ handle: "term_one", agentIdentity: "claude" }] }, truncated: true });
+  const r = await authRecover(store, orca, { send: true });
+  assert.deepEqual(
+    r.rows.map((x) => [x.verdict, x.unread]),
+    [["skip", true]],
+  );
+  assert.equal(orca.sent.length, 0);
+});
+
+test("246: --db names an existing store; a missing path is refused, not created", async () => {
+  const r = await recover({ db: "/nonexistent/sangsoe-246.db" }, fakeOrca() as unknown as OrcaAdapter, ["auth"]);
+  assert.ok("ok" in r && !r.ok && r.refusal.code === "invalid_input");
+});
+
 test("246: an Orca read failure exits 1", async () => {
   const { store, dead } = world();
   dead("ctx_gone", "task_a", "auth");
@@ -318,4 +364,6 @@ test("246: terminalSend is called only from core/recover", () => {
     .filter((f) => /\.(ts|js|sh|py)$/.test(f) && !/\.test\.ts$/.test(f));
   const callers = code.filter((f) => /\bterminalSend\b|terminal["', ]+send\b/.test(readFileSync(f, "utf8"))).map((f) => relative(ROOT, f));
   assert.deepEqual(callers.sort(), ["core/contract/orca.ts", "core/orca/adapter.ts", "core/orca/commands.ts", "core/recover/auth.ts"]);
+  const entrances = code.filter((f) => /\bauthRecover\b|recover\/auth\.ts/.test(readFileSync(f, "utf8"))).map((f) => relative(ROOT, f));
+  assert.deepEqual(entrances.sort(), ["cli/commands/recover.ts", "core/index.ts", "core/recover/auth.ts"], "only the owner's CLI calls authRecover");
 });

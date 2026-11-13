@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import {
   authRecover,
   createOrcaAdapter,
@@ -25,10 +26,12 @@ export async function recover(
     if (values.run !== undefined || values.limit !== undefined) return refuse("recover auth takes only --send and --db");
     const send = values.send === true;
     const path = typeof values.db === "string" && values.db !== "" ? values.db : undefined;
+    // Store.open would create a missing file, and a dry run writes nothing.
+    if (path && !existsSync(path)) return refuse(`--db ${path} does not exist`);
     const store = (open ?? (() => Store.open(path ? { path } : {})))();
     try {
       const r = await authRecover(store, orca, { send });
-      const bad = r.rows.some((x) => x.verdict === "failed" || x.unread);
+      const bad = r.rows.some((x) => x.verdict === "failed" || x.verdict === "undetermined" || x.unread);
       return { code: bad ? 1 : 0, lines: renderAuthRecover(r, send) };
     } finally {
       if (!open) store.close();

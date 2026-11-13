@@ -2,6 +2,7 @@ import type { StoredEvent } from "../contract/index.ts";
 import { dedupeKey, EVENTS } from "../contract/index.ts";
 import type { OrcaAdapter, OrcaResult, Receipt } from "../contract/orca.ts";
 import { recoverWrite } from "../orca/adapter.ts";
+import { LOCAL_HOST } from "../orca/host-filter.ts";
 import { openWaits } from "../owner/release.ts";
 import { hashOf, summarize } from "../session/mask.ts";
 import type { Store } from "../store/store.ts";
@@ -46,9 +47,11 @@ function whoOf(e: StoredEvent): string | undefined {
  */
 function authStops(events: readonly StoredEvent[]): Stop[] {
   const last = new Map<string, StoredEvent>();
+  const idle = new Map<string, number>();
   for (const e of events) {
     const task = e.type === "worker_dead" && e.entity === "dispatch" ? str(e.target) : e.type === "worker_idle" && e.entity === "task" ? str(e.entity_id) : undefined;
     if (task) last.set(task, e);
+    if (task && e.type === "worker_idle") idle.set(task, e.seq);
   }
   const stops: Stop[] = [];
   for (const [task, e] of last) {
@@ -59,7 +62,10 @@ function authStops(events: readonly StoredEvent[]): Stop[] {
     const dispatch = str(w.payload.dispatch);
     const session = str(w.payload.session);
     const worktree = str(w.payload.worktree);
-    if (dispatch) stops.push({ seq: w.seq, kind: "dispatch", who: dispatch });
+    // The monitor releases a Dispatch's wait only on its next round; the Stop hook's worker_idle is sooner.
+    const task = w.entity === "task" ? str(w.entity_id) : undefined;
+    if (dispatch && task && (idle.get(task) ?? 0) > w.seq) continue;
+    if (dispatch) stops.push({ seq: w.seq, kind: "dispatch", who: dispatch, ...(task ? { task } : {}) });
     else if (session) stops.push({ seq: w.seq, kind: "session", who: session, ...(worktree ? { worktree } : {}) });
   }
   return stops.sort((a, b) => a.seq - b.seq);
@@ -96,29 +102,39 @@ async function sessionTerminal(orca: AuthOrca, worktree: string | undefined, ps:
   if (!worktree) return { terminal: null, why: "멈춘 곳의 worktree 를 모름" };
   const rows = await ps();
   if (!rows.ok) return { terminal: null, why: `worktree ps 실패 (${rows.error.code})`, unread: true };
+  // A partial list proves neither that the worktree is gone nor that it holds one agent terminal.
+  const partial = (v: { truncated: boolean; omittedHostIds: readonly string[] }) => v.truncated || v.omittedHostIds.includes(LOCAL_HOST);
+  if (partial(rows.value)) return { terminal: null, why: "worktree ps 목록이 잘림", unread: true };
   const tree = rows.value.rows.find((t) => t.worktreeInstanceId === worktree);
   if (!tree) return { terminal: null, why: "worktree 가 Orca 에 없음" };
   const list = await orca.terminalList({ worktree: `id:${tree.worktreeId}` });
   if (!list.ok) return { terminal: null, why: `terminal list 실패 (${list.error.code})`, unread: true };
+  if (partial(list.value)) return { terminal: null, why: "terminal list 목록이 잘림", unread: true };
   const agents = list.value.rows.filter((t) => t.agentIdentity);
   if (agents.length === 1 && agents[0]) return { terminal: agents[0].handle };
   return { terminal: null, why: agents.length === 0 ? "에이전트 터미널이 없음" : `에이전트 터미널이 ${agents.length}개라 고르지 않음` };
 }
 
-/** Decision 60: a lost response is replayed only under Orca's request id, never sent fresh. */
-async function send(orca: AuthOrca, terminal: string): Promise<OrcaResult<Receipt> & { lost: boolean }> {
+/** Refusals that come before any byte reaches the terminal: sangsoe's own argv check, an unknown handle. */
+const NOT_WRITTEN = new Set(["invalid_argument", "terminal_handle_stale", "terminal_not_found"]);
+
+/**
+ * Decision 60: any other failure may have typed the line (a submit wait that timed out included), so it
+ * is replayed only under Orca's request id, never sent fresh. `refused` is true only for NOT_WRITTEN.
+ */
+async function send(orca: AuthOrca, terminal: string): Promise<OrcaResult<Receipt> & { refused: boolean }> {
   const a = { terminal, text: AUTH_RECOVER_LINE, enter: true, waitSubmit: WAIT_SUBMIT_S };
   let r = await orca.terminalSend(a);
-  const lost = !r.ok && r.error.code === "response_lost";
-  if (!r.ok && lost && r.requestId) r = await recoverWrite(orca, r.requestId, (o) => orca.terminalSend(a, o));
-  return { ...r, lost };
+  if (!r.ok && NOT_WRITTEN.has(r.error.code)) return { ...r, refused: true };
+  if (!r.ok && r.requestId) r = await recoverWrite(orca, r.requestId, (o) => orca.terminalSend(a, o));
+  return { ...r, refused: false };
 }
 
 /**
  * Decision 246: the owner's one command after signing in again. The dry run (send false) reads and
  * writes nothing; `send` writes one owner_action per line, keyed by the stop, so a stop gets one line
- * however often the command runs. A refused send writes nothing and is tried again next run; a send
- * whose response stayed lost is recorded too, since it may have arrived.
+ * however often the command runs. A send refused before writing records nothing and is tried again
+ * next run; any other failure is recorded too, since the line may have arrived.
  */
 export async function authRecover(store: Store, orca: AuthOrca, o: { send: boolean }): Promise<{ rows: AuthRow[] }> {
   const events = store.events();
@@ -140,7 +156,7 @@ export async function authRecover(store: Store, orca: AuthOrca, o: { send: boole
       continue;
     }
     if (terminals.has(found.terminal)) {
-      rows.push({ ...row, terminal: found.terminal, verdict: "skip", why: "같은 터미널의 앞 정지에 한 줄" });
+      rows.push({ ...row, terminal: found.terminal, verdict: "skip", why: "같은 터미널을 앞 정지가 맡음" });
       continue;
     }
     terminals.add(found.terminal);
@@ -149,7 +165,7 @@ export async function authRecover(store: Store, orca: AuthOrca, o: { send: boole
       continue;
     }
     const r = await send(orca, found.terminal);
-    if (!r.ok && !r.lost) {
+    if (!r.ok && r.refused) {
       rows.push({ ...row, terminal: found.terminal, verdict: "failed", why: `${r.error.code}: ${r.error.message}` });
       continue;
     }
@@ -165,7 +181,7 @@ export async function authRecover(store: Store, orca: AuthOrca, o: { send: boole
       said,
     );
     if (r.ok) rows.push({ ...row, terminal: found.terminal, verdict: "sent" });
-    else rows.push({ ...row, terminal: found.terminal, verdict: "undetermined", why: `응답을 잃음(${r.error.code}): 닿았는지 터미널에서 확인한다` });
+    else rows.push({ ...row, terminal: found.terminal, verdict: "undetermined", why: `${r.error.code}: 닿았는지 터미널에서 확인한다` });
   }
   return { rows };
 }
