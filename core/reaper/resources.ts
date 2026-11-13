@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { judgeLoad, type LoadLevel, type LoadSample } from "../capacity/capacity.ts";
 import type { StoredEvent } from "../contract/index.ts";
 import type { Exec, OrcaAdapter, WorktreeRow } from "../contract/orca.ts";
+import { DEFAULT_MONITOR_CONFIG } from "../detect/monitor.ts";
 import { withDiagnostics } from "../detect/resource/judge.ts";
 import type { EventFilter } from "../store/store.ts";
 import type { Blocked, Judged, ReapOptions, ReapReport } from "./round.ts";
@@ -26,6 +27,7 @@ export type ResourceView = {
   load: Reading<{ level: LoadLevel; reasons: string[]; loadPerCpu?: number; memFreePct?: number; diskFreeGb?: number }>;
   /** The resource monitor's last pressure_high or capacity_free row. */
   episode: { state: "high" | "ok" | "none"; since?: string; reason?: string };
+  band: Band;
   made: {
     worktrees: Reading<Usage>;
     terminals: Reading<{ count: number }>;
@@ -51,6 +53,8 @@ export type ResourceDeps = {
   tmpRoot: string;
   uid: number;
   trashBin: string | null;
+  /** The REAPER timer period the band judges a gap by; the default monitor config's when absent. */
+  intervalMs?: number;
 };
 
 /** Leftover per-call directories under `root` this user owns that are older than the minimum age. */
@@ -134,12 +138,58 @@ export async function sangsoeWorktrees(events: ResourceDeps["events"], orca: Pic
   return new Set(list.value.rows.filter((c) => isMine(own, c)).map((c) => c.instanceId ?? c.id));
 }
 
-export async function readResources(d: ResourceDeps): Promise<ResourceView> {
-  const now = d.now();
+export type BandState = "ok" | "warn" | "danger" | "unknown";
+/** The last 24 hours of load levels, from the episode rows the resource monitor already writes. */
+export type Band = { from: string; to: string; spans: { from: string; to: string; state: BandState }[] };
+export const BAND_MS = 24 * 3_600_000;
+
+/**
+ * Decision 235: the band stores nothing of its own. pressure_high marks entering warn or danger (the
+ * level it entered at; a rise inside an episode is not recorded), capacity_free the return to ok. The
+ * monitor's own rounds are not recorded, so a stretch with no REAPER timer round within two of its
+ * periods is unknown: Orca or its worker was not running.
+ */
+export function loadBand(events: readonly StoredEvent[], now: number, intervalMs: number): Band {
+  const from = now - BAND_MS;
+  const at = (e: StoredEvent) => Date.parse(e.ts);
+  const episodes = events.filter((e) => e.type === "pressure_high" || e.type === "capacity_free").sort((a, b) => a.seq - b.seq);
+  const covered = events
+    .filter((e) => e.type === "reap_round" && (e.payload as { trigger?: unknown }).trigger === "timer")
+    .map((e) => [at(e), at(e) + 2 * intervalMs] as const);
+  const levelAt = (t: number): BandState => {
+    if (!covered.some(([a, b]) => a <= t && t < b)) return "unknown";
+    const last = episodes.filter((e) => at(e) <= t).at(-1);
+    if (last?.type !== "pressure_high") return "ok";
+    return String((last.payload as { reason?: unknown }).reason ?? "").startsWith("danger") ? "danger" : "warn";
+  };
+  const cuts = [...new Set([from, now, ...episodes.map(at), ...covered.flat()].filter((t) => t >= from && t <= now))].sort((a, b) => a - b);
+  const spans: Band["spans"] = [];
+  for (let i = 1; i < cuts.length; i++) {
+    const a = cuts[i - 1] as number;
+    const b = cuts[i] as number;
+    const state = levelAt(a);
+    const prev = spans.at(-1);
+    if (prev?.state === state) prev.to = new Date(b).toISOString();
+    else spans.push({ from: new Date(a).toISOString(), to: new Date(b).toISOString(), state });
+  }
+  return { from: new Date(from).toISOString(), to: new Date(now).toISOString(), spans };
+}
+
+export type ResourcePart = "load" | "made" | "candidates";
+export const RESOURCE_PARTS: readonly ResourcePart[] = ["load", "made", "candidates"];
+export type ResourcePartView =
+  | { part: "load"; at: string; load: ResourceView["load"]; episode: ResourceView["episode"]; band: Band }
+  | { part: "made"; at: string; made: ResourceView["made"] }
+  | { part: "candidates"; at: string; worktrees: ResourceView["worktrees"]; tmp: ResourceView["tmp"]; trash: boolean };
+
+const why = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** One point read of the load: Orca's memory figures over the OS sample, judged once. */
+async function readLoad(d: ResourceDeps): Promise<ResourceView["load"]> {
   const diag = await d.orca.diagnosticsMemory();
   const sample = withDiagnostics(d.sample(), diag.ok ? diag.value : null);
   const verdict = judgeLoad(sample);
-  const load: ResourceView["load"] = {
+  return {
     ok: true,
     value: {
       level: verdict.level,
@@ -149,72 +199,78 @@ export async function readResources(d: ResourceDeps): Promise<ResourceView> {
       ...(sample.diskFreeGb !== undefined ? { diskFreeGb: sample.diskFreeGb } : {}),
     },
   };
+}
 
-  const own = ownCards(d.events);
-  const list = await d.orca.worktreeList({ limit: 1000 });
-  let worktrees: ResourceView["made"]["worktrees"];
-  let terminals: ResourceView["made"]["terminals"];
-  let mineIds: Set<string> | null = null;
-  if (!list.ok) {
-    worktrees = { ok: false, why: `worktree list: ${list.error.code}` };
-    terminals = worktrees;
-  } else {
-    const mine = list.value.rows.filter((c) => isMine(own, c));
-    mineIds = new Set(mine.map((c) => c.instanceId ?? c.id));
-    const paths = mine.map((c) => c.path).filter((p) => existsSync(p));
-    worktrees = { ok: true, value: { count: mine.length, kb: total(await diskKb(d.exec, paths), paths) } };
-    const ps = await d.orca.worktreePs({});
-    const ids = new Set(mine.map((c) => c.id));
-    terminals = ps.ok
-      ? { ok: true, value: { count: ps.value.rows.filter((p) => ids.has(p.worktreeId)).reduce((n, p) => n + p.liveTerminalCount, 0) } }
-      : { ok: false, why: `worktree ps: ${ps.error.code}` };
-  }
-
-  let tmpAll: string[] | null = null;
-  let tmpOld: string[] | null = null;
-  let tmpWhy = "";
+/** Leftover per-call directories with their size; `minAgeMs` 0 counts the young ones too. */
+async function tmpUsage(d: ResourceDeps, now: number, minAgeMs?: number): Promise<Reading<Usage>> {
+  let paths: string[];
   try {
-    tmpAll = tmpLeftovers(d.tmpRoot, now, d.uid, 0);
-    tmpOld = tmpLeftovers(d.tmpRoot, now, d.uid);
+    paths = tmpLeftovers(d.tmpRoot, now, d.uid, minAgeMs);
   } catch (e) {
-    tmpWhy = `${d.tmpRoot}: ${e instanceof Error ? e.message : String(e)}`;
+    return { ok: false, why: `${d.tmpRoot}: ${why(e)}` };
   }
-  const tmpKb = tmpAll ? await diskKb(d.exec, tmpAll) : null;
-  const tmpMade: Reading<Usage> = tmpAll ? { ok: true, value: { count: tmpAll.length, kb: total(tmpKb, tmpAll) } } : { ok: false, why: tmpWhy };
-  const tmp: Reading<Usage> = tmpOld ? { ok: true, value: { count: tmpOld.length, kb: total(tmpKb, tmpOld) } } : { ok: false, why: tmpWhy };
+  return { ok: true, value: { count: paths.length, kb: total(await diskKb(d.exec, paths), paths) } };
+}
 
-  let cards: ResourceView["worktrees"];
-  try {
-    const plan = await d.plan({ trigger: "hint", explain: true });
-    if (!plan.roots_ok) cards = { ok: false, why: plan.unseen.join("; ") || "a root could not be read" };
-    else if (!mineIds) cards = { ok: false, why: worktrees.ok ? "worktree list" : worktrees.why };
-    else {
-      const own = mineIds;
+async function readMade(d: ResourceDeps, now: number): Promise<ResourceView["made"]> {
+  const own = ownCards(d.events);
+  const cards = async (): Promise<Pick<ResourceView["made"], "worktrees" | "terminals">> => {
+    const [list, ps] = await Promise.all([d.orca.worktreeList({ limit: 1000 }), d.orca.worktreePs({})]);
+    if (!list.ok) {
+      const failed = { ok: false as const, why: `worktree list: ${list.error.code}` };
+      return { worktrees: failed, terminals: failed };
+    }
+    const mine = list.value.rows.filter((c) => isMine(own, c));
+    const paths = mine.map((c) => c.path).filter((p) => existsSync(p));
+    const ids = new Set(mine.map((c) => c.id));
+    return {
+      worktrees: { ok: true, value: { count: mine.length, kb: total(await diskKb(d.exec, paths), paths) } },
+      terminals: ps.ok
+        ? { ok: true, value: { count: ps.value.rows.filter((p) => ids.has(p.worktreeId)).reduce((n, p) => n + p.liveTerminalCount, 0) } }
+        : { ok: false, why: `worktree ps: ${ps.error.code}` },
+    };
+  };
+  const [c, processes, tmp] = await Promise.all([cards(), processUsage(d.exec), tmpUsage(d, now, 0)]);
+  return { ...c, processes, tmp };
+}
+
+async function readCandidates(d: ResourceDeps, now: number): Promise<Pick<ResourceView, "worktrees" | "tmp">> {
+  const cards = async (): Promise<ResourceView["worktrees"]> => {
+    const list = await d.orca.worktreeList({ limit: 1000 });
+    if (!list.ok) return { ok: false, why: `worktree list: ${list.error.code}` };
+    const own = ownCards(d.events);
+    const mine = new Set(list.value.rows.filter((c) => isMine(own, c)).map((c) => c.instanceId ?? c.id));
+    try {
+      const plan = await d.plan({ trigger: "hint", explain: true, only: mine });
+      if (!plan.roots_ok) return { ok: false, why: plan.unseen.join("; ") || "a root could not be read" };
       // The ones a confirmed round would take (round.ts), of sangsoe's own cards only: another program's
       // worktree is never offered. An unfinished card stays even when its path is gone.
-      const rows = plan.judged.filter(
-        (j) => own.has(j.ref) && (j.state === "finished" || j.state === "no_trace" || (j.gone && j.state === "unknown")),
-      );
+      const rows = plan.judged.filter((j) => mine.has(j.ref) && (j.state === "finished" || j.state === "no_trace" || (j.gone && j.state === "unknown")));
       const paths = rows.filter((j) => !j.gone).map((j) => j.path);
       const kb = await diskKb(d.exec, paths);
-      cards = {
-        ok: true,
-        value: { rows: rows.map((j) => ({ ...j, kb: j.gone ? 0 : (kb?.get(j.path) ?? null) })), markOnly: plan.mark_only, unseen: plan.unseen },
-      };
+      return { ok: true, value: { rows: rows.map((j) => ({ ...j, kb: j.gone ? 0 : (kb?.get(j.path) ?? null) })), markOnly: plan.mark_only, unseen: plan.unseen } };
+    } catch (e) {
+      return { ok: false, why: why(e) };
     }
-  } catch (e) {
-    cards = { ok: false, why: e instanceof Error ? e.message : String(e) };
-  }
-
-  return {
-    at: new Date(now).toISOString(),
-    load,
-    episode: episodeOf(d.events),
-    made: { worktrees, terminals, processes: await processUsage(d.exec), tmp: tmpMade },
-    worktrees: cards,
-    tmp,
-    trash: d.trashBin !== null,
   };
+  const [worktrees, tmp] = await Promise.all([cards(), tmpUsage(d, now)]);
+  return { worktrees, tmp };
+}
+
+/** Decision 235: one part of the section, so the panel paints each as it comes; the reads inside run together. */
+export async function readResourcePart(d: ResourceDeps, part: ResourcePart): Promise<ResourcePartView> {
+  const now = d.now();
+  const at = new Date(now).toISOString();
+  if (part === "load") return { part, at, load: await readLoad(d), episode: episodeOf(d.events), band: loadBand(d.events(), now, d.intervalMs ?? DEFAULT_MONITOR_CONFIG.reaperIntervalMinutes * 60_000) };
+  if (part === "made") return { part, at, made: await readMade(d, now) };
+  return { part, at, ...(await readCandidates(d, now)), trash: d.trashBin !== null };
+}
+
+/** The whole section at once (`sangsoe reap plan`): the three parts together. */
+export async function readResources(d: ResourceDeps): Promise<ResourceView> {
+  const [l, m, c] = await Promise.all(RESOURCE_PARTS.map((p) => readResourcePart(d, p)));
+  if (l?.part !== "load" || m?.part !== "made" || c?.part !== "candidates") throw new Error("resource parts out of order");
+  return { at: l.at, load: l.load, episode: l.episode, band: l.band, made: m.made, worktrees: c.worktrees, tmp: c.tmp, trash: c.trash };
 }
 
 export type OwnerReap = { worktrees: readonly string[]; tmp: boolean };

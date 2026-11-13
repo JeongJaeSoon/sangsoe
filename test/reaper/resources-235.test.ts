@@ -1,7 +1,6 @@
 // Decision 235: the 리소스 read asks GitHub and Orca only about sangsoe's own cards, comes in three
 // parts the panel can paint one by one, and draws the load band from rows the store already has.
 import assert from "node:assert/strict";
-import { join } from "node:path";
 import { after, test } from "node:test";
 import {
   dedupeKey,
