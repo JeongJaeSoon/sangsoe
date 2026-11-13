@@ -161,7 +161,9 @@ export function sangsoeSession(input: HookInput, store: () => Pick<Store, "event
     const s = store();
     if (!s) return undefined;
     if (input.session_id && s.events({ type: "session_started" }).some((e) => e.payload.session === input.session_id)) return true;
-    const task = TASK_LINE.exec(firstPrompt(input.transcript_path) ?? "")?.[1];
+    const prompt = firstPrompt(input.transcript_path);
+    if (prompt === undefined) return undefined;
+    const task = TASK_LINE.exec(prompt)?.[1];
     return task !== undefined && s.events({ type: "item_created" }).some((e) => e.entity_id === task);
   } catch {
     return undefined;

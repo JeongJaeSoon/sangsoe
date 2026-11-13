@@ -42,7 +42,8 @@ can pass every rule and still not work.
    - A screen that lives inside a host app (a plugin panel) is measured in the real host with real
      data; a browser render or a plugin screenshot is only a pre-check. When the repository's
      verify-tier config names a surface and measures for its `ui` evidence (decision 238), the
-     evidence's `observed` is a JSON object with that surface and a number for each measure.
+     evidence's `observed` (the evidence tool's `observed` field) is a JSON object with that surface
+     and a number for each measure.
    - A FAIL is a rule broken past its threshold. A WARN is a judgment call: decide each one and
      write why.
 3. **Walk the scenario** with [references/walkthrough.md](references/walkthrough.md): the user's

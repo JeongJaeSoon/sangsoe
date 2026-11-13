@@ -24,6 +24,8 @@ export type EvidenceRecordInput = {
   /** A large output kept as a file: its path and sha256. */
   path?: string;
   sha256?: string;
+  /** What the run measured; a repository's `ui_evidence` rule reads it as JSON (decision 238). */
+  observed?: string;
 };
 export type StageRecordInput = { repo: string; pr: number; stage: string; sha: string; recorder: string };
 
@@ -77,6 +79,7 @@ export async function recordEvidence(input: EvidenceRecordInput, deps: RecordPor
   const notVerified = input.notVerified.map((s) => s.trim()).filter((s) => s.length > 0);
   if (notVerified.length === 0) return fail("not_verified must name at least one thing this run did not check");
   if ((input.path === undefined) !== (input.sha256 === undefined)) return fail("path and sha256 go together");
+  if (input.observed !== undefined && input.observed.trim() === "") return fail("observed is empty; leave it out or say what the run measured");
 
   const pr = await readPr(deps.exec, input.repo, input.pr);
   if (typeof pr === "string") return fail(pr);
@@ -98,6 +101,7 @@ export async function recordEvidence(input: EvidenceRecordInput, deps: RecordPor
         exit_code: input.exitCode,
         not_verified: notVerified,
         ...(input.path !== undefined && input.sha256 !== undefined ? { path: input.path, sha256: input.sha256 } : {}),
+        ...(input.observed !== undefined ? { observed: input.observed } : {}),
       },
     },
     `recorded: ${input.kind} evidence on ${ref} ${input.head} by ${recorder}, exit ${input.exitCode}`,
