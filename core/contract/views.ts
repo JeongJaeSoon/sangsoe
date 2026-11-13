@@ -87,7 +87,7 @@ export interface ItemStatusRow {
   readonly since: string | null;
   /** 🙋 open decision on the item. */
   readonly decisionOpen: boolean;
-  /** 🚨 unresolved alarm event types (worker_stuck, worker_dead, ci_failed, ..., orphan_extra). */
+  /** 🚨 unresolved alarm event types (worker_stuck, worker_dead, ci_failed, ..., orphan_extra); worker_dead:auth for a stop on a lost login (decision 237). */
   readonly alarms: readonly string[];
   /** ⚠️ unresolved trigger_unclear. */
   readonly unclear: boolean;

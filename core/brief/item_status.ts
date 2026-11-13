@@ -138,7 +138,12 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     if (ALARMS.has(e.type)) {
       const t = taskOf(e, prTask, dispatchTask);
       const name = e.type === "worker_dead" && p.cause === "auth" ? "worker_dead:auth" : e.type;
-      if (t) alarms.set(t, new Map(alarms.get(t)).set(name, e.seq));
+      if (t) {
+        const m = new Map(alarms.get(t));
+        // One worker_dead alarm per item: the newer stop's reading replaces the older one.
+        if (e.type === "worker_dead") m.delete(name === "worker_dead" ? "worker_dead:auth" : "worker_dead");
+        alarms.set(t, m.set(name, e.seq));
+      }
     }
     if (e.type === "worker_idle") {
       const t = taskOf(e, prTask, dispatchTask);

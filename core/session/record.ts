@@ -180,11 +180,6 @@ function compacted(store: Store, row: SessionRow, input: SessionHookInput): void
 const PERMISSION = /permission to use ([A-Za-z_][\w:.-]*)/i;
 const WAITS = new Set(["permission_prompt", "idle_prompt", "elicitation_dialog"]);
 
-/**
- * Notification → waiting_human for a session holding no Dispatch (the owner reaches it through
- * queue-monitor's escalation, decision 91①). The tool is read from the text or left out; a repeat
- * notification for a wait still open writes nothing.
- */
 const SIGN_IN = new Set(["authentication_failed", "oauth_org_not_allowed"]);
 
 /**
@@ -206,6 +201,11 @@ async function lostLogin(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
   });
 }
 
+/**
+ * Notification → waiting_human for a session holding no Dispatch (the owner reaches it through
+ * queue-monitor's escalation, decision 91①). The tool is read from the text or left out; a repeat
+ * notification for a wait still open writes nothing.
+ */
 async function waitingHuman(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
   // A session holding a Dispatch is seen through Orca's needs-input mail alone (decision 196), which
   // Orca already delivers to the lead: one source per wait, and it holds with the plugin off.

@@ -35,8 +35,10 @@ const key = (type: Parameters<typeof eventDef>[0], target: string, ...cond: stri
 // last output). Orca sends that stop as `errored`, but the session resumes by itself.
 const USAGE_LIMIT = /hit your [\w -]*limit|Usage limit reached/i;
 
-// Claude Code's lost-login messages, which open a turn line after its ⏺/⎿ mark (decision 237).
-const AUTH = /^(?:Please run \/login\b|(?:Not logged in|Login expired|OAuth token revoked) · Please run \/login|API Error: 403\b|Goal cleared after an unrecoverable error \(authentication failed\))/;
+// Claude Code's lost-login messages, which open a turn line after its ⏺/⎿ mark or end it with the
+// /login hint (decision 237).
+const AUTH =
+  /^(?:Please run \/login\b|API Error: 403\b|Goal cleared after an unrecoverable error \(authentication failed\))|^(?:Not logged in|Login expired|OAuth token revoked|Invalid API key|API Error: 401\b).* · Please run \/login\s*$/;
 const MARK = /^\s*[⏺⎿]\s*/;
 
 /**
@@ -45,7 +47,7 @@ const MARK = /^\s*[⏺⎿]\s*/;
  */
 export function lostLogin(body: string | undefined): boolean {
   const lines = (body ?? "").split("\n");
-  const box = lines.findIndex((l) => l.trim().startsWith("❯"));
+  const box = lines.findLastIndex((l) => l.trim().startsWith("❯"));
   const last = (box < 0 ? lines : lines.slice(0, box)).filter((l) => MARK.test(l)).at(-1);
   return last !== undefined && AUTH.test(last.replace(MARK, ""));
 }
