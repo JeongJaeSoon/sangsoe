@@ -124,16 +124,22 @@ const NOT_WRITTEN = new Set(["invalid_argument", "terminal_handle_stale", "termi
 
 /**
  * Decision 60: any other failure may have typed the line (a submit wait that timed out included), so it
- * is replayed only under Orca's request id, never sent fresh. `refused` is true only for NOT_WRITTEN,
- * from the send or from its replay, which answers the request's own result.
+ * is replayed only under Orca's request id, never sent fresh. `refused` is true only for NOT_WRITTEN:
+ * from the first send, or from the replay of a request Orca calls completed, whose answer is that
+ * request's own result (decision 60's premise). A pending request's replay may be checked against the
+ * terminal as it is now, and `invalid_argument` on a replay is Orca's verdict on the retry, not on the line.
  */
 async function send(orca: AuthOrca, terminal: string): Promise<OrcaResult<Receipt> & { refused: boolean }> {
   const a = { terminal, text: AUTH_RECOVER_LINE, enter: true, waitSubmit: WAIT_SUBMIT_S };
   const first = await orca.terminalSend(a);
   if (first.ok || !first.requestId || NOT_WRITTEN.has(first.error.code)) return { ...first, refused: !first.ok && NOT_WRITTEN.has(first.error.code) };
-  let replayed: OrcaResult<Receipt> | undefined;
-  const r = await recoverWrite(orca, first.requestId, async (o) => (replayed = await orca.terminalSend(a, o)));
-  return { ...r, refused: replayed !== undefined && !replayed.ok && NOT_WRITTEN.has(replayed.error.code) };
+  let refused = false;
+  const r = await recoverWrite(orca, first.requestId, async (o, state) => {
+    const replayed = await orca.terminalSend(a, o);
+    refused = state === "completed" && !replayed.ok && replayed.error.code !== "invalid_argument" && NOT_WRITTEN.has(replayed.error.code);
+    return replayed;
+  });
+  return { ...r, refused };
 }
 
 /**

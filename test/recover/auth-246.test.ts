@@ -36,9 +36,9 @@ function fakeOrca(
     /** terminal list comes back cut short. */
     listTruncated?: boolean;
     /** The first send's response is lost; request-show then answers this state. */
-    lost?: "absent" | "completed";
-    /** The replay under the request id answers the request's own result: a refusal before writing. */
-    replayRefused?: boolean;
+    lost?: "absent" | "completed" | "pending";
+    /** The replay under the request id answers this refusal code. */
+    replayRefused?: string;
   } = {},
 ): Fake {
   const sent: Sent[] = [];
@@ -81,7 +81,7 @@ function fakeOrca(
       if (o.lost && !w?.retryRequest && !calls.some((c, i) => i < calls.length - 1 && c.startsWith("terminalSend"))) {
         return Promise.resolve({ ok: false, error: { code: "response_lost", message: "timed out" }, requestId: "req_1" });
       }
-      if (o.replayRefused && w?.retryRequest) return Promise.resolve({ ok: false, error: { code: "terminal_handle_stale", message: "terminal_handle_stale" } });
+      if (o.replayRefused && w?.retryRequest) return Promise.resolve({ ok: false, error: { code: o.replayRefused, message: o.replayRefused } });
       sent.push(a);
       return ok({ accepted: true });
     },
@@ -293,16 +293,31 @@ test("246: a lost response is replayed only under Orca's request id; when reques
   assert.equal(b.calls.filter((c) => c.startsWith("terminalSend")).length, 1);
 });
 
-test("246: a lost response whose replay answers a refusal before writing is failed, not recorded, and tried again next run", async () => {
+test("246: a completed request whose replay answers a refusal before writing is failed, not recorded, and tried again next run", async () => {
   const { store, dead } = world();
   dead("ctx_a", "task_a", "auth");
-  const orca = fakeOrca({ workers: [worker("ctx_a", "task_a", "term_a")], lost: "completed", replayRefused: true });
+  const orca = fakeOrca({ workers: [worker("ctx_a", "task_a", "term_a")], lost: "completed", replayRefused: "terminal_handle_stale" });
   const r = await authRecover(store, orca, { send: true });
   assert.equal(r.rows[0]?.verdict, "failed");
   assert.equal(store.events({ type: "owner_action" }).length, 0);
   const again = await authRecover(store, orca, { send: true });
   assert.equal(again.rows[0]?.verdict, "sent", "the stop was not counted as sent, so the next run sends");
   assert.equal(orca.sent.length, 1);
+});
+
+test("246: a pending request's refused replay, or invalid_argument on a replay, may follow a typed line: recorded, never sent again", async () => {
+  for (const [lost, code] of [
+    ["pending", "agent_prompt_blocked"],
+    ["completed", "invalid_argument"],
+  ] as const) {
+    const { store, dead } = world();
+    dead("ctx_a", "task_a", "auth");
+    const orca = fakeOrca({ workers: [worker("ctx_a", "task_a", "term_a")], lost, replayRefused: code });
+    const r = await authRecover(store, orca, { send: true });
+    assert.equal(r.rows[0]?.verdict, "undetermined", `${lost} ${code}`);
+    await authRecover(store, orca, { send: true });
+    assert.equal(orca.calls.filter((c) => c.startsWith("terminalSend")).length, 2, `${lost} ${code}: the send and its one replay, nothing on the next run`);
+  }
 });
 
 test("246: a cut-short terminal list is unread, even when the rows it shows hold one agent terminal", async () => {

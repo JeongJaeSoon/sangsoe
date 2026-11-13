@@ -88,12 +88,12 @@ export function parseEnvelope(r: ExecResult, write: boolean): OrcaResult<unknown
 export async function recoverWrite<T>(
   orca: Pick<OrcaAdapter, "requestShow">,
   requestId: string,
-  replay: (o: WriteOptions) => Promise<OrcaResult<T>>,
+  replay: (o: WriteOptions, state: "completed" | "pending") => Promise<OrcaResult<T>>,
 ): Promise<OrcaResult<T>> {
   const shown = await orca.requestShow({ request: requestId });
   if (!shown.ok) return { ok: false, error: shown.error, requestId };
   const state: unknown = shown.value?.state;
-  if (state === "completed" || state === "pending") return replay({ retryRequest: requestId });
+  if (state === "completed" || state === "pending") return replay({ retryRequest: requestId }, state);
   const message = shown.value?.interpretation ?? `request-show answered state ${JSON.stringify(state)}`;
   return { ok: false, error: { code: state === "absent" ? "request_absent" : "unexpected_shape", message }, requestId };
 }
