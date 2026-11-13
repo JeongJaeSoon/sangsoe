@@ -41,6 +41,18 @@ test("239: another program's worker, or a session sangsoe never saw, is not sang
   assert.equal(facts({ transcript_path: plain }, [{ type: "session_started", payload: { session: "someone-else", role: "lead" } }]).sangsoe(), false);
 });
 
+test("239: a long-lived session's first prompt behind more than 64KB of metadata lines is still read", () => {
+  const made: Row[] = [{ type: "item_created", entity_id: "task_made", payload: {} }];
+  const long = (prompt: string) => {
+    const path = join(scratchDir("sangsoe-gate-239-"), "t.jsonl");
+    const meta = `${JSON.stringify({ type: "custom-title", title: "x".repeat(500) })}\n`.repeat(400);
+    writeFileSync(path, `${meta}${JSON.stringify({ type: "user", message: { content: prompt } })}\n`);
+    return path;
+  };
+  assert.equal(facts({ transcript_path: long(preamble("task_other")) }, made).sangsoe(), false);
+  assert.equal(facts({ transcript_path: long(preamble("task_made")) }, made).sangsoe(), true);
+});
+
 test("239: a session whose first prompt cannot be read is not known, so the guard keeps refusing", () => {
   const made: Row[] = [{ type: "item_created", entity_id: "task_made", payload: {} }];
   assert.equal(facts({}, made).sangsoe(), undefined, "no transcript");
