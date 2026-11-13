@@ -84,13 +84,15 @@ test("237: an old 403 above a later turn is not this stop's cause", () => {
   ]);
 });
 
-test("237: a 401 or a bad key that ends in the /login hint counts too", () => {
-  for (const line of [
-    '⏺ API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"OAuth token has expired."}} · Please run /login',
-    "⏺ Invalid API key · Please run /login",
-  ]) {
-    assert.deepEqual(stops([msg("m1", "errored", body(line))]), [["worker_dead", { reason: "stop_failure", cause: "auth" }]], line);
+test("237: a 401, wrapped at the pane's width, or a bad key counts too", () => {
+  const wrapped = ['⏺ API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"OAuth token has', '  expired."}} · Please run /login'];
+  for (const last of [wrapped, ["⏺ Invalid API key · Please run /login"]]) {
+    assert.deepEqual(stops([msg("m1", "errored", body(...last))]), [["worker_dead", { reason: "stop_failure", cause: "auth" }]], last.join("\n"));
   }
+});
+
+test("237: a bad-key line that only quotes the hint later in a sentence is not a lost login", () => {
+  assert.deepEqual(stops([msg("m1", "errored", body("⏺ Invalid API key in your script; the error said · Please run /login"))]), [["worker_dead", { reason: "stop_failure" }]]);
 });
 
 test("237: an echoed prompt line above a later turn does not cut the output short", () => {
