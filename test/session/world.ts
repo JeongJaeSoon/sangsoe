@@ -34,6 +34,8 @@ export interface SessionWorld extends CoreDeps {
   failRunCurrent: boolean;
   /** dispatch-show's status for TASK: `dispatched` while open, `completed` after worker_done. */
   dispatchStatus: string;
+  /** `worktree ps` rows; null answers an error. */
+  psRows: Record<string, unknown>[] | null;
   calls(): string[][];
 }
 
@@ -60,6 +62,7 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
     failTaskList: false,
     failRunCurrent: false,
     dispatchStatus: "dispatched",
+    psRows: null as Record<string, unknown>[] | null,
   };
   const replies: Record<string, FakeReply> = {
     "worktree-list": () =>
@@ -84,6 +87,8 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
       return ok({ tasks: [...own, ...(runTasks.get(run) ?? [])] });
     },
     "orchestration-gate-list": () => ok({ gates: [] }),
+    "worktree-ps": () =>
+      w.psRows ? ok({ worktrees: w.psRows }) : { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "runtime_unavailable", message: "down" } }), stderr: "" },
     "orchestration-dispatch-show": () =>
       ok({
         dispatch: {
