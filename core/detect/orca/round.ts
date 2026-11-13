@@ -4,6 +4,7 @@ import type { Act, MonitorDeps, Planned, Reading } from "../monitor.ts";
 import { runAbove, sendNotice } from "../notice.ts";
 
 type Notice = Parameters<typeof sendNotice>[1];
+import { INBOX_PAGE, orchestratorRunOf } from "./coordinator.ts";
 import { isUnfinished, judgeOrca, keepLastRead, type Observed, ORCA_EVENT_TYPES, observe } from "./judge.ts";
 import { readRefusalHead, refusalPath } from "./mail.ts";
 
@@ -60,7 +61,7 @@ export async function orcaRound(d: MonitorDeps, signal: AbortSignal): Promise<Re
   const [ps, workerRows, inbox] = await Promise.all([
     d.orca.worktreePs({ agentWait: true }),
     pages(d, signal, GLOBAL_PAGES),
-    d.orca.inbox({ limit: 100 }),
+    d.orca.inbox({ limit: INBOX_PAGE }),
   ]);
   const shows: Record<string, WorkerShow | null> = {};
   for (const w of workerRows?.rows.filter(isUnfinished) ?? []) {
@@ -89,7 +90,45 @@ export async function orcaRound(d: MonitorDeps, signal: AbortSignal): Promise<Re
   const reading = judgeOrca(reads, d.now(), d.config, previous);
   if (!signal.aborted) previous = keepLastRead(previous, observe(reads));
   const raise = await wakeRaises(d, reading.planned, signal);
-  return { ...reading, unseen: [...reading.unseen, ...raise.unseen], acts: [...(reading.acts ?? []), ...raise.acts] };
+  const stalls = stallNotices(d, reading.planned);
+  return {
+    ...reading,
+    unseen: [...reading.unseen, ...raise.unseen, ...stalls.unseen],
+    acts: [...(reading.acts ?? []), ...raise.acts, ...stalls.acts],
+  };
+}
+
+/**
+ * Decision 245: one notice per coordinator stall, to the orchestrator's Run (its own Run when the
+ * orchestrator is the one stalled), keyed by the stall's row so a later round is notify's "already".
+ */
+function stallNotices(d: MonitorDeps, planned: readonly Planned[]): { acts: Act[]; unseen: string[] } {
+  const stalls = planned.flatMap((e) => {
+    const p = e.payload as { run?: string; session?: string };
+    return e.type === "run_stalled" && p.run && p.session ? [{ run: p.run, session: p.session, key: e.dedupe_key ?? p.run }] : [];
+  });
+  if (stalls.length === 0) return { acts: [], unseen: [] };
+  const orch = orchestratorRunOf(d.events({ type: "session_started" }));
+  if (!orch) return { acts: [], unseen: stalls.map((s) => `orchestrator Run unknown: run_stalled ${s.run} written only`) };
+  const acts = stalls.map(({ run, session, key }): Act => {
+    return {
+      what: `tell orchestrator run:${orch}: run ${run} stalled`,
+      wake: true,
+      run: async (dd) => ({
+        ...(await sendNotice(dd, {
+          key: { target: run, dedupe_key: `notify:${dedupeSegment(run)}:${dedupeSegment(key)}` },
+          to: "orchestrator",
+          chain: { orchestratorRun: orch },
+          subject: `⏸ run_stalled: ${run}`,
+          body: `Mail to run:${run} has sat unread ${d.config.stuckMinutes}+ minutes since its coordinator session ${session} last ended a turn.`,
+          msgType: "status",
+          source: "orca-monitor",
+        })),
+        planned: [],
+      }),
+    };
+  });
+  return { acts, unseen: [] };
 }
 
 const TIER_SUFFIX = /:(worker|lead|orchestrator)$/;

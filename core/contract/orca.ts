@@ -190,6 +190,8 @@ export type InboxMessage = {
   handled: boolean;
   body?: string;
   payload?: InboxPayload;
+  /** Orca's `created_at` (ISO time), when sent: how long a message has sat unread. */
+  createdAt?: string;
 };
 
 export type WorkerRow = {

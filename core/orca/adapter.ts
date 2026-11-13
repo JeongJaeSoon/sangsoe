@@ -143,6 +143,7 @@ export function inboxRow(row: Json): InboxMessage {
     handled: row.read === 1 || row.read === true || row.handled === true,
     ...(typeof row.body === "string" ? { body: row.body } : {}),
     ...(Object.keys(payload).length > 0 ? { payload } : {}),
+    ...(typeof row.created_at === "string" ? { createdAt: row.created_at } : {}),
   };
 }
 
