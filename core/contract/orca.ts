@@ -92,6 +92,8 @@ export type TerminalRow = {
 
 export type WorktreePsRow = {
   worktreeId: string;
+  /** Path-free, like `WorktreeRow.instanceId`. */
+  worktreeInstanceId?: string;
   hostId?: string;
   repo: string;
   path: string;

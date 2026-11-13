@@ -1,6 +1,7 @@
 import { dedupeKey, eventDef, type StoredEvent } from "../../contract/index.ts";
 import type { GateRow, InboxMessage, LocalRows, WorkerRow, WorkerShow, WorktreePsRow } from "../../contract/orca.ts";
 import { isOpenGate } from "../../decision/waiters.ts";
+import { orphanedWaits } from "../../owner/release.ts";
 import { settled } from "../../recover/recover.ts";
 import { type MonitorConfig, minutes, type Planned, type Reading } from "../monitor.ts";
 import { judgeMail } from "./mail.ts";
@@ -293,5 +294,22 @@ export function judgeOrca(r: OrcaReads, now: number, c: MonitorConfig, previous:
     judgeMail({ inbox: r.inbox, known, unfinished, ps, events: r.events, refusals: r.refusals ?? new Map() }, planned, unseen);
   }
   judgeChanges(r, previous, now, planned);
+  judgeOrphanedWaits(r, now, planned);
   return { planned, unseen };
+}
+
+/** Decision 232: session waits only, so mail.ts's Dispatch releases never meet these; the age half runs with ps unread too. */
+function judgeOrphanedWaits(r: OrcaReads, now: number, planned: Planned[]): void {
+  const waits = new Map(r.events.map((e) => [e.seq, e]));
+  for (const rel of orphanedWaits(r.events, r.ps, now)) {
+    const w = waits.get(rel.ref);
+    planned.push({
+      type: "waiting_released",
+      source: SOURCE,
+      payload: { ref: String(rel.ref), outcome: rel.outcome, by: rel.by, evidence: rel.evidence },
+      ...(w?.entity ? { entity: w.entity } : {}),
+      ...(w?.entity_id ? { entity_id: w.entity_id } : {}),
+      dedupe_key: key("waiting_released", String(rel.ref)),
+    });
+  }
 }
