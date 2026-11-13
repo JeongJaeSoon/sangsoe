@@ -148,7 +148,13 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     } else if (e.type === "trigger_unclear") unclear.set(String(p.task), e.seq);
     if (ALARMS.has(e.type)) {
       const t = taskOf(e, prTask, dispatchTask);
-      if (t) alarms.set(t, new Map(alarms.get(t)).set(e.type, e.seq));
+      const name = e.type === "worker_dead" && p.cause === "auth" ? "worker_dead:auth" : e.type;
+      if (t) {
+        const m = new Map(alarms.get(t));
+        // One worker_dead alarm per item: the newer stop's reading replaces the older one.
+        if (e.type === "worker_dead") m.delete(name === "worker_dead" ? "worker_dead:auth" : "worker_dead");
+        alarms.set(t, m.set(name, e.seq));
+      }
     }
     if (e.type === "worker_idle") {
       const t = taskOf(e, prTask, dispatchTask);
@@ -187,9 +193,12 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     const open = (comments.get(t.id) ?? []).filter((c) => c.seq > last);
     const reply = replied.get(t.id) ?? null;
     const answered = reply !== null && open.every((c) => c.at !== null && Date.parse(reply) > Date.parse(c.at));
-    // An alarm stands until the item moves again.
+    // An alarm stands until the item moves again. A lost login also ends at the worker's next
+    // finished turn: StopFailure writes no worker_idle, so one after the stop means it signed in (decision 237).
+    const turned = idle.get(t.id) ?? 0;
     const standing = [...(alarms.get(t.id) ?? new Map<string, number>())]
       .filter(([type, seq]) => seq > last && (!prWait || PR_ALARMS.has(type)) && !(type === "review_commented" && answered))
+      .filter(([type, seq]) => !(type === "worker_dead:auth" && turned > seq))
       .map(([type]) => type);
     const undelivered = own.filter((d) => d.undelivered).map((d) => d.decision);
     // Decision 236: a lead's item bundles its children's work and has no evidence of its own; a
