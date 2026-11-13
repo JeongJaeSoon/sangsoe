@@ -113,6 +113,16 @@ test("the seven recording hooks run record.sh with their event and never block",
   assert.match(readFileSync(at("hooks/record.sh"), "utf8"), /\/\.\.\/dist\/cli\/main\.js/);
 });
 
+test("237: StopFailure runs record.sh stop-failure for a lost login only, and never blocks", () => {
+  const group = hooks.hooks.StopFailure ?? [];
+  assert.equal(group.length, 1);
+  assert.equal((group[0] as { matcher?: string }).matcher, "authentication_failed|oauth_org_not_allowed");
+  assert.deepEqual(
+    group[0]?.hooks.map((h) => [h.type, h.command, h.onFailure]),
+    [["command", `sh "\${CLAUDE_PLUGIN_ROOT}/hooks/record.sh" stop-failure`, undefined]],
+  );
+});
+
 test("record.sh exits 0 even when the CLI it finds exits 2, and keeps its stdout", () => {
   const tmp = scratchDir("sangsoe-record-");
   mkdirSync(join(tmp, "plugin"));
