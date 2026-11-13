@@ -60,14 +60,16 @@ export const STYLE = `
 }
 * { box-sizing: border-box; }
 html, body { overflow-x: clip; }
-body { margin: 0; background: var(--paper); color: var(--ink); font: var(--text-base)/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+/* Decision 235: one column the height of the panel at least, so the 리소스 section after the stage
+   sits at the bottom when the stage is short and at the page's end when it is long. */
+body { display: flex; flex-direction: column; min-height: 100dvh; margin: 0; background: var(--paper); color: var(--ink); font: var(--text-base)/20px var(--font-sans); font-variant-numeric: tabular-nums; }
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 2px; }
 code { font-family: var(--font-mono); font-size: var(--text-xs); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: break-word; min-width: 0; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-#root { padding: 0 0 var(--s4); container: panel / inline-size; }
+#root { flex: none; padding: 0 0 var(--s4); container: panel / inline-size; }
 /* The header, and a detail screen's back line under it, stay at the top together (decision 225 (4)). */
 .bar { position: sticky; top: 0; z-index: 2; background: var(--paper); }
 .top { display: flex; align-items: center; gap: var(--s2); height: 36px; padding: 0 var(--gx); border-bottom: 1px solid var(--rule); background: var(--paper); }
@@ -310,7 +312,7 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 /* The 리소스 section (decision 234): its own element under #root, so a panel repaint never touches an
    open confirm list. One quiet fold; the gauges are the only drawing in it. */
-#res { padding: 0 var(--gx) var(--s4); border-top: 1px solid var(--rule); }
+#res { margin: auto 0 0; padding: 0 var(--gx) var(--s4); border-top: 1px solid var(--rule); }
 #res .res-fold { margin: 0; }
 #res .res-fold > summary { padding: var(--s2) 0; border-bottom: 0; }
 #res .res-body { padding: 0 0 var(--s2); }
@@ -328,6 +330,25 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .g-v.wide { grid-column: 2 / 4; }
 .g-v.t-bad { color: var(--bad); }
 .ep { margin: var(--s1) 0 0; font-size: var(--text-xs); color: var(--muted); }
+#res .pending { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--text-sm); }
+/* The 6h / 24h switch ends the PC 부하 line beside the heading, not in it, so the heading's name stays "PC 부하". */
+#res .load-h { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s3); padding: var(--s1) 0; }
+#res .load-h h3 { margin-top: 0; }
+.rng { display: inline-flex; gap: 2px; margin-left: auto; padding: 2px; font-size: var(--text-xs); line-height: 16px; border: 1px solid var(--rule); border-radius: var(--r2); }
+.rng button { height: 20px; padding: 0 var(--s2); border: 0; border-radius: var(--r1); background: none; color: var(--muted); font: inherit; font-weight: 400; cursor: pointer; }
+.rng button[aria-pressed="true"] { color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--rule-2); }
+/* White like the gauges (decision 222): an outlined track, a stretch nobody watched stays white. */
+.band { display: block; width: 100%; height: 10px; margin-top: var(--s3); padding: 0; border: 1px solid var(--rule-2); border-radius: 2px; }
+.band .s-ok, .sw .s-ok { fill: var(--rule-2); }
+.band .s-warn, .sw .s-warn { fill: var(--accent); }
+.band .s-danger, .sw .s-danger { fill: var(--bad); }
+.band .s-unknown, .sw .s-unknown { fill: none; }
+.band-lg { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); margin: var(--s1) 0 0; color: var(--ink-2); font-size: var(--text-xs); line-height: 16px; }
+.band-lg span { display: inline-flex; align-items: center; gap: var(--s1); white-space: nowrap; }
+.sw { flex: none; width: 8px; height: 8px; }
+.sw rect { stroke: var(--rule-2); }
+button.link:disabled { color: var(--muted); cursor: default; }
+.band-ax { display: flex; justify-content: space-between; margin-top: 2px; color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
 .ep.t-bad { color: var(--bad); }
 .unread { color: var(--bad); }
 /* One line per row at every width: a long name or reason is cut, its whole text in the cell's title. */

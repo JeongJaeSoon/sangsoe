@@ -7,7 +7,7 @@ import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { ownerDone } from "../owner/done.ts";
 import { openResources } from "../reaper/open.ts";
-import type { OwnerReap, OwnerReaped, ResourceView } from "../reaper/resources.ts";
+import type { OwnerReap, OwnerReaped, ResourcePart, ResourcePartView, ResourceView } from "../reaper/resources.ts";
 import { hashOf, mask, summarize } from "../session/mask.ts";
 import { Store } from "../store/store.ts";
 import { type BuildOptions, buildBrief, buildGroup, buildItem } from "./build.ts";
@@ -90,7 +90,7 @@ export interface PanelPorts {
   /** Watches the store for new events; watchStore over the store file unless a test gives its own. */
   readonly watch?: (onChange: (seq: number) => void) => Result<{ close(): void }>;
   /** The 리소스 section's read and confirmed 정리 (decision 234); openResources unless a test gives its own. */
-  readonly resources?: { read(): Promise<ResourceView>; reap(a: OwnerReap): Promise<OwnerReaped> };
+  readonly resources?: { read(): Promise<ResourceView>; part?(p: ResourcePart): Promise<ResourcePartView>; reap(a: OwnerReap): Promise<OwnerReaped> };
 }
 
 /**
@@ -122,6 +122,8 @@ export interface PanelCore {
   watch(onChange: (seq: number) => void): Result<{ close(): void }>;
   /** The 리소스 section, read only when the owner opens or refreshes it (decision 234). */
   resources(): Promise<Result<ResourceView>>;
+  /** Decision 235: one part of the 리소스 section, so the panel paints each as it comes. */
+  resourcePart(p: ResourcePart): Promise<Result<ResourcePartView>>;
   /** The confirmed 정리: the owner's press is recorded as an owner_action, then only the listed ids go. */
   reap(a: OwnerReap): Promise<Result<OwnerReaped>>;
 }
@@ -203,6 +205,10 @@ export function panelCore(ports: PanelPorts): PanelCore {
     watch: (onChange) => (ports.watch ?? watchStore)(onChange),
     async resources() {
       return done(await res().read());
+    },
+    async resourcePart(p) {
+      const r = res();
+      return r.part ? done(await r.part(p)) : refuse("core_old", "this core reads the 리소스 section whole", "read it whole");
     },
     async reap(a) {
       if (a.worktrees.length === 0 && !a.tmp) return refuse("bad_input", "nothing to clean up", "press 정리 after the list shows something");

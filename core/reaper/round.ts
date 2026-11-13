@@ -54,6 +54,12 @@ export type ReapOptions = {
   confirmed?: readonly string[];
   /** Decision 234: judge every candidate's finished state, removing nothing, so the panel can say why. */
   explain?: boolean;
+  /**
+   * Decision 235: card instance ids a dry run looks at; every other card is left out before the roots,
+   * so no GitHub or Orca read is spent on it. A card's verdict reads only its own rows and its own
+   * repository, so these cards come out as the whole round would judge them. A round that writes ignores it.
+   */
+  only?: ReadonlySet<string>;
 };
 
 /** One candidate as the panel lists it (decision 234). `no_trace`: no PR and no Dispatch. */
@@ -281,8 +287,10 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
       .map((p) => p.ref),
   );
   const scope: (WorktreeRow & { instanceId: string })[] = [];
+  const only = d.append ? null : (o.only ?? null);
   for (const c of list.value.rows) {
     if (c.isMainWorktree !== false) continue;
+    if (only && !only.has(c.instanceId ?? "")) continue;
     if (!c.instanceId) {
       r.unknown.push(`worktree:${c.id}`);
       continue;

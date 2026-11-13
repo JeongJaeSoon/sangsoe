@@ -135,10 +135,15 @@ export function panelHandlers(load: () => Promise<PanelCore | string>) {
         return thrown(e);
       }
     },
-    "panel.resources": async (): Promise<Reply> => {
+    "panel.resources": async (input?: unknown): Promise<Reply> => {
+      const part = (input as { part?: unknown } | null | undefined)?.part;
+      if (part !== undefined && part !== "load" && part !== "made" && part !== "candidates") {
+        return refuse("bad_input", "not a part of the 리소스 section", "refresh the 리소스 section");
+      }
       try {
         const c = await core();
         if (!isCore(c)) return c;
+        if (part) return c.resourcePart ? await c.resourcePart(part) : refuse("core_old", "this core reads the 리소스 section whole", "read it whole");
         return c.resources ? await c.resources() : refuse("core_old", "this core has no resource read", "update sangsoe");
       } catch (e) {
         return thrown(e);

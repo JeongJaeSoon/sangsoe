@@ -8,7 +8,19 @@ import { nodeExec } from "../orca/exec.ts";
 import { holdStore } from "../store/held.ts";
 import { Store } from "../store/store.ts";
 import { readReaperConfig } from "./config.ts";
-import { type OwnerReap, type OwnerReaped, ownerReap, readResources, type ResourceView, sangsoeWorktrees, TRASH_BIN } from "./resources.ts";
+import {
+  type OwnerReap,
+  type OwnerReaped,
+  ownerReap,
+  type ResourceDeps,
+  type ResourcePart,
+  type ResourcePartView,
+  type ResourceView,
+  readResourcePart,
+  readResources,
+  sangsoeWorktrees,
+  TRASH_BIN,
+} from "./resources.ts";
 import { type ReapOptions, type ReapReport, reapRound } from "./round.ts";
 
 export type ReaperRunner = { run(o?: ReapOptions): Promise<ReapReport>; close(): void };
@@ -52,18 +64,21 @@ export function openResources(o: { dbPath?: string; home?: string } = {}) {
       runner.close();
     }
   };
+  const reading = <T>(fn: (d: ResourceDeps) => Promise<T>): Promise<T> =>
+    withRunner(true, (plan) => {
+      const store = Store.open(o.dbPath ? { path: o.dbPath } : {});
+      return fn({
+        ...base,
+        orca: createOrcaAdapter(exec),
+        events: (f) => store.events(f),
+        sample: () => sampleLoad(),
+        plan: (opts) => plan.run(opts),
+      }).finally(() => store.close());
+    });
   return {
-    read: (): Promise<ResourceView> =>
-      withRunner(true, (plan) => {
-        const store = Store.open(o.dbPath ? { path: o.dbPath } : {});
-        return readResources({
-          ...base,
-          orca: createOrcaAdapter(exec),
-          events: (f) => store.events(f),
-          sample: () => sampleLoad(),
-          plan: (opts) => plan.run(opts),
-        }).finally(() => store.close());
-      }),
+    read: (): Promise<ResourceView> => reading(readResources),
+    /** Decision 235: one part, so the panel paints each as it comes. */
+    part: (p: ResourcePart): Promise<ResourcePartView> => reading((d) => readResourcePart(d, p)),
     reap: (a: OwnerReap): Promise<OwnerReaped> =>
       withRunner(false, (runner) =>
         ownerReap(

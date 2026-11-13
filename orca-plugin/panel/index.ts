@@ -2,7 +2,7 @@
 // The sangsoe html panel (decision 92): three stages down and back, decision and 완료 buttons. Every
 // button is a plugin.request to the worker, which calls the core; the panel changes nothing itself.
 import { panelReads } from "./refresh.ts";
-import { type Reaped, RES_OPEN_KEY, type ResState, type ResView, reapTargets, renderResBody, renderResources, STALE_MS } from "./resources.ts";
+import { type Reaped, RES_OPEN_KEY, type ResState, readParts, reapTargets, renderResBody, repaint, FOCUS_AFTER, type Want, renderResources, STALE_MS } from "./resources.ts";
 import { STYLE } from "./style.ts";
 import {
   type Act,
@@ -65,19 +65,33 @@ function mountResources(after: HTMLElement): void {
   after.after(box);
   let state: ResState = { kind: "idle" };
   let open = false;
+  let hours: 6 | 24 = 6;
   const draw = () => {
-    box.innerHTML = renderResources(state, open, Date.now());
+    box.innerHTML = renderResources(state, open, Date.now(), hours);
   };
+  let want: Want | null = null;
+  // A click anywhere else drops a press still waiting for its button.
+  document.addEventListener("pointerdown", (ev) => {
+    if (!box.contains(ev.target as Node)) want = null;
+  });
   const body = () => {
     const el = box.querySelector<HTMLElement>(".res-body");
-    if (el) el.innerHTML = renderResBody(state, Date.now());
+    if (el) want = repaint(el, renderResBody(state, Date.now(), hours), document.activeElement, want);
   };
   const failed = (e: unknown) => ({ ok: false as const, refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" } });
+  // Decision 235: three parts asked together, each painted as it comes.
   const read = async (result?: Reaped) => {
-    state = { kind: "reading", ...(state.kind === "shown" ? { last: state.view } : {}) };
+    const last = state.kind === "shown" ? state.view : undefined;
+    state = { kind: "reading", got: {}, last, result };
     body();
-    const r = (await orca.plugin.request("panel.resources").catch(failed)) as Reply<ResView>;
-    state = r.ok ? { kind: "shown", view: r.value, ...(result ? { result } : {}) } : { kind: "failed", refusal: r.refusal };
+    const end = await readParts(
+      (input) => orca.plugin.request("panel.resources", input),
+      (s) => {
+        state = s.kind === "reading" ? { ...s, last, result } : s;
+        body();
+      },
+    );
+    state = end.kind === "shown" && result ? { ...end, result } : end;
     body();
   };
   const run = async () => {
@@ -103,9 +117,18 @@ function mountResources(after: HTMLElement): void {
     const el = (ev.target as Element).closest<HTMLElement>("[data-res]");
     if (!el) return;
     const what = el.getAttribute("data-res");
+    want = what ? { from: what, to: FOCUS_AFTER[what] ?? what } : null;
     const busy = state.kind === "reading" || (state.kind === "shown" && state.running === true);
-    if (what === "refresh") {
+    const stale = state.kind === "shown" && Date.now() - Date.parse(state.view.at) > STALE_MS;
+    if (what === "ask" && stale) {
+      // A view gone stale since it was drawn: read it again, as 정리 itself would.
+      want = { from: what, to: "refresh" };
       if (!busy) void read();
+    } else if (what === "refresh") {
+      if (!busy) void read();
+    } else if (what === "h6" || what === "h24") {
+      hours = what === "h6" ? 6 : 24;
+      body();
     }
     else if (what === "run") void run();
     else if (state.kind === "shown" && (what === "ask" || what === "cancel")) {

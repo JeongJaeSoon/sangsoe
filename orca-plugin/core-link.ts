@@ -45,6 +45,8 @@ export type PanelCore = {
   watch?(onChange: (seq: number) => void): Reply<{ close(): void }>;
   /** Absent in a core older than decision 234; the 리소스 section then says so. */
   resources?(): Promise<Reply<unknown>>;
+  /** Absent in a core older than decision 235; the panel then reads the section whole, once. */
+  resourcePart?(part: "load" | "made" | "candidates"): Promise<Reply<unknown>>;
   reap?(a: { worktrees: string[]; tmp: boolean }): Promise<Reply<unknown>>;
 };
 
