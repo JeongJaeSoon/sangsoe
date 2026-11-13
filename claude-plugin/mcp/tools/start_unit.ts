@@ -21,7 +21,7 @@ import {
   type UnitClass,
 } from "../../../core/index.ts";
 import type { Outcome, Refusal, ToolDef } from "../contract.ts";
-import { staleServer } from "../stale.ts";
+import { STALE_FIX, staleServer } from "../stale.ts";
 
 const DEFAULT_LIMIT = 4;
 const ROLES: readonly Role[] = ["orchestrator", "lead", "worker"];
@@ -165,7 +165,7 @@ export default {
     // Before the store and Orca: a stale server would start with the model table it loaded.
     const stale = staleServer();
     if (stale) {
-      return { ok: false, refusal: { code: "server_stale", reason: stale, fix: "restart this Claude Code session (quit and start it again), then call start_unit again" } };
+      return { ok: false, refusal: { code: "server_stale", reason: stale, fix: STALE_FIX } };
     }
     const orca = createOrcaAdapter(nodeExec(180_000));
     const store = Store.open();
