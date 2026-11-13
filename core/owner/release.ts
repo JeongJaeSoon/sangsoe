@@ -1,5 +1,6 @@
 import type { StoredEvent, ViewInput } from "../contract/index.ts";
 import { dedupeKey, EVENTS } from "../contract/index.ts";
+import type { LocalRows, WorktreePsRow } from "../contract/orca.ts";
 import { LOCAL_HOST } from "../orca/host-filter.ts";
 import type { Appended, Store } from "../store/store.ts";
 import { OWNER_DEFAULTS, type OwnerConfig } from "./types.ts";
@@ -63,6 +64,34 @@ export function releasesFor(input: Pick<ViewInput, "events">, signal: ReleaseSig
     case "session_ended":
       return waits.map((w) => ({ ref: w.seq, outcome: "moot", by: "unknown", evidence: signal.evidence }));
   }
+}
+
+/**
+ * Decision 232: a session's wait whose own hooks can no longer release it (a terminal killed with no
+ * SessionEnd, the plugin turned off). Orca's full ps (not truncated, local host not omitted) showing the wait's worktree with no live and no
+ * unverifiable terminal, or no longer listing it, makes it moot `terminal_gone`; any session wait
+ * open `showHours` makes it moot `expired`, since a worktree may hold more than one session.
+ * A Dispatch's wait is left to Orca's mail and ps (decision 196).
+ */
+export function orphanedWaits(
+  events: readonly StoredEvent[],
+  ps: LocalRows<WorktreePsRow> | null,
+  now: number,
+  cfg: Pick<OwnerConfig, "showHours"> = OWNER_DEFAULTS,
+): Release[] {
+  const full = ps && !ps.truncated && !ps.omittedHostIds.includes(LOCAL_HOST) ? new Map(ps.rows.flatMap((r) => (r.worktreeInstanceId ? [[r.worktreeInstanceId, r] as const] : []))) : null;
+  const gone = (worktree: unknown) => {
+    if (!full || typeof worktree !== "string") return false;
+    const row = full.get(worktree);
+    return !row || (row.liveTerminalCount === 0 && row.unverifiableTerminalCount === 0);
+  };
+  const limit = now - cfg.showHours * 3_600_000;
+  return openWaits(events)
+    .filter((w) => typeof w.payload.session === "string" && w.payload.dispatch === undefined)
+    .flatMap((w): Release[] => {
+      const evidence = gone(w.payload.worktree) ? "terminal_gone" : Date.parse(w.ts) <= limit ? "expired" : undefined;
+      return evidence ? [{ ref: w.seq, outcome: "moot", by: "unknown", evidence }] : [];
+    });
 }
 
 /**

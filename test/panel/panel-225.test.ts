@@ -60,7 +60,8 @@ test("(2)(7) the 누가 cell is a badge for who and the elapsed time apart, the 
 });
 
 test("(7) a long who value is cut with an ellipsis inside its badge and keeps its full text in the title", () => {
-  const term = "term_0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+  // A terminal handle is drawn short (panel-spacing (3)); any other long name is cut by CSS.
+  const term = "release-steward-for-acme-api-migration";
   const rows = ov().inProgress.rows.map((r) => (r.id === "i026" ? { ...r, cells: r.cells.map((c, i) => (i === 4 ? { text: `${term} 43m` } : c)) } : r));
   const cell = rowOf(renderStage(withRows(rows)), "i026");
   assert.match(cell, new RegExp(`<td data-l="누가" class="who" title="${term} 43m"><span class="badge">${term}</span><span class="age">43m</span></td>`));
@@ -172,7 +173,7 @@ test("(10) wide tables keep each cell on one line: fixed columns, ellipsis, the 
   const td = rule(WIDE_ONLY, ".tbl td");
   for (const d of ["white-space: nowrap;", "overflow: hidden;", "text-overflow: ellipsis;"]) assert.ok(td.includes(d), d);
   const html = renderStage(one);
-  assert.match(html, /<table class="tbl"><colgroup><col>/);
+  assert.match(html, /<table class="tbl"><colgroup><col style="width:\d+px"><col>/);
   assert.match(rowOf(html, "i031"), /<td data-l="PR" class="pr" title="acme\/api#31">/);
   const g = renderStage(grp);
   assert.match(g, /<table class="tbl gt"><colgroup>/);

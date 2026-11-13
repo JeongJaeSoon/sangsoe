@@ -22,7 +22,7 @@ const sectionOf = (html: string, id: string) => html.slice(html.indexOf(`id="h-$
 test("a lead row says it opens the group: a visible 자세히 › cue (decision 222 (16)) and its own label", () => {
   const html = renderStage(overview);
   const lead = /<tr data-id="lead:api-migration"[^>]*>.*?<\/tr>/s.exec(html)?.[0] ?? "";
-  assert.match(lead, /aria-label="api-migration 묶음 자세히"/);
+  assert.match(lead, /aria-label="api-migration 묶음, [^"]*자세히"/);
   assert.match(lead, /<span class="go" aria-hidden="true">자세히 ›<\/span>/);
   assert.doesNotMatch(/<tr data-id="i026"[^>]*>.*?<\/tr>/s.exec(html)?.[0] ?? "", /class="go"/);
 });
