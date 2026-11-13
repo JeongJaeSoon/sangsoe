@@ -37,7 +37,8 @@ export type Got = { load?: Reply<LoadPart>; made?: Reply<MadePart>; candidates?:
 
 export type ResState =
   | { kind: "idle" }
-  | { kind: "reading"; got: Got }
+  /** `last`: the view a refresh started from, standing in for each part until its new answer comes. */
+  | { kind: "reading"; got: Got; last?: ResView | undefined }
   | { kind: "shown"; view: ResView; confirm?: boolean; running?: boolean; result?: Reaped }
   | { kind: "failed"; refusal: Refusal };
 
@@ -173,14 +174,15 @@ function loadBlock(v: Pick<ResView, "load" | "episode" | "band">, hours: 6 | 24)
   const pick = v.band
     ? `<span class="rng" role="group" aria-label="기간">${([6, 24] as const).map((h) => `<button type="button" data-res="h${h}" aria-pressed="${h === hours}">${h}시간</button>`).join("")}</span>`
     : "";
-  if (!v.load.ok) return `<h3>PC 부하${pick}</h3><p class="ep">${unread(v.load.why)}</p>${ep}${band}`;
+  const head = (badge: string) => `<div class="load-h"><h3>PC 부하${badge}</h3>${pick}</div>`;
+  if (!v.load.ok) return `${head("")}<p class="ep">${unread(v.load.why)}</p>${ep}${band}`;
   const l = v.load.value;
   const rows = [
     l.loadPerCpu !== undefined ? gauge("CPU", `${l.loadPerCpu.toFixed(2)} / 코어`, (l.loadPerCpu / 2) * 100, toneOf(l.reasons, "load/CPU")) : gauge("CPU", "모름", 0, ""),
     l.memFreePct !== undefined ? gauge("메모리 여유", `${Math.round(l.memFreePct)}%`, l.memFreePct, toneOf(l.reasons, "메모리")) : gauge("메모리 여유", "모름", 0, ""),
     l.diskFreeGb !== undefined ? `<div class="gauge"><span class="g-l">디스크 여유</span><span class="g-v wide ${toneOf(l.reasons, "디스크")}">${n(Math.round(l.diskFreeGb))} GB</span></div>` : "",
   ];
-  return `<h3>PC 부하 <span class="badge ${l.level === "ok" ? "" : l.level === "warn" ? "t-run" : "t-bad"}">${LEVEL[l.level]}</span>${pick}</h3>${rows.join("")}${ep}${band}`;
+  return `${head(` <span class="badge ${l.level === "ok" ? "" : l.level === "warn" ? "t-run" : "t-bad"}">${LEVEL[l.level]}</span>`)}${rows.join("")}${ep}${band}`;
 }
 
 function madeBlock(v: Pick<ResView, "made">): string {
@@ -265,10 +267,19 @@ function resultNote(r: Reaped): string {
   return `<p class="msg" role="status"${title ? ` title="${esc(title)}"` : ""}>${esc(parts.join(", ") + tail)}</p>`;
 }
 
-/** One part while the others are still read: drawn when it came, else what is being read. */
-function partBlock<T>(r: Reply<T> | undefined, title: string, what: string, draw: (v: T) => string): string {
-  if (!r || (!r.ok && r.refusal.code === "core_old")) return pending(title, what);
+/** One part while the others are still read: drawn when it came, else the last read's, else what is being read. */
+function partBlock<T>(r: Reply<T> | undefined, last: T | undefined, title: string, what: string, draw: (v: T) => string): string {
+  if (!r || (!r.ok && r.refusal.code === "core_old")) return last ? draw(last) : pending(title, what);
   return r.ok ? draw(r.value) : `<h3>${title}</h3><p class="ep">${unread(r.refusal.reason)}</p>`;
+}
+
+type Paintable = Pick<Element, "contains" | "innerHTML"> & { querySelector(q: string): { focus(): void } | null };
+
+/** Repainting replaces the buttons; the keyboard stays on the one that was focused. */
+export function repaint(el: Paintable, html: string, active: Element | null): void {
+  const at = active && el.contains(active) ? active.getAttribute("data-res") : null;
+  el.innerHTML = html;
+  if (at) el.querySelector(`[data-res="${at}"]`)?.focus();
 }
 
 /** The body inside the fold for one state; `now` decides 낡음, `hours` the band's span. */
@@ -282,10 +293,10 @@ export function renderResBody(s: ResState, now: number, hours: 6 | 24 = 6): stri
   if (s.kind === "reading") {
     const g = s.got;
     return (
-      tools(`<span class="fresh">읽는 중…</span>`, true) +
-      partBlock(g.load, "PC 부하", "부하를 읽는 중…", (v) => loadBlock(v, hours)) +
-      partBlock(g.made, "sangsoe 가 만든 것", "worktree·터미널·프로세스·임시 폴더를 읽는 중…", madeBlock) +
-      partBlock(g.candidates, "정리 후보", "끝난 worktree 를 GitHub·Orca 에 묻는 중…", (v) => candidates(v, null, false))
+      tools(`<span class="fresh" aria-live="polite">읽는 중…</span>`, true) +
+      partBlock<Pick<ResView, "load" | "episode" | "band">>(g.load, s.last, "PC 부하", "부하를 읽는 중…", (v) => loadBlock(v, hours)) +
+      partBlock<Pick<ResView, "made">>(g.made, s.last, "sangsoe 가 만든 것", "worktree·터미널·프로세스·임시 폴더를 읽는 중…", madeBlock) +
+      partBlock<Cands>(g.candidates, s.last, "정리 후보", "끝난 worktree 를 GitHub·Orca 에 묻는 중…", (v) => candidates(v, null, false))
     );
   }
   const v = s.view;

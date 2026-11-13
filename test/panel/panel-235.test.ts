@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PanelCore } from "../../orca-plugin/core-link.ts";
 import { panelHandlers } from "../../orca-plugin/panel/requests.ts";
-import { type Band, type Got, PARTS, type PartName, readParts, renderResBody, type ResState } from "../../orca-plugin/panel/resources.ts";
+import { type Band, type Got, PARTS, type PartName, readParts, renderResBody, repaint, type ResState } from "../../orca-plugin/panel/resources.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
 
 // Decision 235: the 리소스 section read in three parts that fill in one by one, pinned to the panel's
@@ -50,6 +50,16 @@ test("reading: each part says what is being read until it comes, and a part that
   assert.doesNotMatch(html, /부하를 읽는 중/);
   assert.match(html, /worktree·터미널·프로세스·임시 폴더를 읽는 중…/);
   assert.doesNotMatch(html, /data-res="ask"/, "nothing to clean up while the candidates are read");
+});
+
+test("a refresh keeps the last read in place until each part's new answer comes, with nothing to press", () => {
+  const last = { ...parts.made, ...parts.candidates, ...parts.load, at: AT } as unknown as ResState & { kind: "shown" };
+  const html = renderResBody({ kind: "reading", got: { load: ok("load") }, last: last as never }, NOW);
+  assert.doesNotMatch(html, /읽는 중…<\/p>/, "no part drops to a reading row");
+  assert.match(html, /<h3>sangsoe 가 만든 것<\/h3><table/);
+  assert.match(html, /<h3>정리 후보<\/h3>/);
+  assert.doesNotMatch(html, /data-res="(ask|run)"/);
+  assert.match(html, /<span class="fresh" aria-live="polite">읽는 중…<\/span>/);
 });
 
 test("the panel asks the three parts together and paints after each; all three in, the view is whole", async () => {
@@ -132,17 +142,36 @@ test("band: 6 hours by default, 24 on the switch; danger, ok and unknown each dr
   assert.match(day, /aria-label="최근 24시간 부하: 위험 1시간, 보통 9시간, 모름 14시간"/);
   assert.match(day, /<rect class="s-unknown" x="0" width="583" height="8"\/>/);
   assert.match(day, /<span>24시간 전<\/span><span>지금<\/span>/);
+  assert.match(six, /<div class="load-h"><h3>PC 부하 <span class="badge[^"]*">[^<]*<\/span><\/h3><span class="rng"/, "the switch sits beside the heading, so its name stays PC 부하");
+});
+
+test("a repaint keeps the keyboard on the button that had it, and takes no focus it did not have", () => {
+  const focused: string[] = [];
+  const el = (inside: boolean) => ({
+    innerHTML: "",
+    contains: () => inside,
+    querySelector: (q: string) => ({ focus: () => void focused.push(q) }),
+  });
+  const active = { getAttribute: (n: string) => (n === "data-res" ? "h24" : null) } as unknown as Element;
+  const box = el(true);
+  repaint(box, "<b>new</b>", active);
+  assert.equal(box.innerHTML, "<b>new</b>");
+  assert.deepEqual(focused, ['[data-res="h24"]']);
+  repaint(el(false), "x", active);
+  repaint(el(true), "x", null);
+  assert.deepEqual(focused, ['[data-res="h24"]'], "focus outside the section is left alone");
 });
 
 const rule = (sel: string) => new RegExp(`(?:^|\\n)${sel.replace(/[.()[\]#>:]/g, "\\$&")} \\{[^}]*\\}`).exec(STYLE)?.[0] ?? "";
 
-test("F2: the section sits at the panel's bottom when the stage is short, at the page's end when it is long", () => {
+// These pin the CSS rules; the layout they make is measured in a browser (decision 235, the U102 check).
+test("F2 rules: the section is pushed to the panel's bottom when the stage is short, to the page's end when it is long", () => {
   assert.match(rule("body"), /display: flex; flex-direction: column; min-height: 100dvh;/);
   assert.match(rule("#res"), /margin: auto 0 0;/, "pushed down by the free space, nothing under it");
   assert.doesNotMatch(rule("#res"), /position: (fixed|sticky)/, "an open section never gets a scroll of its own");
 });
 
-test("F3: the section adds no space of its own below it, and nothing in it scrolls by itself", () => {
+test("F3 rules: the section adds no space of its own below it, and nothing in it scrolls by itself", () => {
   const res = STYLE.slice(STYLE.indexOf("/* The 리소스 section"));
   assert.doesNotMatch(res, /overflow(-y)?: (auto|scroll)/);
   assert.doesNotMatch(rule("#res"), /margin: 0 0 var/, "the section rule's 24px never lands under it");

@@ -146,8 +146,9 @@ export const BAND_MS = 24 * 3_600_000;
 /**
  * Decision 235: the band stores nothing of its own. pressure_high marks entering warn or danger (the
  * level it entered at; a rise inside an episode is not recorded), capacity_free the return to ok. The
- * monitor's own rounds are not recorded, so a stretch with no REAPER timer round within two of its
- * periods is unknown: Orca or its worker was not running.
+ * monitor's own rounds are not recorded, so a stretch with no REAPER timer round within three of its
+ * periods is unknown: Orca or its worker was not running. Three, not two: a tick that fires while a
+ * hint round (pressure_high is one) still runs is dropped, so the load itself can skip one round.
  */
 export function loadBand(events: readonly StoredEvent[], now: number, intervalMs: number): Band {
   const from = now - BAND_MS;
@@ -155,7 +156,7 @@ export function loadBand(events: readonly StoredEvent[], now: number, intervalMs
   const episodes = events.filter((e) => e.type === "pressure_high" || e.type === "capacity_free").sort((a, b) => a.seq - b.seq);
   const covered = events
     .filter((e) => e.type === "reap_round" && (e.payload as { trigger?: unknown }).trigger === "timer")
-    .map((e) => [at(e), at(e) + 2 * intervalMs] as const);
+    .map((e) => [at(e), at(e) + 3 * intervalMs] as const);
   const levelAt = (t: number): BandState => {
     if (!covered.some(([a, b]) => a <= t && t < b)) return "unknown";
     const last = episodes.filter((e) => at(e) <= t).at(-1);
@@ -261,7 +262,7 @@ async function readCandidates(d: ResourceDeps, now: number): Promise<Pick<Resour
 export async function readResourcePart(d: ResourceDeps, part: ResourcePart): Promise<ResourcePartView> {
   const now = d.now();
   const at = new Date(now).toISOString();
-  if (part === "load") return { part, at, load: await readLoad(d), episode: episodeOf(d.events), band: loadBand(d.events(), now, d.intervalMs ?? DEFAULT_MONITOR_CONFIG.reaperIntervalMinutes * 60_000) };
+  if (part === "load") return { part, at, load: await readLoad(d), episode: episodeOf(d.events), band: loadBand(["pressure_high", "capacity_free", "reap_round"].flatMap((type) => d.events({ type })), now, d.intervalMs ?? DEFAULT_MONITOR_CONFIG.reaperIntervalMinutes * 60_000) };
   if (part === "made") return { part, at, made: await readMade(d, now) };
   return { part, at, ...(await readCandidates(d, now)), trash: d.trashBin !== null };
 }

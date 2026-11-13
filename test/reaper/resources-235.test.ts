@@ -36,6 +36,8 @@ test("only: a dry run judges sangsoe's cards exactly as the whole round would, a
 
   const whole = await w.round({ explain: true });
   const ghWhole = w.gh.paths.length;
+  assert.ok(w.gh.paths.some((p) => p.includes("other/thing")), "the whole round does read the other repository");
+  assert.ok(w.orca.calls.some((c) => c.includes("ctx_theirs")), "the whole round does read the other Dispatch");
   w.gh.paths = [];
   w.orca.calls = [];
   const ids = new Set([mine, mineSmoke, mineOpen].map((c) => c.instanceId ?? ""));
@@ -179,6 +181,25 @@ test("band: high from pressure_high to capacity_free, its tone from the level it
   assert.equal(at(3), "ok");
   assert.equal(at(0.5), "warn", "an episode still open runs to now");
   for (let i = 1; i < band.spans.length; i++) assert.equal(band.spans[i]?.from, band.spans[i - 1]?.to, "spans touch");
+});
+
+test("band edges: no rows is all unknown; an episode opened before the window still counts; one dropped tick is not a gap, two are", () => {
+  const ev = (type: string, ago: number, payload: unknown = {}) => ({ type, ts: new Date(NOW - ago).toISOString(), payload, seq: 0 });
+  const timer = (ago: number) => ev("reap_round", ago, { trigger: "timer" });
+  const band = (rows: ReturnType<typeof ev>[]) => loadBand(rows.map((e, i) => ({ ...e, seq: i + 1 })) as never, NOW, 10 * 60_000);
+  const at = (b: ReturnType<typeof loadBand>, ago: number) => b.spans.find((s) => Date.parse(s.from) <= NOW - ago && NOW - ago < Date.parse(s.to))?.state;
+  const M = 60_000;
+
+  assert.deepEqual(band([]).spans, [{ from: new Date(NOW - 24 * H).toISOString(), to: new Date(NOW).toISOString(), state: "unknown" }]);
+
+  const old = band([ev("pressure_high", 30 * H, { reason: "warn: x" }), ...[50, 40, 30, 20, 10, 0].map((m) => timer(m * M))]);
+  assert.equal(at(old, 5 * M), "warn", "pressure_high 30h ago, never freed: still warn");
+
+  const dropped = band([timer(60 * M), timer(35 * M), timer(5 * M)]);
+  assert.equal(at(dropped, 40 * M), "ok", "25 minutes between rounds: one tick dropped, still watched");
+  const gone = band([timer(80 * M), timer(40 * M)]);
+  assert.equal(at(gone, 45 * M), "unknown", "30 minutes after a round with none since: not watched");
+  assert.equal(at(gone, 55 * M), "ok");
 });
 
 test("the load part draws the band from the store's rows and writes none", async () => {

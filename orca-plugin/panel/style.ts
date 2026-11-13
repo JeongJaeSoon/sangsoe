@@ -331,8 +331,10 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .g-v.t-bad { color: var(--bad); }
 .ep { margin: var(--s1) 0 0; font-size: var(--text-xs); color: var(--muted); }
 #res .pending { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--text-sm); }
-/* The 6h / 24h switch ends the PC 부하 line; the band under the gauges carries only state tones. */
-.rng { display: inline-flex; gap: 2px; margin-left: auto; padding: 2px; border: 1px solid var(--rule); border-radius: var(--r2); }
+/* The 6h / 24h switch ends the PC 부하 line beside the heading, not in it, so the heading's name stays "PC 부하". */
+#res .load-h { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s3); padding: var(--s1) 0; }
+#res .load-h h3 { margin-top: 0; }
+.rng { display: inline-flex; gap: 2px; margin-left: auto; padding: 2px; font-size: var(--text-xs); line-height: 16px; border: 1px solid var(--rule); border-radius: var(--r2); }
 .rng button { height: 20px; padding: 0 var(--s2); border: 0; border-radius: var(--r1); background: none; color: var(--muted); font: inherit; font-weight: 400; cursor: pointer; }
 .rng button[aria-pressed="true"] { color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--rule-2); }
 /* White like the gauges (decision 222): an outlined track, a stretch nobody watched stays white. */
