@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { existsSync, lutimesSync, mkdirSync, readdirSync, renameSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { type Exec, ownerReap, TMP_MIN_AGE_MS, type WorktreeRow } from "../../core/index.ts";
+import { type Exec, ownerReap, sangsoeWorktrees, TMP_MIN_AGE_MS, type WorktreeRow } from "../../core/index.ts";
 import { scratchDir } from "../scratch.ts";
 import { assertNeverForbidden, CONFIG, card, dropScratch, finishedCard, makeRepo, startedBySangsoe, worker, world } from "./harness.ts";
 
@@ -34,7 +34,8 @@ test("정리 over every armed gate removes only the clean listed card and trashe
   const tasked = finishedCard(w, "open-task");
   w.orca.workers.push(worker(tasked.id, { dispatchId: "ctx_task" }));
   w.orca.taskStatus.set("task_1", "dispatched");
-  const named = [clean, dirty, local, open, live, kept, listening, stacked, tasked];
+  const foreign = finishedCard(w, "other-program", { foreign: true });
+  const named = [clean, dirty, local, open, live, kept, listening, stacked, tasked, foreign];
 
   const now = Date.now();
   const root = scratchDir("blast-tmp-");
@@ -64,7 +65,7 @@ test("정리 over every armed gate removes only the clean listed card and trashe
   };
 
   const out = await ownerReap(
-    { run: (o) => w.round(o), exec, now: () => now, tmpRoot: root, uid: process.getuid?.() ?? -1, trashBin: "/fake/trash" },
+    { run: (o) => w.round(o), mine: () => sangsoeWorktrees((f) => w.store.events(f), w.orca), exec, now: () => now, tmpRoot: root, uid: process.getuid?.() ?? -1, trashBin: "/fake/trash" },
     { worktrees: named.map(id), tmp: true },
   );
 
@@ -74,6 +75,7 @@ test("정리 over every armed gate removes only the clean listed card and trashe
   assert.deepEqual(blocked, { [id(dirty)]: "uncommitted", [id(local)]: "unpushed", [id(listening)]: "listener", [id(stacked)]: "compose_running" });
   for (const c of [open, live, kept, tasked]) assert.ok(out.skipped.includes(`not a candidate now: ${id(c)}`), `${id(c)}: ${out.skipped.join("; ")}`);
   assert.ok(!w.orca.calls.some((c) => c.includes(unlisted.id) && c.startsWith("worktreeRm")), "a card not listed stays");
+  assert.ok(out.skipped.includes(`not made by sangsoe: ${id(foreign)}`), "another program's finished worktree is refused even when named");
   for (const c of [unlisted, dirty, local, open, live, kept, listening, stacked, tasked]) assert.ok(existsSync(c.path), c.path);
   assert.ok(!w.docker.calls.some((x) => / (rm|down|stop|kill|prune) /.test(` ${x} `)), w.docker.calls.join("\n"));
   assertNeverForbidden(w);

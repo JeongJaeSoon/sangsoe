@@ -12,6 +12,7 @@ export {
   readResources,
   type ResourceDeps,
   type ResourceView,
+  sangsoeWorktrees,
   TMP_MIN_AGE_MS,
   tmpLeftovers,
 } from "./resources.ts";

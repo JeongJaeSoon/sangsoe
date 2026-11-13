@@ -99,23 +99,27 @@ test("the view: load from one point read, sangsoe's own cards and terminals, lef
   store.append({ type: "pressure_high", source: "resource-monitor", payload: { reason: "warn: load/CPU 1.50" }, dedupe_key: dedupeKey(eventDef("pressure_high") as EventDef, "0") });
   const mine = row("w1", root);
   const foreign = row("w2", root);
-  store.append({
-    type: "unit_started",
-    source: "start_unit",
-    entity: "task",
-    entity_id: "task_1",
-    payload: { kind: "default", picked_by: "role", model: "row", effort: "medium", route: "none", budget: 0, budget_per: "unit", used: 0, worktree: mine.id },
-  });
+  const goneMine = row("w3", join(root, "nope"));
+  const unfinished = row("w4", root);
+  for (const c of [mine, goneMine, unfinished]) {
+    store.append({
+      type: "unit_started",
+      source: "start_unit",
+      entity: "task",
+      entity_id: `task_${c.id}`,
+      payload: { kind: "default", picked_by: "role", model: "row", effort: "medium", route: "none", budget: 0, budget_per: "unit", used: 0, worktree: c.id },
+    });
+  }
   const v = await readResources(
     deps({
       root,
       store,
-      cards: [mine, foreign],
+      cards: [mine, foreign, goneMine, unfinished],
       plan: {
         judged: [
-          { ref: "inst-a", name: "a", path: root, gone: false, state: "finished", why: "PR #3" },
-          { ref: "inst-b", name: "b", path: join(root, "nope"), gone: true, state: "unknown", why: "no HEAD on the card row" },
-          { ref: "inst-c", name: "c", path: root, gone: false, state: "unfinished", why: "PR #4 did not carry HEAD" },
+          { ref: "inst-w1", name: "a", path: root, gone: false, state: "finished", why: "PR #3" },
+          { ref: "inst-w3", name: "b", path: join(root, "nope"), gone: true, state: "unknown", why: "no HEAD on the card row" },
+          { ref: "inst-w4", name: "c", path: root, gone: false, state: "unfinished", why: "PR #4 did not carry HEAD" },
         ],
       },
     }),
@@ -124,8 +128,8 @@ test("the view: load from one point read, sangsoe's own cards and terminals, lef
   assert.equal(v.load.value.loadPerCpu, 0.5);
   assert.equal(v.load.value.memFreePct, 25, "macOS memory comes from Orca's diagnostics, as the resource monitor reads it");
   assert.equal(v.episode.state, "high");
-  assert.deepEqual(v.made.worktrees, { ok: true, value: { count: 1, kb: 8 } }, "only the card sangsoe started");
-  assert.deepEqual(v.made.terminals, { ok: true, value: { count: 2 } });
+  assert.deepEqual(v.made.worktrees, { ok: true, value: { count: 3, kb: 16 } }, "only the cards sangsoe started");
+  assert.deepEqual(v.made.terminals, { ok: true, value: { count: 6 } });
   assert.deepEqual(v.made.processes, { ok: true, value: { claude: { count: 1, kb: 100 }, node: { count: 0, kb: 0 } } });
   assert.deepEqual(v.made.tmp, { ok: true, value: { count: 3, kb: 24 } });
   assert.deepEqual(v.tmp, { ok: true, value: { count: 2, kb: 16 } });
@@ -133,11 +137,57 @@ test("the view: load from one point read, sangsoe's own cards and terminals, lef
   assert.deepEqual(
     v.worktrees.value.rows.map((r) => [r.ref, r.kb]),
     [
-      ["inst-a", 8],
-      ["inst-b", 0],
+      ["inst-w1", 8],
+      ["inst-w3", 0],
     ],
     "an unfinished card is not offered",
   );
+});
+
+test("a finished worktree another program made is never a candidate, not even listed", async () => {
+  const root = tmpRoot();
+  const store = Store.open({ path: ":memory:" });
+  const mine = row("w1", root);
+  const other = row("other", root);
+  store.append({
+    type: "unit_started",
+    source: "start_unit",
+    entity: "task",
+    entity_id: "task_1",
+    payload: { kind: "default", picked_by: "role", model: "row", effort: "medium", route: "none", budget: 0, budget_per: "unit", used: 0, worktree: mine.id },
+  });
+  const judged = [
+    { ref: "inst-w1", name: "mine", path: root, gone: false, state: "finished" as const, why: "PR #3" },
+    { ref: "inst-other", name: "other", path: root, gone: false, state: "finished" as const, why: "PR #9" },
+    { ref: "inst-gone-other", name: "gone", path: join(root, "nope"), gone: true, state: "unknown" as const, why: "no HEAD" },
+  ];
+  const v = await readResources(deps({ root, store, cards: [mine, other], plan: { judged } }));
+  assert.ok(v.worktrees.ok);
+  assert.deepEqual(v.worktrees.value.rows.map((r) => r.ref), ["inst-w1"]);
+
+  const asked: ReapOptions[] = [];
+  const out = await ownerReap(
+    {
+      run: async (o) => {
+        asked.push(o);
+        return { reaped: [], blocked: [], unseen: [], unknown: [], mark_only: false } as unknown as ReapReport;
+      },
+      mine: async () => new Set(["inst-w1"]),
+      exec: async () => ({ code: 0, stdout: "", stderr: "" }),
+      now: () => NOW,
+      tmpRoot: root,
+      uid: UID,
+      trashBin: null,
+    },
+    { worktrees: ["inst-w1", "inst-other"], tmp: false },
+  );
+  assert.deepEqual(asked, [{ trigger: "hint", confirmed: ["inst-w1"] }], "a named id sangsoe did not make never reaches the round");
+  assert.deepEqual(out.skipped, ["not made by sangsoe: inst-other"]);
+  const none = await ownerReap(
+    { run: async () => assert.fail("no round"), mine: async () => null, exec: async () => assert.fail("no exec"), now: () => NOW, tmpRoot: root, uid: UID, trashBin: null },
+    { worktrees: ["inst-w1"], tmp: false },
+  );
+  assert.deepEqual(none.skipped, ["sangsoe's worktrees could not be read: no card removed"]);
 });
 
 test("an unreadable root is shown as unread, never as zero", async () => {
@@ -163,6 +213,7 @@ test("정리: the confirmed ids go to one REAPER round, old leftovers to the tra
         asked.push(o);
         return { reaped: ["worktree:inst-a"], blocked: [{ kind: "worktree", ref: "inst-b", reason: "uncommitted" }], unseen: [], unknown: [], mark_only: false } as unknown as ReapReport;
       },
+      mine: async () => new Set(["inst-a", "inst-b"]),
       exec,
       now: () => NOW,
       tmpRoot: root,
@@ -189,6 +240,7 @@ test("정리 without a trash command moves nothing, and no card list runs no rou
       run: async () => {
         throw new Error("no round expected");
       },
+      mine: async () => null,
       exec,
       now: () => NOW,
       tmpRoot: root,
@@ -212,6 +264,7 @@ test("정리 reports only the listed cards, and a failing temp-folder half keeps
           unknown: ["worktree:inst-other", "worktree:inst-b: rm busy", "worktree:inst-bb"],
           mark_only: false,
         }) as unknown as ReapReport,
+      mine: async () => new Set(["inst-a", "inst-b", "inst-bb"]),
       exec: async () => ({ code: 0, stdout: "", stderr: "" }),
       now: () => NOW,
       tmpRoot: join(scratchDir("res-gone-"), "missing"),

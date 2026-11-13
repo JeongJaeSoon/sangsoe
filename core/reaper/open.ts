@@ -8,7 +8,7 @@ import { nodeExec } from "../orca/exec.ts";
 import { holdStore } from "../store/held.ts";
 import { Store } from "../store/store.ts";
 import { readReaperConfig } from "./config.ts";
-import { type OwnerReap, type OwnerReaped, ownerReap, readResources, type ResourceView, TRASH_BIN } from "./resources.ts";
+import { type OwnerReap, type OwnerReaped, ownerReap, readResources, type ResourceView, sangsoeWorktrees, TRASH_BIN } from "./resources.ts";
 import { type ReapOptions, type ReapReport, reapRound } from "./round.ts";
 
 export type ReaperRunner = { run(o?: ReapOptions): Promise<ReapReport>; close(): void };
@@ -64,6 +64,19 @@ export function openResources(o: { dbPath?: string; home?: string } = {}) {
           plan: (opts) => plan.run(opts),
         }).finally(() => store.close());
       }),
-    reap: (a: OwnerReap): Promise<OwnerReaped> => withRunner(false, (runner) => ownerReap({ ...base, run: (opts) => runner.run(opts) }, a)),
+    reap: (a: OwnerReap): Promise<OwnerReaped> =>
+      withRunner(false, (runner) =>
+        ownerReap(
+          {
+            ...base,
+            run: (opts) => runner.run(opts),
+            mine: () => {
+              const store = Store.open(o.dbPath ? { path: o.dbPath } : {});
+              return sangsoeWorktrees((f) => store.events(f), createOrcaAdapter(exec)).finally(() => store.close());
+            },
+          },
+          a,
+        ),
+      ),
   };
 }

@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { judgeLoad, type LoadLevel, type LoadSample } from "../capacity/capacity.ts";
 import type { StoredEvent } from "../contract/index.ts";
-import type { Exec, OrcaAdapter } from "../contract/orca.ts";
+import type { Exec, OrcaAdapter, WorktreeRow } from "../contract/orca.ts";
 import { withDiagnostics } from "../detect/resource/judge.ts";
 import type { EventFilter } from "../store/store.ts";
 import type { Blocked, Judged, ReapOptions, ReapReport } from "./round.ts";
@@ -120,6 +120,20 @@ function ownCards(events: ResourceDeps["events"]): { ids: Set<string>; instances
   return { ids, instances };
 }
 
+const isMine = (own: ReturnType<typeof ownCards>, c: WorktreeRow) =>
+  c.isMainWorktree === false && (own.ids.has(c.id) || own.instances.has(c.instanceId ?? ""));
+
+/**
+ * The instance ids of the worktrees sangsoe made (start_unit's `unit_started.worktree`, a recorded
+ * `resource`{kind worktree}); null when Orca's list cannot be read. Only these are ever offered to 정리.
+ */
+export async function sangsoeWorktrees(events: ResourceDeps["events"], orca: Pick<OrcaAdapter, "worktreeList">): Promise<Set<string> | null> {
+  const list = await orca.worktreeList({ limit: 1000 });
+  if (!list.ok) return null;
+  const own = ownCards(events);
+  return new Set(list.value.rows.filter((c) => isMine(own, c)).map((c) => c.instanceId ?? c.id));
+}
+
 export async function readResources(d: ResourceDeps): Promise<ResourceView> {
   const now = d.now();
   const diag = await d.orca.diagnosticsMemory();
@@ -140,11 +154,13 @@ export async function readResources(d: ResourceDeps): Promise<ResourceView> {
   const list = await d.orca.worktreeList({ limit: 1000 });
   let worktrees: ResourceView["made"]["worktrees"];
   let terminals: ResourceView["made"]["terminals"];
+  let mineIds: Set<string> | null = null;
   if (!list.ok) {
     worktrees = { ok: false, why: `worktree list: ${list.error.code}` };
     terminals = worktrees;
   } else {
-    const mine = list.value.rows.filter((c) => c.isMainWorktree === false && (own.ids.has(c.id) || own.instances.has(c.instanceId ?? "")));
+    const mine = list.value.rows.filter((c) => isMine(own, c));
+    mineIds = new Set(mine.map((c) => c.instanceId ?? c.id));
     const paths = mine.map((c) => c.path).filter((p) => existsSync(p));
     worktrees = { ok: true, value: { count: mine.length, kb: total(await diskKb(d.exec, paths), paths) } };
     const ps = await d.orca.worktreePs({});
@@ -171,9 +187,14 @@ export async function readResources(d: ResourceDeps): Promise<ResourceView> {
   try {
     const plan = await d.plan({ trigger: "hint", explain: true });
     if (!plan.roots_ok) cards = { ok: false, why: plan.unseen.join("; ") || "a root could not be read" };
+    else if (!mineIds) cards = { ok: false, why: worktrees.ok ? "worktree list" : worktrees.why };
     else {
-      // The ones a confirmed round would take (round.ts): an unfinished card stays even when its path is gone.
-      const rows = plan.judged.filter((j) => j.state === "finished" || j.state === "no_trace" || (j.gone && j.state === "unknown"));
+      const own = mineIds;
+      // The ones a confirmed round would take (round.ts), of sangsoe's own cards only: another program's
+      // worktree is never offered. An unfinished card stays even when its path is gone.
+      const rows = plan.judged.filter(
+        (j) => own.has(j.ref) && (j.state === "finished" || j.state === "no_trace" || (j.gone && j.state === "unknown")),
+      );
       const paths = rows.filter((j) => !j.gone).map((j) => j.path);
       const kb = await diskKb(d.exec, paths);
       cards = {
@@ -207,6 +228,8 @@ export type OwnerReaped = {
 
 export type OwnerReapDeps = {
   run(o: ReapOptions): Promise<ReapReport>;
+  /** sangsoeWorktrees, read at run time; null removes no card. */
+  mine(): Promise<Set<string> | null>;
   exec: Exec;
   now(): number;
   tmpRoot: string;
@@ -220,13 +243,17 @@ export type OwnerReapDeps = {
  */
 export async function ownerReap(d: OwnerReapDeps, a: OwnerReap): Promise<OwnerReaped> {
   const out: OwnerReaped = { reaped: [], blocked: [], skipped: [], tmp: null };
-  if (a.worktrees.length > 0) {
-    const r = await d.run({ trigger: "hint", confirmed: a.worktrees });
+  const mine = a.worktrees.length > 0 ? await d.mine() : null;
+  if (a.worktrees.length > 0 && !mine) out.skipped.push("sangsoe's worktrees could not be read: no card removed");
+  const named = mine ? a.worktrees.filter((id) => mine.has(id)) : [];
+  if (mine) for (const id of a.worktrees) if (!mine.has(id)) out.skipped.push(`not made by sangsoe: ${id}`);
+  if (named.length > 0) {
+    const r = await d.run({ trigger: "hint", confirmed: named });
     out.reaped = r.reaped;
-    out.blocked = r.blocked.filter((b) => b.kind !== "worktree" || a.worktrees.includes(b.ref));
+    out.blocked = r.blocked.filter((b) => b.kind !== "worktree" || named.includes(b.ref));
     // The round also lists cards the owner did not name (unreadable roots elsewhere); the owner hears only of theirs.
-    const listed = (u: string) => !u.startsWith("worktree:") || a.worktrees.some((id) => u === `worktree:${id}` || u.startsWith(`worktree:${id}:`));
-    out.skipped = [...r.unseen, ...r.unknown.filter(listed)];
+    const listed = (u: string) => !u.startsWith("worktree:") || named.some((id) => u === `worktree:${id}` || u.startsWith(`worktree:${id}:`));
+    out.skipped.push(...r.unseen, ...r.unknown.filter(listed));
     if (r.mark_only) out.skipped.push("reaper config absent: no card removed");
   }
   if (a.tmp && d.trashBin) {
