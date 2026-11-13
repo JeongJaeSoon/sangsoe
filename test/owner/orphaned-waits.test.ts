@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { LocalRows, WorktreePsRow } from "../../core/contract/orca.ts";
-import { DEFAULT_MONITOR_CONFIG, judgeOrca, type OrcaReads, ownerTodoFrom } from "../../core/index.ts";
+import { DEFAULT_MONITOR_CONFIG, judgeOrca, type LocalRows, type OrcaReads, ownerTodoFrom, type WorktreePsRow } from "../../core/index.ts";
 import { later, ownerWorld, T0 } from "./world.ts";
 
 // Decision 232: a session's wait whose own hooks no longer reach the store (a terminal killed
