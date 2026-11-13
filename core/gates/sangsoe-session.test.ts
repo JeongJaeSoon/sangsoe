@@ -35,7 +35,7 @@ test("239: a sangsoe agent, a session sangsoe started, or a worker on a Task san
 test("239: another program's worker, or a session sangsoe never saw, is not sangsoe's", () => {
   const made: Row[] = [{ type: "item_created", entity_id: "task_made", payload: {} }];
   assert.equal(facts({ transcript_path: transcript(preamble("task_other")) }, made).sangsoe(), false);
-  assert.equal(facts({ agent_type: "agent-skills:lead" }, made).sangsoe(), false);
+  assert.equal(facts({ agent_type: "other-plugin:lead" }, made).sangsoe(), false);
   assert.equal(facts({ transcript_path: transcript("fix the login bug") }, made).sangsoe(), false);
   assert.equal(facts({}, [{ type: "session_started", payload: { session: "someone-else", role: "lead" } }]).sangsoe(), false);
 });

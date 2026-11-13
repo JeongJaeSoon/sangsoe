@@ -58,7 +58,7 @@ test("preview pages for the owner list (only with PANEL_PREVIEW_DIR)", { skip: !
   mkdirSync(dir, { recursive: true });
   const long = `/tmp/${"deep-folder/".repeat(12)}checkout-with-a-very-long-name`;
   const many: Rec[] = [
-    { kind: "checkout", ref: long, owner: "task_0123456789abcdef", since: AT },
+    { kind: "checkout", ref: long, owner: "task_with_a_long_owner_id", since: AT },
     ...Array.from({ length: 24 }, (_, i) => ({ kind: ["branch", "file", "process", "registration"][i % 4] ?? "file", ref: `ref-${i}`, owner: `task_${i}`, since: AT })),
   ];
   const measure = `<script>addEventListener("load",()=>{const r=document.getElementById("res");const q=(s)=>[...r.querySelectorAll(s)];const box=(e)=>e.getBoundingClientRect();const out=q("*").filter(e=>box(e).right>box(r).right+0.5).map(e=>e.className||e.tagName);const scrollers=q("*").filter(e=>{const s=getComputedStyle(e);return /(auto|scroll)/.test(s.overflowX+s.overflowY)&&(e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth);}).length;const rows={};for(const t of q("table.owned tbody tr")){const h=Math.round(box(t).height);rows[h]=(rows[h]||0)+1;}const wrapped=q("table.owned td").filter(e=>e.scrollHeight>36).length;const p=document.createElement("pre");p.id="measure";p.textContent=JSON.stringify({pageOverflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,resOverflow:out,scrollers,rowHeights:rows,wrapped});document.body.append(p);});</script>`;
