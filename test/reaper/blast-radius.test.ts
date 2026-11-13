@@ -2,7 +2,7 @@
 // once. Only the clean listed card leaves Orca, only old per-call folders reach the trash command, and
 // nothing else on the fixture changes.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readdirSync, renameSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, lutimesSync, mkdirSync, readdirSync, renameSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { type Exec, ownerReap, TMP_MIN_AGE_MS, type WorktreeRow } from "../../core/index.ts";
@@ -49,7 +49,12 @@ test("정리 over every armed gate removes only the clean listed card and trashe
   const old = aged("sangsoe-hook-abc123", 2 * TMP_MIN_AGE_MS);
   const young = aged("sangsoe-session-young1", TMP_MIN_AGE_MS - 60_000);
   const other = aged("sangsoe-review-record-abc123", 2 * TMP_MIN_AGE_MS);
-  symlinkSync(outside, join(root, "sangsoe-pre-link01"));
+  // Old link to an old folder: only lstat and the directory check keep it out of the trash.
+  const link = join(root, "sangsoe-pre-link01");
+  symlinkSync(outside, link);
+  const then = (now - 2 * TMP_MIN_AGE_MS) / 1000;
+  utimesSync(outside, then, then);
+  lutimesSync(link, then, then);
   const trash = scratchDir("blast-trash-");
   const calls: string[][] = [];
   const exec: Exec = async (file, args) => {
@@ -75,6 +80,6 @@ test("정리 over every armed gate removes only the clean listed card and trashe
 
   assert.deepEqual(calls, [["/fake/trash", old]], "the trash command is the only file act, on the old per-call folder alone");
   assert.deepEqual(out.tmp, { moved: 1, left: 0 });
-  for (const p of [young, other, join(root, "sangsoe-pre-link01"), join(outside, "keep.txt")]) assert.ok(existsSync(p), p);
+  for (const p of [young, other, link, join(outside, "keep.txt")]) assert.ok(existsSync(p), p);
   assert.deepEqual(readdirSync(trash), ["sangsoe-hook-abc123"]);
 });
