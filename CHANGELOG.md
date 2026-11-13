@@ -4,12 +4,12 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## 0.1.6
 
-Everything since `v0.1.5`: decisions 230 to 240 and a fix to the test of 219. The pre-releases `v0.1.6-rc.1` to `v0.1.6-rc.3` carried the same changes, for checking the panel, its 리소스 section, the hooks and gates and doctor on an installed build.
+Everything since `v0.1.5`: decisions 230 to 240, a fix to the test of 219 and a fix to the owner's answer to a wait. The pre-releases checked them on an installed build as they came: `v0.1.6-rc.1` carried 230 to 234, `v0.1.6-rc.2` added 235 and 236, and `v0.1.6-rc.3` added 237 to 240 and the 219 test fix; the wait fix came after rc.3.
 
 ### Upgrading from 0.1.5
 
 - **Re-approve.** `brew upgrade sangsoe` installs to a new Cellar folder, the Orca plugin now asks for `storage:own` (to remember whether the 리소스 section is open), and its content and the vendored core changed, so the plugin waits for approval again. Have the review of the 0.1.6 build recorded with `sangsoe review record` by someone other than the session that wrote its pull request, then run `sangsoe plugin approve`, as the README's Update section says.
-- **Restart every running session (233, 237).** A server started under 0.1.5 keeps the core it loaded, and `start_unit` refuses on it with `server_stale`; it also refuses `evidence_record`'s `observed` and `resource_record`'s new kinds. The Claude plugin has a new `StopFailure` hook, which a session loads when it starts. `/reload-plugins` does not restart the server, since an upgrade at the same install path leaves the plugin's MCP configuration unchanged: quit each session, start it again in the same directory with `claude --continue` plus the flags it was started with (such as `--agent`), then call `start_unit` again.
+- **Restart every running session (233, 237, 238, 240).** A server started under 0.1.5 keeps the core it loaded, and `start_unit` refuses on it with `server_stale`; it also refuses `evidence_record`'s `observed` and `resource_record`'s new kinds. The Claude plugin has a new `StopFailure` hook, which a session loads when it starts. `/reload-plugins` does not restart the server, since an upgrade at the same install path leaves the plugin's MCP configuration unchanged: quit each session, start it again in the same directory with `claude --continue` plus the flags it was started with (such as `--agent`), then call `start_unit` again.
 - **Switching from `sangsoe-rc`.** The stable formula conflicts with `sangsoe-rc`: run `sangsoe uninstall` and `brew uninstall sangsoe-rc` before `brew install JeongJaeSoon/tap/sangsoe`, then the README's Install steps, `sangsoe install --permissions` included.
 
 ### Changes
@@ -33,6 +33,7 @@ Everything since `v0.1.5`: decisions 230 to 240 and a fix to the test of 219. Th
 ### Fixes
 
 - **The panel's "back paints from memory" test no longer fails on a slow or fast machine (219).** It compared one cold render with the average of five core readings, so it failed whenever that render was slower. It now drives the panel with a stand-in page and checks that back paints the remembered screen before it asks for a fresh reading.
+- `awaitingResume` no longer counts a panel button (an `owner_action` with no session) as the owner answering a Dispatch's open wait, which names no session either: a wait now matches the owner's words only on the session it names.
 
 ## 0.1.5
 
