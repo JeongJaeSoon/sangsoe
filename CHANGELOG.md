@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **`sangsoe decision moot` retires a broken decision that nothing waits on (231).** A decision whose gate Orca refused right after it was opened keeps its `dNNN` with no waiter at all, not even the orchestrator's carrier Task; the panel draws it as a broken row (219), and `decision moot` refused it with `not_moot` forever because it required at least one closed waiter. It now closes such a decision: it writes one `decision_closed` event (`reason: moot`, `evidence: tasks_closed`) and calls nothing in Orca besides the entrance's `run-current`, since there is no gate to resolve and no one to tell. A decision with an open waiter, or only a carrier Task, is still refused, and queue-monitor still never moots a decision without waiters by itself. The core changed, so the Orca plugin's vendored core changes too and needs re-approval.
+
 ## 0.1.5
 
 Everything since `v0.1.4`: decisions 225, 227, 228 and 229. The pre-releases `v0.1.5-rc.1` and `v0.1.5-rc.2` carried the same changes, except 229 in rc.1, for checking the panel and doctor on an installed build.
