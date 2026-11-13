@@ -97,7 +97,8 @@ function next(f: ItemFacts): string {
   else if (f.state === "planned") base = "선행 대기";
   else if (f.idle) base = "워커가 다음 지시를 기다림";
   // A session stopped on a lost login does nothing else until someone signs in (decision 237).
-  const alarm = f.alarms.includes("worker_dead:auth") ? "worker_dead:auth" : f.alarms[0];
+  if (f.alarms.includes("worker_dead:auth")) return `🚨 ${ALARM_NEXT["worker_dead:auth"]}`;
+  const alarm = f.alarms[0];
   if (!alarm) return base;
   return `🚨 ${base === "—" ? (ALARM_NEXT[alarm] ?? alarm) : base}`;
 }
