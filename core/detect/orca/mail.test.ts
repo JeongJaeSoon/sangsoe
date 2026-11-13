@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { scratchDir } from "../../../test/scratch.ts";
 import type { StoredEvent } from "../../contract/index.ts";
 import type { InboxMessage, LocalRows, WorkerRow, WorktreePsRow } from "../../contract/orca.ts";
 import { inboxRow } from "../../orca/adapter.ts";
@@ -121,7 +121,7 @@ test("worker_done mail is a marker row with ids only: no outcome, no body", () =
 });
 
 test("refusal_report reads the Act:/Category: header of the file the escalation names, inside the refusal root only", async () => {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), "sangsoe-mail-")));
+  const base = realpathSync(scratchDir("sangsoe-mail-"));
   const root = join(base, "orch-refusal");
   // The reader is built before the root exists, as the plugin worker's is at start.
   const read = readRefusalHead(() => refusalRoots([base]));

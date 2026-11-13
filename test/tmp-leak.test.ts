@@ -19,8 +19,8 @@ const LEAKED = [
 test("the test files that made per-call temporary directories leave none behind", (t) => {
   const tmp = mkdtempSync(join(tmpdir(), "leak-probe-"));
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
-  const env = { ...process.env, TMPDIR: `${tmp}/` };
-  delete env.NODE_TEST_CONTEXT;
+  const { NODE_TEST_CONTEXT: _, ...rest } = process.env;
+  const env = { ...rest, TMPDIR: `${tmp}/` };
   const r = spawnSync(process.execPath, ["--test", ...LEAKED], { cwd: ROOT, env, encoding: "utf8" });
   assert.equal(r.status, 0, r.stdout.slice(-2000));
   assert.deepEqual(

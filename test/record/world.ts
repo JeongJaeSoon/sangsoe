@@ -1,7 +1,6 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ApproveExec, fixedClock, Store } from "../../core/index.ts";
+import { scratchDir } from "../scratch.ts";
 
 // One fake world for evidence_record, stage_record, their CLI commands and land: GitHub answers
 // through a fake exec, the session's checkout is whatever `session` says, and the store is a file
@@ -11,7 +10,7 @@ export const REPO = "acme/api";
 export const HEAD = "a".repeat(40);
 export const PR_BRANCH = "feat/api-retry";
 
-const dir = mkdtempSync(join(tmpdir(), "sangsoe-record-"));
+const dir = scratchDir("sangsoe-record-");
 let n = 0;
 
 export const world = {
