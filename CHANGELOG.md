@@ -2,14 +2,15 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
-## 0.1.6-rc.1 (pre-release)
+## 0.1.6
 
-Everything since `v0.1.5`: decisions 230 to 234. A pre-release for checking the panel, its 리소스 section and doctor on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
+Everything since `v0.1.5`: decisions 230 to 234. The pre-release `v0.1.6-rc.1` carried the same changes, for checking the panel, its 리소스 section and doctor on an installed build.
 
 ### Upgrading from 0.1.5
 
-- **Re-approve.** The Orca plugin now asks for `storage:own` (to remember whether the 리소스 section is open), and its content and the vendored core changed, so the plugin waits for approval again. Have the review of the build recorded with `sangsoe review record` by someone other than the session that wrote its pull request, then run `sangsoe plugin approve`, as the README's Update section says.
+- **Re-approve.** `brew upgrade sangsoe` installs to a new Cellar folder, the Orca plugin now asks for `storage:own` (to remember whether the 리소스 section is open), and its content and the vendored core changed, so the plugin waits for approval again. Have the review of the 0.1.6 build recorded with `sangsoe review record` by someone other than the session that wrote its pull request, then run `sangsoe plugin approve`, as the README's Update section says.
 - **Restart every session that calls `start_unit` (233).** A server started under 0.1.5 keeps the core it loaded, and `start_unit` refuses on it with `server_stale`. `/reload-plugins` does not restart it, since an upgrade at the same install path leaves the plugin's MCP configuration unchanged: quit the session, start it again in the same directory with `claude --continue` plus the flags it was started with (such as `--agent`), then call `start_unit` again.
+- **Switching from `sangsoe-rc`.** The stable formula conflicts with `sangsoe-rc`: run `sangsoe uninstall` and `brew uninstall sangsoe-rc` before `brew install JeongJaeSoon/tap/sangsoe`, then the README's Install steps.
 
 ### Changes
 
