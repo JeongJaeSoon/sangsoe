@@ -65,8 +65,8 @@ test("(3) the wide 누가 column keeps room for a short name and its time", () =
   const cols = /<table class="tbl"><colgroup>(.*?)<\/colgroup>/.exec(html.slice(html.indexOf('id="h-prog"')))?.[1] ?? "";
   // 상태, 항목, PR, 다음, 누가: the last one is the who column.
   // A short handle (about 101px as a badge), the room the badge leaves a four-glyph time, both insets.
-  assert.match(cols.split("<col")[5] ?? "", /^ style="width:13em">$/);
-  assert.match(rule(STYLE, ".who .badge"), /max-width: min\(14em, calc\(100% - 3\.75em\)\);/);
+  assert.match(cols.split("<col")[5] ?? "", /^ style="width:13\.5em">$/);
+  assert.match(rule(STYLE, ".who .badge"), /max-width: min\(14em, calc\(100% - 4em\)\);/);
 });
 
 test("(4) a wide 누가 cell with no one says so before its time, never a bare age", () => {

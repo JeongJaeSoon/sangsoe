@@ -130,8 +130,8 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .badge.t-run { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 45%, var(--paper)); background: color-mix(in oklab, var(--accent) 8%, var(--paper)); }
 .badge.t-done, .badge.t-gone { color: var(--muted); }
 .badge.cnt { margin-left: var(--s2); }
-/* The badge's 11px em: 3.75em leaves the time beside it four glyphs at 13px ("119m") and its gap. */
-.who .badge { min-width: 0; max-width: min(14em, calc(100% - 3.75em)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The badge's 11px em: 4em leaves the time beside it four glyphs at 13px ("119m", 34px) and its 8px gap. */
+.who .badge { min-width: 0; max-width: min(14em, calc(100% - 4em)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who .age { margin-left: var(--s2); color: var(--muted); }
 .hint0 { margin: 0 0 var(--s3); padding: var(--s2) var(--s3); border: 1px dashed var(--rule-2); border-radius: var(--r2); color: var(--ink-2); font-size: var(--text-sm); }
 .figs { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin: 0 0 var(--s4); padding: var(--s2) var(--s3); border: 1px solid var(--rule); border-radius: var(--r3); }

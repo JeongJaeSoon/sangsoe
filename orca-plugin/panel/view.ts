@@ -296,7 +296,7 @@ function tableHtml(t: Table, rows: string[], acts: boolean): string {
   const first = (c: Column) =>
     stateLed ? `<col style="width:${STATE_COL_PX}px">` : c.max > 4 ? `<col style="width:calc(${c.max}ch + 24px)">` : "<col>";
   // A table column ignores a width that mixes % and a length (max(), calc()), so 누가 is a length alone.
-  const share = (c: Column) => `<col style="width:${COL_CLASS[c.name] === "who" ? "13em" : `${c.max * 1.25}%`}">`;
+  const share = (c: Column) => `<col style="width:${COL_CLASS[c.name] === "who" ? "13.5em" : `${c.max * 1.25}%`}">`;
   const col = (c: Column, i: number) => (i === 0 ? first(c) : i === 1 ? "<col>" : share(c));
   const cols = t.columns.map(col).join("") + (acts ? '<col class="c-acts">' : "");
   return `<table class="tbl"><colgroup>${cols}</colgroup><thead><tr>${head}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
