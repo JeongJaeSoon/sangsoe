@@ -8,6 +8,7 @@ export { MARKED_ONLY, type ProbePorts, type ProbeRead, type ProbeTarget, probeRo
 export {
   awaitingResume,
   openWaits,
+  orphanedWaits,
   type Release,
   type ReleaseSignal,
   recordReleases,
