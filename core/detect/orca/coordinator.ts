@@ -65,7 +65,9 @@ const tops = (coords: ReadonlyMap<string, CoordinatorRead>) => [...coords].filte
  */
 export function recipientOf(run: string, coords: ReadonlyMap<string, CoordinatorRead>): string | undefined {
   if ([...coords.values()].some((k) => k.unresolved || (k.pane && k.dispatch === undefined))) return undefined;
-  const others = tops(coords).filter((r) => r !== run);
+  // Tops are told apart by terminal: one terminal may still be named by a Run it coordinated before.
+  const self = coords.get(run)?.handle;
+  const others = tops(coords).filter((r) => r !== run && coords.get(r)?.handle !== self);
   return others.length === 1 ? others[0] : undefined;
 }
 
