@@ -5,7 +5,7 @@ import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import type { Host } from "../install/host.ts";
 import { buildArgs, parseEnvelope } from "../orca/adapter.ts";
 import type { Store } from "../store/store.ts";
-import { type HookInput, roleOf } from "./index.ts";
+import { type HookInput, isSangsoeAgent, roleOf } from "./index.ts";
 import type { Facts, OpenPr, Role } from "./types.ts";
 
 const HEAD_BYTES = 64 * 1024;
@@ -147,6 +147,27 @@ export function readDoneBlockers(host: Host, store: () => Pick<Store, "events"> 
   }
 }
 
+// The line Orca writes into a dispatched worker's first prompt.
+const TASK_LINE = /^Your task ID is: (\S+)/m;
+
+/**
+ * Decision 239: whether the session is sangsoe's. A sangsoe agent; else a session sangsoe recorded
+ * as started (session_started is written only for a session with a role); else a worker whose Task,
+ * read from Orca's first-prompt line, sangsoe made. undefined when the store cannot be read.
+ */
+export function sangsoeSession(input: HookInput, store: () => Pick<Store, "events"> | undefined): boolean | undefined {
+  if (input.agent_type && isSangsoeAgent(input.agent_type)) return true;
+  try {
+    const s = store();
+    if (!s) return undefined;
+    if (input.session_id && s.events({ type: "session_started" }).some((e) => e.payload.session === input.session_id)) return true;
+    const task = TASK_LINE.exec(firstPrompt(input.transcript_path) ?? "")?.[1];
+    return task !== undefined && s.events({ type: "item_created" }).some((e) => e.entity_id === task);
+  } catch {
+    return undefined;
+  }
+}
+
 /** The facts as this machine has them; each read once per hook process, and only when asked. */
 export function hostFacts(input: HookInput, host: Host, store: () => Pick<Store, "events"> | undefined): Facts {
   const once = <T>(f: () => T) => {
@@ -165,6 +186,7 @@ export function hostFacts(input: HookInput, host: Host, store: () => Pick<Store,
     load: once(() => judgeLoad(sampleLoad(host.env.HOME))),
     ownOpenPrs: once(() => openPrs(host, input.cwd, store)),
     doneBlockers: (task, run) => readDoneBlockers(host, store, task, run),
+    sangsoe: once(() => sangsoeSession(input, store)),
     readScript: (named) => {
       const home = host.env.HOME;
       const path = home ? named.replace(/^(~|\$HOME|\$\{HOME\})\//, `${home}/`) : named;

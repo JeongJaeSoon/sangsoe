@@ -34,6 +34,8 @@ export type Facts = {
   readScript(path: string): string | undefined;
   /** done_blockers of a Task over the store and its Run's task list (the bound Run without `run`). */
   doneBlockers(task: string, run?: string): readonly string[] | undefined;
+  /** The session is sangsoe's (decision 239): a sangsoe agent, started by sangsoe, or on a Task sangsoe made. */
+  sangsoe(): boolean | undefined;
 };
 
 /** null is "no opinion": the call goes on to Claude Code's own permission check. */
