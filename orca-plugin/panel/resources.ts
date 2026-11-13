@@ -37,8 +37,8 @@ export type Got = { load?: Reply<LoadPart>; made?: Reply<MadePart>; candidates?:
 
 export type ResState =
   | { kind: "idle" }
-  /** `last`: the view a refresh started from, standing in for each part until its new answer comes. */
-  | { kind: "reading"; got: Got; last?: ResView | undefined }
+  /** `last`: the view a refresh started from, standing in for each part until its new answer comes; `result`: the 정리 this read follows. */
+  | { kind: "reading"; got: Got; last?: ResView | undefined; result?: Reaped | undefined }
   | { kind: "shown"; view: ResView; confirm?: boolean; running?: boolean; result?: Reaped }
   | { kind: "failed"; refusal: Refusal };
 
@@ -275,11 +275,23 @@ function partBlock<T>(r: Reply<T> | undefined, last: T | undefined, title: strin
 
 type Paintable = Pick<Element, "contains" | "innerHTML"> & { querySelector(q: string): { focus(): void } | null };
 
-/** Repainting replaces the buttons; the keyboard stays on the one that was focused. */
-export function repaint(el: Paintable, html: string, active: Element | null): void {
-  const at = active && el.contains(active) ? active.getAttribute("data-res") : null;
+/** Where the keyboard goes after a press whose button does not come back: 정리… opens the confirm, 취소 closes it, a reap ends on 새로 고침. */
+export const FOCUS_AFTER: Readonly<Record<string, string>> = { ask: "run", cancel: "ask", run: "refresh" };
+
+/**
+ * Repainting replaces the buttons. The keyboard goes to `want` (set by a press) or else stays on the
+ * button it was on, once that button is drawn enabled; until then the key is returned to try again on
+ * the next paint. Focus that left the section for somewhere else is never taken back.
+ */
+export function repaint(el: Paintable, html: string, active: Element | null, want: string | null = null): string | null {
+  const inside = !!active && el.contains(active);
+  const key = want ?? (inside ? active?.getAttribute("data-res") : null) ?? null;
+  const free = inside || !active || active.tagName === "BODY";
   el.innerHTML = html;
-  if (at) el.querySelector(`[data-res="${at}"]`)?.focus();
+  if (!key || !free) return null;
+  const to = el.querySelector(`[data-res="${key}"]:not(:disabled)`);
+  to?.focus();
+  return to ? null : key;
 }
 
 /** The body inside the fold for one state; `now` decides 낡음, `hours` the band's span. */
@@ -294,9 +306,11 @@ export function renderResBody(s: ResState, now: number, hours: 6 | 24 = 6): stri
     const g = s.got;
     return (
       tools(`<span class="fresh" aria-live="polite">읽는 중…</span>`, true) +
+      (s.result ? resultNote(s.result) : "") +
       partBlock<Pick<ResView, "load" | "episode" | "band">>(g.load, s.last, "PC 부하", "부하를 읽는 중…", (v) => loadBlock(v, hours)) +
       partBlock<Pick<ResView, "made">>(g.made, s.last, "sangsoe 가 만든 것", "worktree·터미널·프로세스·임시 폴더를 읽는 중…", madeBlock) +
-      partBlock<Cands>(g.candidates, s.last, "정리 후보", "끝난 worktree 를 GitHub·Orca 에 묻는 중…", (v) => candidates(v, null, false))
+      // After a 정리 the last list names what was just taken, so it does not stand in.
+      partBlock<Cands>(g.candidates, s.result ? undefined : s.last, "정리 후보", "끝난 worktree 를 GitHub·Orca 에 묻는 중…", (v) => candidates(v, null, false))
     );
   }
   const v = s.view;

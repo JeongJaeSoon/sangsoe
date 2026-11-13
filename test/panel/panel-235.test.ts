@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PanelCore } from "../../orca-plugin/core-link.ts";
 import { panelHandlers } from "../../orca-plugin/panel/requests.ts";
-import { type Band, type Got, PARTS, type PartName, readParts, renderResBody, repaint, type ResState } from "../../orca-plugin/panel/resources.ts";
+import { type Band, type Got, PARTS, type PartName, readParts, FOCUS_AFTER, type Reaped, renderResBody, repaint, type ResState, type ResView } from "../../orca-plugin/panel/resources.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
 
 // Decision 235: the 리소스 section read in three parts that fill in one by one, pinned to the panel's
@@ -53,13 +53,21 @@ test("reading: each part says what is being read until it comes, and a part that
 });
 
 test("a refresh keeps the last read in place until each part's new answer comes, with nothing to press", () => {
-  const last = { ...parts.made, ...parts.candidates, ...parts.load, at: AT } as unknown as ResState & { kind: "shown" };
-  const html = renderResBody({ kind: "reading", got: { load: ok("load") }, last: last as never }, NOW);
+  const before = { ...parts.load.load.value, loadPerCpu: 0.9 };
+  const last = { ...parts.made, ...parts.candidates, ...parts.load, load: { ok: true, value: before }, at: AT } as unknown as ResView;
+  const html = renderResBody({ kind: "reading", got: { load: ok("load") }, last }, NOW);
+  assert.match(html, /aria-label="CPU 0\.20 \/ 코어"/, "a part that came is drawn fresh");
+  assert.doesNotMatch(html, /0\.90/, "the last read never covers a fresh answer");
   assert.doesNotMatch(html, /읽는 중…<\/p>/, "no part drops to a reading row");
   assert.match(html, /<h3>sangsoe 가 만든 것<\/h3><table/);
-  assert.match(html, /<h3>정리 후보<\/h3>/);
+  assert.match(html, /<h3>정리 후보<\/h3><p class="empty">/);
   assert.doesNotMatch(html, /data-res="(ask|run)"/);
   assert.match(html, /<span class="fresh" aria-live="polite">읽는 중…<\/span>/);
+
+  const result: Reaped = { reaped: ["worktree:inst-a"], blocked: [], skipped: [], tmp: null };
+  const after = renderResBody({ kind: "reading", got: {}, last, result }, NOW);
+  assert.match(after, /worktree 1건 정리/, "the 정리 outcome shows while the list is read again");
+  assert.match(after, /<h3>정리 후보<\/h3><p class="pending"/, "the list from before the 정리 does not stand in");
 });
 
 test("the panel asks the three parts together and paints after each; all three in, the view is whole", async () => {
@@ -145,21 +153,38 @@ test("band: 6 hours by default, 24 on the switch; danger, ok and unknown each dr
   assert.match(six, /<div class="load-h"><h3>PC 부하 <span class="badge[^"]*">[^<]*<\/span><\/h3><span class="rng"/, "the switch sits beside the heading, so its name stays PC 부하");
 });
 
-test("a repaint keeps the keyboard on the button that had it, and takes no focus it did not have", () => {
+test("a repaint keeps the keyboard on the button that had it, waits for a disabled one, and takes no focus it did not have", () => {
   const focused: string[] = [];
-  const el = (inside: boolean) => ({
+  // `enabled`: the data-res keys the new paint draws as pressable buttons.
+  const el = (inside: boolean, enabled: string[]) => ({
     innerHTML: "",
     contains: () => inside,
-    querySelector: (q: string) => ({ focus: () => void focused.push(q) }),
+    querySelector: (q: string) => {
+      const key = /data-res="([^"]+)"\]:not\(:disabled\)$/.exec(q)?.[1] ?? "";
+      return enabled.includes(key) ? { focus: () => void focused.push(key) } : null;
+    },
   });
-  const active = { getAttribute: (n: string) => (n === "data-res" ? "h24" : null) } as unknown as Element;
-  const box = el(true);
-  repaint(box, "<b>new</b>", active);
+  const on = (key: string, tagName = "BUTTON") => ({ tagName, getAttribute: (n: string) => (n === "data-res" ? key : null) }) as unknown as Element;
+  const body = on("", "BODY");
+
+  const box = el(true, ["h24"]);
+  assert.equal(repaint(box, "<b>new</b>", on("h24")), null);
   assert.equal(box.innerHTML, "<b>new</b>");
-  assert.deepEqual(focused, ['[data-res="h24"]']);
-  repaint(el(false), "x", active);
-  repaint(el(true), "x", null);
-  assert.deepEqual(focused, ['[data-res="h24"]'], "focus outside the section is left alone");
+  assert.deepEqual(focused, ["h24"]);
+
+  // 새로 고침 is drawn disabled while the read runs: the key waits, focus lands on it when it comes back.
+  assert.equal(repaint(el(true, []), "x", on("refresh"), "refresh"), "refresh");
+  assert.equal(repaint(el(false, ["refresh"]), "x", body, "refresh"), null);
+  assert.deepEqual(focused, ["h24", "refresh"]);
+
+  // 정리… opens the confirm: the press asks for the run button, which is there.
+  assert.equal(repaint(el(true, ["run", "cancel"]), "x", on("ask"), FOCUS_AFTER.ask ?? null), null);
+  assert.deepEqual(focused, ["h24", "refresh", "run"]);
+  assert.deepEqual(FOCUS_AFTER, { ask: "run", cancel: "ask", run: "refresh" });
+
+  assert.equal(repaint(el(false, ["refresh"]), "x", on("other"), "refresh"), null, "focus elsewhere on the page is left alone");
+  assert.equal(repaint(el(true, ["h6"]), "x", null), null);
+  assert.deepEqual(focused, ["h24", "refresh", "run"]);
 });
 
 const rule = (sel: string) => new RegExp(`(?:^|\\n)${sel.replace(/[.()[\]#>:]/g, "\\$&")} \\{[^}]*\\}`).exec(STYLE)?.[0] ?? "";

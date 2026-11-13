@@ -183,7 +183,7 @@ test("band: high from pressure_high to capacity_free, its tone from the level it
   for (let i = 1; i < band.spans.length; i++) assert.equal(band.spans[i]?.from, band.spans[i - 1]?.to, "spans touch");
 });
 
-test("band edges: no rows is all unknown; an episode opened before the window still counts; one dropped tick is not a gap, two are", () => {
+test("band edges: no rows is all unknown; an episode opened before the window still counts; a round covers three periods, a longer silence is unknown", () => {
   const ev = (type: string, ago: number, payload: unknown = {}) => ({ type, ts: new Date(NOW - ago).toISOString(), payload, seq: 0 });
   const timer = (ago: number) => ev("reap_round", ago, { trigger: "timer" });
   const band = (rows: ReturnType<typeof ev>[]) => loadBand(rows.map((e, i) => ({ ...e, seq: i + 1 })) as never, NOW, 10 * 60_000);
@@ -210,7 +210,14 @@ test("the load part draws the band from the store's rows and writes none", async
     store.append({ type: "reap_round", source: "reaper", payload: { trigger: "timer", roots_ok: true, round } });
   }
   const before = store.events().length;
-  const p = await readResourcePart(deps({ store }), "load");
+  const filters: unknown[] = [];
+  const d = deps({ store });
+  const p = await readResourcePart({ ...d, events: (f) => {
+        filters.push(f?.type);
+        return d.events(f);
+      } }, "load");
+  assert.ok(!filters.includes(undefined), "the store is read by type, never whole");
+  assert.deepEqual([...new Set(filters)].sort(), ["capacity_free", "pressure_high", "reap_round"]);
   assert.ok(p.part === "load");
   assert.equal(p.part === "load" ? p.band.spans.at(-1)?.state : null, "warn");
   assert.equal(store.events().length, before);
