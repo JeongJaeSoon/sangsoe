@@ -29,14 +29,14 @@ function hook(home: string, input: string, args: string[] = ["hook", "pre-tool-u
   return { code: r.status, stdout: r.stdout.trim(), stderr: r.stderr.trim() };
 }
 
-const call = (note: string) => {
+const call = (note: string, extra: Record<string, unknown> = {}) => {
   const l = byNote(note);
-  return JSON.stringify({ session_id: "s1", cwd: "/work/acme", tool_name: l.tool_name, tool_input: l.tool_input });
+  return JSON.stringify({ session_id: "s1", cwd: "/work/acme", tool_name: l.tool_name, tool_input: l.tool_input, ...extra });
 };
 
 test("a raw start is denied on stdout and recorded as gate_denied with the command in a file", () => {
   const home = scratchDir("sangsoe-hook-");
-  const r = hook(home, call("fallback start"));
+  const r = hook(home, call("fallback start", { agent_type: "sangsoe:lead" }));
   assert.equal(r.code, 0, r.stderr);
   const out = JSON.parse(r.stdout).hookSpecificOutput;
   assert.equal(out.permissionDecision, "deny");
@@ -51,6 +51,19 @@ test("a raw start is denied on stdout and recorded as gate_denied with the comma
     assert.equal(events[0]?.actor, "s1");
     assert.ok(readFileSync(payload.command_file, "utf8").startsWith("Bash\n"));
     assert.equal(JSON.stringify(payload).includes("launch"), false, "the event holds the path, not the command");
+  } finally {
+    store.close();
+  }
+});
+
+test("decision 239: the same raw start in a session sangsoe has no record of passes and records nothing", () => {
+  const home = scratchDir("sangsoe-hook-");
+  const r = hook(home, call("fallback start"));
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.stdout, "");
+  const store = Store.open({ home });
+  try {
+    assert.equal(store.events({ type: "gate_denied" }).length, 0);
   } finally {
     store.close();
   }
