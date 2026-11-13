@@ -34,7 +34,8 @@ function assertAuthNotice(r: CheckResult): void {
   assert.equal(r.status, "notice", r.summary);
   assert.match(r.summary, /GitHub 인증이 실패/);
   assert.match(r.summary, /sangsoe 결함이 아니다/);
-  assert.doesNotMatch(r.summary, /[\n\r\x1b]|Command failed/, "one clean line, no raw stderr");
+  assert.doesNotMatch(r.summary, /[\n\r]|Command failed/, "one line, no raw stderr");
+  assert.ok(!r.summary.includes("\x1b"), "no colour codes");
   assert.match(r.fix ?? "", /^gh auth status, re-authenticate GitHub/);
 }
 

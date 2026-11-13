@@ -10,9 +10,28 @@ async function contentHash(orca: OrcaAdapter, dir: string): Promise<string | nul
   return typeof hash === "string" ? hash : null;
 }
 
+// gh's own 401 line and the usual wording of a token or credential helper refusing; not 403, which is also a rate limit.
+const AUTH_FAILED = /\bHTTP 401\b|Bad credentials|gh auth login|\btoken (?:is |has )?(?:expired|invalid|revoked)|(?:expired|invalid|revoked) (?:access |refresh )?token|credential/i;
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, "g");
+
+/** Decision 233: a GitHub login that failed is the reader's to fix, not a sangsoe defect, so it reads as one line. */
+export function githubAuthFailed(error: string): boolean {
+  return AUTH_FAILED.test(error.replace(ANSI, ""));
+}
+
 async function treeHash(orca: OrcaAdapter, build: PluginBuild, commit: string): Promise<string | CheckResult> {
   const tree = await build.fetchTree(commit);
-  if ("error" in tree) return { id, status: "warn", summary: tree.error, fix: tree.fix };
+  if ("error" in tree) {
+    if (githubAuthFailed(tree.error)) {
+      return {
+        id,
+        status: "notice",
+        summary: `GitHub 인증이 실패해 ${commit.slice(0, 12)} 트리를 받지 못했고 내용을 견주지 못했다 (sangsoe 결함이 아니다)`,
+        fix: "gh auth status, re-authenticate GitHub, then sangsoe doctor",
+      };
+    }
+    return { id, status: "warn", summary: tree.error, fix: tree.fix };
+  }
   try {
     return (await contentHash(orca, tree.dir)) ?? { id, status: "warn", summary: `${commit} 트리의 contentHash 를 읽지 못했다`, fix: "sangsoe doctor" };
   } finally {
