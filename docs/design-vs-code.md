@@ -108,7 +108,7 @@
 | uninstall | design.html 설치, README Uninstall | changed (결정 208) | `core/install/install.ts:161`, `core/install/install.ts:178` | 마켓플레이스는 scope 없이 지우고 재시작 안내 줄 |
 | 데이터·설정 남김 | README Uninstall | implemented | `core/install/install.ts:180` | |
 | 버전 어긋남 SessionStart 줄 | design.html 설치 | implemented | `core/session/session-start.ts:71`, `core/detect/queue/drift.ts:19` | Orca 쪽은 job_drift |
-| 낡은 MCP 서버 거부 | README Update | changed (결정 211) | `claude-plugin/mcp/tools/start_unit.ts:166` | start_unit 만 `server_stale` |
+| 낡은 MCP 서버 거부 | README Update | changed (결정 211·233) | `claude-plugin/mcp/tools/start_unit.ts:166`, `claude-plugin/mcp/stale.ts:9` | start_unit 만 `server_stale`. 고칠 말은 `claude --continue`(결정 233) |
 | hook·MCP 가 CLI 찾기 | design.html 설치 | changed (결정 118) | `claude-plugin/.mcp.json:6` | plugin 옆 dist, 없으면 PATH |
 | 플러그인 경계 bin 폴더 CLI | design-appendix 플러그인 경계 | changed (결정 90) | `claude-plugin/.mcp.json:6` | plugin 안 bin 없음, CLI 는 브루 래퍼 |
 | vendor 코어 사본 | design-appendix 배치 규칙 | implemented | `orca-plugin/core-link.ts:51`, `package.json:26` | |
@@ -120,7 +120,7 @@
 | doctor claude marketplace | README Install | implemented | `core/install/doctor.ts:156` | 경로가 트리와 다르면 FAIL |
 | doctor orca plugin | README Install | implemented | `core/install/doctor.ts:172`, `core/install/doctor.ts:182` | 승인 대기는 FAIL |
 | doctor orca-plugin-version | README Install | implemented | `core/checks/orca-plugin-version.ts:26` | |
-| doctor orca-plugin-content | README Install, Update | implemented | `core/checks/orca-plugin-content.ts:28` | 빌드 커밋·리뷰된 head 와 비교 |
+| doctor orca-plugin-content | README Install, Update | changed (결정 233) | `core/checks/orca-plugin-content.ts:47`, `core/checks/orca-plugin-content.ts:18` | 빌드 커밋·리뷰된 head 와 비교. GitHub 인증 실패로 트리를 못 받으면 한 줄 notice |
 | doctor reaper-config | README REAPER | implemented | `core/checks/reaper-config.ts:21`, `core/reaper/config.ts:21` | |
 | doctor watch-repos | README Watched repositories | implemented | `core/checks/watch-repos.ts:12` | |
 | doctor tier-config | README Verify tier | implemented | `core/checks/tier-config.ts:14` | |
