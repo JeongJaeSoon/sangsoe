@@ -6,7 +6,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { recordResource, type WorktreeRow } from "../../core/index.ts";
-import { assertNeverForbidden, card as anyCard, dropScratch, finishedCard as anyFinished, makeRepo, rounds, scratch, startedBySangsoe, world } from "./harness.ts";
+import { assertNeverForbidden, card as anyCard, dropScratch, finishedCard as anyFinished, makeRepo, rounds, scratch, startedBySangsoe, worker, world } from "./harness.ts";
 
 after(dropScratch);
 
@@ -70,20 +70,45 @@ test("a registration whose path is gone loses its Orca entry without git status,
   assert.ok(!rms(w).some((x) => x.includes(local.id)));
 });
 
-test("a confirmed round touches no Docker resource, not even one an earlier round left held", async () => {
+test("a confirmed round sweeps the Docker ids of the cards it removed, never one an earlier round left held", async () => {
   const w = world();
   finishedCard(w, "earlier");
   recordResource(w.store, { kind: "volume", ref: "earlier_data", owner: "inst-earlier" });
   w.docker.objects.set("earlier_data", { kind: "volume" });
   w.docker.state = "absent";
   await rounds(w, 3, 30);
-  assert.ok(w.types("reap_done").length === 0 || !w.types("reap_done").some((p) => p.ref === "earlier_data"));
+  assert.ok(!w.types("reap_done").some((p) => p.ref === "earlier_data"));
   w.docker.state = "up";
   const c = finishedCard(w, "confirmed-only");
+  // Held under the Task the card's work ran under: only this round can still map it to the card.
+  w.orca.workers.push(worker(c.id, { taskId: "task_confirmed", dispatchId: "ctx_confirmed" }));
+  recordResource(w.store, { kind: "container", ref: "c0nf1rm", owner: "task_confirmed" });
+  w.docker.objects.set("c0nf1rm", { kind: "container", running: false });
   const r = await w.round({ confirmed: [c.instanceId] });
-  assert.deepEqual(r.reaped, [`worktree:${c.instanceId}`]);
+  assert.deepEqual(r.reaped, [`worktree:${c.instanceId}`, "container:c0nf1rm"]);
+  assert.ok(!w.docker.objects.has("c0nf1rm"), "the confirmed card's own container goes with it");
   assert.ok(w.docker.objects.has("earlier_data"), "the owner confirmed one worktree, not a volume they never saw");
-  assert.ok(!w.docker.calls.some((x) => / rm /.test(` ${x} `)), w.docker.calls.join("\n"));
+});
+
+test("a confirmed round closes no released setup shell, which a timer round would (decision 202)", async () => {
+  const w = world();
+  const freed = finishedCard(w, "freed");
+  const shell = "term_setup";
+  w.store.append({
+    type: "unit_started",
+    source: "mcp:start_unit",
+    entity: "task",
+    entity_id: "task_freed",
+    payload: { kind: "worker", picked_by: "role", model: "m", effort: "medium", route: "worktree_file", budget: 3, budget_per: "unit", used: 0, worktree: freed.id, shell, setup: "none" },
+  });
+  w.orca.workers.push(worker(freed.id, { terminalState: "released" }));
+  w.orca.terminals.set(freed.id, [{ handle: shell }] as never);
+  const named = finishedCard(w, "named");
+  const r = await w.round({ confirmed: [named.instanceId] });
+  assert.deepEqual(r.reaped, [`worktree:${named.instanceId}`]);
+  assert.ok(!w.orca.calls.some((x) => x.startsWith("terminalClose")), w.orca.calls.join("\n"));
+  const timer = await w.round();
+  assert.deepEqual(timer.shells_closed, [shell], "the same shell is the timer round's to close");
 });
 
 test("no reaper config: a confirmed card is still not removed", async () => {

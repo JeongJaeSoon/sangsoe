@@ -309,7 +309,8 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
 
   // Not a card removal, so mark-only rounds (by flag or by no config) close it too; a dry run does not,
   // nor does a round whose protect list could not be read.
-  if (typeof workers !== "string" && d.append && d.config.kind !== "unreadable") r.shells_closed = await closeReleasedShells(d, config, scope, workers);
+  // A confirmed round (decision 234) closes nothing the owner did not name.
+  if (typeof workers !== "string" && d.append && d.config.kind !== "unreadable" && !o.confirmed) r.shells_closed = await closeReleasedShells(d, config, scope, workers);
 
   const ps = await d.orca.worktreePs({});
   if (!ps.ok) rootFailed(`worktree ps: ${ps.error.code}`);
@@ -510,9 +511,12 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     if (c && !taskCard.has(w.taskId)) taskCard.set(w.taskId, c.instanceId);
   }
   const holds = dockerHolds(holdEvents(d.events));
-  const owned = [...holds.values()].filter((h) => h.held && reapedCards.has(taskCard.get(h.owner) ?? h.owner));
-  // The owner confirmed worktrees, not Docker ids they never saw: the timer round sweeps those (decision 234).
-  if (owned.length > 0 && !signal.aborted && !confirmed) {
+  // A confirmed round sweeps only what the cards it removed now held (decision 234): earlier holds are the
+  // timer round's, and only this round can still map a Task-owned hold to its card.
+  const removedNow = new Set(r.reaped.filter((x) => x.startsWith("worktree:")).map((x) => x.slice("worktree:".length)));
+  const swept = confirmed ? removedNow : reapedCards;
+  const owned = [...holds.values()].filter((h) => h.held && swept.has(taskCard.get(h.owner) ?? h.owner));
+  if (owned.length > 0 && !signal.aborted) {
     const s = await docker();
     // A Docker that does not answer keeps every hold for the next round.
     if (s.kind === "absent") r.docker_skipped = true;
