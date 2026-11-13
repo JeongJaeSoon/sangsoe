@@ -134,13 +134,12 @@ test("fromMail: the newest terminal and pane that sent the Run's mail to one of 
   assert.equal(fromMail(box, "run_q"), undefined);
 });
 
-test("recipientOf: the one other top Run, the stalled Run when it is the only top, else no one", () => {
+test("recipientOf: the one other top Run, else no one (a stalled Run is never told in its own Run)", () => {
   assert.equal(recipientOf("run_a", coords), "run_o");
-  assert.equal(recipientOf("run_o", new Map([["run_o", orch]])), "run_o");
+  assert.equal(recipientOf("run_o", new Map([["run_o", orch]])), undefined, "the only top may be a lead whose orchestrator left the page");
   assert.equal(recipientOf("run_a", new Map([...coords, ["run_b", { pane: "p:b", handle: "term_b", dispatch: false }]])), undefined);
   assert.equal(recipientOf("run_a", new Map([...coords, ["run_d", { pane: "p:d", handle: "term_d", dispatch: true }]])), "run_o", "a dispatched lead is no top");
   assert.equal(recipientOf("run_a", new Map([["run_a", lead], ["run_o", { pane: "p:o", handle: "term_o" }]])), undefined, "unknown Dispatch is no top");
   assert.equal(recipientOf("run_a", new Map([["run_a", lead], ["run_o", { unresolved: true }]])), undefined, "a live coordinator not placed is unknown");
   assert.equal(recipientOf("run_a", new Map([["run_a", lead], ["run_o", orch], ["run_g", {}]])), "run_o", "a Run with no live terminal is no top");
-  assert.equal(recipientOf("run_o", new Map([["run_o", orch], ["run_g", {}]])), undefined, "a Run with no live terminal may be a resumed orchestrator: no self-notice");
 });

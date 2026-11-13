@@ -147,15 +147,14 @@ test("a lead holding a Dispatch is left to Orca's stop mail", async () => {
   assert.equal(s.stalled().length, 0);
 });
 
-test("a stalled orchestrator is told in its own Run once; its own unread notice, past the wake check, adds nothing", async () => {
+test("the only top stalled (an orchestrator, or a lead whose orchestrator left the page): one row, no notice to itself, across rounds", async () => {
   const s = setup([orch()]);
   s.send(`run:${ORCH_RUN}`, T0 + MIN);
-  await runMonitor("orca", s.deps(T0 + (N + 2) * MIN));
-  assert.deepEqual(s.w.sends.map((m) => m.to), [`run:${ORCH_RUN}`]);
-  await runMonitor("orca", s.deps(T0 + (N + 2 + DEFAULT_MONITOR_CONFIG.wakeMinutes + 1) * MIN));
+  const r = await runMonitor("orca", s.deps(T0 + (N + 2) * MIN));
+  assert.ok(r.unseen.some((u) => u.includes(ORCH_RUN)), r.unseen.join("\n"));
   await runMonitor("orca", s.deps(T0 + (3 * N + 5) * MIN));
-  assert.equal(s.stalled().length, 1);
-  assert.equal(s.w.sends.length, 1);
+  assert.deepEqual(s.stalled().map((e) => e.payload), [{ run: ORCH_RUN, coordinator: "term_orch" }]);
+  assert.deepEqual(s.w.sends, []);
 });
 
 test("with two other tops the row is written and no notice goes out", async () => {
