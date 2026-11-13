@@ -68,6 +68,8 @@ type Setup = {
   existingRole?: string;
   /** The first line of task_lead's spec in the orchestrator's Run; null leaves task_lead out of that list. */
   requesterRoleLine?: string | null;
+  /** task-list on the orchestrator's Run, where the lead's own Task lives; `taskList` answers the rest. */
+  requesterTaskList?: () => ExecResult;
   /** What `dispatch-show --task task_new` answers after the start. */
   newDispatch?: "missing";
   taskList?: () => ExecResult;
@@ -122,10 +124,12 @@ function harness(s: Setup = {}) {
       "orchestration-run-current": ok({ runId: s.heldRun === undefined ? RUN : s.heldRun }),
       "orchestration-task-create": ok({ task: { id: NEW_TASK } }),
       "orchestration-task-list": (args: readonly string[]) =>
-        s.taskList
-          ? s.taskList()
-          : flag(args, "run") === ORCH_RUN
-            ? ok({ tasks: s.requesterRoleLine === null ? [] : [{ id: "task_lead", status: "dispatched", title: "lead", spec: `${s.requesterRoleLine ?? "sangsoe-role: lead"}\nprogram brief` }] })
+        flag(args, "run") === ORCH_RUN
+          ? s.requesterTaskList
+            ? s.requesterTaskList()
+            : ok({ tasks: s.requesterRoleLine === null ? [] : [{ id: "task_lead", status: "dispatched", title: "lead", spec: `${s.requesterRoleLine ?? "sangsoe-role: lead"}\nprogram brief` }] })
+          : s.taskList
+            ? s.taskList()
             : ok({ tasks: [{ id: NEW_TASK, status: s.newTaskStatus ?? "ready", title: "t", spec: `sangsoe-role: ${s.existingRole ?? "worker"}\nbrief` }] }),
       "orchestration-worker-start": () => (s.workerStart ? s.workerStart() : ok({ dispatchId: "ctx_new", worktreeId: CHILD_TREE })),
       "worktree-create": ok({ worktree: { id: CHILD_TREE, path: CHILD_PATH, repoId: "repo-0001" } }),
@@ -380,7 +384,7 @@ test("decision 243: a Task-less lead's worker sits at depth 1 under the depth se
 test("decision 243: MCP start_unit passes a lead with no taskId to the core", async () => {
   const h = harness();
   const r = await handle({ role: "lead", worktreeId: PARENT_TREE, runId: RUN, childRole: "worker", spec: "brief" }, ports(h));
-  assert.equal(r.ok && r.value.kind, "started", JSON.stringify(r));
+  assert.equal(r.ok && (r.value as { kind: string }).kind, "started", JSON.stringify(r));
 });
 
 test("decision 243 (다): a lead with a Task is a lead only if its Task's role line says so, read from its Dispatch's Run", async () => {
@@ -391,7 +395,7 @@ test("decision 243 (다): a lead with a Task is a lead only if its Task's role l
   assert.match(out.kind === "refused" ? out.detail : "", /sangsoe-role/);
   const read = worker.called("task-list").find((c) => flag(c, "run") === ORCH_RUN) ?? [];
   assert.ok(read.includes("--full"), "the spec comes from task-list --full on the Dispatch's Run");
-  for (const s of [{ requesterRoleLine: null }, { requesterRoleLine: "program brief, no role line" }, { taskList: () => fail("runtime_unavailable") }]) {
+  for (const s of [{ requesterRoleLine: null }, { requesterRoleLine: "program brief, no role line" }, { requesterTaskList: () => fail("runtime_unavailable") }]) {
     const h = harness(s);
     assertRefused(h, await start(h), "lineage_invalid");
   }
