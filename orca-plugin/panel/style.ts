@@ -337,16 +337,14 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .rng button[aria-pressed="true"] { color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--rule-2); }
 /* White like the gauges (decision 222): an outlined track, a stretch nobody watched stays white. */
 .band { display: block; width: 100%; height: 10px; margin-top: var(--s3); padding: 0; border: 1px solid var(--rule-2); border-radius: 2px; }
-.band .s-ok { fill: var(--rule-2); }
-.band .s-warn { fill: var(--accent); }
-.band .s-danger { fill: var(--bad); }
-.band .s-unknown { fill: none; }
+.band .s-ok, .sw .s-ok { fill: var(--rule-2); }
+.band .s-warn, .sw .s-warn { fill: var(--accent); }
+.band .s-danger, .sw .s-danger { fill: var(--bad); }
+.band .s-unknown, .sw .s-unknown { fill: none; }
 .band-lg { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); margin: var(--s1) 0 0; color: var(--ink-2); font-size: var(--text-xs); line-height: 16px; }
 .band-lg span { display: inline-flex; align-items: center; gap: var(--s1); white-space: nowrap; }
-.sw { display: inline-block; width: 8px; height: 8px; border: 1px solid var(--rule-2); border-radius: 2px; }
-.sw.s-ok { background: var(--rule-2); }
-.sw.s-warn { background: var(--accent); border-color: var(--accent); }
-.sw.s-danger { background: var(--bad); border-color: var(--bad); }
+.sw { flex: none; width: 8px; height: 8px; }
+.sw rect { stroke: var(--rule-2); }
 button.link:disabled { color: var(--muted); cursor: default; }
 .band-ax { display: flex; justify-content: space-between; margin-top: 2px; color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
 .ep.t-bad { color: var(--bad); }
