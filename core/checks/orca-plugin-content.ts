@@ -11,7 +11,7 @@ async function contentHash(orca: OrcaAdapter, dir: string): Promise<string | nul
 }
 
 // gh's own 401 line and the usual wording of a token or credential helper refusing; not 403, which is also a rate limit.
-const AUTH_FAILED = /\bHTTP 401\b|Bad credentials|gh auth login|\btoken (?:is |has )?(?:expired|invalid|revoked)|(?:expired|invalid|revoked) (?:access |refresh )?token|credential/i;
+const AUTH_FAILED = /\bHTTP 401\b|Bad credentials|gh auth login|\btoken (?:is |has )?(?:expired|invalid|revoked)|(?:expired|invalid|revoked) (?:access |refresh )?token|credentials? (?:not found|missing|invalid|expired)/i;
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, "g");
 
 /** Decision 233: a GitHub login that failed is the reader's to fix, not a sangsoe defect, so it reads as one line. */

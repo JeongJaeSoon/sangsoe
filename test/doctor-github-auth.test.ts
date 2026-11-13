@@ -50,6 +50,7 @@ test("decision 233: a credential helper's coloured multi-line refusal is the sam
 test("decision 233: fetch failures that are not a failed login keep their warning", async () => {
   const notAuth = [
     'gh: Not Found (HTTP 404)\n{"message":"Not Found"}\n',
+    "warning: no credential helper configured\ngh: Not Found (HTTP 404)\n",
     "gh: API rate limit exceeded for 203.0.113.7. (But here's the good news: Authenticated requests get a higher rate limit.) (HTTP 403)\n",
     "",
   ];

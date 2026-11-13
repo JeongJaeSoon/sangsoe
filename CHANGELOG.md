@@ -5,7 +5,7 @@ Decision numbers refer to `docs/decisions.md`.
 ## Unreleased
 
 - **Doctor tells a failed GitHub login apart from a sangsoe defect (233).** When `gh` cannot download the build's tree because GitHub authentication failed (an HTTP 401, `Bad credentials`, or an expired or invalid token from a credential helper), the `orca-plugin-content` row is one `notice` line saying the content could not be compared and that this is not a sangsoe defect, with the fix `gh auth status, re-authenticate GitHub, then sangsoe doctor`. It no longer prints the command's raw, multi-line stderr or its colour codes. A content mismatch still fails, and other download failures (not found, rate limit, timeout) are still a `warn`. The core changed, so the Orca plugin's vendored core changes too and needs re-approval.
-- **`server_stale` names the recovery that works (233).** `/reload-plugins` keeps a plugin MCP server whose configuration is unchanged, and an upgrade at the same install path changes none of it. The refusal's fix now says so and says to quit the session and run `claude --continue` in the same directory, then call `start_unit` again.
+- **`server_stale` names the recovery that works (233).** `/reload-plugins` keeps a plugin MCP server whose configuration is unchanged, and an upgrade at the same install path changes none of it. The refusal's fix now says so and says to quit the session and start it again in the same directory with `claude --continue` plus the flags it was started with (such as `--agent`), then call `start_unit` again.
 
 ## 0.1.5
 

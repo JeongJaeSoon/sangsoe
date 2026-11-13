@@ -74,7 +74,7 @@ test("decision 211: a running server refuses start_unit once the install under i
   assert.match(refusal.reason, new RegExp(`runs sangsoe ${VERSION}, but sangsoe ${VERSION}-next is installed`));
   // Decision 233: the one recovery that restarts it, after /reload-plugins left it running.
   assert.match(refusal.fix, /\/reload-plugins does not restart this server/);
-  assert.match(refusal.fix, /run `claude --continue` in the same directory/);
+  assert.match(refusal.fix, /in the same directory with `claude --continue` plus the flags it was started with/);
 });
 
 test("decision 211: outside the server entry (tests, the CLI) there is no install to compare", () => {
