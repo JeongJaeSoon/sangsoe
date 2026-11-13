@@ -20,7 +20,7 @@ const ORCH_PANE = "tab_o:leaf_o";
 
 type Coord = { run: string; handle: string; pane: string; shown: string; state: string; since: number };
 
-function setup(coords: Coord[], o: { dispatchTerminals?: string[] } = {}) {
+function setup(coords: Coord[], o: { dispatchTerminals?: string[]; showFails?: string[]; hiddenPanes?: string[] } = {}) {
   const w = createWorld([]);
   const mail: InboxMessage[] = [];
   const notices = () =>
@@ -45,12 +45,15 @@ function setup(coords: Coord[], o: { dispatchTerminals?: string[] } = {}) {
       return w.orca.send(...a);
     },
     inbox: async () => ok([...mail, ...notices()]),
-    runShow: async (a: { id: string }) => ok({ runId: a.id, objective: a.id, coordinatorHandle: coords.find((c) => c.run === a.id)?.shown }),
+    runShow: async (a: { id: string }) =>
+      o.showFails?.includes(a.id)
+        ? { ok: false as const, error: { code: "x", message: "run-show failed" } }
+        : ok({ runId: a.id, objective: a.id, coordinatorHandle: coords.find((c) => c.run === a.id)?.shown }),
     terminalList: async () =>
       rows(coords.map((c) => ({ handle: c.handle, worktreeId: `w_${c.run}`, executionHostId: "local", agentIdentity: "claude", tabId: c.pane.split(":")[0], leafId: c.pane.split(":")[1] }))),
     worktreePs: async () =>
       rows(
-        coords.map((c) => ({
+        coords.filter((c) => !o.hiddenPanes?.includes(c.pane)).map((c) => ({
           worktreeId: `w_${c.run}`,
           hostId: "local",
           repo: "api",
@@ -165,6 +168,18 @@ test("with two other tops the row is written and no notice goes out", async () =
   assert.equal(s.stalled().length, 1);
   assert.equal(s.w.sends.length, 0);
   assert.ok(r.unseen.some((u) => u.includes(LEAD_RUN)), r.unseen.join("\n"));
+});
+
+test("an orchestrator Run whose run-show fails or whose live terminal has no pane leaves the lead's stall unnoticed, never told to itself", async () => {
+  for (const o of [{ showFails: [ORCH_RUN] }, { hiddenPanes: [ORCH_PANE] }]) {
+    const s = setup([lead(), orch()], o);
+    leadSpoke(s);
+    s.send(`run:${LEAD_RUN}`, T0 + MIN);
+    const r = await runMonitor("orca", s.deps(T0 + (N + 2) * MIN));
+    assert.equal(s.stalled().length, 1, JSON.stringify(o));
+    assert.deepEqual(s.w.sends, [], JSON.stringify(o));
+    assert.ok(r.unseen.some((u) => u.includes(LEAD_RUN)), r.unseen.join("\n"));
+  }
 });
 
 test("a dry run judges but sends nothing", async () => {

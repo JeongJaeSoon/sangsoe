@@ -65,6 +65,15 @@ test("more mail in the same stall is the same key; a turn after it re-arms with 
   assert.ok(later && later !== a);
 });
 
+test("an older unread message from before the last turn does not hide mail that came after it", () => {
+  const box = [mail("run:run_a", 120), mail("run:run_a", 60)];
+  const r = judge(box, ps(agent(lead.pane ?? "", { stateStartedAt: ago(100) })));
+  assert.deepEqual(
+    r.planned.map((e) => e.dedupe_key),
+    [`run_stalled:run_a:coordinator:tab_l%3Aleaf_l:${ago(100)}`],
+  );
+});
+
 test("a coordinator that took a turn after the mail, is working, or waits on a person is not stalled", () => {
   const box = [mail("run:run_a", 60)];
   assert.deepEqual(judge(box, ps(agent(lead.pane ?? "", { stateStartedAt: ago(50) }))).planned, [], "idle since after the mail");
@@ -131,4 +140,6 @@ test("recipientOf: the one other top Run, the stalled Run when it is the only to
   assert.equal(recipientOf("run_a", new Map([...coords, ["run_b", { pane: "p:b", handle: "term_b", dispatch: false }]])), undefined);
   assert.equal(recipientOf("run_a", new Map([...coords, ["run_d", { pane: "p:d", handle: "term_d", dispatch: true }]])), "run_o", "a dispatched lead is no top");
   assert.equal(recipientOf("run_a", new Map([["run_a", lead], ["run_o", { pane: "p:o", handle: "term_o" }]])), undefined, "unknown Dispatch is no top");
+  assert.equal(recipientOf("run_a", new Map([["run_a", lead], ["run_o", { unresolved: true }]])), undefined, "a live coordinator not placed is unknown");
+  assert.equal(recipientOf("run_a", new Map([["run_a", lead], ["run_o", orch], ["run_g", {}]])), "run_o", "a Run with no live terminal is no top");
 });
