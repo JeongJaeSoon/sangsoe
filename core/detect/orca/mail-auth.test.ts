@@ -84,6 +84,20 @@ test("237: an old 403 above a later turn is not this stop's cause", () => {
   ]);
 });
 
+test("237: a 401 or a bad key that ends in the /login hint counts too", () => {
+  for (const line of [
+    '⏺ API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"OAuth token has expired."}} · Please run /login',
+    "⏺ Invalid API key · Please run /login",
+  ]) {
+    assert.deepEqual(stops([msg("m1", "errored", body(line))]), [["worker_dead", { reason: "stop_failure", cause: "auth" }]], line);
+  }
+});
+
+test("237: an echoed prompt line above a later turn does not cut the output short", () => {
+  const echoed = ["⏺ Please run /login · API Error: 403 Forbidden", "❯ /login", "⏺ Signed in; CI is green.", "  ⎿  API Error: 500 Internal server error"];
+  assert.deepEqual(stops([msg("m1", "errored", body(...echoed))]), [["worker_dead", { reason: "stop_failure" }]]);
+});
+
 test("237: a turn that only quotes the message mid-sentence is not a lost login", () => {
   assert.deepEqual(stops([msg("m1", "errored", body('⏺ The lead saw "Please run /login" on another card earlier.'))]), [["worker_dead", { reason: "stop_failure" }]]);
 });

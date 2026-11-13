@@ -28,6 +28,15 @@ test("237: a stop_failure with cause auth is its own alarm and names the sign-in
   assert.match(renderMarkdown(v.value.model), /\| 🚨 재로그인 \|/);
 });
 
+test("237: the newer of an auth stop and another stop of the same item is the one shown", () => {
+  const quiet = alarms(withEvents());
+  const at = (ts: string, payload: Record<string, unknown>) => line(ts, "worker_dead", payload, { entity: "dispatch", entity_id: "ctx_x", target: "task_26" });
+  const authThenGone = withEvents(at("2026-11-10T11:00:00.000Z", { reason: "stop_failure", cause: "auth" }), at("2026-11-10T11:30:00.000Z", { reason: "terminal_gone" }));
+  assert.deepEqual(alarms(authThenGone), [...quiet, "worker_dead"]);
+  const goneThenAuth = withEvents(at("2026-11-10T11:00:00.000Z", { reason: "stop_failure" }), at("2026-11-10T11:30:00.000Z", { reason: "stop_failure", cause: "auth" }));
+  assert.deepEqual(alarms(goneThenAuth), [...quiet, "worker_dead:auth"]);
+});
+
 test("237: a stale wait on a lost login tells the owner what to do, not the terminal's last words", () => {
   const w = ownerWorld();
   const wait = w.store.append({ type: "waiting_human", source: "StopFailure", payload: { session: "sess_lead", cause: "auth", excerpt: "API Error: 403" } });
