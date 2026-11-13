@@ -3,12 +3,10 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import type { CheckResult, PluginBuild } from "../core/checks/index.ts";
-import { orcaPluginContent } from "../core/checks/orca-plugin-content.ts";
-import type { RunResult } from "../core/install/host.ts";
-import { realPluginBuild } from "../core/install/doctor.ts";
-import { createOrcaAdapter } from "../core/orca/adapter.ts";
+import { type CheckResult, createOrcaAdapter, DOCTOR_CHECKS, type PluginBuild, realCheckContext } from "../core/index.ts";
 import { createFakeOrca } from "./fake-orca/index.ts";
+
+const orcaPluginContent = DOCTOR_CHECKS.find((c) => c.id === "orca-plugin-content");
 
 // Decision 233: the real tree fetch runs a `gh` found on PATH; this one prints the stderr file next to it and fails.
 const bin = mkdtempSync(join(tmpdir(), "sangsoe-fake-gh-"));
@@ -18,7 +16,7 @@ process.env.PATH = `${bin}:${process.env.PATH ?? ""}`;
 after(() => rmSync(bin, { recursive: true, force: true }));
 
 const BUILT = "b".repeat(40);
-const notCheckout = async (): Promise<RunResult> => ({ code: 1, stdout: "", stderr: "" });
+const notCheckout = async () => ({ code: 1, stdout: "", stderr: "" });
 
 async function contentRow(stderr: string): Promise<CheckResult> {
   writeFileSync(join(bin, "stderr"), stderr);
@@ -26,7 +24,9 @@ async function contentRow(stderr: string): Promise<CheckResult> {
     scenario: "local",
     replies: { "plugin-inspect": () => ({ code: 0, stdout: JSON.stringify({ ok: true, result: { contentHash: "sha256-here" } }), stderr: "" }) },
   });
-  const pluginBuild: PluginBuild = { ...realPluginBuild("/opt/homebrew/opt/sangsoe/libexec", notCheckout), buildCommit: async () => BUILT };
+  const real = realCheckContext("/opt/homebrew/opt/sangsoe/libexec", notCheckout).pluginBuild;
+  assert.ok(real && orcaPluginContent);
+  const pluginBuild: PluginBuild = { ...real, buildCommit: async () => BUILT };
   return orcaPluginContent.run({ orca: createOrcaAdapter(fake.exec), exec: fake.exec, coreVersion: "0.1.0", pluginBuild });
 }
 
