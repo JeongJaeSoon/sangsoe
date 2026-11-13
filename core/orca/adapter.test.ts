@@ -245,6 +245,8 @@ test("inbox maps the --full record: read becomes handled, the handles from and t
   assert.deepEqual(done?.payload, { taskId: "task_000000000001", dispatchId: "ctx_000000000001" }, "the outcome stays in Orca");
   assert.equal(stop?.payload?.stopReason, "errored");
   assert.equal(status?.payload, undefined);
+  assert.equal(status?.createdAt, "2026-11-14T08:00:00Z", "created_at tells how long mail sat unread (decision 245)");
+  assert.equal(stop?.createdAt, undefined, "a row without created_at has no age");
 });
 
 test("gate-list reads options from the JSON text Orca returns; anything else leaves them unknown", async () => {
