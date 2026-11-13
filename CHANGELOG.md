@@ -6,12 +6,23 @@ Decision numbers refer to `docs/decisions.md`.
 
 ### Changes
 
+- **The resource round keeps the last 24 hours of machine load (241).** Every 5-minute resource round now stores one sample (load average, CPU count, free memory, free disk) in a new `load_sample` table and drops samples 24 hours old in the same write, so at most 288 rows are kept. Nothing reads them yet; they are for the panel's load trend. The samples are not in the facts file and come back on their own within a day after a lost database. A dry run stores nothing. The database moves to schema 3, which an older build refuses to open.
+
+## 0.1.6-rc.3 (pre-release)
+
+Everything since `v0.1.6-rc.2`: decisions 237 to 240 and a fix to the test of 219. A pre-release for checking the hooks and gates, the 리소스 section and doctor on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
+
+### Upgrading from 0.1.6-rc.2
+
+- **Re-approve.** The Orca plugin's content and its vendored core changed, so the plugin waits for approval again. It asks for no new capability. Have the review of the build recorded with `sangsoe review record` by someone other than the session that wrote its pull request, then run `sangsoe plugin approve`, as the README's Update section says.
+- **Restart every running session.** The Claude plugin has a new `StopFailure` hook (237), which a session loads when it starts, and the version changed, so a server started under 0.1.6-rc.2 refuses `start_unit` with `server_stale`: restart each session as 0.1.6-rc.1's Upgrading says.
+
+### Changes
+
 - **A session stopped on a lost login reads as one, and the owner's list says how to recover (237).** When a session's turn ends on Claude Code's "Please run /login" (an `API Error: 403` or `401`, an invalid key, a revoked or expired login, or a goal cleared on failed authentication), the orca-monitor marks the Dispatch's stop with `cause: "auth"`, judged from the last turn line of Orca's stop mail only, so an older 403 left on screen above a later turn does not count. A session holding no Dispatch (an orchestrator, a Run's lead) is now seen too: a new `StopFailure` hook (matcher `authentication_failed|oauth_org_not_allowed`) records its wait, once per stop, released by its next finished turn. The item's 🚨 says 재로그인 before any other alarm, and the owner's list says: sign in once with `/login` in any session, then restart each stopped session with `claude --continue` (and enter `/goal` again if it was cleared). A running session keeps the token it loaded, so signing in alone does not wake it.
 - **A repository can ask its UI evidence for a surface and measures (238).** The panel's 리소스 section passed a browser measurement and still failed in the real Orca panel, because a `ui` evidence row counted with no measurement in it. `verify_tier.ui_evidence` in `config.json` now names, per repository, the surfaces and measures its `ui` rows must carry; land counts such a row only when its `observed` is a JSON object with one of those surfaces and a number for each measure. `evidence_record` takes `observed` and `sangsoe evidence record` takes `--observed` to write it. A repository with no entry is checked as before. The `ui-review` and `deliver-ticket` skills say a host-app panel is measured in the real host.
 - **The raw-start guard leaves other programs' sessions alone (239).** `[gate:start]` refused a raw worker start in any session on the machine, so another program's lead using its own Orca commands was blocked. It now refuses only in a session that is sangsoe's: one started from a sangsoe agent, one sangsoe opened, or one whose Task sangsoe created. That holds for every start the guard knows, a detached `claude` included. When the store or the session's first prompt cannot be read it still refuses.
 - **What only the owner clears is recorded and listed (240).** `resource_record` and `sangsoe resource record` also take a checkout, a registration, a branch, a file or a process. These are never cleared by REAPER; the 리소스 section lists them under 기록됨·오너 손 with no button, and the session that recorded them releases them once it has.
-- **The resource round keeps the last 24 hours of machine load (241).** Every 5-minute resource round now stores one sample (load average, CPU count, free memory, free disk) in a new `load_sample` table and drops samples 24 hours old in the same write, so at most 288 rows are kept. Nothing reads them yet; they are for the panel's load trend. The samples are not in the facts file and come back on their own within a day after a lost database. A dry run stores nothing. The database moves to schema 3, which an older build refuses to open.
-- The Claude plugin's hooks changed (a `StopFailure` hook, 237), and the Orca plugin's content and its vendored core changed, so the Orca plugin waits for approval again.
 
 ### Fixes
 
