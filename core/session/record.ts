@@ -189,10 +189,11 @@ async function waitingHuman(deps: CoreDeps, row: SessionRow, input: SessionHookI
   const kind = input.notification_type;
   if (kind ? !WAITS.has(kind) : !/permission|waiting for your input/i.test(message)) return;
   const tool = PERMISSION.exec(message)?.[1];
+  // Read Orca before the store, so no await sits between counting this session's waits and writing.
+  const worktree = await liveWorktree(deps.orca, input.cwd);
   const open = openWaits(deps.store.events()).filter((e) => e.payload.session === input.session_id);
   if (open.some((e) => e.payload.tool === tool)) return;
   const n = deps.store.events({ type: "waiting_human" }).filter((e) => e.payload.session === input.session_id).length + 1;
-  const worktree = await liveWorktree(deps.orca, input.cwd);
   deps.store.append({
     type: "waiting_human",
     source: "Notification",
