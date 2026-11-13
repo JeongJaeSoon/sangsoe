@@ -155,7 +155,8 @@ function bandBlock(b: Band, hours: 6 | 24): string {
   return (
     `<svg class="band" viewBox="0 0 1000 8" preserveAspectRatio="none" role="img" aria-label="${esc(`최근 ${hours}시간 부하: ${said.join(", ")}`)}">${rects.join("")}</svg>` +
     `<div class="band-ax"><span>${hours}시간 전</span><span>지금</span></div>` +
-    `<p class="ep">단계 변화만 기록된다. 빈 곳은 감시가 돌지 않은 때다.</p>`
+    `<p class="band-lg">${(["warn", "danger", "ok", "unknown"] as const).map((k) => `<span><i class="sw s-${k}"></i>${BAND_WORD[k]}${k === "unknown" ? "(감시가 돌지 않음)" : ""}</span>`).join("")}</p>` +
+    `<p class="ep">단계 변화만 기록된다.</p>`
   );
 }
 
