@@ -142,7 +142,29 @@ function fakeHost(
   return { host, calls, state, profiles };
 }
 
-const writes = (calls: string[]) => calls.filter((c) => !/ list --json$|--version$/.test(c));
+// `ps` is decision 247's read of the process table.
+const writes = (calls: string[]) => calls.filter((c) => !/ list --json$|--version$|^ps /.test(c));
+
+test("decision 247: install ends with the stale-session list, one line when none, and it never changes the exit code", async () => {
+  const { host } = fakeHost();
+  const none = await install(host, ROOT, online().ctx);
+  assert.equal(none.code, 0, none.lines.join("\n"));
+  assert.equal(none.lines.at(-1), "stale sessions: none");
+
+  const gone = join(tmpdir(), "sangsoe-install-test-gone", "claude-plugin", "mcp", "server.js");
+  const run = host.run;
+  host.run = (cmd, args, env) =>
+    cmd === "ps" ? { code: 0, stdout: `  11  1-00:00:00 node ${gone}\n  12  00:05 node ${gone}\n  13  00:05 node /x/other.js\n`, stderr: "" } : run(cmd, args, env);
+  const two = await install(host, ROOT, online().ctx);
+  assert.equal(two.code, 0, two.lines.join("\n"));
+  const tail = two.lines.slice(two.lines.indexOf("") + 1).filter((l) => /^stale sessions|^ {2}pid |^restart each/.test(l));
+  assert.equal(tail.length, 4, two.lines.join("\n"));
+  assert.match(tail[0] ?? "", /^stale sessions: 2 sangsoe MCP servers/);
+  assert.match(tail[1] ?? "", /^ {2}pid 11 .*installed none$/);
+  assert.match(tail[2] ?? "", /^ {2}pid 12 /);
+  assert.match(tail[3] ?? "", /^restart each with claude --continue in its terminal/);
+  assert.equal(two.lines.at(-1), tail[3], "the list is the last thing install prints");
+});
 
 test("first install adds the marketplace at the tree root and installs the plugin at user scope", async () => {
   const { host, calls } = fakeHost();
