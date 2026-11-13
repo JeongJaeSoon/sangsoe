@@ -35,10 +35,10 @@ const key = (type: Parameters<typeof eventDef>[0], target: string, ...cond: stri
 // last output). Orca sends that stop as `errored`, but the session resumes by itself.
 const USAGE_LIMIT = /hit your [\w -]*limit|Usage limit reached/i;
 
-// Claude Code's lost-login messages, which open a turn line after its ⏺/⎿ mark or end it with the
-// /login hint (decision 237).
+// Claude Code's lost-login messages, which open a turn line after its ⏺/⎿ mark (decision 237). Only
+// the opening: a long 401 body wraps at the pane's width, so its /login hint is on a later line.
 const AUTH =
-  /^(?:Please run \/login\b|API Error: 403\b|Goal cleared after an unrecoverable error \(authentication failed\))|^(?:Not logged in|Login expired|OAuth token revoked|Invalid API key|API Error: 401\b).* · Please run \/login\s*$/;
+  /^(?:Please run \/login\b|(?:Not logged in|Login expired|OAuth token revoked|Invalid API key) · Please run \/login|API Error: 40[13]\b|Goal cleared after an unrecoverable error \(authentication failed\))/;
 const MARK = /^\s*[⏺⎿]\s*/;
 
 /**
