@@ -1,4 +1,5 @@
 import { closeSync, openSync, readSync, statSync } from "node:fs";
+import { StringDecoder } from "node:string_decoder";
 import { judgeLoad, sampleLoad } from "../capacity/capacity.ts";
 import { doneBlockers } from "../graph/flow.ts";
 import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
@@ -11,24 +12,39 @@ import type { Facts, OpenPr, Role } from "./types.ts";
 const HEAD_BYTES = 64 * 1024;
 const SCRIPT_BYTES = 64 * 1024;
 
-function head(path: string, bytes: number): string | undefined {
+/** A long-lived session stacks metadata lines above its first user line; past this the prompt is not known. */
+const PROMPT_SCAN_BYTES = 2 * 1024 * 1024;
+
+/** The transcript's lines from the top, read a chunk at a time so a line across a chunk edge stays whole. */
+function* headLines(path: string, limit: number): Generator<string> {
+  let fd: number;
   try {
-    const fd = openSync(path, "r");
-    try {
-      const buf = Buffer.alloc(bytes);
-      return buf.toString("utf8", 0, readSync(fd, buf, 0, bytes, 0));
-    } finally {
-      closeSync(fd);
-    }
+    fd = openSync(path, "r");
   } catch {
-    return undefined;
+    return;
+  }
+  try {
+    const buf = Buffer.alloc(HEAD_BYTES);
+    const utf8 = new StringDecoder("utf8");
+    let rest = "";
+    for (let at = 0; at < limit; ) {
+      const n = readSync(fd, buf, 0, HEAD_BYTES, at);
+      if (n === 0) break;
+      at += n;
+      const lines = (rest + utf8.write(buf.subarray(0, n))).split("\n");
+      rest = lines.pop() ?? "";
+      yield* lines;
+    }
+    if (rest) yield rest;
+  } finally {
+    closeSync(fd);
   }
 }
 
 /** The text of the transcript's first user message. */
 export function firstPrompt(transcriptPath: string | undefined): string | undefined {
   if (!transcriptPath) return undefined;
-  for (const line of (head(transcriptPath, HEAD_BYTES) ?? "").split("\n")) {
+  for (const line of headLines(transcriptPath, PROMPT_SCAN_BYTES)) {
     try {
       const rec = JSON.parse(line) as { type?: string; message?: { content?: unknown } };
       if (rec.type !== "user") continue;
