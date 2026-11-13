@@ -67,7 +67,10 @@ export function recipientOf(run: string, coords: ReadonlyMap<string, Coordinator
   const all = tops(coords);
   const others = all.filter((r) => r !== run);
   if (others.length === 1) return others[0];
-  return others.length === 0 && all.includes(run) ? run : undefined;
+  // A Run with no live terminal may be an orchestrator that resumed elsewhere (run-show keeps the
+  // dead handle), so the stalled Run tells itself only when every other named Run was placed.
+  const placed = [...coords].every(([r, k]) => r === run || k.pane);
+  return others.length === 0 && all.includes(run) && placed ? run : undefined;
 }
 
 /**
