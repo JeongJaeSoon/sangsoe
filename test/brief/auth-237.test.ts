@@ -37,6 +37,15 @@ test("237: an auth stop after an idle turn says 재로그인, not that the worke
   assert.doesNotMatch(md, /🚨 워커가 다음 지시를 기다림/);
 });
 
+test("237: a finished turn after the auth stop means the session signed in again: 재로그인 is gone", () => {
+  const idle = line("2026-11-10T11:30:00.000Z", "worker_idle", { session: "s1" }, { entity: "task", entity_id: "task_26" });
+  const quiet = alarms(withEvents());
+  assert.deepEqual(alarms(withEvents(dead({ reason: "stop_failure", cause: "auth" }), idle)), quiet);
+  const v = panelView(withEvents(dead({ reason: "stop_failure", cause: "auth" }), idle), {});
+  assert.ok(v.ok, JSON.stringify(v));
+  assert.doesNotMatch(renderMarkdown(v.value.model), /재로그인/);
+});
+
 test("237: the newer of an auth stop and another stop of the same item is the one shown", () => {
   const quiet = alarms(withEvents());
   const at = (ts: string, payload: Record<string, unknown>) => line(ts, "worker_dead", payload, { entity: "dispatch", entity_id: "ctx_x", target: "task_26" });
