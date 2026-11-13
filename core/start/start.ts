@@ -115,7 +115,7 @@ function specRole(spec: unknown): { first: string; role: string } {
 }
 
 /**
- * Decision 243 (다): a depth-1 worker holding a Run of its own would pass every Dispatch check as a
+ * Decision 243 ③: a depth-1 worker holding a Run of its own would pass every Dispatch check as a
  * lead, so a lead's own Task must carry the lead role line. Unreadable is a problem, never a pass.
  */
 async function leadTaskProblem(orca: OrcaAdapter, taskId: string, run: string): Promise<string | null> {

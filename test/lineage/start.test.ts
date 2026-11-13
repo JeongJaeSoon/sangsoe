@@ -402,6 +402,12 @@ test("decision 243 ③: a lead with a Task is a lead only if its Task's role lin
     const h = harness(s);
     assertRefused(h, await start(h), "lineage_invalid");
   }
+  const noRun = harness({
+    replies: { "orchestration-dispatch-show": () => ok({ dispatch: { ...dispatchRow("ctx_lead", "task_lead", 1, ORCH_RUN).dispatch, run_id: "" } }) },
+  });
+  const r = await start(noRun);
+  assertRefused(noRun, r, "lineage_invalid");
+  assert.match(r.kind === "refused" ? r.detail : "", /Run 이 없다/);
   const lead = harness();
   assert.equal((await start(lead)).kind, "started");
 });
