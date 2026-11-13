@@ -43,6 +43,9 @@ export type PanelCore = {
   worktree?(target: { group?: string; item?: string }): Promise<Reply<{ worktree: string }>>;
   /** Absent in a core older than decision 205; the panel then re-reads on its interval only. */
   watch?(onChange: (seq: number) => void): Reply<{ close(): void }>;
+  /** Absent in a core older than decision 234; the 리소스 section then says so. */
+  resources?(): Promise<Reply<unknown>>;
+  reap?(a: { worktrees: string[]; tmp: boolean }): Promise<Reply<unknown>>;
 };
 
 type CoreModule = {

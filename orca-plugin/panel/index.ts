@@ -2,6 +2,7 @@
 // The sangsoe html panel (decision 92): three stages down and back, decision and 완료 buttons. Every
 // button is a plugin.request to the worker, which calls the core; the panel changes nothing itself.
 import { panelReads } from "./refresh.ts";
+import { type Reaped, RES_OPEN_KEY, type ResState, type ResView, reapTargets, renderResBody, renderResources } from "./resources.ts";
 import { STYLE } from "./style.ts";
 import {
   type Act,
@@ -32,6 +33,8 @@ type Frame = {
     /** The worker's `panels.post`; absent on an Orca without it. */
     on?(event: string, fn: (payload: unknown) => void): unknown;
   };
+  /** The plugin's own store (`storage:own`); absent on an Orca without it, where the fold opens closed. */
+  storage?: { get(key: string): Promise<unknown>; set(key: string, value: unknown): Promise<void> };
 };
 declare const orca: Frame;
 
@@ -52,11 +55,77 @@ export function panelRoot(doc: RootDoc): HTMLElement {
   return root;
 }
 
+/**
+ * The 리소스 fold (decision 234) in its own element after #root, so the panel's own repaints never
+ * reach it. It reads only when opened or refreshed, and 정리 runs on the confirm button alone.
+ */
+function mountResources(after: HTMLElement): void {
+  const box = document.createElement("section");
+  box.id = "res";
+  after.after(box);
+  let state: ResState = { kind: "idle" };
+  let open = false;
+  const draw = () => {
+    box.innerHTML = renderResources(state, open, Date.now());
+  };
+  const body = () => {
+    const el = box.querySelector<HTMLElement>(".res-body");
+    if (el) el.innerHTML = renderResBody(state, Date.now());
+  };
+  const failed = (e: unknown) => ({ ok: false as const, refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" } });
+  const read = async (result?: Reaped) => {
+    state = { kind: "reading", ...(state.kind === "shown" ? { last: state.view } : {}) };
+    body();
+    const r = (await orca.plugin.request("panel.resources").catch(failed)) as Reply<ResView>;
+    state = r.ok ? { kind: "shown", view: r.value, ...(result ? { result } : {}) } : { kind: "failed", refusal: r.refusal };
+    body();
+  };
+  const run = async () => {
+    if (state.kind !== "shown" || state.running) return;
+    const view = state.view;
+    state = { ...state, running: true };
+    body();
+    const r = (await orca.plugin.request("panel.reap", reapTargets(view)).catch(failed)) as Reply<Reaped>;
+    if (r.ok) await read(r.value);
+    else state = { kind: "failed", refusal: r.refusal };
+    body();
+  };
+  box.addEventListener("toggle", (ev) => {
+    const d = ev.target as HTMLDetailsElement;
+    if (!d.matches(".res-fold")) return;
+    open = d.open;
+    void orca.storage?.set(RES_OPEN_KEY, open).catch(() => undefined);
+    if (open && (state.kind === "idle" || state.kind === "failed")) void read();
+    else body();
+  }, true);
+  box.addEventListener("click", (ev) => {
+    const el = (ev.target as Element).closest<HTMLElement>("[data-res]");
+    if (!el) return;
+    const what = el.getAttribute("data-res");
+    if (what === "refresh") void read();
+    else if (what === "run") void run();
+    else if (state.kind === "shown" && (what === "ask" || what === "cancel")) {
+      state = { ...state, confirm: what === "ask" };
+      body();
+    }
+  });
+  draw();
+  void (orca.storage?.get(RES_OPEN_KEY) ?? Promise.resolve(null))
+    .catch(() => null)
+    .then((v) => {
+      if (v !== true) return;
+      open = true;
+      draw();
+      void read();
+    });
+}
+
 function mount(): void {
   const style = document.createElement("style");
   style.textContent = STYLE;
   document.head.append(style);
   const root = panelRoot(document);
+  mountResources(root);
 
   let stack: Target[] = [];
   let tab: Tab = "all";

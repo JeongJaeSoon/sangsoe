@@ -129,6 +129,8 @@ export default function activate(
   });
   orca.panels.handle("panel.act", panel["panel.act"]);
   orca.panels.handle("panel.open", openHandler(exec, panel.worktree));
+  orca.panels.handle("panel.resources", panel["panel.resources"]);
+  orca.panels.handle("panel.reap", panel["panel.reap"]);
   stopRounds = () => {
     stopped = true;
     closeWatch?.();
