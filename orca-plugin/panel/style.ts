@@ -334,7 +334,7 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .tbl.res { table-layout: fixed; }
 .tbl.res td { height: 32px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tbl.res th:first-child, .tbl.res td:first-child { width: auto; }
-.tbl.res .num { text-align: right; white-space: nowrap; width: 6.5em; }
+.tbl.res .num { text-align: right; white-space: nowrap; width: 8em; }
 #res .empty { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--text-sm); }
 .res-acts { margin-top: var(--s3); }
 .confirm { margin-top: var(--s3); padding: var(--s3); border: 1px solid var(--rule-2); border-radius: var(--r3); font-size: var(--text-sm); }
