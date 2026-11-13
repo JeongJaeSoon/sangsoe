@@ -411,6 +411,33 @@ test("moot never closes an answered decision, and a carrier Task alone does not 
   assert.equal(m.refusal.code, "not_moot");
 });
 
+test("decision 231: `decision moot` retires a broken decision with no waiter at all, without calling Orca", async () => {
+  // Orca refused the gate after decision_opened was written: the record holds a dNNN and no waiter (decision 219).
+  const w = createWorld([], { currentRun: RUN });
+  const broken = await decisionOpen(w, ask([{ task: T1, run: RUN }]));
+  assert.ok(!broken.ok);
+  assert.equal(broken.refusal.code, "orca_error");
+  assert.deepEqual(row(w, "d001")?.waiters, []);
+  assert.equal(row(w, "d001")?.state, "open");
+
+  const before = w.calls().length;
+  const r = await decisionMootFrom({ decision: "d001" }, w);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(r.value, { status: "moot", decision: "d001", resolved: [], notified: [], handedOff: [] });
+  assert.deepEqual(w.calls().slice(before), [["orchestration", "run-current"]], "only the entrance's run-current");
+  assert.equal(w.sends.length, 0);
+  assert.deepEqual(
+    w.store.events({ type: "decision_closed" }).map((e) => e.payload),
+    [{ decision: "d001", reason: "moot", evidence: "tasks_closed" }],
+  );
+  assert.equal(row(w, "d001")?.closedReason, "moot");
+
+  const again = await decisionMootFrom({ decision: "d001" }, w);
+  assert.ok(again.ok);
+  assert.deepEqual(again.value, { status: "moot", decision: "d001", resolved: [], notified: [], handedOff: [] });
+  assert.equal(w.store.events({ type: "decision_closed" }).length, 1);
+});
+
 test("decisionAnswer needs the owner_action it cites, and one owner_action answers one decision", async () => {
   const w = createWorld([{ id: T1, run: RUN, status: "dispatched", dispatchId: "ctx_000000000001" }]);
   const { decision: d } = await open(w);

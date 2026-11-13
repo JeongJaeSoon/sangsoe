@@ -53,8 +53,8 @@ export function parseDecisionAnswer(raw: Raw): Result<Omit<DecisionAnswerInput, 
 }
 
 /**
- * The entrance takes no evidence: an open decision is mooted only when Orca shows every waiter closed,
- * and a moot decision resumes under the evidence first recorded. A closed PR is queue-monitor's to
+ * The entrance takes no evidence: an open decision is mooted only when Orca shows every waiter closed
+ * or it has no waiter at all (decision 231), and a moot decision resumes under the evidence first recorded. A closed PR is queue-monitor's to
  * observe; it calls `decisionMoot` itself, so no caller can moot a decision by naming a PR.
  */
 export function parseDecisionMoot(raw: Raw): Result<Omit<DecisionMootInput, "callerRun">> {
