@@ -215,7 +215,12 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       requesterDepth = typeof row.depth === "number" ? row.depth : Number.NaN;
       if (!requesterDispatch || Number.isNaN(requesterDepth)) lineageProblem = "요청자의 Dispatch 에 id·depth 가 없다";
       else if (row.run_id === requester.runId) lineageProblem = "요청자의 Dispatch 가 시작하려는 Run 안에 있다(그 Run 을 쥔 쪽이 아니다)";
-      else if (requester.role === "lead") lineageProblem = await leadTaskProblem(orca, requester.taskId, String(row.run_id));
+      else if (requester.role === "lead") {
+        lineageProblem =
+          typeof row.run_id === "string" && row.run_id !== ""
+            ? await leadTaskProblem(orca, requester.taskId, row.run_id)
+            : "요청자의 Dispatch 에 Run 이 없다";
+      }
     }
   } else if (requester.role === "worker") {
     lineageProblem = "worker 의 Task id 가 없어 Dispatch 를 읽을 수 없다";

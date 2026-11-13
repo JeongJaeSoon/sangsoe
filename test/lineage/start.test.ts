@@ -387,12 +387,15 @@ test("decision 243: MCP start_unit passes a lead with no taskId to the core", as
   assert.equal(r.ok && (r.value as { kind: string }).kind, "started", JSON.stringify(r));
 });
 
-test("decision 243 (다): a lead with a Task is a lead only if its Task's role line says so, read from its Dispatch's Run", async () => {
+test("decision 243 ③: a lead with a Task is a lead only if its Task's role line says so, read from its Dispatch's Run", async () => {
   // A depth-1 worker holding a Run of its own would otherwise pass as a lead.
   const worker = harness({ requesterRoleLine: "sangsoe-role: worker" });
   const out = await start(worker, request());
   assertRefused(worker, out, "lineage_invalid");
   assert.match(out.kind === "refused" ? out.detail : "", /sangsoe-role/);
+  // It has a Dispatch, so the refusal goes to whoever started it, not to the owner.
+  assertEscalatedToParent(worker, out);
+  assert.equal(worker.store.events({ type: "escalation" }).length, 0);
   const read = worker.called("task-list").find((c) => flag(c, "run") === ORCH_RUN) ?? [];
   assert.ok(read.includes("--full"), "the spec comes from task-list --full on the Dispatch's Run");
   for (const s of [{ requesterRoleLine: null }, { requesterRoleLine: "program brief, no role line" }, { requesterTaskList: () => fail("runtime_unavailable") }]) {
