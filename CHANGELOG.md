@@ -2,6 +2,15 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **The 리소스 section reads in seconds and says what it is reading (235).** Opening it showed only "읽는 중…" for about half a minute: listing cleanup candidates asked GitHub about every Orca worktree on the machine, one call after another, and kept only sangsoe's. It now asks only about sangsoe's own worktrees, and reads the load, what sangsoe made and the cleanup candidates as three parts at once. Each part appears as soon as it is read; until then its place says what is being read. A part that cannot be read says so in its own place. Measured once on one machine: the load in 0.3 seconds, what sangsoe made in 1.6, the candidates in 7.6, against 26 for everything before. `sangsoe reap plan` gets the same speed-up.
+- **The 리소스 section sits at the bottom of the panel and adds no scroll of its own (235).** It sat right under the status with empty space below it, and when it was opened its own 24px bottom margin could push a page that just fitted into scrolling. It now sits at the bottom of the panel when the status is short and at the end of the page when it is long, with no margin under it.
+- **PC 부하 shows a band of the load levels over the last 6 or 24 hours (235).** The band is drawn from the high-load and back-to-normal rows the resource monitor already writes, so nothing new is stored: warn and danger in their tones, normal in grey, and a stretch with no timer round (Orca was not running) left empty. It shows when the level changed, not the load figures in between; time-series charts of the figures need stored samples and are planned for 0.1.7.
+- The Orca plugin's content and its vendored core changed, so the plugin waits for approval again.
+
 ## 0.1.6-rc.1 (pre-release)
 
 Everything since `v0.1.5`: decisions 230 to 234. A pre-release for checking the panel, its 리소스 section and doctor on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
