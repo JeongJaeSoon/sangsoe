@@ -55,3 +55,11 @@ test("232: no live terminal there, or ps unread: the wait names no worktree and 
     [undefined, undefined],
   );
 });
+
+test("232: a truncated ps names no worktree: the page may hold an enclosing worktree and miss the session's own", async () => {
+  const w = await orchestrator();
+  w.psTruncated = true;
+  w.psRows = [psRow("/", "inst_root", 1)];
+  await hook(w, "notification", idle);
+  assert.equal(w.store.events({ type: "waiting_human" })[0]?.payload.worktree, undefined);
+});

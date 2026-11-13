@@ -36,6 +36,7 @@ export interface SessionWorld extends CoreDeps {
   dispatchStatus: string;
   /** `worktree ps` rows; null answers an error. */
   psRows: Record<string, unknown>[] | null;
+  psTruncated: boolean;
   calls(): string[][];
 }
 
@@ -63,6 +64,7 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
     failRunCurrent: false,
     dispatchStatus: "dispatched",
     psRows: null as Record<string, unknown>[] | null,
+    psTruncated: false,
   };
   const replies: Record<string, FakeReply> = {
     "worktree-list": () =>
@@ -88,7 +90,7 @@ export function createSessionWorld(o: { spec?: string; heldRun?: string | null; 
     },
     "orchestration-gate-list": () => ok({ gates: [] }),
     "worktree-ps": () =>
-      w.psRows ? ok({ worktrees: w.psRows }) : { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "runtime_unavailable", message: "down" } }), stderr: "" },
+      w.psRows ? ok({ worktrees: w.psRows, truncated: w.psTruncated }) : { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "runtime_unavailable", message: "down" } }), stderr: "" },
     "orchestration-dispatch-show": () =>
       ok({
         dispatch: {

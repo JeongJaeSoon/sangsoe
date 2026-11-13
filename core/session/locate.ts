@@ -69,7 +69,8 @@ async function dispatchIn(orca: OrcaAdapter, worktree: string, run?: string): Pr
 export async function liveWorktree(orca: OrcaAdapter, cwd: string | undefined): Promise<string | undefined> {
   if (!cwd) return undefined;
   const ps = await orca.worktreePs({});
-  if (!ps.ok) return undefined;
+  // A partial list may hold an enclosing worktree and miss the session's own.
+  if (!ps.ok || ps.value.truncated || ps.value.omittedHostIds.includes("local")) return undefined;
   const here = real(cwd);
   const tree = ps.value.rows.filter((t) => within(here, real(t.path))).sort((a, b) => b.path.length - a.path.length)[0];
   return tree && tree.liveTerminalCount > 0 ? tree.worktreeInstanceId : undefined;

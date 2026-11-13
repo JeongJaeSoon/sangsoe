@@ -68,7 +68,7 @@ export function releasesFor(input: Pick<ViewInput, "events">, signal: ReleaseSig
 
 /**
  * Decision 232: a session's wait whose own hooks can no longer release it (a terminal killed with no
- * SessionEnd, the plugin turned off). Orca's full ps showing the wait's worktree with no live and no
+ * SessionEnd, the plugin turned off). Orca's full ps (not truncated, local host not omitted) showing the wait's worktree with no live and no
  * unverifiable terminal, or no longer listing it, makes it moot `terminal_gone`; any session wait
  * open `showHours` makes it moot `expired`, since a worktree may hold more than one session.
  * A Dispatch's wait is left to Orca's mail and ps (decision 196).
@@ -79,7 +79,7 @@ export function orphanedWaits(
   now: number,
   cfg: Pick<OwnerConfig, "showHours"> = OWNER_DEFAULTS,
 ): Release[] {
-  const full = ps && !ps.truncated ? new Map(ps.rows.flatMap((r) => (r.worktreeInstanceId ? [[r.worktreeInstanceId, r] as const] : []))) : null;
+  const full = ps && !ps.truncated && !ps.omittedHostIds.includes(LOCAL_HOST) ? new Map(ps.rows.flatMap((r) => (r.worktreeInstanceId ? [[r.worktreeInstanceId, r] as const] : []))) : null;
   const gone = (worktree: unknown) => {
     if (!full || typeof worktree !== "string") return false;
     const row = full.get(worktree);

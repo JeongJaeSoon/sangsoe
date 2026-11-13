@@ -71,6 +71,7 @@ test("232: only positive evidence closes by terminal: ps unread, truncated or un
   w.at(later(T0, 60));
   assert.deepEqual(round(w, null), []);
   assert.deepEqual(round(w, rows([], true)), [], "a truncated list does not prove the worktree gone");
+  assert.deepEqual(round(w, { ...rows([]), omittedHostIds: ["local"] }), [], "nor a list that left out this host");
   assert.deepEqual(round(w, rows([tree({ liveTerminalCount: 0, unverifiableTerminalCount: 1 })])), []);
   assert.equal(todo(w).length, 1);
 });
