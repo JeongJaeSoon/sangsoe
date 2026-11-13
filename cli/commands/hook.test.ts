@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,7 +58,9 @@ test("a raw start is denied on stdout and recorded as gate_denied with the comma
 
 test("decision 239: the same raw start in a session sangsoe has no record of passes and records nothing", () => {
   const home = scratchDir("sangsoe-hook-");
-  const r = hook(home, call("fallback start"));
+  const transcript = join(home, "t.jsonl");
+  writeFileSync(transcript, `${JSON.stringify({ type: "user", message: { content: "start the build workers" } })}\n`);
+  const r = hook(home, call("fallback start", { transcript_path: transcript }));
   assert.equal(r.code, 0, r.stderr);
   assert.equal(r.stdout, "");
   const store = Store.open({ home });
