@@ -63,6 +63,19 @@ async function dispatchIn(orca: OrcaAdapter, worktree: string, run?: string): Pr
 }
 
 /**
+ * Decision 232: Orca's path-free id of the innermost worktree holding cwd, only while Orca shows a live
+ * terminal there; undefined when ps fails or nothing matches. The id is a reference, not a copy.
+ */
+export async function liveWorktree(orca: OrcaAdapter, cwd: string | undefined): Promise<string | undefined> {
+  if (!cwd) return undefined;
+  const ps = await orca.worktreePs({});
+  if (!ps.ok) return undefined;
+  const here = real(cwd);
+  const tree = ps.value.rows.filter((t) => within(here, real(t.path))).sort((a, b) => b.path.length - a.path.length)[0];
+  return tree && tree.liveTerminalCount > 0 ? tree.worktreeInstanceId : undefined;
+}
+
+/**
  * The Dispatch working in cwd's worktree, read from Orca alone (no copy in sqlite): the worktree whose
  * path holds cwd, its unsettled Dispatch, that Dispatch's Run, and the Task's spec. undefined when any
  * read fails or nothing matches: the caller then does nothing.

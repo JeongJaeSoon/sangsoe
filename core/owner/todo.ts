@@ -12,7 +12,8 @@ const STILL_REFUSED = new Set(["pending", "ready"]);
  * The owner's to-do (decisions 12, 89, 91): open decisions, the owner's 🟢 items, waiting_human rows
  * the owning lead could not release, and undelivered answers. Every row leaves only on an observed
  * fact or a recorded answer: a verify probe that came true takes the owner item out (it goes to the
- * holder as close_suggested), waiting_released takes the wait out. An orchestrator's refused start
+ * holder as close_suggested), waiting_released takes the wait out. The one exception is a session's
+ * wait open past show_hours, which expires (decision 232). An orchestrator's refused start
  * (escalation{to: owner}, decision 94 (다)) is the owner's too, as the row of the item whose Task it
  * could not start. One item is one row.
  */

@@ -7,6 +7,7 @@ import type { CoreDeps } from "../notify/result.ts";
 import { classifyPrompt } from "../owner/prompt.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
 import type { Store } from "../store/store.ts";
+import { liveWorktree } from "./locate.ts";
 import { hashOf, mask, summarize } from "./mask.ts";
 import { type SessionHookInput, type SessionRow, sessionOf } from "./session.ts";
 import { sessionStart, type SessionStartOptions } from "./session-start.ts";
@@ -191,10 +192,11 @@ async function waitingHuman(deps: CoreDeps, row: SessionRow, input: SessionHookI
   const open = openWaits(deps.store.events()).filter((e) => e.payload.session === input.session_id);
   if (open.some((e) => e.payload.tool === tool)) return;
   const n = deps.store.events({ type: "waiting_human" }).filter((e) => e.payload.session === input.session_id).length + 1;
+  const worktree = await liveWorktree(deps.orca, input.cwd);
   deps.store.append({
     type: "waiting_human",
     source: "Notification",
     dedupe_key: dedupeKey(EVENTS.waiting_human, input.session_id, String(n)),
-    payload: { session: input.session_id, ...(tool ? { tool } : {}), ...(message ? { excerpt: summarize(mask(message)) } : {}) },
+    payload: { session: input.session_id, ...(tool ? { tool } : {}), ...(message ? { excerpt: summarize(mask(message)) } : {}), ...(worktree ? { worktree } : {}) },
   });
 }

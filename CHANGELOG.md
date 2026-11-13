@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **A wait from a session that is gone leaves "지금 오너가 할 일" (232).** A session's "Claude is waiting for your input" or permission wait was closed only by that same session's hooks (its next turn end, the tool it asked for, SessionEnd). A session whose terminal was killed without SessionEnd, or whose plugin was turned off, left its wait on the owner's list for good. The Notification hook now notes the Orca worktree the wait was raised in (its path-free id, only while Orca shows a live terminal there), and the orca-monitor closes the wait as moot when Orca's full `worktree ps` shows that worktree with no live or unverifiable terminal, or no longer lists it (`terminal_gone`). Any session wait open longer than `show_hours` (24 hours) is closed as moot too (`expired`), so waits written before this change clear on the first round after install. A Dispatch's wait is unchanged. The core changed, so the Orca plugin's vendored core changes too and needs re-approval.
+
 ## 0.1.5
 
 Everything since `v0.1.4`: decisions 225, 227, 228 and 229. The pre-releases `v0.1.5-rc.1` and `v0.1.5-rc.2` carried the same changes, except 229 in rc.1, for checking the panel and doctor on an installed build.
