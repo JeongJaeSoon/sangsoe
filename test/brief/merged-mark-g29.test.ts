@@ -16,7 +16,7 @@ async function shipped(w: GraphWorld) {
   assert.ok(e.ok, JSON.stringify(e));
   const impl = (e.value.steps as Record<string, string>).impl as string;
   w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: PR, task: impl } });
-  w.store.append({ type: "evidence", source: "lead:api", entity: "task", entity_id: impl, payload: { kind: "test", exit_code: 0 } });
+  w.store.append({ type: "evidence", source: "evidence record", subject: PR, payload: { kind: "test", exit_code: 0, not_verified: ["prod"] } });
   w.complete(impl);
   w.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: PR, merge_sha: SHA } });
   return impl;
@@ -43,7 +43,7 @@ test("a merged item with no deploys_after edge reads ✅ on its own evidence", a
   w.task("t_plain", "run_a");
   bindItem(w, "t_plain", "i001");
   w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#9", task: "t_plain" } });
-  w.store.append({ type: "evidence", source: "lead:api", entity: "task", entity_id: "t_plain", payload: { kind: "test", exit_code: 0 } });
+  w.store.append({ type: "evidence", source: "evidence record", subject: "acme/api#9", payload: { kind: "test", exit_code: 0, not_verified: ["prod"] } });
   w.complete("t_plain");
   w.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#9", merge_sha: SHA } });
   assert.equal(await short(w, "t_plain"), false);
