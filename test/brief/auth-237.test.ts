@@ -28,6 +28,15 @@ test("237: a stop_failure with cause auth is its own alarm and names the sign-in
   assert.match(renderMarkdown(v.value.model), /\| 🚨 재로그인 \|/);
 });
 
+test("237: an auth stop after an idle turn says 재로그인, not that the worker waits for orders", () => {
+  const idle = line("2026-11-10T10:30:00.000Z", "worker_idle", { session: "s1" }, { entity: "task", entity_id: "task_26" });
+  const v = panelView(withEvents(idle, dead({ reason: "stop_failure", cause: "auth" })), {});
+  assert.ok(v.ok, JSON.stringify(v));
+  const md = renderMarkdown(v.value.model);
+  assert.match(md, /\| 🚨 재로그인 \|/);
+  assert.doesNotMatch(md, /🚨 워커가 다음 지시를 기다림/);
+});
+
 test("237: the newer of an auth stop and another stop of the same item is the one shown", () => {
   const quiet = alarms(withEvents());
   const at = (ts: string, payload: Record<string, unknown>) => line(ts, "worker_dead", payload, { entity: "dispatch", entity_id: "ctx_x", target: "task_26" });
