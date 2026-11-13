@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
-import { type OwnerReap, type OwnerReaped, panelCore, type ResourceView, Store } from "../../core/index.ts";
+import { type OwnerReap, type OwnerReaped, panelCore, panelView, type ResourceView, Store } from "../../core/index.ts";
+import { STYLE } from "../../orca-plugin/panel/style.ts";
+import { type PanelView, renderStage } from "../../orca-plugin/panel/view.ts";
+import { groupWorld } from "../brief/group-world.ts";
 import type { PanelCore } from "../../orca-plugin/core-link.ts";
 import { panelHandlers, parseReap } from "../../orca-plugin/panel/requests.ts";
 import { type ResView, reapTargets, renderResBody, renderResources, STALE_MS } from "../../orca-plugin/panel/resources.ts";
@@ -36,6 +41,32 @@ const view = (o: Partial<ResView> = {}): ResView => ({
   ...o,
 });
 
+// PANEL_PREVIEW_DIR=<dir> writes the overview without and with the fold, closed, open and confirming,
+// for the headless renders at 600 / 900 / 1200px (ui-review). The page script records overflow.
+test("preview pages for the screenshots (only with PANEL_PREVIEW_DIR)", { skip: !process.env.PANEL_PREVIEW_DIR }, async () => {
+  const dir = process.env.PANEL_PREVIEW_DIR ?? "";
+  mkdirSync(dir, { recursive: true });
+  const w = await groupWorld();
+  const one = panelView(await w.input(), {});
+  assert.ok(one.ok);
+  const stage = renderStage(one.value as unknown as PanelView);
+  // ui-review checks on the fold: horizontal-overflow, row-height, vertical-center (gauge rows), value-wrap.
+  const measure = `<script>addEventListener("load",()=>{const r=document.getElementById("res");const q=(s)=>r?[...r.querySelectorAll(s)]:[];const box=(e)=>e.getBoundingClientRect();const out=q("*").filter(e=>box(e).right>box(r).right+0.5).map(e=>e.className||e.tagName);const rows={};for(const t of q("tbody tr")){const h=Math.round(box(t).height);rows[h]=(rows[h]||0)+1;}const off=q(".gauge").map(g=>{const c=[...g.children].map(x=>{const b=box(x);return b.top+b.height/2;});return Math.round(Math.max(...c)-Math.min(...c));});const wrapped=q("td.num,.g-v,.g-l").filter(e=>box(e).height>34&&e.tagName!=="TD"||e.tagName==="TD"&&e.scrollHeight>36).length;const p=document.createElement("pre");p.id="measure";p.textContent=JSON.stringify({pageOverflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,resOverflow:out,rowHeights:rows,gaugeCenterOff:off,wrapped});document.body.append(p);});</script>`;
+  const cases: [string, string][] = [
+    ["before", ""],
+    ["closed", renderResources({ kind: "idle" }, false, NOW)],
+    ["open", renderResources({ kind: "shown", view: view() }, true, NOW)],
+    ["confirm", renderResources({ kind: "shown", view: view(), confirm: true }, true, NOW)],
+  ];
+  for (const [name, res] of cases) {
+    for (const width of [390, 600, 900, 1200]) {
+      const section = res ? `<section id="res">${res}</section>` : "";
+      const page = `<!doctype html><html lang="ko" class="light"><head><meta charset="utf-8"><style>${STYLE}</style></head><body style="width:${width}px;margin:0"><div id="root">${stage}</div>${section}${measure}</body></html>`;
+      writeFileSync(join(dir, `res-${name}-${width}.html`), page);
+    }
+  }
+});
+
 test("the fold is closed by default and reads nothing until opened", () => {
   const html = renderResources({ kind: "idle" }, false, NOW);
   assert.match(html, /^<details class="fold res-fold"><summary>리소스<\/summary><div class="res-body"><\/div><\/details>$/);
@@ -50,8 +81,8 @@ test("open: load gauges, what sangsoe made with counts and sizes, and the candid
   assert.match(html, /부하 높음: warn: load\/CPU 1\.50/);
   assert.match(html, /<tr><td>worktree<\/td><td class="num">3<\/td><td class="num">3\.0 GB<\/td><\/tr>/);
   assert.match(html, /<tr><td>임시 폴더<\/td><td class="num">13,201<\/td><td class="num">95 MB<\/td><\/tr>/);
-  assert.match(html, /acme-u12<\/td><td>끝남 \(PR #12\)<\/td><td class="num">2\.0 MB/);
-  assert.match(html, /smoke-1<\/td><td>경로 없음: 등록만 지움<\/td>/);
+  assert.match(html, /title="acme-u12: \/w\/a">acme-u12<\/td><td title="끝남 \(PR #12\)">끝남 \(PR #12\)<\/td><td class="num">2\.0 MB/);
+  assert.match(html, /smoke-1<\/td><td title="경로 없음: 등록만 지움">경로 없음: 등록만 지움<\/td>/);
   assert.match(html, /임시 폴더 13,000개<\/td>/);
   assert.match(html, /data-res="ask">정리…<\/button>/);
   assert.doesNotMatch(html, /data-res="run"/, "nothing runs on the first press");
@@ -102,7 +133,12 @@ test("panel.reap takes only listed-looking ids and a boolean; anything else neve
     assert.equal(parseReap(bad), null, JSON.stringify(bad));
   }
   let reached = 0;
-  const core = { reap: async () => (reached++, { ok: true, value: {} }) } as unknown as PanelCore;
+  const core = {
+    reap: async () => {
+      reached++;
+      return { ok: true, value: {} };
+    },
+  } as unknown as PanelCore;
   const h = panelHandlers(async () => core);
   assert.equal(((await h["panel.reap"]({ worktrees: ["; rm"] })) as { ok: boolean }).ok, false);
   assert.equal(reached, 0);
@@ -134,5 +170,5 @@ test("the core records the owner's press as an owner_action before the confirmed
   assert.deepEqual(order, ["record", "reap inst-a true"]);
   const rows = store.events({ type: "owner_action" });
   assert.equal(rows.length, 1);
-  assert.equal((rows[0]?.payload as { origin: string }).origin, "button");
+  assert.equal((rows[0]?.payload as { origin?: string } | undefined)?.origin, "button");
 });

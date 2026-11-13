@@ -323,7 +323,9 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .ep { margin: var(--s1) 0 0; font-size: var(--text-xs); color: var(--muted); }
 .ep.t-bad { color: var(--bad); }
 .unread { color: var(--bad); }
-.tbl.res td { height: 32px; }
+/* One line per row at every width: a long name or reason is cut, its whole text in the cell's title. */
+.tbl.res { table-layout: fixed; }
+.tbl.res td { height: 32px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tbl.res th:first-child, .tbl.res td:first-child { width: auto; }
 .tbl.res .num { text-align: right; white-space: nowrap; width: 6.5em; }
 #res .empty { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--text-sm); }

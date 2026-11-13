@@ -125,13 +125,15 @@ function candidates(v: ResView, s: Extract<ResState, { kind: "shown" }>): string
   else {
     for (const r of v.worktrees.value.rows) {
       const why = r.gone ? "경로 없음: 등록만 지움" : (STATE[r.state] ?? r.state) + (r.state === "finished" ? ` (${r.why})` : "");
-      rows.push(`<tr><td class="title" title="${esc(r.path)}">${esc(r.name)}</td><td>${esc(why)}</td><td class="num">${size(r.kb)}</td></tr>`);
+      rows.push(`<tr><td class="title" title="${esc(`${r.name}: ${r.path}`)}">${esc(r.name)}</td><td title="${esc(why)}">${esc(why)}</td><td class="num">${size(r.kb)}</td></tr>`);
     }
     if (v.worktrees.value.markOnly) notes.push("reaper 설정이 없어 worktree 는 정리하지 않는다. sangsoe doctor 를 본다.");
   }
   if (!v.tmp.ok) notes.push(`임시 폴더를 ${unread(v.tmp.why)}.`);
   else if (v.tmp.value.count > 0) {
-    rows.push(`<tr><td class="title">임시 폴더 ${n(v.tmp.value.count)}개</td><td>한 시간 넘게 남은 시험용 폴더</td><td class="num">${size(v.tmp.value.kb)}</td></tr>`);
+    const label = `임시 폴더 ${n(v.tmp.value.count)}개`;
+    const why = "한 시간 넘게 남은 시험용 폴더";
+    rows.push(`<tr><td class="title" title="${label}">${label}</td><td title="${why}">${why}</td><td class="num">${size(v.tmp.value.kb)}</td></tr>`);
     if (!v.trash) notes.push("이 기계에 휴지통 명령(trash)이 없어 임시 폴더는 정리하지 않는다.");
   }
   const t = reapTargets(v);

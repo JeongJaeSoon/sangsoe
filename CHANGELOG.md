@@ -2,6 +2,17 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Upgrading
+
+- **Re-approve.** The Orca plugin now asks for `storage:own` (to remember whether the 리소스 section is open), and its content and the vendored core changed, so the plugin waits for approval again at the next release candidate.
+
+### Changes
+
+- **The panel shows the machine's load and what sangsoe made, and cleans up on the owner's confirmation (234).** A new 리소스 section at the panel's bottom is folded by default and remembers whether you left it open. Opened, refreshed or after a cleanup (never on a timer) it reads CPU per core, free memory and disk and the resource monitor's last high-load notice; sangsoe's worktrees with their size, their live terminals, claude and node processes, and leftover `$TMPDIR/sangsoe-{hook,session,pre,record,mail}-*` folders; and what cleanup would take, each with its reason. 정리… lists the targets; only the second button runs. Worktrees go through REAPER's checks without the two-round wait, and the owner's confirmation counts as finished only for a card with no pull request and no Dispatch, or a registration whose folder is gone (only the registration is removed). Uncommitted or unpushed work, an open pull request, a listener, a compose stack or `protect` still blocks. Temporary folders older than an hour go to the trash; processes are never stopped. `sangsoe reap plan` prints the same reading, and `sangsoe reap run --only <id,...>` and `run --tmp` run the same cleanup.
+- **Tests no longer leave temporary folders behind.** Five test files created `sangsoe-{hook,session,pre,record,mail}-*` folders under `$TMPDIR` and never removed them, about 43 per full run. They now come from one helper that removes them when the test process exits, and a test runs those files under an empty `$TMPDIR` and checks that nothing is left.
+
 ## 0.1.5
 
 Everything since `v0.1.4`: decisions 225, 227, 228 and 229. The pre-releases `v0.1.5-rc.1` and `v0.1.5-rc.2` carried the same changes, except 229 in rc.1, for checking the panel and doctor on an installed build.
