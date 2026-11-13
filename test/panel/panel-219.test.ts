@@ -76,26 +76,92 @@ test("(13) the seven figure cells wrap evenly in a narrow panel", () => {
   assert.match(narrow, /\.figs \{ display: grid; grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
 });
 
-test("(10) back paints from memory: no reading between the click and the paint", async () => {
+// A stand-in for the panel page: just what mount() touches. The click target answers closest() with
+// the button it stands for.
+function fakePage() {
+  const listeners = new Map<string, (ev: unknown) => void>();
+  const el = () => ({
+    id: "",
+    innerHTML: "",
+    textContent: "",
+    after: () => undefined,
+    append: () => undefined,
+    addEventListener: (type: string, fn: (ev: unknown) => void) => listeners.set(type, fn),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    setAttribute: () => undefined,
+    removeAttribute: () => undefined,
+    contains: () => false,
+  });
+  const root = el();
+  const document = {
+    head: el(),
+    body: el(),
+    visibilityState: "visible",
+    activeElement: null,
+    getElementById: (id: string) => (id === "root" ? root : null),
+    createElement: el,
+    addEventListener: () => undefined,
+  };
+  const click = (attr: string, value = "") => {
+    const button = { hasAttribute: (a: string) => a === attr, getAttribute: (a: string) => (a === attr ? value : null) };
+    listeners.get("click")?.({ target: { closest: (sel: string) => (sel === "a" ? null : button) } });
+  };
+  return { root, document, click };
+}
+
+test("(10) back paints from memory: no reading between the click and the paint", async (t) => {
   const x = await groupWorld();
-  const memo = screenMemo();
-  let stack = down([], { group: LEAD });
   const overview = await viewOf(x, {});
+  const group = await viewOf(x, { group: LEAD });
+
+  // The pure memo: the overview outlives a step down, and a screen off the stack is dropped.
+  const memo = screenMemo();
   memo.put({}, overview, []);
-  // Before decision 219 back waited on a reading: measure that reading on this fixture.
-  const input = await x.input();
-  const t0 = performance.now();
-  for (let i = 0; i < 5; i++) panelView(input, {});
-  const read = (performance.now() - t0) / 5;
-  memo.put({ group: LEAD }, await viewOf(x, { group: LEAD }), stack);
-  stack = [];
-  const t1 = performance.now();
-  const shown = memo.get({});
-  assert.ok(shown, "the overview is still in memory");
-  renderStage(shown);
-  const fromMemory = performance.now() - t1;
-  assert.ok(fromMemory < read, `memory ${fromMemory.toFixed(2)} ms vs a core reading ${read.toFixed(2)} ms (Orca reads not counted)`);
-  memo.put({}, overview, stack);
+  memo.put({ group: LEAD }, group, down([], { group: LEAD }));
+  assert.equal(memo.get({}), overview, "the overview is still in memory");
+  memo.put({}, overview, []);
   assert.equal(memo.size, 1, "a screen off the stack is dropped");
-  console.log(`# (10) back: core reading ${read.toFixed(2)} ms + Orca reads, from memory ${fromMemory.toFixed(2)} ms`);
+
+  // The panel itself: each panel.brief reading stays pending until the test answers it, and records
+  // what the page showed when it was asked for.
+  t.mock.timers.enable({ apis: ["setInterval", "setTimeout"] });
+  const page = fakePage();
+  const reads: { input: unknown; shown: string; answer: (v: PanelView) => void }[] = [];
+  const g = globalThis as Record<string, unknown>;
+  g.document = page.document;
+  g.orca = {
+    plugin: {
+      request: (name: string, input: unknown) =>
+        name === "panel.brief"
+          ? new Promise((resolve) => reads.push({ input, shown: page.root.innerHTML, answer: (v) => resolve({ ok: true, value: v }) }))
+          : new Promise(() => undefined),
+    },
+  };
+  const settle = () => new Promise((r) => setImmediate(r));
+  try {
+    await import("../../orca-plugin/panel/index.ts");
+    assert.equal(reads.length, 1);
+    reads[0]?.answer(overview);
+    await settle();
+    const first = page.root.innerHTML;
+    assert.match(first, /현황/);
+
+    // A screen never read waits on its reading: the control for the claim below.
+    page.click("data-nav", JSON.stringify({ group: LEAD }));
+    assert.equal(reads.length, 2);
+    assert.deepEqual(reads[1]?.input, { group: LEAD });
+    assert.equal(page.root.innerHTML, first, "nothing to paint before the group is read");
+    reads[1]?.answer(group);
+    await settle();
+    assert.notEqual(page.root.innerHTML, first);
+
+    page.click("data-back");
+    assert.equal(reads.length, 3, "back still asks for a fresh reading");
+    assert.equal(reads[2]?.shown, first, "the overview was painted before its reading was asked for");
+    assert.equal(page.root.innerHTML, first, "and stays while that reading is out");
+  } finally {
+    delete g.document;
+    delete g.orca;
+  }
 });

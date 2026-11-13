@@ -5,6 +5,7 @@ import { landTool } from "../../claude-plugin/mcp/tools/land.ts";
 import {
   dedupeKey,
   EVENTS,
+  evidenceGaps,
   expandFlow,
   type GhClient,
   type GhResponse,
@@ -208,6 +209,24 @@ test("evidence the reader could never count is refused before it is written", as
     assert.match(r.ok ? "" : r.refusal.reason, want);
   }
   assert.deepEqual(rows("evidence"), []);
+});
+
+test("decision 238: both entrances write a ui row's observed, and land's check counts a row so written", async () => {
+  reset();
+  const rule = { surface: ["orca-panel"], measures: ["first_read_ms", "scrolls", "hscroll"] };
+  const measured = JSON.stringify({ surface: "orca-panel", first_read_ms: 900, scrolls: 0, hscroll: 0 });
+  assert.ok((await evidence({ kind: "ui", observed: measured })).ok);
+  const cli = await viaCli([...evidenceArgv("owner").map((a) => (a === "test" ? "ui" : a)), "--observed", measured], dirs);
+  assert.ok(cli.ok, JSON.stringify(cli));
+  assert.deepEqual(rows("evidence").map((e) => (e.payload as { observed?: string }).observed), [measured, measured]);
+  const s = openStore();
+  try {
+    assert.deepEqual(evidenceGaps(s.events({ type: "evidence" }), { pr: "acme/api#12", head: HEAD, author: world.author, kinds: ["ui"], ui: rule }), []);
+  } finally {
+    s.close();
+  }
+  const blank = await evidence({ kind: "ui", observed: " " });
+  assert.match(blank.ok ? "" : blank.refusal.reason, /observed is empty/);
 });
 
 test("decision 227: `sangsoe stage record` from the PR's author session is refused; another session and the owner's shell record", async () => {

@@ -184,7 +184,8 @@ export const startGuard: Gate = (call: ToolCall, facts: Facts): Verdict | null =
       }
     }
   }
-  if (!kind) return null;
+  // Decision 239: another program's session starts its workers its own way; not knowing still refuses.
+  if (!kind || facts.sangsoe() === false) return null;
   return {
     decision: "deny",
     gate: "start",

@@ -311,7 +311,7 @@
 | MCP tool land | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/land.ts:6`, `core/land/land.ts:200` | |
 | MCP tool handoff_save | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/handoff_save.ts:21` | sqlite 에 쓰지 않는다 |
 | MCP tool review_ask_record | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/review_ask_record.ts:21` | |
-| MCP tool resource_record | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/resource_record.ts:23`, `core/reaper/record.ts:161` | |
+| MCP tool resource_record | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/resource_record.ts:23`, `core/reaper/record.ts:200` | |
 | MCP tool review_record | design-appendix MCP 인터페이스 | changed (결정 162) | `claude-plugin/mcp/tools/review_record.ts:12` | CLI 와 같은 함수의 둘째 입구 |
 | MCP tool evidence_record·stage_record | design-appendix MCP 인터페이스 | changed (결정 171) | `claude-plugin/mcp/tools/evidence_record.ts:11`, `claude-plugin/mcp/tools/stage_record.ts:11` | |
 | tool item_transition·priority_set·notify | design-appendix MCP 인터페이스 | cut (결정 160) | `claude-plugin/mcp/tools/README.md:55` | LATER — 결정 160 의 조건 |
@@ -335,7 +335,7 @@
 | CLI hook·reap run·resource record·models·version | design-appendix 신호 흐름 | implemented | `cli/commands/hook.ts:29`, `cli/commands/reap.ts:27` | 설계 본문에 이름이 없는 셸 입구 |
 | 데이터 소유 항목·결정·깨움·간선 | design.html 데이터 소유 | implemented | `core/contract/events/item_extra_set.ts:4`, `core/decision/open.ts:64` | |
 | 데이터 소유 오너의 말 | design.html 데이터 소유 | implemented | `core/store/store.ts:408` | owner_class 는 결정 162 가 짓지 않았다 |
-| 데이터 소유 PR·증거·등급·자원 | design.html 데이터 소유 | implemented | `core/land/land.ts:200`, `core/reaper/record.ts:161` | |
+| 데이터 소유 PR·증거·등급·자원 | design.html 데이터 소유 | implemented | `core/land/land.ts:200`, `core/reaper/record.ts:200` | |
 | 데이터 소유 외부 티켓 | design.html 데이터 소유 | implemented | `core/start/start.ts:475`, `claude-plugin/mcp/tools/start_unit.ts:57` | 키 칸은 없고, `start_unit` 의 `references` 가 새 worktree 에 `reference add` 로 붙인다(`claude-plugin/skills/start/SKILL.md:44`) |
 | 간선 종류 넷 | design.html 의존 관리 | implemented | `core/graph/ready.ts:113`, `core/graph/ready.ts:137` | blocks·after·stacked_on·deploys_after |
 | GRAPH 유일 입구 | design.html 의존 관리 | implemented | `core/graph/edit.ts:9`, `core/start/item.ts:33` | 만든 뒤 간선은 GRAPH 만. 만들 때의 deps 는 Orca 가 원본이라 task-create 로 간다 |

@@ -19,7 +19,11 @@ export type TierConfig = {
   v3_globs: string[];
   protected_paths: string[];
   owners: string[];
+  /** Decision 238: per repository (lowercase owner/name), where a `ui` row is taken and what it measures. */
+  ui_evidence?: Record<string, UiEvidenceRule>;
 };
+
+export type UiEvidenceRule = { surface: string[]; measures: string[] };
 
 /** What evidence a V3 file asks for: a screen shot and the lead's verdict, or a dev check. */
 type V3Kind = "ui" | "dev";
@@ -37,11 +41,29 @@ export type TierVerdict = {
 
 const LISTS = ["docs_globs", "test_globs", "ui_globs", "v3_globs", "protected_paths"] as const;
 
+const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === "string");
+
+/** `ui_evidence` read, absent (undefined) or malformed (null): each repo needs a non-empty surface and measures list. */
+function uiEvidence(v: unknown): Record<string, UiEvidenceRule> | undefined | null {
+  if (v === undefined) return undefined;
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
+  const out: Record<string, UiEvidenceRule> = {};
+  for (const [repo, rule] of Object.entries(v)) {
+    const r = typeof rule === "object" && rule !== null ? (rule as Record<string, unknown>) : {};
+    if (!strings(r.surface) || !strings(r.measures) || r.surface.length === 0 || r.measures.length === 0) return null;
+    out[repo.toLowerCase()] = { surface: r.surface, measures: r.measures };
+  }
+  return out;
+}
+
 /** The lists `parseTierConfig` needs that `raw` lacks or holds as something other than strings. */
 export function tierConfigGaps(raw: unknown): string[] {
   const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
-  const list = (v: unknown) => Array.isArray(v) && v.every((s) => typeof s === "string");
-  return [...LISTS.filter((k) => !list(r[k])), ...(r.owners === undefined || list(r.owners) ? [] : ["owners"])];
+  return [
+    ...LISTS.filter((k) => !strings(r[k])),
+    ...(r.owners === undefined || strings(r.owners) ? [] : ["owners"]),
+    ...(uiEvidence(r.ui_evidence) === null ? ["ui_evidence"] : []),
+  ];
 }
 
 /** null when the config is not an object or any list is missing or not a list of strings. */
@@ -57,7 +79,9 @@ export function parseTierConfig(raw: unknown): TierConfig | null {
   }
   const owners = r.owners === undefined ? [] : list(r.owners);
   if (!owners) return null;
-  return { ...(out as Omit<TierConfig, "owners">), owners: owners.map((o) => o.toLowerCase()) };
+  const ui = uiEvidence(r.ui_evidence);
+  if (ui === null) return null;
+  return { ...(out as Omit<TierConfig, "owners">), owners: owners.map((o) => o.toLowerCase()), ...(ui ? { ui_evidence: ui } : {}) };
 }
 
 const rank = (t: Tier) => TIERS.indexOf(t);

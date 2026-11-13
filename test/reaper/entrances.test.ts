@@ -17,11 +17,11 @@ import { expectSameViaBothEntrances } from "../boundaries/both-entrances.ts";
 test("resource_record and `sangsoe resource record` refuse the same way and write nothing", async () => {
   const out = await expectSameViaBothEntrances({
     tool: "resource_record",
-    input: { owner: "task_1", kind: "process", ref: "4242" },
-    argv: ["resource", "record", "--owner", "task_1", "--kind", "process", "--ref", "4242"],
+    input: { owner: "task_1", kind: "worktree", ref: "inst-1" },
+    argv: ["resource", "record", "--owner", "task_1", "--kind", "worktree", "--ref", "inst-1"],
   });
   assert.equal(out.ok, false);
-  assert.match(out.ok ? "" : out.refusal.reason, /REAPER sweeps only container, volume, network, image/);
+  assert.match(out.ok ? "" : out.refusal.reason, /container, volume, network, image.*checkout, registration, branch, file, process/);
 });
 
 test("recordResource writes one resource row per id, and the same id twice is one row", () => {

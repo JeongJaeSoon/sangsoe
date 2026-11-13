@@ -1,4 +1,5 @@
 import type { StoredEvent } from "../contract/index.ts";
+import type { UiEvidenceRule } from "./verify-tier.ts";
 
 // Evidence rows bind to a PR by the row's `subject` (lowercase owner/repo#N); the payload carries
 // kind, head_sha, exit_code and not_verified (decision 85, decision 0125).
@@ -10,7 +11,22 @@ const atHead = (row: StoredEvent, head: string) => {
   return sha.length >= 7 && head.startsWith(sha);
 };
 
-function judge(rows: readonly StoredEvent[], kind: string, author: string | null): EvidenceGap | null {
+/** Decision 238: a `ui` row's `observed` is a JSON object naming one of the rule's surfaces and a number for each measure. */
+function uiGap(observed: unknown, rule: UiEvidenceRule): string | null {
+  let o: Record<string, unknown> = {};
+  try {
+    const v = typeof observed === "string" ? (JSON.parse(observed) as unknown) : undefined;
+    if (typeof v === "object" && v !== null && !Array.isArray(v)) o = v as Record<string, unknown>;
+  } catch {
+    // Free text names no surface.
+  }
+  if (typeof o.surface !== "string") return `observed names no surface (one of ${rule.surface.join(", ")})`;
+  if (!rule.surface.includes(o.surface)) return `observed surface ${o.surface} is not one of ${rule.surface.join(", ")}`;
+  const missing = rule.measures.filter((m) => typeof o[m] !== "number" || !Number.isFinite(o[m]));
+  return missing.length > 0 ? `observed lacks ${missing.join(", ")}` : null;
+}
+
+function judge(rows: readonly StoredEvent[], kind: string, author: string | null, ui?: UiEvidenceRule): EvidenceGap | null {
   if (rows.length === 0) return { kind, why: "no row" };
   const counted = rows.filter((r) => r.actor !== null && r.actor.toLowerCase() !== author);
   const latest = counted.at(-1);
@@ -23,13 +39,14 @@ function judge(rows: readonly StoredEvent[], kind: string, author: string | null
   if (code !== 0) return { kind, why: `exit_code ${String(code)}` };
   const nv = latest.payload.not_verified;
   if (!Array.isArray(nv) || nv.length === 0) return { kind, why: "not_verified empty" };
-  return null;
+  const why = kind === "ui" && ui ? uiGap(latest.payload.observed, ui) : null;
+  return why ? { kind, why } : null;
 }
 
 /** The kinds that lack passing evidence at `head`, in the order asked. Empty means the check passes. */
 export function evidenceGaps(
   events: readonly StoredEvent[],
-  a: { pr: string; head: string; author: string | null; kinds: readonly string[] },
+  a: { pr: string; head: string; author: string | null; kinds: readonly string[]; ui?: UiEvidenceRule },
 ): EvidenceGap[] {
   const author = a.author?.toLowerCase() ?? null;
   const rows = events.filter((e) => e.type === "evidence" && e.subject === a.pr && atHead(e, a.head));
@@ -38,6 +55,7 @@ export function evidenceGaps(
       rows.filter((r) => r.payload.kind === kind),
       kind,
       author,
+      a.ui,
     );
     return gap ? [gap] : [];
   });

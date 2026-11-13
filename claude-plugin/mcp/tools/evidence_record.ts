@@ -22,6 +22,10 @@ export function evidenceRecordTool(ports: () => RecordPorts): ToolDef {
         recorder: { type: "string", description: "who ran or checked it; never the PR's author" },
         path: { type: "string", description: "a large output kept as a file" },
         sha256: { type: "string", description: "that file's sha256; given with path" },
+        observed: {
+          type: "string",
+          description: "what the run measured; for a ui row on a repository whose config names a surface and measures, a JSON object with that surface and a number per measure",
+        },
       },
       required: ["pr", "head_sha", "kind", "exit_code", "not_verified", "recorder"],
       additionalProperties: false,
@@ -44,6 +48,7 @@ export function evidenceRecordTool(ports: () => RecordPorts): ToolDef {
           recorder: String(input.recorder),
           ...(typeof input.path === "string" ? { path: input.path } : {}),
           ...(typeof input.sha256 === "string" ? { sha256: input.sha256 } : {}),
+          ...(typeof input.observed === "string" ? { observed: input.observed } : {}),
         },
         p,
       );

@@ -3,7 +3,7 @@ import type { CommandArgs, CommandDef, Outcome } from "../contract.ts";
 
 const REQUIRED = ["pr", "head", "kind", "exit-code", "not-verified", "recorder"] as const;
 const USAGE =
-  "--pr <N> --head <sha> --kind test|run|ui|dev --exit-code <N> --not-verified <what> [--not-verified <what>...] --recorder <name> [--repo <owner/name>] [--path <file> --sha256 <hex>]";
+  "--pr <N> --head <sha> --kind test|run|ui|dev --exit-code <N> --not-verified <what> [--not-verified <what>...] --recorder <name> [--repo <owner/name>] [--path <file> --sha256 <hex>] [--observed <what was measured>]";
 // Word for word the evidence_record tool's fix, so both entrances return one Outcome.
 const EVIDENCE_FIX = "check --pr, --head (the PR's current head), --kind, --not-verified (at least one) and --recorder (not the author)";
 
@@ -21,6 +21,7 @@ export async function evidenceRecord(
   const nv = values["not-verified"];
   const path = opt("path");
   const sha256 = opt("sha256");
+  const observed = opt("observed");
   const repo = opt("repo") ?? SANGSOE_REPO;
   const pr = /^[0-9]+$/.test(text("pr")) ? Number(text("pr")) : Number.NaN;
   const head = text("head");
@@ -38,6 +39,7 @@ export async function evidenceRecord(
       recorder: text("recorder"),
       ...(path !== undefined ? { path } : {}),
       ...(sha256 !== undefined ? { sha256 } : {}),
+      ...(observed !== undefined ? { observed } : {}),
     },
     deps,
   );
@@ -59,6 +61,7 @@ export default {
     repo: { type: "string" },
     path: { type: "string" },
     sha256: { type: "string" },
+    observed: { type: "string" },
   },
   run: ({ values }) => evidenceRecord(values),
 } satisfies CommandDef;
