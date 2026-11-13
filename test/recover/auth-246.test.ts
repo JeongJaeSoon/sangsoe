@@ -8,7 +8,7 @@ import { AUTH_RECOVER_LINE, authRecover, type OrcaAdapter, type OrcaResult, Stor
 import { recover } from "../../cli/commands/recover.ts";
 
 type Sent = { terminal: string; text: string; enter?: boolean; waitSubmit?: number };
-type Fake = Pick<OrcaAdapter, "workerShow" | "worktreePs" | "terminalList" | "terminalSend"> & { sent: Sent[]; calls: string[] };
+type Fake = Pick<OrcaAdapter, "workerShow" | "worktreePs" | "terminalList" | "terminalSend" | "requestShow"> & { sent: Sent[]; calls: string[] };
 
 const worker = (dispatch: string, task: string, terminal: string, over: Partial<WorkerShow> = {}): WorkerShow => ({
   dispatchId: dispatch,
@@ -22,7 +22,15 @@ const worker = (dispatch: string, task: string, terminal: string, over: Partial<
   ...over,
 });
 
-function fakeOrca(o: { workers?: WorkerShow[]; terminals?: Record<string, { handle: string; agentIdentity?: string }[]>; refuse?: boolean } = {}): Fake {
+function fakeOrca(
+  o: {
+    workers?: WorkerShow[];
+    terminals?: Record<string, { handle: string; agentIdentity?: string }[]>;
+    refuse?: boolean;
+    /** The first send's response is lost; request-show then answers this state. */
+    lost?: "absent" | "completed";
+  } = {},
+): Fake {
   const sent: Sent[] = [];
   const calls: string[] = [];
   const ok = <T>(value: T): Promise<OrcaResult<T>> => Promise.resolve({ ok: true, value });
@@ -53,11 +61,18 @@ function fakeOrca(o: { workers?: WorkerShow[]; terminals?: Record<string, { hand
       const id = a.worktree.replace(/^id:repo::\/w\//, "");
       return ok({ rows: o.terminals?.[id] ?? [], truncated: false, omittedHostIds: [], nonLocal: { rows: 0 } } as never);
     },
-    terminalSend: (a) => {
-      calls.push(`terminalSend ${a.terminal}`);
+    terminalSend: (a, w) => {
+      calls.push(`terminalSend ${a.terminal}${w?.retryRequest ? ` retry ${w.retryRequest}` : ""}`);
       if (o.refuse) return Promise.resolve({ ok: false, error: { code: "terminal_gone", message: "no such terminal" } });
+      if (o.lost && !w?.retryRequest && !calls.some((c, i) => i < calls.length - 1 && c.startsWith("terminalSend"))) {
+        return Promise.resolve({ ok: false, error: { code: "response_lost", message: "timed out" }, requestId: "req_1" });
+      }
       sent.push(a);
       return ok({ accepted: true });
+    },
+    requestShow: (a) => {
+      calls.push(`requestShow ${a.request}`);
+      return ok({ state: o.lost } as never);
     },
   };
 }
@@ -212,7 +227,7 @@ test("246: a session without a Dispatch is sent to only when its worktree holds 
   );
 });
 
-test("246: two stops on one terminal get one line", async () => {
+test("246: two stops on one terminal get one line, on this run and the next", async () => {
   const { store, dead } = world();
   dead("ctx_a", "task_a", "auth");
   store.append({ type: "waiting_human", source: "orca-monitor", entity: "task", entity_id: "task_a", payload: { dispatch: "ctx_a", cause: "auth" } });
@@ -223,6 +238,53 @@ test("246: two stops on one terminal get one line", async () => {
     r.rows.map((x) => x.verdict),
     ["sent", "skip"],
   );
+  const again = await authRecover(store, orca, { send: true });
+  assert.equal(orca.sent.length, 1, "the Dispatch's wait is the same stop the line already covered");
+  assert.deepEqual(
+    again.rows.map((x) => x.verdict),
+    ["already", "already"],
+  );
+});
+
+test("246: a session without a Dispatch that stops again keeps its open wait: no second line, the row names the restart", async () => {
+  const { store } = world();
+  store.append({ type: "waiting_human", source: "StopFailure", payload: { session: "sess_one", cause: "auth", worktree: "wt_one" } });
+  const orca = fakeOrca({ terminals: { wt_one: [{ handle: "term_one", agentIdentity: "claude" }] } });
+  await authRecover(store, orca, { send: true });
+  const again = await authRecover(store, orca, { send: true });
+  assert.equal(orca.sent.length, 1);
+  assert.equal(again.rows[0]?.verdict, "already");
+  assert.match(again.rows[0]?.why ?? "", /claude --continue/);
+});
+
+test("246: a lost response is replayed only under Orca's request id; when request-show cannot say, it is recorded and not sent again", async () => {
+  const replayed = world();
+  replayed.dead("ctx_a", "task_a", "auth");
+  const a = fakeOrca({ workers: [worker("ctx_a", "task_a", "term_a")], lost: "completed" });
+  const r1 = await authRecover(replayed.store, a, { send: true });
+  assert.deepEqual(
+    a.calls.filter((c) => !c.startsWith("workerShow")),
+    ["terminalSend term_a", "requestShow req_1", "terminalSend term_a retry req_1"],
+  );
+  assert.equal(r1.rows[0]?.verdict, "sent");
+
+  const unknown = world();
+  unknown.dead("ctx_a", "task_a", "auth");
+  const b = fakeOrca({ workers: [worker("ctx_a", "task_a", "term_a")], lost: "absent" });
+  const r2 = await authRecover(unknown.store, b, { send: true });
+  assert.equal(r2.rows[0]?.verdict, "undetermined");
+  assert.equal(unknown.store.events({ type: "owner_action" }).length, 1, "it may have arrived, so the stop counts as sent");
+  await authRecover(unknown.store, b, { send: true });
+  assert.equal(b.calls.filter((c) => c.startsWith("terminalSend")).length, 1);
+});
+
+test("246: an Orca read failure exits 1", async () => {
+  const { store, dead } = world();
+  dead("ctx_gone", "task_a", "auth");
+  const r = await recover({}, fakeOrca() as unknown as OrcaAdapter, ["auth"], () => store);
+  assert.ok("lines" in r);
+  assert.equal(r.code, 1);
+  assert.match(r.lines.join("\n"), /worker-show 실패/);
 });
 
 test("246: sangsoe recover auth is a dry run unless --send, and prints the sign-in step first", async () => {

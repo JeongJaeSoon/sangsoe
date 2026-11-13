@@ -86,7 +86,7 @@ export function parseEnvelope(r: ExecResult, write: boolean): OrcaResult<unknown
  * only with the same request id. `absent` is not proof nothing happened, so it is not resent.
  */
 export async function recoverWrite<T>(
-  orca: OrcaAdapter,
+  orca: Pick<OrcaAdapter, "requestShow">,
   requestId: string,
   replay: (o: WriteOptions) => Promise<OrcaResult<T>>,
 ): Promise<OrcaResult<T>> {
@@ -329,6 +329,8 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     },
     terminalList: (a) => local("terminalList", "terminals", "executionHostId", "handle", { flags: { worktree: a.worktree } }),
     terminalClose: (a) => run("terminalClose", { flags: { terminal: a.terminal } }),
+    terminalSend: (a, o) =>
+      run("terminalSend", { flags: { terminal: a.terminal, text: a.text, enter: a.enter, "wait-submit": a.waitSubmit } }, o),
     repoShow: async (a) => {
       const r = await shaped<Json>("repoShow", has("repo", isObject), { flags: { repo: a.repo } });
       if (!r.ok) return r;
