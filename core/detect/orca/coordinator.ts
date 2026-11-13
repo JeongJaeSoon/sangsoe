@@ -59,18 +59,14 @@ export function fromMail(inbox: readonly InboxMessage[], run: string): { pane: s
 const tops = (coords: ReadonlyMap<string, CoordinatorRead>) => [...coords].filter(([, k]) => k.pane && k.dispatch === false).map(([run]) => run);
 
 /**
- * Who hears of a stall of `run`: the one other top Run (the orchestrator's), or `run` itself when it
- * is the only top (a stalled orchestrator). Anything else is no one: the row stands alone.
+ * Who hears of a stall of `run`: the one other top Run (the orchestrator's). Anything else is no
+ * one and the row stands alone, the stalled Run itself included: as the only top it may be a lead
+ * whose orchestrator left the page.
  */
 export function recipientOf(run: string, coords: ReadonlyMap<string, CoordinatorRead>): string | undefined {
   if ([...coords.values()].some((k) => k.unresolved || (k.pane && k.dispatch === undefined))) return undefined;
-  const all = tops(coords);
-  const others = all.filter((r) => r !== run);
-  if (others.length === 1) return others[0];
-  // A Run with no live terminal may be an orchestrator that resumed elsewhere (run-show keeps the
-  // dead handle), so the stalled Run tells itself only when every other named Run was placed.
-  const placed = [...coords].every(([r, k]) => r === run || k.pane);
-  return others.length === 0 && all.includes(run) && placed ? run : undefined;
+  const others = tops(coords).filter((r) => r !== run);
+  return others.length === 1 ? others[0] : undefined;
 }
 
 /**
