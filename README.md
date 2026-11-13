@@ -63,14 +63,14 @@ Every `brew upgrade sangsoe` needs a new review record and a new approval. Each 
    FAIL     orca plugin: local.sangsoe waits for approval — fix: sangsoe plugin approve
    ```
 
-   and `warn orca-plugin-version` may appear with the same fix. Every other row should be `ok`, `orca-plugin-content` included: the new folder equals its build commit and reviewed head before anything is enabled.
+   and `warn orca-plugin-version` may appear with the same fix. Every other row should be `ok`, `orca-plugin-content` included: the new folder equals its build commit and reviewed head before anything is enabled. That row downloads both trees with `gh`; when GitHub authentication fails it is a one-line `notice` that the content could not be compared, which is not a sangsoe defect: run `gh auth status`, sign in to GitHub again, then `sangsoe doctor`.
 3. Whoever reviewed the new build's pull request records it on this machine: `sangsoe review record --pr <n> --head <full sha> --act-on 0 --reviewer <name>`. The previous version's record does not carry over: it names another pull request and head.
 4. `sangsoe plugin approve --dry-run`, then `sangsoe plugin approve`. It prints `recorded plugin_approved (seq N)` and `enabled`.
 5. `sangsoe doctor` exits 0 with every row `ok` or `notice`, including `orca plugin: local.sangsoe <new version>, running`. A `notice` row does not change the exit code; the usual ones are those step 5 of Install names. When a release needs a new rule, `permissions` is a `warn` naming `sangsoe install --permissions`, which adds only the missing rules.
 
 A Claude Code session that was running during `brew upgrade sangsoe` keeps working: a tool call made while the plugin folder is missing goes ahead with a `PreToolUse` hook error instead of being held. Open a new session to pick up the new plugin. A session started under `0.1.1` or older still has the hook that holds such a call; restart it.
 
-Restart every session that calls `start_unit` after an upgrade: quit it and start it again. `/reload-plugins` does not restart a running MCP server, and the server keeps the code it loaded at start, so the old model table and start rules stay in force. From the release after `0.1.3`, `start_unit` refuses on such a server with `server_stale` and names both versions. A server started under an older release has no such check.
+Restart every session that calls `start_unit` after an upgrade: quit it and run `claude --continue` in the same directory, which starts a new MCP server and keeps the conversation. `/reload-plugins` keeps a plugin MCP server whose configuration is unchanged, and an upgrade at the same install path changes none of it, so the server keeps the code it loaded at start and the old model table and start rules stay in force. From the release after `0.1.3`, `start_unit` refuses on such a server with `server_stale`, names both versions and names this recovery. A server started under an older release has no such check.
 
 Upgrading from `0.1.0` adds the `permissions` row and changes others; `CHANGELOG.md` lists them, and what upgrading from an older release adds.
 
