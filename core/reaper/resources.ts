@@ -6,6 +6,7 @@ import type { Exec, OrcaAdapter, WorktreeRow } from "../contract/orca.ts";
 import { DEFAULT_MONITOR_CONFIG } from "../detect/monitor.ts";
 import { withDiagnostics } from "../detect/resource/judge.ts";
 import type { EventFilter } from "../store/store.ts";
+import { ownerHolds } from "./record.ts";
 import type { Blocked, Judged, ReapOptions, ReapReport } from "./round.ts";
 
 // Decision 234: the panel's 리소스 section. Every number is read when the owner opens or refreshes the
@@ -33,6 +34,8 @@ export type ResourceView = {
     terminals: Reading<{ count: number }>;
     processes: Reading<{ claude: Usage; node: Usage }>;
     tmp: Reading<Usage>;
+    /** Decision 240: owner-kind rows still held, oldest first; listed only, never cleared by sangsoe. */
+    recorded: { kind: string; ref: string; owner: string; since: string }[];
   };
   /** Cards REAPER would list (a dry run that writes nothing), each with why it is one. */
   worktrees: Reading<{ rows: (Judged & { kb: number | null })[]; markOnly: boolean; unseen: string[] }>;
@@ -232,7 +235,11 @@ async function readMade(d: ResourceDeps, now: number): Promise<ResourceView["mad
     };
   };
   const [c, processes, tmp] = await Promise.all([cards(), processUsage(d.exec), tmpUsage(d, now, 0)]);
-  return { ...c, processes, tmp };
+  const recorded = [...ownerHolds(d.events({ type: "resource" })).values()]
+    .filter((h) => h.held)
+    .map(({ kind, ref, owner, since }) => ({ kind, ref, owner, since }))
+    .sort((a, b) => a.since.localeCompare(b.since));
+  return { ...c, processes, tmp, recorded };
 }
 
 async function readCandidates(d: ResourceDeps, now: number): Promise<Pick<ResourceView, "worktrees" | "tmp">> {

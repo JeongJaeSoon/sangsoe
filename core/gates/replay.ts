@@ -5,7 +5,15 @@ import type { Facts, OpenPr, Role } from "./types.ts";
 // PreToolUse input plus `expect` (deny|pass), the `gate` expected to deny, and the facts the line assumes.
 
 /** `blockers`: done_blockers by Task; a Task not named has none, and null is unread. */
-type LineFacts = { role?: Role; load?: "ok" | "warn" | "danger"; openPrs?: OpenPr[]; scripts?: Record<string, string>; blockers?: Record<string, string[] | null> };
+/** `sangsoe`: whether the session is sangsoe's (decision 239); absent is unread. */
+type LineFacts = {
+  role?: Role;
+  load?: "ok" | "warn" | "danger";
+  openPrs?: OpenPr[];
+  scripts?: Record<string, string>;
+  blockers?: Record<string, string[] | null>;
+  sangsoe?: boolean;
+};
 type Line = Omit<HookInput, "cwd"> & { expect: "deny" | "pass"; gate?: string; note?: string; facts?: LineFacts };
 
 export type ReplayRow = { n: number; note: string; expect: "deny" | "pass"; got: string; gates: string[]; ok: boolean };
@@ -26,6 +34,7 @@ function factsOf(line: Line): Facts {
     ownOpenPrs: () => f.openPrs,
     readScript: (p) => f.scripts?.[p],
     doneBlockers: (task) => blockersOf(f, task),
+    sangsoe: () => f.sangsoe,
   };
 }
 

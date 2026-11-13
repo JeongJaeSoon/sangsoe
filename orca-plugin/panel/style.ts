@@ -356,6 +356,8 @@ button.link:disabled { color: var(--muted); cursor: default; }
 .tbl.res td { height: 32px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tbl.res th:first-child, .tbl.res td:first-child { width: auto; }
 .tbl.res .num { text-align: right; white-space: nowrap; width: 8em; }
+.tbl.owned th.k, .tbl.owned td.k { width: 6em; }
+.tbl.owned th.o, .tbl.owned td.o { width: 9em; }
 #res .empty { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--text-sm); }
 .res-acts { margin-top: var(--s3); }
 .confirm { margin-top: var(--s3); padding: var(--s3); border: 1px solid var(--rule-2); border-radius: var(--r3); font-size: var(--text-sm); }
