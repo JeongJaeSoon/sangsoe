@@ -1,6 +1,6 @@
 // sqlite schema (appendix #schema). `event` is the only record of truth; `owner_text` keeps the masked
 // owner text apart so it can be emptied; counter/migration are bookkeeping; pr_ref/gh_budget/gh_seen
-// are the three caches the appendix's exception table allows. Nothing here copies an Orca fact.
+// are the three caches the appendix's exception table allows; load_sample keeps 24h (decision 241). Nothing copies an Orca fact.
 
 export const SCHEMA_V = 3;
 

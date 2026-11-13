@@ -33,7 +33,7 @@ export async function resourceRound(d: MonitorDeps, signal: AbortSignal): Promis
     },
     d.config,
   );
-  // The store is there only on a writing run; a dry or aborted round keeps no sample (decision 241).
+  // The store is there only on a writing run; a dry round, or one aborted before this point, keeps no sample (decision 241).
   if (d.core && !signal.aborted) {
     try {
       d.core.store.recordLoadSample(withDiagnostics(sample, diagnostics));
