@@ -8,6 +8,9 @@ const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 /** A refused start leaves its Task open; it stops being the owner's once Orca shows the Task moved on. */
 const STILL_REFUSED = new Set(["pending", "ready"]);
 
+/** Decision 237: a running session keeps the token it loaded, so after the sign-in each stopped one restarts. */
+export const AUTH_RECOVERY = "재로그인: 어느 세션에서든 /login 한 번 → 멈춘 세션마다 claude --continue (/goal 이 지워졌으면 다시)";
+
 /**
  * The owner's to-do (decisions 12, 89, 91): open decisions, the owner's 🟢 items, waiting_human rows
  * the owning lead could not release, and undelivered answers. Every row leaves only on an observed
@@ -46,7 +49,7 @@ export function ownerTodoFrom(input: ViewInput, facts: readonly OwnerItemFacts[]
     if (e.type !== "waiting_human" || !stale.has(String(e.seq)) || released.has(String(e.seq))) continue;
     const f = e.entity === "task" && e.entity_id ? byTask.get(e.entity_id) : undefined;
     if (f && (f.state === "done" || f.state === "cancelled")) continue;
-    const why = str(e.payload.excerpt) ?? str(e.payload.tool);
+    const why = e.payload.cause === "auth" ? AUTH_RECOVERY : (str(e.payload.excerpt) ?? str(e.payload.tool));
     rows.push({ kind: "waiting_human", ref: f ? f.alias : `w${e.seq}`, whyOwner: why, since: e.ts });
   }
   const tasks = new Map(input.orca.tasks.map((t) => [t.id, t]));

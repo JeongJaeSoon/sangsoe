@@ -228,7 +228,8 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   const config = deps.config();
   const tier = verifyTier(diff.kind === "ok" ? diff.data : null, labels.kind === "ok" ? labels.data : null, config.tier, tierUnreadable(config));
   const kinds = requiredEvidence(tier);
-  const gaps = evidenceGaps(events, { pr, head, author: pull.user.login, kinds });
+  const ui = config.tier?.ui_evidence?.[repo.toLowerCase()];
+  const gaps = evidenceGaps(events, { pr, head, author: pull.user.login, kinds, ...(ui ? { ui } : {}) });
   const gap = gaps[0];
   if (gap) {
     throw new Refused(

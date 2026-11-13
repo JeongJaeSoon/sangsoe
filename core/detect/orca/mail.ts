@@ -35,6 +35,23 @@ const key = (type: Parameters<typeof eventDef>[0], target: string, ...cond: stri
 // last output). Orca sends that stop as `errored`, but the session resumes by itself.
 const USAGE_LIMIT = /hit your [\w -]*limit|Usage limit reached/i;
 
+// Claude Code's lost-login messages, which open a turn line after its ⏺/⎿ mark (decision 237). Only
+// the opening: a long 401 body wraps at the pane's width, so its /login hint is on a later line.
+const AUTH =
+  /^(?:Please run \/login\b|(?:Not logged in|Login expired|OAuth token revoked|Invalid API key) · Please run \/login|API Error: 40[13]\b|Goal cleared after an unrecoverable error \(authentication failed\))/;
+const MARK = /^\s*[⏺⎿]\s*/;
+
+/**
+ * Whether the stop mail's last turn line (the last ⏺/⎿ line above the input box) is a lost login.
+ * Only the last one: an older 403 still on screen above a later turn is not this stop's cause.
+ */
+export function lostLogin(body: string | undefined): boolean {
+  const lines = (body ?? "").split("\n");
+  const box = lines.findLastIndex((l) => l.trim().startsWith("❯"));
+  const last = (box < 0 ? lines : lines.slice(0, box)).filter((l) => MARK.test(l)).at(-1);
+  return last !== undefined && AUTH.test(last.replace(MARK, ""));
+}
+
 // Sessions write the refusal file under <TMPDIR>/orch-refusal/ (or /tmp when TMPDIR is unset); a
 // body's path is trusted only inside those roots. Bodies end the path with a sentence's period.
 const REFUSAL_PATH = /(\/[^\s`'"()<>]*\/orch-refusal\/[^\s`'"()<>]+)/;
@@ -131,7 +148,8 @@ export function judgeMail(r: MailReads, planned: Planned[], unseen: string[]): v
       if (stop === "errored" && USAGE_LIMIT.test(m.body ?? "")) {
         plan({ type: "rate_limited", source: SOURCE, payload: { kind: "usage_limit" }, ...on, dedupe_key: key("rate_limited", dispatch, m.id) });
       } else if (stop === "errored") {
-        plan({ type: "worker_dead", source: SOURCE, payload: { reason: "stop_failure" }, ...on, dedupe_key: key("worker_dead", dispatch, m.id) });
+        const payload = { reason: "stop_failure", ...(lostLogin(m.body) ? { cause: "auth" as const } : {}) };
+        plan({ type: "worker_dead", source: SOURCE, payload, ...on, dedupe_key: key("worker_dead", dispatch, m.id) });
       } else if (stop === "needs-input") {
         if (!r.ps) continue;
         // Written only while ps still shows the wait, so a prompt answered before this round is no row.
@@ -139,7 +157,7 @@ export function judgeMail(r: MailReads, planned: Planned[], unseen: string[]): v
         plan({
           type: "waiting_human",
           source: SOURCE,
-          payload: { dispatch },
+          payload: { dispatch, ...(lostLogin(m.body) ? { cause: "auth" } : {}) },
           entity: "task",
           entity_id: task,
           dedupe_key: key("waiting_human", dispatch, m.id),

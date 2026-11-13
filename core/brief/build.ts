@@ -39,6 +39,7 @@ const ALARM_NEXT: Readonly<Record<string, string>> = {
   ci_failed: "CI 수정",
   worker_stuck: "멈춤 확인",
   worker_dead: "재시작",
+  "worker_dead:auth": "재로그인",
   land_failed: "land 확인",
   loop_detected: "반복 확인",
   decision_untracked: "결정 연결",
@@ -95,6 +96,8 @@ function next(f: ItemFacts): string {
   else if (f.state === "ready") base = "시작";
   else if (f.state === "planned") base = "선행 대기";
   else if (f.idle) base = "워커가 다음 지시를 기다림";
+  // A session stopped on a lost login does nothing else until someone signs in (decision 237).
+  if (f.alarms.includes("worker_dead:auth")) return `🚨 ${ALARM_NEXT["worker_dead:auth"]}`;
   const alarm = f.alarms[0];
   if (!alarm) return base;
   return `🚨 ${base === "—" ? (ALARM_NEXT[alarm] ?? alarm) : base}`;
@@ -146,6 +149,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
   let left = 0;
   let blocked = 0;
   let evidenceShort = 0;
+  let reviewOnly = 0;
   const groupRows = new Map<string, ItemFacts[]>();
   const held: ItemFacts[] = [];
   const closed: ItemFacts[] = [];
@@ -156,6 +160,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
         done++;
         closed.push(f);
         if (f.evidenceShort) evidenceShort++;
+        if (f.reviewOnly) reviewOnly++;
       }
       continue;
     }
@@ -242,6 +247,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     onHold: holdRows.length > 0 ? table("보류", COLS.onHold, holdRows) : null,
     doneDays,
     evidenceShort,
+    reviewOnly,
     done: doneTable(closed, foldFacts(input.events), doneDays),
     ...(today ? { advisorToday: today } : {}),
     ...(restart.length > 0 ? { restartDue: restart } : {}),
@@ -625,6 +631,7 @@ export function buildItem(input: BriefInput, alias: string, opts: BuildOptions =
     f.alarms.length > 0 ? "🚨" : "",
     f.unclear ? "⚠️" : "",
     f.evidenceShort ? "🔍" : "",
+    f.reviewOnly ? "👀" : "",
   ].join("");
   const model = modelLine(input, f.task);
   return {

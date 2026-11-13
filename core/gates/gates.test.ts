@@ -17,7 +17,7 @@ const lines = FIXTURE.split("\n")
         agent_type?: string;
         tool_name: string;
         tool_input: Record<string, unknown>;
-        facts?: { role?: Role; load?: "warn" | "danger"; openPrs?: OpenPr[]; scripts?: Record<string, string>; blockers?: Record<string, string[] | null> };
+        facts?: { role?: Role; load?: "warn" | "danger"; openPrs?: OpenPr[]; scripts?: Record<string, string>; blockers?: Record<string, string[] | null>; sangsoe?: boolean };
       },
   );
 
@@ -28,6 +28,7 @@ const denyFacts = (l: (typeof lines)[number]): Facts => ({
   ownOpenPrs: () => l.facts?.openPrs,
   readScript: (p) => l.facts?.scripts?.[p],
   doneBlockers: (task) => blockersOf(l.facts ?? {}, task),
+  sangsoe: () => l.facts?.sangsoe,
 });
 
 const calm: Facts = {
@@ -36,6 +37,7 @@ const calm: Facts = {
   ownOpenPrs: () => undefined,
   readScript: () => undefined,
   doneBlockers: () => [],
+  sangsoe: () => undefined,
 };
 
 test("fixture of real commands: no false positive, no false negative, the expected gate denies", (t) => {
@@ -136,6 +138,7 @@ test("load, open PRs and scripts are read only when a gate needs them", () => {
     ownOpenPrs: () => read(undefined),
     readScript: () => read(undefined),
     doneBlockers: () => read(undefined),
+    sangsoe: () => read(undefined),
   };
   for (const command of ["ls -la", "git status", "npm test", "sed -n '1,5p' a.ts | head"]) {
     evaluate({ tool: "Bash", input: { command }, cwd: REPLAY_CWD, subagent: false }, counting);

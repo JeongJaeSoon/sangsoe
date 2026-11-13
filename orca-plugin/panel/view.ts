@@ -18,6 +18,8 @@ export type Overview = {
   onHold: Table | null;
   doneDays: number;
   evidenceShort: number;
+  /** Absent from a core older than decision 236. */
+  reviewOnly?: number;
   /** Absent from a core older than decision 199. */
   done?: Table;
 };
@@ -358,7 +360,7 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
     m.groups === 0 ? `<p class="hint0" data-tab="prog">${esc(NO_GROUP)}</p>` : "",
     m.onHold ? section("hold", m.onHold, m.onHold.rows.map((r) => rowHtml(m.onHold as Table, r, { nav: { item: r.id } })), false, "", "prog") : "",
     m.done ? doneFold(m.done) : "",
-    `<p class="foot">완료는 최근 ${m.doneDays}일 · 🔍 근거 부족 ${m.evidenceShort} · 상세: <code>sangsoe brief &lt;묶음&gt;</code></p>`,
+    `<p class="foot">완료는 최근 ${m.doneDays}일 · 🔍 근거 부족 ${m.evidenceShort}${m.reviewOnly === undefined ? "" : ` · 👀 리뷰만 있음 ${m.reviewOnly}`} · 상세: <code>sangsoe brief &lt;묶음&gt;</code></p>`,
   ].join("");
 }
 

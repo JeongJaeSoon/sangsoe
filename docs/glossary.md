@@ -420,7 +420,7 @@
 | hook | Claude Code hook 의 입구. PreToolUse 한 번의 게이트 판정이나 기록 hook 하나를 표준 입력으로 받는다. `--replay` 는 실제 명령 모음으로 게이트를 잰다 | `sangsoe hook` | — |
 | monitor run | monitor 라운드 한 번. Orca plugin worker 의 타이머와 같은 함수다. `--dry-run` 은 쓸 event 와 Orca 쓰기를 보이기만 한다 | `sangsoe monitor run` | — |
 | reap run | REAPER 라운드 한 번(표시 → 정리). `--dry-run`·`--mark-only` 는 아무것도 지우지 않는다 | `sangsoe reap run` | — |
-| resource record | 막 만든 Docker id(또는 compose 프로젝트의 id 전부)를 소유자와 함께 `resource` 로 남긴다. MCP `resource_record` 와 같은 함수다 | `sangsoe resource record` | — |
+| resource record | 막 만든 Docker id(또는 compose 프로젝트의 id 전부)를 소유자와 함께 `resource` 로 남긴다. checkout·등록·브랜치·파일·프로세스도 받지만 이것은 오너 몫이라 패널에 보이기만 하고 치우지 않는다(결정 240). MCP `resource_record` 와 같은 함수다 | `sangsoe resource record` | — |
 | review record | 독립 리뷰 판정 하나를 `review_verdict` 로 남긴다(결정 111). 리뷰어가 작성자이면 거부한다 | `sangsoe review record` | — |
 | evidence record | 검증 실행 한 건을 PR 의 현재 head 에 `evidence` 로 남긴다(결정 171). 기록자가 작성자이면 거부한다. MCP `evidence_record` 와 같은 함수다 | `sangsoe evidence record` | — |
 | stage record | 머지된 PR 이 닿은 단계를 `stage_recorded` 로 남긴다(결정 171). 머지 전이거나 기록자가 작성자이면 거부한다. MCP `stage_record` 와 같은 함수다 | `sangsoe stage record` | — |

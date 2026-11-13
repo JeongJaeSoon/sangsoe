@@ -1,7 +1,7 @@
 import { lazyStore, nodeExec, type RecordInput, resourceRecord } from "../../core/index.ts";
 import type { CommandArgs, CommandDef, Outcome } from "../contract.ts";
 
-const USAGE = "--owner <task or worktree id> (--kind <container|volume|network|image> --ref <id> | --compose <project>) [--action created|released]";
+const USAGE = "--owner <task or worktree id> (--kind <container|volume|network|image|checkout|registration|branch|file|process> --ref <id> | --compose <project>) [--action created|released]";
 
 export async function resourceRecordCommand(values: CommandArgs["values"]): Promise<Outcome> {
   const input: RecordInput = { owner: "" };
@@ -19,7 +19,7 @@ export async function resourceRecordCommand(values: CommandArgs["values"]): Prom
 
 export default {
   name: "resource record",
-  summary: "record a Docker id (or a compose project's ids) you just made, so REAPER may clear it once the work is done",
+  summary: "record a Docker id (or a compose project's ids) you just made, so REAPER may clear it once the work is done; or a checkout, registration, branch, file or process only you clear",
   usage: USAGE,
   required: ["owner"],
   options: {

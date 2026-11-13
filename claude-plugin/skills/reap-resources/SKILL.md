@@ -9,7 +9,7 @@ description: "Use when a sangsoe session must clean up what it started or deal w
 
 ## 당사자의 몫
 
-- **띄울 때 남긴다.** compose stack, dev server, 오래 도는 프로세스를 띄우면 `resource_record` 로 종류·id·이 Task 를 남긴다. REAPER 가 치우는 근거는 만든 쪽이 남긴 기록뿐이다.
+- **띄울 때 남긴다.** compose stack, dev server, 오래 도는 프로세스를 띄우면 `resource_record` 로 종류·id·이 Task 를 남긴다. REAPER 가 치우는 근거는 만든 쪽이 남긴 기록뿐이고, 치우는 것은 Docker id 뿐이다. checkout·등록·브랜치·파일·프로세스는 기록해도 패널의 "기록됨·오너 손" 에 보일 뿐 누구도 대신 치우지 않는다(결정 240).
 - **확인한 턴에 내린다.** 검증·프리뷰용 stack 은 확인이 끝난 그 턴에 `docker compose -p <project> down` 으로 내린다. `-v` 는 붙이지 않는다.
 - **내가 띄운 것만.** 프로세스는 이 세션이 띄우고 PID 를 기록한 것만 그 PID 로 끝낸다. 이름·패턴으로 고르는 kill, 라벨로 고르는 Docker 정리는 쓰지 않는다.
 - **남겨야 하면** 이유와 기한을 `resource_record` 에 적는다.
