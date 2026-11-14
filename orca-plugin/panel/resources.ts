@@ -9,12 +9,22 @@ type Reply<T> = { ok: true; value: T } | { ok: false; refusal: Refusal };
 export type ResRow = { ref: string; name: string; path: string; gone: boolean; state: string; why: string; kb: number | null };
 export type BandState = "ok" | "warn" | "danger" | "unknown";
 export type Band = { from: string; to: string; spans: { from: string; to: string; state: BandState }[] };
+/** Decision 250: the core's last 24 hours of 5-minute samples; [warn, danger] per metric, free amounts as the core keeps them. */
+export type LoadHistory = {
+  from: string;
+  to: string;
+  stepMs: number;
+  thresholds: { loadPerCpu: readonly [number, number]; memFreePct: readonly [number, number]; diskFreeGb: readonly [number, number] };
+  points: { at: number; loadPerCpu?: number; memUsedPct?: number; diskFreeGb?: number }[];
+};
 export type ResView = {
   at: string;
   load: Reading<{ level: "ok" | "warn" | "danger"; reasons: string[]; loadPerCpu?: number; memFreePct?: number; diskFreeGb?: number }>;
   episode: { state: "high" | "ok" | "none"; since?: string; reason?: string };
   /** Absent from a core older than decision 235. */
   band?: Band | null;
+  /** Absent from a core older than decision 250. */
+  history?: Reading<LoadHistory> | null;
   made: {
     worktrees: Reading<Usage>;
     terminals: Reading<{ count: number }>;
@@ -32,7 +42,7 @@ export type Reaped = { reaped: string[]; blocked: { kind: string; ref: string; r
 /** Decision 235: the section comes in three parts, each painted as it arrives. */
 export type PartName = "load" | "made" | "candidates";
 export const PARTS: readonly PartName[] = ["load", "made", "candidates"];
-type LoadPart = Pick<ResView, "at" | "load" | "episode" | "band"> & { part: "load" };
+type LoadPart = Pick<ResView, "at" | "load" | "episode" | "band" | "history"> & { part: "load" };
 type MadePart = Pick<ResView, "at" | "made"> & { part: "made" };
 type CandPart = Pick<ResView, "at" | "worktrees" | "tmp" | "trash"> & { part: "candidates" };
 export type Got = { load?: Reply<LoadPart>; made?: Reply<MadePart>; candidates?: Reply<CandPart> };
@@ -57,6 +67,7 @@ function assemble(got: Required<Got>): ResState {
       load: l.ok ? l.value.load : no(l),
       episode: l.ok ? l.value.episode : { state: "none" },
       band: l.ok ? (l.value.band ?? null) : null,
+      history: l.ok ? (l.value.history ?? null) : null,
       made: m.ok ? m.value.made : { worktrees: no(m), terminals: no(m), processes: no(m), tmp: no(m) },
       worktrees: c.ok ? c.value.worktrees : no(c),
       tmp: c.ok ? c.value.tmp : no(c),
@@ -163,9 +174,81 @@ function bandBlock(b: Band, hours: 6 | 24): string {
   );
 }
 
+type Point = LoadHistory["points"][number];
+type Series = {
+  key: "loadPerCpu" | "memUsedPct" | "diskFreeGb";
+  label: string;
+  /** The value as read: a number with its unit, `per` after the last one only. */
+  fmt: (v: number) => string;
+  per: string;
+  /** [warn, danger] on this series' own axis, and how the words name them. */
+  lines: (t: LoadHistory["thresholds"]) => readonly [number, number];
+  line: (v: number) => string;
+  top: (peak: number, lines: readonly [number, number]) => number;
+};
+
+/** Decision 250: the rows of the card; a fourth series is one more entry once the core samples it. */
+const SERIES: readonly Series[] = [
+  { key: "loadPerCpu", label: "CPU 부하", fmt: (v) => v.toFixed(2), per: "/코어", lines: (t) => t.loadPerCpu, line: String, top: (p, [, d]) => Math.max(d * 1.25, p) },
+  { key: "memUsedPct", label: "사용 메모리", fmt: (v) => `${Math.round(v)}%`, per: "", lines: (t) => [100 - t.memFreePct[0], 100 - t.memFreePct[1]], line: (v) => `${v}%`, top: () => 100 },
+  { key: "diskFreeGb", label: "디스크 여유", fmt: (v) => `${n(Math.round(v))} GB`, per: "", lines: (t) => t.diskFreeGb, line: (v) => `${v} GB`, top: (p, [w]) => Math.max(p, w * 2) },
+];
+
+/** More than this many periods without a sample is a stretch nobody watched: the line breaks there. */
+const GAP_STEPS = 3;
+
+function sparkRow(s: Series, h: LoadHistory): string {
+  const pts = h.points.flatMap((p: Point) => (p[s.key] === undefined ? [] : [{ at: p.at, v: p[s.key] as number }]));
+  const last = pts.at(-1);
+  if (!last) return `<div class="gauge sp-row"><span class="g-l">${esc(s.label)}</span><span class="sp-none">기록 없음</span></div>`;
+  const vs = pts.map((p) => p.v);
+  const lo = Math.min(...vs);
+  const hi = Math.max(...vs);
+  const lines = s.lines(h.thresholds);
+  const top = s.top(hi, lines);
+  const from = Date.parse(h.from);
+  const span = Date.parse(h.to) - from;
+  const y = (v: number) => (23 - (Math.max(0, Math.min(top, v)) / top) * 22).toFixed(1);
+  const x = (t: number) => ((Math.max(0, t - from) / span) * 1000).toFixed(1);
+  let d = "";
+  let prev: number | null = null;
+  for (const p of pts) {
+    d += `${prev === null || p.at - prev > GAP_STEPS * h.stepMs ? "M" : "L"}${x(p.at)} ${y(p.v)}`;
+    prev = p.at;
+  }
+  // A lone sample between two gaps gets a short stroke of its own so it shows.
+  d = d.replace(/M([\d.]+ [\d.]+)(?=M|$)/g, "M$1h3");
+  const said = `${s.label} 최근 24시간: 마지막 ${s.fmt(last.v)}${s.per}, 최저 ${s.fmt(lo)}, 최고 ${s.fmt(hi)}, 표본 ${pts.length}개, 경고 ${s.line(lines[0])}, 위험 ${s.line(lines[1])}`;
+  // The warn line only: at 24px, memory's warn and danger lines (80% and 90%) sit 2px apart and read as one.
+  const warn = y(lines[0]);
+  return (
+    `<div class="gauge sp-row"><span class="g-l">${esc(s.label)}</span>` +
+    `<svg class="sp" viewBox="0 0 1000 24" preserveAspectRatio="none" role="img" aria-label="${esc(said)}"><line class="sp-th" x1="0" x2="1000" y1="${warn}" y2="${warn}"/><path class="sp-line" d="${d}"/></svg>` +
+    `<span class="g-v sp-min">${esc(`${s.fmt(lo)}–${s.fmt(hi)}`.replace(/(%| GB)–/, "–"))}</span></div>`
+  );
+}
+
+/**
+ * Decision 250: the last 24 hours of the resource monitor's 5-minute samples, one sparkline per
+ * series on the full 24-hour axis. The core sends them in the load part; the panel keeps no copy.
+ */
+export function historyCard(h: Reading<LoadHistory> | null | undefined): string {
+  if (!h) return "";
+  if (!h.ok) return `<p class="ep">부하 기록을 ${unread(h.why)}</p>`;
+  const v = h.value;
+  const first = v.points[0];
+  if (!first) return `<p class="empty sp-empty">부하 기록 없음. 감시가 5분마다 하나씩 남긴다.</p>`;
+  const partial = first.at - Date.parse(v.from) > GAP_STEPS * v.stepMs;
+  const count = `${partial ? `${hhmm(new Date(first.at).toISOString())}부터 ` : ""}표본 ${n(v.points.length)}개`;
+  return (
+    `<div class="spark" role="group" aria-label="최근 24시간 부하">${SERIES.map((s) => sparkRow(s, v)).join("")}` +
+    `<div class="band-ax sp-ax"><span>24시간 전</span><span>${count}</span><span>지금</span></div></div>`
+  );
+}
+
 const pending = (title: string, what: string) => `<h3>${title}</h3><p class="pending" role="status">${what}</p>`;
 
-function loadBlock(v: Pick<ResView, "load" | "episode" | "band">, hours: 6 | 24): string {
+function loadBlock(v: Pick<ResView, "load" | "episode" | "band" | "history">, hours: 6 | 24): string {
   const ep =
     v.episode.state === "high"
       ? `<p class="ep t-bad">${esc(hhmm(v.episode.since ?? ""))}부터 부하 높음${v.episode.reason ? `: ${esc(v.episode.reason)}` : ""}</p>`
@@ -177,14 +260,15 @@ function loadBlock(v: Pick<ResView, "load" | "episode" | "band">, hours: 6 | 24)
     ? `<span class="rng" role="group" aria-label="기간">${([6, 24] as const).map((h) => `<button type="button" data-res="h${h}" aria-pressed="${h === hours}">${h}시간</button>`).join("")}</span>`
     : "";
   const head = (badge: string) => `<div class="load-h"><h3>PC 부하${badge}</h3>${pick}</div>`;
-  if (!v.load.ok) return `${head("")}<p class="ep">${unread(v.load.why)}</p>${ep}${band}`;
+  const card = historyCard(v.history);
+  if (!v.load.ok) return `${head("")}<p class="ep">${unread(v.load.why)}</p>${card}${ep}${band}`;
   const l = v.load.value;
   const rows = [
     l.loadPerCpu !== undefined ? gauge("CPU", `${l.loadPerCpu.toFixed(2)} / 코어`, (l.loadPerCpu / 2) * 100, toneOf(l.reasons, "load/CPU")) : gauge("CPU", "모름", 0, ""),
     l.memFreePct !== undefined ? gauge("메모리 여유", `${Math.round(l.memFreePct)}%`, l.memFreePct, toneOf(l.reasons, "메모리")) : gauge("메모리 여유", "모름", 0, ""),
     l.diskFreeGb !== undefined ? `<div class="gauge"><span class="g-l">디스크 여유</span><span class="g-v wide ${toneOf(l.reasons, "디스크")}">${n(Math.round(l.diskFreeGb))} GB</span></div>` : "",
   ];
-  return `${head(` <span class="badge ${l.level === "ok" ? "" : l.level === "warn" ? "t-run" : "t-bad"}">${LEVEL[l.level]}</span>`)}${rows.join("")}${ep}${band}`;
+  return `${head(` <span class="badge ${l.level === "ok" ? "" : l.level === "warn" ? "t-run" : "t-bad"}">${LEVEL[l.level]}</span>`)}${rows.join("")}${card}${ep}${band}`;
 }
 
 const OWNED = "기록됨·오너 손";
@@ -328,7 +412,7 @@ export function renderResBody(s: ResState, now: number, hours: 6 | 24 = 6): stri
     return (
       tools(`<span class="fresh" aria-live="polite">읽는 중…</span>`, true) +
       (s.result ? resultNote(s.result) : "") +
-      partBlock<Pick<ResView, "load" | "episode" | "band">>(g.load, s.last, "PC 부하", "부하를 읽는 중…", (v) => loadBlock(v, hours)) +
+      partBlock<Pick<ResView, "load" | "episode" | "band" | "history">>(g.load, s.last, "PC 부하", "부하를 읽는 중…", (v) => loadBlock(v, hours)) +
       // The owner's list is usually empty, so its reading row would only flash.
       partBlock<Pick<ResView, "made">>(g.made, s.last, OWNED, "", madeBlock) +
       // After a 정리 the last list names what was just taken, so it does not stand in.
