@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Fixes
+
+- **A re-install no longer makes `sangsoe doctor` fail `orca-plugin-content` (258).** `orca plugin dev load` writes its own `.orca/` folder (TypeScript typings and a `.gitignore`) into the plugin folder it loads, and `orca plugin inspect` counted it, so the installed folder never matched its build commit's tree once install had loaded it. `sangsoe plugin approve` and `sangsoe doctor` now leave a top-level `.orca/` directory out of the content they compare; any other change to the folder still fails. A folder without `.orca/` hashes exactly as before, so earlier approvals stay valid.
+
 ## 0.1.6-rc.5 (pre-release)
 
 Everything since `v0.1.6-rc.4`: decision 253. A pre-release for checking the 리소스 section's spacing and its arrow on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.

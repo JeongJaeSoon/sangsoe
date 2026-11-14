@@ -1,6 +1,7 @@
 // `sangsoe plugin approve`: the one code path that enables the sangsoe Orca plugin (decision 77).
 // It enables only when all three conditions hold, and records `plugin_approved` (decision 0104).
 import type { PayloadOf } from "../contract/index.ts";
+import { inspectContentHash } from "./content-hash.ts";
 
 export type PluginApproved = { readonly type: "plugin_approved" } & PayloadOf<"plugin_approved">;
 
@@ -63,10 +64,12 @@ function parse(stdout: string): OrcaJson | null {
   }
 }
 
-async function contentHash(exec: Exec, dir: string): Promise<string | null> {
-  const r = await exec("orca", ["plugin", "inspect", dir, "--json"]);
-  const hash = (parse(r.stdout)?.result as { contentHash?: unknown } | undefined)?.contentHash;
-  return r.code === 0 && typeof hash === "string" ? hash : null;
+function contentHash(exec: Exec, dir: string): Promise<string | null> {
+  return inspectContentHash(dir, async (d) => {
+    const r = await exec("orca", ["plugin", "inspect", d, "--json"]);
+    const hash = (parse(r.stdout)?.result as { contentHash?: unknown } | undefined)?.contentHash;
+    return r.code === 0 && typeof hash === "string" ? hash : null;
+  });
 }
 
 async function checkMerged(ports: ApprovePorts, commit: string): Promise<{ check: Check; pr: MergedPr | null }> {
