@@ -68,7 +68,7 @@ function fakeOrca(
     },
     terminalList: (a) => {
       calls.push(`terminalList ${a.worktree}`);
-      const id = a.worktree.replace(/^id:repo::\/w\//, "");
+      const id = (a.worktree ?? "").replace(/^id:repo::\/w\//, "");
       return ok({ rows: o.terminals?.[id] ?? [], truncated: o.listTruncated === true, omittedHostIds: [], nonLocal: { rows: 0 } } as never);
     },
     terminalSend: (a, w) => {
