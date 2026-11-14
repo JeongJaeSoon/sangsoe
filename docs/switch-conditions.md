@@ -53,4 +53,4 @@
 
 합계: 기반 4 · 코어 13 · 랜드 6 · 정리 8 · 감지기 5 · 패널 4 · 설치 3 · 이관 3 = 46.
 
-오너 몫(M3, 결정 260): 옮기는 프로그램마다 그 프로그램이 PR 을 여는 저장소를 `~/.config/sangsoe/config.json` 의 `watch.repos` 에 더한다. pr-monitor 는 그 목록의 PR 만 보므로(`core/detect/pr/README.md:4`) 빠진 저장소의 PR trigger 는 머지돼도 모름으로 남는다(`core/graph/ready.ts:248`). 목록에 넣어도 `watch.authors` 에 없는 작성자의 PR 과, `linked_only`(기본 켜짐)일 때 `pr_opened` 행도 Orca 연결도 없이 머지된 PR 은 보지 않는다(`core/detect/pr/round.ts:531`, `:536`). 그래서 프로그램이 열지 않은 PR 에 건 trigger 는 이 두 칸도 맞춰야 풀린다. 설정 파일은 오너가 고친다.
+오너 몫(M3, 결정 260): 옮기는 프로그램마다 그 프로그램이 PR 을 여는 저장소를 `~/.config/sangsoe/config.json` 의 `watch.repos` 에 더한다. pr-monitor 는 그 목록의 PR 만 보므로(`core/detect/pr/README.md:4`) 빠진 저장소의 PR trigger 는 머지돼도 모름으로 남는다(`core/graph/ready.ts:248`). 목록에 넣어도 `watch.authors` 가 비어 있지 않으면 거기 없는 작성자의 PR 과, `linked_only`(기본 켜짐)일 때 `pr_opened` 행도 Orca 연결도 없이 머지된 PR 은 보지 않는다(`core/detect/pr/round.ts:531`, `:536`). 그래서 프로그램이 열지 않은 PR 에 건 trigger 는 이 두 칸도 맞춰야 풀린다. 설정 파일은 오너가 고친다.
