@@ -277,7 +277,7 @@ function withSettings(host: Host, dir: string, settings: unknown): Host {
 test("decision 228: after install --permissions, doctor states the permission and land facts in one row", async () => {
   const m = SANGSOE_RULES.length;
   assert.ok(landAllowRules({ permissions: { allow: [...SANGSOE_RULES] } }).permissions.length > 0, "sangsoe's rules allow land, so the full row covers it");
-  // The live profile after U82: the 16 rules beside an older land rule the owner had added.
+  // The live profile after U82: the rules beside an older land rule the owner had added.
   const host = withSettings(fakeHost().host, DEFAULT_DIR, { permissions: { allow: ["Bash(sangsoe land:*)", ...SANGSOE_RULES] } });
   const r = await doctor(host, ROOT, online());
   assert.deepEqual(settingsRows(r.lines), [`ok       permissions: ${m} of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json`], r.lines.join("\n"));

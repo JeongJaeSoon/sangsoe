@@ -25,6 +25,8 @@ export const SANGSOE_RULES: readonly string[] = [
   "Bash(orca worktree list:*)",
   "Bash(orca reference list:*)",
   "Bash(orca search:*)",
+  // Decision 263: the by-handle form only, never a bare `orca terminal close`. `unit_close` is the path that checks the Dispatch first.
+  "Bash(orca terminal close --terminal term_*)",
 ];
 
 export const PERMISSIONS_FIX = "sangsoe install --permissions";

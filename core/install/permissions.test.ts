@@ -89,7 +89,7 @@ test("decision 221: the diff is shown and asked about, y writes, a rerun is a no
   assert.match(shown, new RegExp(`^--- ${t.settings}\n\\+\\+\\+ ${t.settings}\n@@ `));
   assert.match(shown, /^\+ {6}"Read\(~\/notes\/\*\*\)",$/m, "the old last rule gains a comma");
   assert.match(shown, /^- {6}"Read\(~\/notes\/\*\*\)"$/m);
-  assert.match(shown, /^\+ {6}"Bash\(orca search:\*\)"$/m);
+  assert.match(shown, /^\+ {6}"Bash\(orca terminal close --terminal term_\*\)"$/m);
   assert.match(shown, new RegExp(`Add these ${SANGSOE_RULES.length} rules\\? \\[y/N\\] $`));
 
   const after = readFileSync(t.settings, "utf8");
@@ -371,8 +371,15 @@ test("decision 221: the rules are narrow: no push, merge, rm, brew, or bare orca
   const orchestration = /^(ask|send|reply|inbox|run-create|run-use|task-list|task-update|worker-list|worker-release)$/;
   for (const r of SANGSOE_RULES) {
     if (r === "mcp__plugin_sangsoe_sangsoe") continue;
+    if (r === "Bash(orca terminal close --terminal term_*)") continue; // decision 263: pinned by its own test below
     const m = /^Bash\(orca (orchestration ([a-z-]+)|worktree (set|show|list)|reference list|search):\*\)$/.exec(r);
     assert.ok(m, r);
     if (m[2] !== undefined) assert.match(m[2], orchestration, r);
   }
+});
+
+test("decision 263: the one terminal rule names a handle, and no rule allows a bare terminal close", () => {
+  const terminal = SANGSOE_RULES.filter((r) => r.includes("terminal"));
+  assert.deepEqual(terminal, ["Bash(orca terminal close --terminal term_*)"]);
+  assert.equal(SANGSOE_RULES.length, 17);
 });
