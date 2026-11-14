@@ -7,4 +7,6 @@
 - `ports.ts` — 실제 포트와 빌드 커밋 찾기(그 폴더를 추적하는 깨끗한 git checkout 이면 HEAD, 아니면 plugin 폴더 옆 `build-info.json`(릴리스가 쓴다). 폴더를 무시하는 저장소 안에 있을 뿐이면(Homebrew prefix) git 은 보지 않는다. 읽지 못하면 커밋이 없다고 한다).
 - `review-verdict.ts` — `review_verdict` 를 쓰는 유일한 함수(`sangsoe review record`, 작성자는 GitHub 에서 읽는다)와, approve 가 그 줄에서 리뷰 증거를 고르는 함수(결정 111). event 정의 `review_verdict`·`plugin_approved` 는 `core/contract/events/` 에 있다.
 
+- `content-hash.ts` — approve 와 doctor 가 함께 쓰는 내용 해시: `orca plugin inspect` 의 `contentHash` 를, Orca 가 폴더 맨 위에 쓰는 `.orca/` 를 뺀 사본에서 읽는다(결정 258).
+
 조건 (2) 를 지문이 아니라 폴더 내용 해시로 읽는 이유는 결정 0105.
