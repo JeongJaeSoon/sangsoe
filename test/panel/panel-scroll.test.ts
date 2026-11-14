@@ -127,7 +127,8 @@ test("the rc.3 panel fits 1070px at 440 / 544 / 600 / 900 with the 리소스 sec
 
 test("a stage taller than the panel keeps a gap above the 리소스 section's rule", { skip: noBrowser }, async () => {
   const rows = Array.from({ length: 60 }, (_, i) => ({ id: `i${100 + i}`, cells: [{ text: "📅" }, { text: `i${100 + i} acme task ${i}` }, { text: "—" }, { text: "선행 대기" }, { text: "—" }] }));
-  const long = { ...VIEW, model: { ...VIEW.model, inProgress: { ...VIEW.model.inProgress, count: 60, rows } } } as typeof VIEW;
+  const model = VIEW.model as Extract<typeof VIEW.model, { inProgress: unknown }>;
+  const long = { ...VIEW, model: { ...model, inProgress: { ...model.inProgress, count: 60, rows } } } as typeof VIEW;
   const closed = renderResources({ kind: "idle" }, false, Date.parse(NOW));
   const got = measure({ "long-544": panelPage(renderStage(long), closed) }, () => 544);
   const m = got["long-544"] as Measured;
