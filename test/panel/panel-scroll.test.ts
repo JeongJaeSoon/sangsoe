@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { readParts, renderResBody, renderResources, type ResState } from "../../orca-plugin/panel/resources.ts";
@@ -8,6 +7,7 @@ import { STYLE } from "../../orca-plugin/panel/style.ts";
 import { renderStage } from "../../orca-plugin/panel/view.ts";
 import { NOW, PARTS_GOT, VIEW } from "../fixtures/panel/rc3-state.ts";
 import { scratchDir } from "../scratch.ts";
+import { dump, noBrowser, orcaPage } from "./browser.ts";
 
 // U116 (decision 248): the owner's rc.3 panel, 1070px tall, scrolled 25px at 544 with the 리소스
 // section open. Drawn here in a real browser inside the page Orca builds for an html panel (no body
@@ -15,18 +15,6 @@ import { scratchDir } from "../scratch.ts";
 
 const HEIGHT = 1070;
 const WIDTHS = [440, 544, 600, 900] as const;
-
-function chrome(): string | null {
-  const named = process.env.CHROME;
-  if (named) return named;
-  const mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-  if (process.platform === "darwin" && existsSync(mac)) return mac;
-  for (const bin of ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]) {
-    const r = spawnSync("which", [bin], { encoding: "utf8" });
-    if (r.status === 0 && r.stdout.trim()) return r.stdout.trim();
-  }
-  return null;
-}
 
 const shown = async (): Promise<ResState> => readParts(async (input) => PARTS_GOT[input?.part ?? "load"], () => undefined);
 
@@ -48,17 +36,18 @@ addEventListener("load", () => {
   const sum = document.querySelector("#res summary");
   const body = document.querySelector("#res .res-body");
   window.measured = {
-    vh: innerHeight, docH: d.scrollHeight, hscroll: d.scrollWidth - d.clientWidth, scrollers,
+    vh: innerHeight, docH: d.scrollHeight, contentH: Math.round(document.getElementById("root").getBoundingClientRect().height + document.getElementById("res").getBoundingClientRect().height), hscroll: d.scrollWidth - d.clientWidth, scrollers,
     res: rect("#res"), summary: rect("#res summary"), stamp: rect("#res .res-h"),
     summaryWeight: Number(getComputedStyle(sum).fontWeight), bodyBorder: getComputedStyle(body).borderTopWidth,
   };
 });`;
-  return `<!doctype html>\n<html class="light">\n<head>\n<meta charset="utf-8">\n<style id="tokens">:root{}</style>\n</head>\n<div id="root"></div>\n<script>${mount}</script>\n`;
+  return orcaPage("", `<script>${mount}</script>\n`);
 }
 
 type Measured = {
   vh: number;
   docH: number;
+  contentH: number;
   hscroll: number;
   scrollers: string[];
   res: DOMRect;
@@ -70,8 +59,6 @@ type Measured = {
 
 /** One browser run over every width and fold state, each page in an iframe of the panel's size. */
 function measure(pages: Record<string, string>, width: (name: string) => number): Record<string, Measured> {
-  const bin = chrome();
-  assert.ok(bin, "no Chrome: set CHROME");
   const dir = scratchDir("sangsoe-panel-");
   for (const [name, html] of Object.entries(pages)) writeFileSync(join(dir, `${name}.html`), html);
   const frames = Object.keys(pages)
@@ -83,27 +70,10 @@ addEventListener("load", () => setTimeout(() => {
   for (const f of document.querySelectorAll("iframe")) out[f.name] = f.contentWindow.measured;
   document.getElementById("out").textContent = JSON.stringify(out);
 }, 200));</script></body></html>`;
-  writeFileSync(join(dir, "index.html"), outer);
-  const args = [
-    "--headless=new",
-    "--disable-gpu",
-    "--allow-file-access-from-files",
-    `--user-data-dir=${join(dir, "profile")}`,
-    "--window-size=1000,1200",
-    "--virtual-time-budget=5000",
-    ...(process.platform === "linux" ? ["--no-sandbox"] : []),
-    "--dump-dom",
-    `file://${join(dir, "index.html")}`,
-  ];
-  const r = spawnSync(bin, args, { encoding: "utf8", timeout: 60_000 });
-  const json = /<pre id="out">([^<]*)<\/pre>/.exec(r.stdout)?.[1];
-  assert.ok(json, `no measurement from Chrome: ${r.stderr.slice(-500)}`);
-  return JSON.parse(json.replaceAll("&quot;", '"').replaceAll("&amp;", "&")) as Record<string, Measured>;
+  return dump(dir, outer) as Record<string, Measured>;
 }
 
-const skip = !chrome() && !process.env.CI ? "no Chrome on this machine (CI requires one)" : false;
-
-test("the rc.3 panel fits 1070px at 440 / 544 / 600 / 900 with the 리소스 section open or closed", { skip }, async () => {
+test("the rc.3 panel fits 1070px at 440 / 544 / 600 / 900 with the 리소스 section open or closed", { skip: noBrowser }, async (t) => {
   const stage = renderStage(VIEW);
   const now = Date.parse(NOW);
   const open = renderResources(await shown(), true, now, 24);
@@ -114,6 +84,7 @@ test("the rc.3 panel fits 1070px at 440 / 544 / 600 / 900 with the 리소스 sec
     pages[`closed-${w}`] = panelPage(stage, closed);
   }
   const got = measure(pages, (name) => Number(name.split("-")[1]));
+  t.diagnostic(Object.entries(got).map(([k, m]) => `${k} content ${m?.contentH} docH ${m?.docH} vh ${m?.vh} resBottom ${m?.res.bottom} underHeading ${m ? m.vh - m.summary.bottom : "?"} hscroll ${m?.hscroll}`).join("; "));
   for (const [name, m] of Object.entries(got)) {
     assert.ok(m, `${name}: the page drew`);
     assert.equal(m.vh, HEIGHT, `${name}: the frame is the panel's height`);
