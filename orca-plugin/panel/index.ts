@@ -77,10 +77,9 @@ export function panelRoot(doc: RootDoc): HTMLElement {
 
 /**
  * The 리소스 fold (decision 234) in its own element after #root, so the panel's own repaints never
- * reach it. It reads when opened, shown again or refreshed, and every minute while open and shown
- * (decision 257); 정리 runs on the confirm button alone.
+ * reach it. It reads when opened, shown again or refreshed, and on the panel's interval tick while
+ * open and shown (decision 257); 정리 runs on the confirm button alone. Returns what that tick calls.
  */
-/** Returns what the panel's interval tick calls for this section. */
 function mountResources(after: HTMLElement): () => void {
   const box = document.createElement("section");
   box.id = "res";
@@ -116,20 +115,22 @@ function mountResources(after: HTMLElement): () => void {
     flight = p;
     return p;
   };
+  /** When the 정리 후보 now shown was asked for; only an answer that was read and applied moves it. */
   let candidatesAt = Number.NEGATIVE_INFINITY;
   // Decision 235: three parts asked together, each painted as it comes. A read the owner asks for
-  // shows its reading row at once and starts when a minute's read still running has ended.
+  // shows its reading row at once and starts when a tick's read still running has ended.
   const read = async (result?: Reaped) => {
     const last = state.kind === "shown" ? state.view : undefined;
     state = { kind: "reading", got: {}, last, result };
     body();
     while (flight) await flight.catch(() => undefined);
     await solo(async () => {
-      candidatesAt = Date.now();
+      const asked = Date.now();
       const end = await readParts(ask, (s) => {
         state = s.kind === "reading" ? { ...s, last, result } : s;
         body();
       });
+      if (end.kind === "shown" && end.got?.candidates.ok) candidatesAt = asked;
       state = end.kind === "shown" && result ? { ...end, result } : end;
       body();
     });
@@ -142,13 +143,22 @@ function mountResources(after: HTMLElement): () => void {
    */
   const quiet = async (why: "show" | "tick") => {
     if (state.kind !== "shown") return;
+    // A view read whole (a core older than decision 235) cannot be read in parts: a tick would read
+    // 정리 후보 every time, so it waits for show, open or 새로 고침 as before.
+    if (why === "tick" && !state.got) return;
     const t0 = performance.now();
-    const parts = why === "show" || !state.got ? PARTS : tickParts(Date.now(), candidatesAt);
-    if (parts.includes("candidates")) candidatesAt = Date.now();
-    const end = await readParts(ask, () => undefined, { parts, kept: state.got });
+    const asked = Date.now();
+    const kept = state.got;
+    const parts = why === "show" || !kept ? PARTS : tickParts(asked, candidatesAt);
+    const end = await readParts(ask, () => undefined, { parts, kept });
     const s = state;
     if (s.kind !== "shown" || s.confirm || s.running) return;
-    if (end.kind === "shown") state = s.result ? { ...end, result: s.result } : end;
+    if (end.kind === "shown") {
+      state = s.result ? { ...end, result: s.result } : end;
+      // A 정리 후보 that failed keeps the kept answer: the next tick asks again.
+      const c = end.got?.candidates;
+      if (parts.includes("candidates") && c?.ok && c !== kept?.candidates) candidatesAt = asked;
+    }
     const el = box.querySelector<HTMLElement>(".res-body");
     if (!el) return;
     const next = resPieces(state as Extract<ResState, { kind: "shown" }>, Date.now(), hours);

@@ -1,6 +1,6 @@
 // The 리소스 section at the bottom of the panel (decision 234): folded by default, its open state in
 // Orca's plugin storage, read when the owner opens, shows or refreshes it and, while open and shown,
-// every minute (decision 257). 정리 shows what it will take and runs only after the second press.
+// on the panel's interval tick (decision 257). 정리 shows what it will take and runs only after the second press.
 // Declared by hand: this folder imports nothing from the core.
 import { CHEV, esc, type Refusal } from "./view.ts";
 
@@ -71,7 +71,7 @@ function assemble(got: Required<Got>): ResState {
 /**
  * Asks for the parts at once and paints after each answer. A core older than decision 235 refuses
  * parts; the section is then read whole, once. Decision 257: `parts` asks only some, and the rest
- * come from `kept`; a part asked again that fails keeps its `kept` answer, so a minute's failed
+ * come from `kept`; a part asked again that fails keeps its `kept` answer, so a tick's failed
  * read leaves the last reading to age into 낡음 rather than blanking it.
  */
 export async function readParts(
@@ -104,7 +104,7 @@ export async function readParts(
 
 export const RES_OPEN_KEY = "resources.open";
 /**
- * A reading older than this is marked 낡음 and cannot be reaped from. The minute's read keeps it
+ * A reading older than this is marked 낡음 and cannot be reaped from. The tick's read keeps it
  * fresh only while it succeeds; the oldest part decides (decision 257).
  */
 export const STALE_MS = 5 * 60_000;
@@ -328,7 +328,7 @@ export function repaint(el: Paintable, html: string, active: Element | null, wan
   return to ? null : (w ?? { from: key, to: key });
 }
 
-/** The body's runs, in order; the minute's read rewrites only the ones whose html changed (decision 257). */
+/** The body's runs, in order; a tick's read rewrites only the ones whose html changed (decision 257). */
 export const PIECES = ["stamp", "note", "load", "made", "candidates"] as const;
 export type Piece = (typeof PIECES)[number];
 export type Pieces = Record<Piece, string>;
