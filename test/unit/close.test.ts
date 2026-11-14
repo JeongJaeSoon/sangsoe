@@ -17,6 +17,12 @@ type Scene = {
   agents?: unknown[];
   psTruncated?: boolean;
   closeFails?: boolean;
+  /** The worktree whose `terminal list` shows the rows; any other worktree lists none. */
+  listedIn?: string;
+  /** The worktree `worktree ps` files the agents under. */
+  agentsIn?: string;
+  /** Host the terminal and the ps row claim; anything but local is counted, not returned. */
+  host?: string;
 };
 
 const ok = (result: unknown): ExecResult => ({ code: 0, stdout: JSON.stringify({ ok: true, result }), stderr: "" });
@@ -32,11 +38,13 @@ function world(s: Scene = {}) {
       return ok({ dispatchId: DISPATCH, taskId: "task_1", runId: "run_1", state: "succeeded", terminal: TERM, terminalState: "retained", workspace: WS, ...s.show });
     }
     if (cmd === "terminal list") {
-      return ok({ terminals: s.terminals ?? [{ handle: TERM, worktreeId: WS, executionHostId: "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" }] });
+      const rows = s.terminals ?? [{ handle: TERM, worktreeId: WS, executionHostId: s.host ?? "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" }];
+      const at = args[args.indexOf("--worktree") + 1];
+      return ok({ terminals: at === `id:${s.listedIn ?? WS}` ? rows : [] });
     }
     if (cmd === "worktree ps") {
       const agents = s.agents ?? [{ paneKey: "tab1:leaf1", state: "done", agentType: "claude", agentWait: null }];
-      return ok({ worktrees: [{ worktreeId: WS, hostId: "local", repo: "api", path: "/work/acme/api", branch: "b", isMainWorktree: false, isArchived: false, liveTerminalCount: 1, unverifiableTerminalCount: 0, status: "x", agents }], ...(s.psTruncated ? { truncated: true } : {}) });
+      return ok({ worktrees: [{ worktreeId: s.agentsIn ?? WS, hostId: s.host ?? "local", repo: "api", path: "/work/acme/api", branch: "b", isMainWorktree: false, isArchived: false, liveTerminalCount: 1, unverifiableTerminalCount: 0, status: "x", agents }], ...(s.psTruncated ? { truncated: true } : {}) });
     }
     if (cmd === "terminal close") return s.closeFails ? bad("terminal_not_found") : ok({ closed: true });
     return bad("unexpected");
@@ -87,6 +95,10 @@ const REFUSED: [string, Scene, string | undefined, string][] = [
   ["an agent whose wait Orca never looked at", { agents: [{ paneKey: "tab1:leaf1", state: "idle", agentType: "claude" }] }, ME, "agent_not_idle"],
   ["no agent row for the terminal", { agents: [{ paneKey: "other:pane", state: "done", agentType: "claude", agentWait: null }] }, ME, "agent_not_idle"],
   ["a truncated worktree ps", { psTruncated: true }, ME, "agent_not_idle"],
+  ["a terminal that is listed only under another worktree", { listedIn: "wt-2::/work/acme/web" }, ME, "terminal_not_live"],
+  ["an agent row filed under another worktree with the same pane key", { agentsIn: "wt-2::/work/acme/web" }, ME, "agent_not_idle"],
+  ["a terminal on another host", { host: "remote-1" }, ME, "terminal_not_live"],
+  ["a sibling pane of the same tab at rest while the terminal's own pane is not listed", { agents: [{ paneKey: "tab1:leaf2", state: "idle", agentType: "claude", agentWait: null }] }, ME, "agent_not_idle"],
   ["a close Orca fails", { closeFails: true }, ME, "close_failed"],
 ];
 
