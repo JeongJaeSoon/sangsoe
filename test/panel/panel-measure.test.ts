@@ -90,7 +90,29 @@ type Out = {
   res_gap_to_page_end: number;
   stamp_on_heading: boolean;
   tail: string;
+} & Spacing & { folded?: Spacing };
+
+type Spacing = {
+  res_space_above: number;
+  res_space_below: number;
+  res_card_pad_top: number | null;
+  res_card_pad_bottom: number | null;
+  res_arrow_off: number;
 };
+
+/** U123 (decision 253): each pair the owner saw as uneven, within 2px; returns what is not. */
+function uneven(at: string, m: Spacing | undefined, open: boolean): string[] {
+  if (!m) return [`${at}: no spacing measured`];
+  const out: string[] = [];
+  const near = (a: number | null, b: number | null, what: string) => {
+    if (a === null || b === null || Math.abs(a - b) > 2) out.push(`${at}: ${what} ${a} vs ${b}`);
+  };
+  near(m.res_space_above, m.res_space_below, "space above the 리소스 title vs below the section");
+  near(m.res_arrow_off, 0, "arrow centre vs title centre");
+  if (open) near(m.res_card_pad_top, m.res_card_pad_bottom, "card padding top vs bottom");
+  else if (m.res_card_pad_top !== null) out.push(`${at}: a closed section has no card`);
+  return out;
+}
 
 test("the measurement script times the first open per part and the panel's layout, on the panel's own DOM", { skip: noBrowser }, (t) => {
   const dir = scratchDir("sangsoe-measure-");
@@ -150,4 +172,6 @@ addEventListener("load", () => setTimeout(read, 100));
     assert.equal(m.stamp_on_heading, true);
     assert.match(m.tail, /상세: sangsoe brief/);
   }
+  assert.equal(o.folded, undefined, "a refresh never sees the section closed");
+  assert.deepEqual([...uneven("closed", c.folded, false), ...uneven("first open", c, true), ...uneven("refresh", o, true)], []);
 });

@@ -54,6 +54,73 @@
     }
   };
 
+  // Spacing is read from ink, not boxes: a line box adds half-leading the eye does not see. A text
+  // node's ink comes from its glyphs' canvas metrics on the baseline its line box holds.
+  const pen = document.createElement("canvas").getContext("2d");
+  const ink = (node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const lines = [...range.getClientRects()].filter((x) => x.width > 1);
+    if (!lines.length) return null;
+    const s = getComputedStyle(node.parentElement);
+    pen.font = `${s.fontStyle} ${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+    const m = pen.measureText(node.textContent.trim());
+    const base = lines[0].top + m.fontBoundingBoxAscent;
+    return { base, top: base - m.actualBoundingBoxAscent, bottom: lines.at(-1).top + m.fontBoundingBoxAscent + m.actualBoundingBoxDescent };
+  };
+  /**
+   * The highest and lowest text ink inside `box`. Glyphs only: the eye pairs the first line of text
+   * with the last (the owner's rc.4 read), so an outlined control such as 6시간/24시간 is left out.
+   */
+  const drawn = (box) => {
+    const b = box.getBoundingClientRect();
+    const ys = [];
+    const walk = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      const k = n.textContent.trim() ? ink(n) : null;
+      if (k) ys.push(k.top, k.bottom);
+    }
+    // .res-h sits in the body's DOM but on the 리소스 row, above the card.
+    const inside = ys.filter((y) => y >= b.top && y <= b.bottom);
+    return inside.length ? { top: Math.min(...inside), bottom: Math.max(...inside) } : null;
+  };
+  const arrowY = (sum, title) => {
+    const chev = sum.querySelector(".chev");
+    if (chev) {
+      const r = chev.getBoundingClientRect();
+      return (r.top + r.bottom) / 2;
+    }
+    // 0.1.6-rc.4 and earlier draw it as a ::after glyph on the title's baseline.
+    const s = getComputedStyle(sum, "::after");
+    pen.font = `${s.fontStyle} ${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+    const m = pen.measureText(s.content.replace(/^"|"$/g, ""));
+    return title.base - (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
+  };
+  const px = (n) => Math.round(n * 10) / 10;
+  /**
+   * Above: the section's top line to the 리소스 title's ink. Below: the title's ink (closed) or the
+   * card's bottom line (open) to the section's end. The card's padding is from its lines to the ink
+   * inside, and the arrow's offset is its centre less the title's, positive when it sits lower.
+   */
+  const spacing = () => {
+    const sum = fold.querySelector("summary");
+    const t = ink([...sum.childNodes].find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim()));
+    const r = res.getBoundingClientRect();
+    const card = fold.open ? fold.querySelector(".res-body") : null;
+    const c = card?.getBoundingClientRect();
+    const cs = card && getComputedStyle(card);
+    const e = card && drawn(card);
+    return {
+      res_space_above: px(t.top - r.top - parseFloat(getComputedStyle(res).borderTopWidth)),
+      res_space_below: px(r.bottom - (c ? c.bottom : t.bottom)),
+      res_card_pad_top: e ? px(e.top - c.top - parseFloat(cs.borderTopWidth)) : null,
+      res_card_pad_bottom: e ? px(c.bottom - parseFloat(cs.borderBottomWidth) - e.bottom) : null,
+      res_arrow_off: px(arrowY(sum, t) - (t.top + t.bottom) / 2),
+    };
+  };
+  // A first open starts folded: that is the only time the closed section can be read.
+  const folded = mode === "first_open" ? spacing() : undefined;
+
   const layout = () => {
     const d = document.documentElement;
     const r = res.getBoundingClientRect();
@@ -76,6 +143,8 @@
       res_gap_to_page_end: Math.round(d.scrollHeight - bottom),
       stamp_on_heading: !!stamp && stamp.top + stamp.height / 2 > sum.top && stamp.top + stamp.height / 2 < sum.bottom,
       tail: foot?.textContent.trim().slice(0, 80) ?? "",
+      ...spacing(),
+      folded,
     };
   };
 
