@@ -33,6 +33,8 @@ const DESIGN_TABLE = [
   "worktree create",
   "terminal list",
   "terminal close",
+  // Decision 246: the owner's `sangsoe recover auth --send` only (test/recover/auth-246.test.ts pins the caller).
+  "terminal send",
   "repo show",
   "reference add",
   "reference find",
@@ -295,6 +297,13 @@ test("ports reads one worktree's listeners, and only from the local host", async
     const shape = await createOrcaAdapter(bad.exec).ports({ worktree: "id:x" });
     assert.equal(!shape.ok && shape.error.code, "unexpected_shape", JSON.stringify(row));
   }
+});
+
+test("terminal send passes the text as one argument, --enter bare and --wait-submit in seconds", async () => {
+  const fake = createFakeOrca();
+  const r = await createOrcaAdapter(fake.exec).terminalSend({ terminal: "term_1", text: "a b; c", enter: true, waitSubmit: 10 });
+  assert.ok(r.ok);
+  assert.deepEqual(fake.calls[0], ["orca", "terminal", "send", "--terminal", "term_1", "--text", "a b; c", "--enter", "--wait-submit", "10", "--json"]);
 });
 
 test("worker-start passes --keep-open bare and --repo with its selector", async () => {
