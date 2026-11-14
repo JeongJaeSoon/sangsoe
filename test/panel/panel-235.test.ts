@@ -201,6 +201,11 @@ test("F2 rules: the section is pushed to the panel's bottom when the stage is sh
   // Decision 262: the bar is pinned to the panel's bottom and the open section is a sheet over the board.
   assert.match(rule("#res"), /position: sticky; bottom: 0;/);
   assert.match(rule("#res .res-fold[open]"), /position: absolute;[^}]*bottom: 0;/);
+  // The sheet opens by growing from its bottom edge (a translate lengthens the page while it plays) and not at all when motion is reduced.
+  assert.match(rule("#res .res-fold[open]"), /transform-origin: bottom;/);
+  assert.match(STYLE, /@starting-style \{ #res \.res-fold\[open\] \{ transform: scaleY\(/);
+  assert.doesNotMatch(STYLE, /@starting-style[^}]*translate/);
+  assert.match(STYLE, /@media \(prefers-reduced-motion: reduce\) \{ #res \.res-fold\[open\] \{ transition: none; \} \}/);
 });
 
 test("F3 rules: the section adds no space of its own below it, and only its open body scrolls inside the sheet", () => {
