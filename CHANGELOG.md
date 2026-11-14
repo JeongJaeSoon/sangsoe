@@ -4,11 +4,16 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+## 0.1.7-rc.1 (pre-release)
+
+Everything since `v0.1.6`: decisions 241, 245, 246, 250, 251, 257, 259, 260, 262, 263 and 264. A pre-release for checking them on an installed build and the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.6.
+
 ### Upgrading from 0.1.6
 
-- Run `sangsoe install --auto-compact` once, read the diff, then run it again with `--yes` (or answer `y`). Until you do, `sangsoe doctor` warns on the new `auto-compact window` row.
-- Run `sangsoe install --permissions` again, read the diff, then run it with `--yes` (or answer `y`). It adds one rule, `Bash(orca terminal close --terminal term_*)` (263), so `sangsoe doctor` reads `permissions: 17 of 17` instead of warning `16 of 17`. The rule is by handle only; no rule allows a bare `orca terminal close`.
-- **Re-approve.** The core changed (the new `unit_closed` event), so the Orca plugin's vendored core changed and the plugin waits for approval again: have the review of this build recorded with `sangsoe review record` by someone other than the session that wrote its pull request, then run `sangsoe plugin approve`, as the README's Update section says. Restart each running session with `claude --continue` so it loads the new `unit_close` tool.
+- **The store moves to schema 3 on its first open, and 0.1.6 cannot open it afterwards.** The new `load_sample` table (241) is the change. There is no downgrade path, and no sangsoe command makes a backup: before the first open, copy `~/.local/share/sangsoe/sangsoe.db` (with its `-wal` and `-shm` files, if present) somewhere safe. `sangsoe.db.facts.jsonl` beside it is the copy sangsoe keeps itself of the facts only sangsoe holds (183, 184), not a backup of the database. A 0.1.6 binary that meets a schema-3 store fails every new CLI call, MCP server and session until 0.1.7-rc.1 or later is installed.
+- **Re-approve.** The Orca plugin's content and its vendored core changed (the new `unit_closed` event, the monitor's `run_stalled`, the panel), so the plugin waits for approval again: have the review of this build recorded with `sangsoe review record` by someone other than the session that wrote its pull request, then run `sangsoe plugin approve`, as the README's Update section says. Restart each running session with `claude --continue` so it loads the new `unit_close` tool.
+- **The permission rule set grew from 16 to 17.** Run `sangsoe install --permissions` again, read the diff, then run it with `--yes` (or answer `y`). It adds one rule, `Bash(orca terminal close --terminal term_*)` (263), so `sangsoe doctor` reads `permissions: 17 of 17` instead of warning `16 of 17`. The rule is by handle only; no rule allows a bare `orca terminal close`.
+- **Opt in to the auto-compact window.** Run `sangsoe install --auto-compact` once, read the diff, then run it again with `--yes` (or answer `y`) (264). Until you do, `sangsoe doctor` warns on the new `auto-compact window` row.
 
 ### Changes
 
