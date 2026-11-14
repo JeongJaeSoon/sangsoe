@@ -24,6 +24,13 @@
 // emoji_gap (decision 259) is the gap after an emoji at each place the panel draws one (sumline, foot,
 // fold_title, group_head, state_cell; null where this width does not draw it), and emoji_gap_spread
 // the largest less the smallest. It is done when the spread is 1px or less.
+//
+// And the cost of the section's last read on the panel's 30-second tick (decision 257), as the panel
+// itself timed it: periodic_read_ms from the tick to its paint, periodic_parts what it asked
+// (load+made, or all three when 정리 후보 was due), periodic_paint the pieces it rewrote (none when the
+// answer was unchanged). Pass: periodic_read_ms under 7500 (a quarter of the tick) and, on a machine
+// whose load did not move, periodic_paint none or stamp. With the section not yet open and shown for
+// a tick, periodic_read_ms is null.
 (() => {
   const PARTS = ["PC 부하", "정리 후보"];
   const LIMIT_MS = 8000;
@@ -34,6 +41,11 @@
     return;
   }
   const mode = fold.open ? "refresh" : "first_open";
+  const last = res.dataset;
+  const periodic =
+    last.tickMs === undefined
+      ? { periodic_read_ms: null, periodic_note: "no tick read yet: keep the section open and the panel shown for 30 s, then rerun" }
+      : { periodic_read_ms: Number(last.tickMs), periodic_parts: last.tickParts, periodic_paint: last.tickPaint };
   const parts = {};
   const paints = [];
   const refresh = () => res.querySelector('[data-res="refresh"]');
@@ -205,7 +217,7 @@
     observer.disconnect();
     clearTimeout(timer);
     seen();
-    const out = { mode, first_read_ms: { ...parts, all: timedOut ? null : ms() }, paints_ms: paints, timed_out: timedOut, ...layout() };
+    const out = { mode, first_read_ms: { ...parts, all: timedOut ? null : ms() }, paints_ms: paints, timed_out: timedOut, ...periodic, ...layout() };
     const line = `SANGSOE_MEASURE ${JSON.stringify(out)}`;
     console.log(line);
     window.sangsoeMeasure = out;

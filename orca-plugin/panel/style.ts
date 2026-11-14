@@ -364,6 +364,14 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .sw rect { stroke: var(--rule-2); }
 button.link:disabled { color: var(--muted); cursor: default; }
 .band-ax { display: flex; justify-content: space-between; margin-top: 2px; color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
+/* Decision 250: the 24-hour card under the gauges, on their grid so the labels line up. White with a
+   1px rule (decision 222); the line is a quiet stroke, the dashed warn line the band's warn colour. */
+.spark { margin-top: var(--s2); padding: var(--s1) var(--s3) 0; border: 1px solid var(--rule); border-radius: var(--r2); }
+.sp { display: block; width: 100%; height: 24px; overflow: visible; }
+.sp-line { fill: none; stroke: var(--ink-2); stroke-width: 1.25px; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.sp-th { stroke: var(--accent); stroke-width: 1px; stroke-dasharray: 2 3; opacity: 0.6; vector-effect: non-scaling-stroke; }
+.sp-min, .sp-none { color: var(--muted); font-size: var(--text-xs); }
+.sp-none { grid-column: 2 / 4; }
 .ep.t-bad { color: var(--bad); }
 .unread { color: var(--bad); }
 /* One line per row at every width: a long name or reason is cut, its whole text in the cell's title. */

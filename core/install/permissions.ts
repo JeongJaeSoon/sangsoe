@@ -168,15 +168,22 @@ export type PermissionOptions = {
 
 type Report = { code: number; lines: string[] };
 
+/**
+ * Decision 167: install registers the plugin in the current and Orca's selected profile, so what a
+ * settings step writes goes to both (decision 264 reuses this set for the auto-compact window).
+ */
+export function userSettingsPaths(host: Host, step: string, lines: string[]): string[] {
+  const dirs = [currentProfile(host).dir];
+  const orca = orcaProfile(host);
+  if (!orca) lines.push(`${step}: ${UNREADABLE("orca account list --json")} for Orca's selected profile; only ${dirs[0]} is written`);
+  else if (orca.dir !== dirs[0]) dirs.push(orca.dir);
+  return dirs.map((d) => join(d, "settings.json"));
+}
+
 function targets(host: Host, scope: Scope, cwd: string, lines: string[]): string[] {
   if (scope === "project") return [join(cwd, ".claude", "settings.json")];
   if (scope === "local") return [join(cwd, ".claude", "settings.local.json")];
-  // Decision 167: install registers the plugin in both profiles, so the rules go to both too.
-  const dirs = [currentProfile(host).dir];
-  const orca = orcaProfile(host);
-  if (!orca) lines.push(`permissions: ${UNREADABLE("orca account list --json")} for Orca's selected profile; only ${dirs[0]} is written`);
-  else if (orca.dir !== dirs[0]) dirs.push(orca.dir);
-  return dirs.map((d) => join(d, "settings.json"));
+  return userSettingsPaths(host, "permissions", lines);
 }
 
 /** `sangsoe install --permissions`: adds the missing SANGSOE_RULES after showing the diff and asking. */

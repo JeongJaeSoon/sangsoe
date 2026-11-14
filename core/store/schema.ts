@@ -1,8 +1,8 @@
 // sqlite schema (appendix #schema). `event` is the only record of truth; `owner_text` keeps the masked
 // owner text apart so it can be emptied; counter/migration are bookkeeping; pr_ref/gh_budget/gh_seen
-// are the three caches the appendix's exception table allows. Nothing here copies an Orca fact.
+// are the three caches the appendix's exception table allows; load_sample keeps 24h (decision 241). Nothing copies an Orca fact.
 
-export const SCHEMA_V = 2;
+export const SCHEMA_V = 3;
 
 // Schema 2 (decision 0126): GRAPH's two guards as triggers, so no writer can bypass them. The current
 // extra edges are computed inline (the schema holds no SQL view); an edge_removed cancels the
@@ -108,4 +108,16 @@ CREATE TABLE gh_seen (
 `;
 
 /** Every table the schema may hold. A table outside this list (a view cache, an Orca copy) fails a test. */
-export const TABLES = ["event", "owner_text", "counter", "migration", "pr_ref", "gh_budget", "gh_seen"] as const;
+export const TABLES = ["event", "owner_text", "counter", "migration", "pr_ref", "gh_budget", "gh_seen", "load_sample"] as const;
+
+// Schema 3 (decision 241): the resource round's load samples, a retention table rather than a cache.
+// It copies no fact another tool keeps, holds 24h, is never in the facts file, and refills after a loss.
+export const LOAD_SAMPLE_DDL = `
+CREATE TABLE load_sample (
+  at           INTEGER PRIMARY KEY,
+  load5        REAL,
+  cpus         INTEGER,
+  mem_free_pct REAL,
+  disk_free_gb REAL
+);
+`;
