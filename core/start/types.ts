@@ -16,7 +16,7 @@ export type Requester = {
    * running in no Orca worktree (a plain folder or a folder context) leaves it out (decision 197).
    */
   worktreeId?: string;
-  /** The requester's own Task; required for a lead or worker, absent for the orchestrator. */
+  /** The requester's own Task: a worker's, or a lead's when one started it; absent for the orchestrator and a Task-less lead (decision 243). */
   taskId?: string;
   /** The Run the Task lives in: the requester's own. */
   runId: string;

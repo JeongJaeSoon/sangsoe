@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **A lead that holds its Run but has no Task starts workers with `start_unit` (243).** `start_unit` refused every lead without a Task (`lineage_invalid`), so a lead started outside it opened its units outside the ledger, with no `item_created` or `unit_started` row for REAPER or the evidence count to read. Such a lead now leaves `taskId` out and gets the orchestrator's checks: it holds the Run (`run-current`), names the worktree its folder is in, and that worktree has no unfinished Dispatch. It still starts no lead, and its refusals go to the owner. A lead that passes a `taskId` is now a lead only if that Task's spec starts with the lead role line, so a worker holding a Run of its own cannot pass as one.
+
 ## 0.1.6
 
 Everything since `v0.1.5`: decisions 230 to 240, 248, 249, 253 and 258, a fix to the owner's answer to a wait and two test fixes. The pre-releases checked them on an installed build as they came: `v0.1.6-rc.1` carried 230 to 234, `v0.1.6-rc.2` added 235 and 236, `v0.1.6-rc.3` added 237 to 240 and the 219 test fix, `v0.1.6-rc.4` added 248, 249, the wait fix and the measurement test fix, `v0.1.6-rc.5` added 253, and `v0.1.6-rc.6` added 258.
