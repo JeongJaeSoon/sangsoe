@@ -201,7 +201,7 @@ export function stateBadge(text: string): string {
   const f = /(?:\s*\p{Extended_Pictographic}️?)+$/u.exec(rest);
   const word = (f ? rest.slice(0, f.index) : rest).trim();
   if (!word) return esc(text);
-  return badge(word, TONE[m?.[1] ?? ""] ?? "") + (f ? `<span class="fl">${esc(f[0].trim())}</span>` : "");
+  return badge(word, TONE[m?.[1] ?? ""] ?? "") + (f ? `<span class="sr"> </span><span class="fl">${esc(f[0].trim())}</span>` : "");
 }
 
 // The words of core/contract/transitions.ts STATE_LABEL and views.ts READING_LABEL, by their mark;
@@ -796,7 +796,7 @@ function group(m: GroupDetail): string {
 function item(m: ItemDetail): string {
   const rows = m.chain.rows.map((r) => rowHtml(m.chain, r, { idCol: true }));
   return [
-    `<h1><span class="em">${esc(m.state)}</span><span class="id">${esc(m.id)}</span> ${esc(m.title)}${m.flags ? `<span class="fl">${esc(m.flags)}</span>` : ""}</h1>`,
+    `<h1><span class="em">${esc(m.state)}<span class="sr"> </span></span><span class="id">${esc(m.id)}</span> ${esc(m.title)}${m.flags ? `<span class="sr"> </span><span class="fl">${esc(m.flags)}</span>` : ""}</h1>`,
     `<p class="sumline">누가 ${m.who === "—" ? "—" : badge(m.who)} · <span class="pri">${esc(m.priority)}</span></p>`,
     section("chain", m.chain, rows),
   ].join("");

@@ -140,7 +140,7 @@ test("(5) a graph row with nothing under its title line draws no rule and no emp
 
 test("(6) state words are badges in the graph tables, toned by state, flags kept beside them", () => {
   const html = renderStage(grp);
-  assert.match(html, /<span class="badge t-run">진행 중<\/span><span class="fl">🚨<\/span>/);
+  assert.match(html, /<span class="badge t-run">진행 중<\/span><span class="sr"> <\/span><span class="fl">🚨<\/span>/);
   assert.match(html, /<span class="badge">예정<\/span>/);
   assert.match(html, /<span class="badge t-bad">막힘<\/span>/);
   assert.match(html, /<span class="badge">열림<\/span>/, "a state word with no marker is a badge too");

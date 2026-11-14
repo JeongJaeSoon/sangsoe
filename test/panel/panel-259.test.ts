@@ -45,7 +45,25 @@ test("259: no screen draws an emoji and its label apart by a literal space", asy
   assert.match(fold, /<span class="em">✅<span class="sr"> <\/span><\/span>완료 최근 7일/);
   assert.match(renderStage(VIEW), /<p class="sumline"><span class="em">✅<span class="sr"> <\/span><\/span>완료 16건 · <span class="em">🔄<span class="sr"> <\/span><\/span>진행 중 0건/);
   assert.doesNotMatch(textOf(drawn(stateBadge("🔄 진행 중 🚨"))), LITERAL);
-  assert.match(stateBadge("🔄 진행 중 🚨"), /<span class="badge t-run">진행 중<\/span><span class="fl">🚨<\/span>$/);
+  assert.match(stateBadge("🔄 진행 중 🚨"), /<span class="badge t-run">진행 중<\/span><span class="sr"> <\/span><span class="fl">🚨<\/span>$/);
+});
+
+test("259: the item heading keeps a word boundary after the state marker and before the flags", async () => {
+  const html = renderStage(await view({ item: "i031" }));
+  const h1 = /<h1>.*?<\/h1>/s.exec(html)?.[0] ?? "";
+  assert.match(h1, /<span class="em">[^<]+<span class="sr"> <\/span><\/span><span class="id">/, "the state marker is followed by a hidden space");
+  assert.doesNotMatch(textOf(drawn(h1)), LITERAL);
+  const flagged: string[] = [];
+  for (let n = 1; n <= 120; n++) {
+    const id = `i${String(n).padStart(3, "0")}`;
+    const r = panelView(await (await groupWorld()).input(), { item: id });
+    if (!r.ok) continue;
+    const page = renderStage(r.value as unknown as PanelView);
+    const head = /<h1>.*?<\/h1>/s.exec(page)?.[0] ?? "";
+    if (/class="fl"/.test(head)) flagged.push(head);
+  }
+  assert.ok(flagged.length > 0, "the world has an item with flags to check");
+  for (const head of flagged) assert.match(head, /[^>]<span class="sr"> <\/span><span class="fl">/, "the title is followed by a hidden space before the flags");
 });
 
 test("259: one variable sets every gap: the class, the state mark, the flags and a narrow group head", () => {
