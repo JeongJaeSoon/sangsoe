@@ -203,7 +203,8 @@ test("F2 rules: the section is pushed to the panel's bottom when the stage is sh
   assert.match(rule("#res .res-fold[open]"), /position: absolute;[^}]*bottom: 0;/);
   // The header's menu hangs from .bar (its own stacking context): it must sit above the pinned section, or an open sheet hides it.
   const z = (sel: string) => Number(/z-index: (\d+);/.exec(rule(sel))?.[1]);
-  assert.ok(z(".bar") > z("#res"), "the header, and the menu inside it, stack above the 리소스 section");
+  assert.ok(z(".bar:has(details.menu[open])") > z("#res"), "an open menu's bar stacks above the 리소스 section");
+  assert.ok(z(".bar") < z("#res"), "otherwise the bar, taller on a detail screen, stays under the sheet's own heading");
   // The sheet opens by growing from its bottom edge (a translate lengthens the page while it plays) and not at all when motion is reduced.
   assert.match(rule("#res .res-fold[open]"), /transform-origin: bottom;/);
   assert.match(STYLE, /@starting-style \{ #res \.res-fold\[open\] \{ transform: scaleY\(/);
