@@ -20,7 +20,10 @@ const ORCH_PANE = "tab_o:leaf_o";
 
 type Coord = { run: string; handle: string; pane: string; shown: string; state: string; since: number };
 
-function setup(coords: Coord[], o: { dispatchTerminals?: string[]; showFails?: string[]; hiddenPanes?: string[] } = {}) {
+function setup(
+  coords: Coord[],
+  o: { dispatchTerminals?: string[]; showFails?: string[]; hiddenPanes?: string[]; hiddenHandles?: string[]; listTruncated?: boolean } = {},
+) {
   const w = createWorld([]);
   const mail: InboxMessage[] = [];
   const notices = () =>
@@ -37,7 +40,7 @@ function setup(coords: Coord[], o: { dispatchTerminals?: string[]; showFails?: s
   const sentAt: number[] = [];
   let clock = T0;
   const ok = <T>(value: T) => ({ ok: true as const, value });
-  const rows = <T>(r: T[]) => ok({ rows: r, nonLocal: { rows: 0, hostIds: [] }, omittedHostIds: [], truncated: false });
+  const rows = <T>(r: T[], truncated = false) => ok({ rows: r, nonLocal: { rows: 0, hostIds: [] }, omittedHostIds: [], truncated });
   const orca = {
     ...w.orca,
     send: (...a: Parameters<OrcaAdapter["send"]>) => {
@@ -50,7 +53,12 @@ function setup(coords: Coord[], o: { dispatchTerminals?: string[]; showFails?: s
         ? { ok: false as const, error: { code: "x", message: "run-show failed" } }
         : ok({ runId: a.id, objective: a.id, coordinatorHandle: coords.find((c) => c.run === a.id)?.shown }),
     terminalList: async () =>
-      rows(coords.map((c) => ({ handle: c.handle, worktreeId: `w_${c.run}`, executionHostId: "local", agentIdentity: "claude", tabId: c.pane.split(":")[0], leafId: c.pane.split(":")[1] }))),
+      rows(
+        coords
+          .filter((c) => !o.hiddenHandles?.includes(c.handle))
+          .map((c) => ({ handle: c.handle, worktreeId: `w_${c.run}`, executionHostId: "local", agentIdentity: "claude", tabId: c.pane.split(":")[0], leafId: c.pane.split(":")[1] })),
+        o.listTruncated === true,
+      ),
     worktreePs: async () =>
       rows(
         coords.filter((c) => !o.hiddenPanes?.includes(c.pane)).map((c) => ({
@@ -189,6 +197,32 @@ test("an orchestrator resumed in a new terminal (run-show names the dead one) le
   assert.equal(s.stalled().length, 1);
   assert.deepEqual(s.w.sends, []);
   assert.ok(r.unseen.some((u) => u.includes(LEAD_RUN)), r.unseen.join("\n"));
+});
+
+const OTHER_RUN = "run_000000000005";
+const other = (): Coord => ({ run: OTHER_RUN, handle: "term_other", pane: "tab_x:leaf_x", shown: "term_other", state: "done", since: T0 });
+
+test("a cut-short terminal list leaves the orchestrator unplaced, so nothing is noticed to another top", async () => {
+  // The orchestrator's terminal is missing from a list Orca cut short: it is unseen, not quiet, and
+  // the visible top must not take its place as the stalled lead's recipient (decision 245, unseen).
+  const s = setup([lead(), orch("working", T0), other()], { hiddenHandles: ["term_orch"], listTruncated: true });
+  leadSpoke(s);
+  s.send(`run:${LEAD_RUN}`, T0 + MIN);
+  s.send(`run:${OTHER_RUN}`, T0 - 40 * MIN, { handled: true });
+
+  await runMonitor("orca", s.deps(T0 + (N + 2) * MIN));
+  assert.equal(s.w.sends.length, 0, "the notice goes nowhere while the orchestrator is unplaced");
+  assert.equal(s.stalled().length, 1, "the lead's stall still writes its own row");
+});
+
+test("a newer unread mail after the coordinator's last turn is noticed even with an older one before that turn", async () => {
+  // oldUnread keeps the newest mail old enough to count; the older mail before the turn never hides it.
+  const s = setup([lead("done", T0 - 10 * MIN), orch("working", T0)]);
+  leadSpoke(s);
+  s.send(`run:${LEAD_RUN}`, T0 - 40 * MIN);
+  s.send(`run:${LEAD_RUN}`, T0 - 5 * MIN);
+  await runMonitor("orca", s.deps(T0 + (N + 2) * MIN));
+  assert.deepEqual(s.stalled().map((e) => e.payload), [{ run: LEAD_RUN, coordinator: "term_lead" }]);
 });
 
 test("a dry run judges but sends nothing", async () => {

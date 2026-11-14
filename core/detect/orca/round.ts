@@ -131,7 +131,7 @@ async function readCoordinators(
     const mail = fromMail(inbox, run);
     const k = pane && panes.has(pane) && t ? { pane, handle: t.handle } : mail && live.has(mail.handle) ? mail : undefined;
     // An unplaced Run could be the orchestrator's, so no top is sure (the stalled Run would tell itself).
-    const unresolved = !k && (!show || t !== undefined);
+    const unresolved = !k && (!show || t !== undefined || list.truncated === true);
     coords.set(run, k ? { ...k, ...(busy ? { dispatch: busy.has(k.handle) } : {}) } : unresolved ? { unresolved: true } : {});
     const found = k ? `${k.handle} pane ${k.pane}${k === mail ? " (from its mail)" : ""}, dispatch ${busy ? busy.has(k.handle) : "unknown"}` : undefined;
     calls.push(`coordinator run:${run}: ${found ?? (unresolved ? (show ? `${shown} live but no ps pane` : "run-show not read") : "no live terminal")}`);
