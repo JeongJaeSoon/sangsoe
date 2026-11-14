@@ -6,7 +6,7 @@
 | resource | uri | 내용 | 단위 |
 |---|---|---|---|
 | `brief` | `sangsoe://brief` | 현황 1단계 표 글. 코어 `renderMarkdown(buildBrief(...))` 그대로이고 `sangsoe brief` 출력과 같다(결정 89) | U9 |
-| `ready` | `sangsoe://ready` | 리드가 시작할 수 있는 🟢 항목(코어 `readiness`, 오너가 시작할 것은 빼고), 이어서 기다리는 항목마다 `renderWhy` 의 "왜 준비되지 않았나" 표. `brief` 와 같은 Run 들을 읽는다(결정 162) | U31 |
+| `ready` | `sangsoe://ready` | 리드가 시작할 수 있는 🟢 항목(코어 `readiness`, 오너가 시작할 것은 빼고), 이어서 기다리는 항목마다 `renderWhy` 의 "왜 준비되지 않았나" 표. `brief` 와 같은 Run 들을 읽는다(결정 162). 끝에 같은 base 의 열린 PR 둘이 같은 파일을 바꾸는 쌍의 "겹침" 절(코어 `prOverlaps`, 읽을 때 GitHub 파일 목록, 결정 252) | U31 · U122 |
 | `models` | `sangsoe://models` | 모델 선택 표 하나(`core/models/table.ts`): 카탈로그 · 정책 · 변경 이력 · 출처. `start_unit` 의 `kind`·`effort`·`tier`·`reason` 이 이 표에서 고른다. JSON(결정 164) | U32 |
 | `item_timeline` | `sangsoe://item/{task}/timeline` | 한 항목의 event 를 순서대로(코어 뷰 `item_timeline`, 잡음 제외). `{task}` 는 Orca Task id 나 `iNNN`. JSON `{task, rows}`(결정 162) | U31 |
 

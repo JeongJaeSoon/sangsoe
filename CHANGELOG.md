@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **The lead's ready read names open PRs that change the same file (252).** Resource `ready` ends with a 겹침 section: one line per pair of open PRs on the same repository and base, with the files both change, so the land order is set before a merge makes the other one conflict. It is computed when read, from pr-monitor's open PRs and GitHub's file lists (read only for a base with two or more open PRs); nothing is stored or sent. A list that could not be read leaves its PR's pairs unjudged and says so.
+
 ## 0.1.6-rc.4 (pre-release)
 
 Everything since `v0.1.6-rc.3`: decisions 248 and 249 and a fix to the owner's answer to a wait. A pre-release for checking the 리소스 section and 현황's top block on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
