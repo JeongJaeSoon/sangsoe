@@ -34,8 +34,8 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 | 워커의 실행 출력(리드만) | 리뷰한 head 의 출력인가, 확인 못 한 것이 적혔나. 맞으면 등급이 묻는 `kind` 마다 증거를 기록하고, 머지 뒤에는 배포 단계를 기록한다. 그 PR 을 쓴 세션은 거부된다(결정 171). 워커의 `ask` 에는 Orca `reply` 로 답한다 | `evidence_record` · `stage_record` |
 | "승인되면 머지" PR 이 승인됨(리드만) | 같은 `land` 요청으로 머지한다 | `land` |
 | 질문(`ask`) | 브리프와 승인 줄 안에서 답할 수 있나. 있으면 Orca `reply`, 없으면 한 단계 위로 | `decision_open`(오너 판단일 때) |
-| escalation | 네 단위 안에서 풀 수 있나. 아니면 선택지·추천·기다리는 것을 붙여 위로 | `decision_open`, 또는 리드는 Orca `send --type escalation`(Dispatch 가 없는 오케스트레이터는 status·question 형, 결정 197) |
-| 거부 보고 | 거부된 행위를 다른 길로 하지 않는다. 규칙이 바뀌어야 하면 오너 몫으로 올린다 | `decision_open` |
+| escalation | 네 단위 안에서 풀 수 있나. 아니면 선택지·추천·기다리는 것을 붙여 위로 | `decision_open`, 또는 리드는 Orca `send --type escalation`(Dispatch 가 없는 오케스트레이터와 Task 없는 리드는 status·question 형, 결정 197·243) |
+| 거부 보고 | 범주와 막은 층(권한 규칙·분류기·hook·사람)을 읽는다. 어느 세션도, 너도, 그 행위를 다른 길로 하지 않고, 통과할 꼴(stdin·래퍼·다른 세션·다른 도구·다른 확인)을 일러 주지 않는다. 이유를 밝힌 분류기·hook 거부면 거부된 세션이 그 이유가 요구한 증거를 더해 같은 꼴로 한 번 한다. 보고에 이미 "재시도 1회" 가 있거나 사람이 거부했으면 이 길은 없다. 규칙이 있어야 하면 가장 작은 규칙을 오너 몫으로 올리고, 오너가 규칙을 더했거나 그 세션의 대화에서 허용하면 그 세션이 한 번 더 한다. 거부된 확인은 '확인 못 함(거부)' 으로 남기고 일은 계속한다. 거부를 돌아 만든 변경은 land 하지 않고 되돌린다. 서브에이전트의 Edit·Write 가 판정 없이(no verdict) 거부되면 그 서브에이전트를 띄운 세션(워커가 띄웠으면 그 워커)이 단위째 한 번 다시 하고, 너는 다시 시작하지 않는다. 거기서 또 판정이 없으면 오너 몫이다. 같은 거부의 되풀이 보고에는 이미 닫힌 결정을 다시 준다. 보고가 가리킨 `orch-refusal/` 파일은 코어가 그 메시지의 `refusal_report` 를 남긴 뒤(resource `brief` 에 그 거부가 보인 뒤)에, Dispatch 없는 길로 온 보고면 읽은 뒤에 휴지통으로 옮긴다. 먼저 옮기면 코어가 읽지 못해 거부가 보이지 않는다(결정 255) | `decision_open` |
 | `item_ready`·`capacity_free` | 시작할 항목이 생겼다 | `start_unit`(`start` skill) |
 | `close_suggested` | 증거가 그 오너 항목의 완료를 보이나. 보이면 오너에게 완료 버튼을 누를 항목이라고 알린다. 오너 항목은 오너가 닫는다. 오너가 먼저 누른 항목은 ⏳ 검증 대기라 이 제안이 오지 않고 probe 가 통과하면 저절로 ✅ 로 읽힌다(결정 181) | — |
 | `main_red` | 머지한 PR 의 당사자에게 원인 좁히기를 맡긴다. 동결 중에는 `main_fix` 만 land 된다 | `start_unit` 또는 Orca `send` |
