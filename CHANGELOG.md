@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **An emoji and its label are always the same distance apart (259).** The panel put 3px after the emoji in the summary line, the footer, the folded 완료 list and the flags, 12px after the mark on a group's title row in a narrow panel, and 4px before the badge in a wide table's state column. One variable (`--emoji-gap`, 4px) and one class now set the gap everywhere, instead of a typed space. `scripts/panel-measure.devtools.js` reports the gap at each place as `emoji_gap` and the difference as `emoji_gap_spread`, which must be 1px or less.
+
 ## 0.1.6-rc.5 (pre-release)
 
 Everything since `v0.1.6-rc.4`: decision 253. A pre-release for checking the 리소스 section's spacing and its arrow on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.

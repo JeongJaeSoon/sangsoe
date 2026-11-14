@@ -13,7 +13,9 @@ test.before(async () => {
   group = g.value as unknown as PanelView;
 });
 const gm = () => group.model as GroupDetail;
-const cells = (html: string) => [...html.matchAll(/<div(?: class="[^"]*")?><dt>([^<]*)<\/dt><dd>(\d+)/g)].map((m) => [m[1], Number(m[2])] as const);
+// Decision 259: the gap after an emoji is a class, so the name reads back as the emoji, a space, the label.
+const plain = (s: string) => s.replace(/<span class="em">([^<]*)<\/span>/g, "$1 ");
+const cells = (html: string) => [...html.matchAll(/<div(?: class="[^"]*")?><dt>((?:(?!<\/dt>).)*)<\/dt><dd>(\d+)/g)].map((m) => [plain(m[1] ?? ""), Number(m[2])] as const);
 
 test("the title counts open items, the cells before ✅ add up to it, and ✅ comes after them", () => {
   const html = renderStage(group);
@@ -24,7 +26,7 @@ test("the title counts open items, the cells before ✅ add up to it, and ✅ co
   const names = cells(html).map(([n]) => n);
   assert.deepEqual(names.slice(0, 3), ["🔄 진행 중", "🚧 막힘", "남은 것"]);
   assert.ok(names.indexOf(`✅ ${f.doneDays}일`) > names.indexOf("남은 것"));
-  assert.match(html, /<div class="aside"><dt>✅ 7일<\/dt>/);
+  assert.match(html, /<div class="aside"><dt><span class="em">✅<\/span>7일<\/dt>/);
 });
 
 test("a second click on the same row does not push the screen twice", () => {
