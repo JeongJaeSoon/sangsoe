@@ -33,7 +33,9 @@ const MOVED = `${everyday.currentId}-next`;
 
 type Ev = { seq: number; ts: string; type: string; entity_id: string | null; payload: Record<string, unknown> };
 let seq = 0;
-const at = (minute: number) => new Date(Date.UTC(2026, 10, 14, 9, minute)).toISOString();
+// After every row's check, so a later table update does not put these sessions before the cutoff.
+const BASE = Math.max(...CATALOG.flatMap((r) => [r.verified, ...(r.pin ? [r.pin.since] : [])]).map((d) => Date.parse(`${d}T00:00:00Z`))) + 86_400_000;
+const at = (minute: number) => new Date(BASE + minute * 60_000).toISOString();
 const unit = (task: string, model: string, minute: number): Ev => ({
   seq: ++seq,
   ts: at(minute),
