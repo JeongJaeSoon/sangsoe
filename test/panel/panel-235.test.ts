@@ -42,13 +42,13 @@ const ok = (p: PartName) => ({ ok: true as const, value: parts[p] as never });
 test("reading: each part says what is being read until it comes, and a part that came is drawn at once", () => {
   const none = renderResBody({ kind: "reading", got: {} }, NOW);
   assert.match(none, /<h3>PC 부하<\/h3><p class="pending" role="status">부하를 읽는 중…<\/p>/);
-  assert.match(none, /<h3>sangsoe 가 만든 것<\/h3><p class="pending" role="status">worktree·터미널·프로세스·임시 폴더를 읽는 중…<\/p>/);
+  assert.doesNotMatch(none, /기록됨·오너 손|sangsoe 가 만든 것/, "decision 248: the made part draws no reading row");
   assert.match(none, /<h3>정리 후보<\/h3><p class="pending" role="status">끝난 worktree 를 GitHub·Orca 에 묻는 중…<\/p>/);
   const one: Got = { load: ok("load") };
   const html = renderResBody({ kind: "reading", got: one }, NOW);
   assert.match(html, /aria-label="CPU 0\.20 \/ 코어"/, "the load part is drawn");
   assert.doesNotMatch(html, /부하를 읽는 중/);
-  assert.match(html, /worktree·터미널·프로세스·임시 폴더를 읽는 중…/);
+  assert.match(html, /끝난 worktree 를 GitHub·Orca 에 묻는 중…/);
   assert.doesNotMatch(html, /data-res="ask"/, "nothing to clean up while the candidates are read");
 });
 
@@ -59,7 +59,7 @@ test("a refresh keeps the last read in place until each part's new answer comes,
   assert.match(html, /aria-label="CPU 0\.20 \/ 코어"/, "a part that came is drawn fresh");
   assert.doesNotMatch(html, /0\.90/, "the last read never covers a fresh answer");
   assert.doesNotMatch(html, /읽는 중…<\/p>/, "no part drops to a reading row");
-  assert.match(html, /<h3>sangsoe 가 만든 것<\/h3><table/);
+  assert.doesNotMatch(html, /sangsoe 가 만든 것/);
   assert.match(html, /<h3>정리 후보<\/h3><p class="empty">/);
   assert.doesNotMatch(html, /data-res="(ask|run)"/);
   assert.match(html, /<span class="fresh" aria-live="polite">읽는 중…<\/span>/);

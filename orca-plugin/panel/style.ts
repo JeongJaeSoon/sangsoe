@@ -69,7 +69,8 @@ code { font-family: var(--font-mono); font-size: var(--text-xs); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: break-word; min-width: 0; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-#root { flex: none; padding: 0 0 var(--s4); container: panel / inline-size; }
+/* 8px, not rc.3's 16: a stage taller than the panel still ends clear of the 리소스 rule (decision 248). */
+#root { flex: none; padding: 0 0 var(--s2); container: panel / inline-size; }
 /* The header, and a detail screen's back line under it, stay at the top together (decision 225 (4)). */
 .bar { position: sticky; top: 0; z-index: 2; background: var(--paper); }
 .top { display: flex; align-items: center; gap: var(--s2); height: 36px; padding: 0 var(--gx); border-bottom: 1px solid var(--rule); background: var(--paper); }
@@ -312,12 +313,17 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 /* The 리소스 section (decision 234): its own element under #root, so a panel repaint never touches an
    open confirm list. One quiet fold; the gauges are the only drawing in it. */
-#res { margin: auto 0 0; padding: 0 var(--gx) var(--s4); border-top: 1px solid var(--rule); }
-#res .res-fold { margin: 0; }
-#res .res-fold > summary { padding: var(--s2) 0; border-bottom: 0; }
-#res .res-body { padding: 0 0 var(--s2); }
+#res { margin: auto 0 0; padding: 0 var(--gx) var(--s2); border-top: 1px solid var(--rule); }
+/* Decision 248: closed, the heading is a quiet muted row; open, it is ink and the body sits in the
+   panel's one emphasis, a 1px rule with rounded corners (decision 222), so the two read apart. */
+#res .res-fold { margin: 0; position: relative; }
+#res .res-fold > summary { padding: var(--s2) 0; border-bottom: 0; color: var(--muted); font-weight: 500; }
+#res .res-fold[open] > summary { color: var(--ink); font-weight: 600; }
+#res .res-fold[open] > .res-body { padding: 0 var(--s3) var(--s3); border: 1px solid var(--rule); border-radius: var(--r3); }
 #res h3 { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s3); }
-.res-h { display: flex; align-items: baseline; gap: var(--s3); justify-content: flex-end; }
+/* The reading time and 새로 고침 end the 리소스 row, left of its chevron; in the DOM they stay after the
+   summary, so the keyboard reaches them next and a press never toggles the fold. */
+.res-h { position: absolute; top: 0; right: var(--s5); height: 36px; display: flex; align-items: center; gap: var(--s3); font-size: var(--text-sm); }
 .res-h .stale { color: var(--bad); }
 .gauge { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; align-items: center; gap: var(--s3); min-height: 24px; font-size: var(--text-sm); }
 .g-l { color: var(--ink-2); white-space: nowrap; }
@@ -358,7 +364,8 @@ button.link:disabled { color: var(--muted); cursor: default; }
 .tbl.res .num { text-align: right; white-space: nowrap; width: 8em; }
 .tbl.owned th.k, .tbl.owned td.k { width: 6em; }
 .tbl.owned th.o, .tbl.owned td.o { width: 9em; }
-#res .empty { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--text-sm); }
+/* padding 0: the stage's .empty pads 12px above and below, which here only lengthened the page. */
+#res .empty { margin: var(--s1) 0 0; padding: 0; color: var(--muted); font-size: var(--text-sm); }
 .res-acts { margin-top: var(--s3); }
 .confirm { margin-top: var(--s3); padding: var(--s3); border: 1px solid var(--rule-2); border-radius: var(--r3); font-size: var(--text-sm); }
 .confirm p { margin: 0 0 var(--s3); }
