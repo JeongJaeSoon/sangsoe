@@ -351,11 +351,14 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
     return rowHtml(m.inProgress, r, { cls: "item" });
   });
   const s = m.summary;
+  // Decision 249: the tabs and the two sections already show this line's counts, so it stays for a screen reader only.
+  const calm = m.decisions.rows.length === 0 && m.ownerTodo.rows.length === 0;
   return [
-    `<h1>현황 · 묶음 ${m.groups} · 내가 할 일 <span>${m.todo.total}</span> <span class="dim">(결정 ${m.todo.decisions} + 할 일 ${m.todo.other})</span></h1>`,
+    `<h1 class="sr">현황 · 묶음 ${m.groups} · 내가 할 일 ${m.todo.total} (결정 ${m.todo.decisions} + 할 일 ${m.todo.other})</h1>`,
     `<p class="sumline">✅ 완료 ${s.done}건 · 🔄 진행 중 ${s.doing}건 · 남은 것 ${s.left}건 · 🚧 막힌 것 ${s.blocked}건</p>`,
-    section("dec", m.decisions, decisions, true, "", "todo"),
-    section("me", m.ownerTodo, todoRows, true, "", "todo"),
+    calm
+      ? `<section aria-labelledby="h-owner" class="nil" data-tab="todo"><div class="sec-h"><h2 id="h-owner">${esc(m.decisions.title)} <span class="count">0</span> · ${esc(m.ownerTodo.title)} <span class="count">0</span></h2><span class="none">없음</span></div></section>`
+      : section("dec", m.decisions, decisions, true, "", "todo") + section("me", m.ownerTodo, todoRows, true, "", "todo"),
     section("prog", m.inProgress, progress, false, "우선순위, 오래된 🚧 순", "prog"),
     m.groups === 0 ? `<p class="hint0" data-tab="prog">${esc(NO_GROUP)}</p>` : "",
     m.onHold ? section("hold", m.onHold, m.onHold.rows.map((r) => rowHtml(m.onHold as Table, r, { nav: { item: r.id } })), false, "", "prog") : "",
