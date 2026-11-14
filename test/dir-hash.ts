@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { join, relative } from "node:path";
 
 /**
@@ -13,7 +13,7 @@ export function diskHash(dir: string): string | null {
     for (const e of readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const p = join(d, e.name);
       if (e.isDirectory()) walk(p);
-      else h.update(`${relative(dir, p)}\0`).update(readFileSync(p));
+      else h.update(`${relative(dir, p)}\0`).update(e.isSymbolicLink() ? `-> ${readlinkSync(p)}` : readFileSync(p));
     }
   };
   walk(dir);
