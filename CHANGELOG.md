@@ -3,6 +3,7 @@
 Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
+
 ### Changes
 
 - **The 리소스 section keeps itself current while you look at it (257).** While the section is open and the panel is shown, it re-reads PC 부하 and 기록됨·오너 손 on the panel's own 30-second tick, with no timer of its own; folded or hidden, the tick reads nothing, and showing it again reads all three parts at once. 정리 후보, which asks GitHub about each card and takes a few seconds, is read on open, show and 새로 고침, and on the tick only when its last reading would turn 낡음 before the next one (and again on the next tick after one that failed), so 정리 does not lock while the section stays open and the reads succeed. With a core too old to read in parts, the tick reads nothing. These reads are quiet: no reading row, one read at a time, and only the parts whose drawing changed are rewritten, so a moving CPU gauge leaves the candidate list and its buttons alone. A read the tick started is dropped if you open the confirm list, start 정리 or press 새로 고침 meanwhile. `scripts/panel-measure.devtools.js` now reports the last tick's cost (`periodic_read_ms`, `periodic_parts`, `periodic_paint`).
