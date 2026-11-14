@@ -1,10 +1,10 @@
 // Probe A9 (decision 261): did Orca message delivery alone wake a top-level orchestrator session?
 // Token-free, read-only. Two records that already exist are joined by Orca's messageId; nothing is stored:
-//   sender side   the sending session's transcript: the `orca orchestration send` result (messageId=...) and its time
+//   sender side   the sender's own log, one line per send: <n> <condition> scheduled=<time> sent=<time> messageId=<id>
 //   receiver side the probe session's transcript(s): the `check` tool_result that carries the id, and the first tool call
 // The result is a table on stdout.
 //
-//   node scripts/a9-collect.ts <sender.jsonl> <probe.jsonl>... [--subject-prefix "A9 probe"]
+//   node scripts/a9-collect.ts <sends.log> <probe.jsonl>...
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -85,20 +85,14 @@ export interface Send {
   sentAt: number;
 }
 
-// The sends are the `orca orchestration send` calls (whose command contains the prefix) with the messageId Orca returned.
-export function sends(senderFiles: string[], subjectPrefix = ""): Send[] {
-  const lines = parseTranscript(senderFiles);
-  const wanted = new Map<string, true>();
-  for (const l of lines) {
-    for (const c of l.commands) {
-      if (c.command.includes("orchestration send") && c.command.includes(subjectPrefix)) wanted.set(c.id, true);
-    }
-  }
+// A send log line carries the actual send time (second resolution) and the messageId Orca returned.
+export function sends(logFile: string): Send[] {
   const out: Send[] = [];
-  for (const l of lines) {
-    if (!l.toolResult || !l.resultIds.some((id) => wanted.has(id))) continue;
-    const m = /messageId=(msg_[A-Za-z0-9]+)/.exec(l.text);
-    if (m?.[1]) out.push({ id: m[1], sentAt: l.ts });
+  for (const line of readFileSync(logFile, "utf8").split("\n")) {
+    const at = /\bsent=(\S+)/.exec(line);
+    const id = /\bmessageId=(msg_[A-Za-z0-9]+)/.exec(line);
+    const sentAt = at?.[1] ? Date.parse(at[1]) : Number.NaN;
+    if (id?.[1] && !Number.isNaN(sentAt)) out.push({ id: id[1], sentAt });
   }
   return out;
 }
@@ -155,13 +149,10 @@ export function table(rows: Row[]): string {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const args = process.argv.slice(2);
-  const i = args.indexOf("--subject-prefix");
-  const prefix = i >= 0 ? (args.splice(i, 2)[1] ?? "") : "";
-  const [senderFile, ...probe] = args;
-  if (!senderFile || probe.length === 0) {
-    console.error("usage: a9-collect.ts <sender.jsonl> <probe.jsonl>... [--subject-prefix <text>]");
+  const [logFile, ...probe] = process.argv.slice(2);
+  if (!logFile || probe.length === 0) {
+    console.error("usage: a9-collect.ts <sends.log> <probe.jsonl>...");
     process.exit(2);
   }
-  console.log(table(collect(sends([senderFile], prefix), probe)));
+  console.log(table(collect(sends(logFile), probe)));
 }

@@ -15,8 +15,6 @@ const wake = (s: number) => ({ type: "user", timestamp: iso(s), message: { role:
 const tool = (s: number) => ({ type: "assistant", timestamp: iso(s), message: { content: [{ type: "tool_use", id: `u${s}`, name: "Bash", input: { command: "ls" } }], stop_reason: "tool_use" } });
 const result = (s: number, text: string) => ({ type: "user", timestamp: iso(s), message: { content: [{ type: "tool_result", tool_use_id: `u${s}`, content: text }] } });
 const done = (s: number) => ({ type: "assistant", timestamp: iso(s), message: { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" } });
-const sendCall = (s: number, command: string) => ({ type: "assistant", timestamp: iso(s), message: { content: [{ type: "tool_use", id: `send${s}`, name: "Bash", input: { command } }], stop_reason: "tool_use" } });
-const sendResult = (s: number, id: string) => ({ type: "user", timestamp: iso(s), message: { content: [{ type: "tool_result", tool_use_id: `send${s - 1}`, content: `messageId=${id}` }] } });
 
 function withFiles<T>(files: unknown[][], fn: (paths: string[]) => T): T {
   const dir = mkdtempSync(join(tmpdir(), "a9-test-"));
@@ -38,22 +36,22 @@ const one = (rows: Row[]): Row => {
 };
 const sent = (id: string, s: number): Send => ({ id, sentAt: T0 + s * 1000 });
 
-test("sends: only send commands carrying the prefix count, timed at the result", () => {
-  withFiles(
-    [
+test("sends: reads the send time and messageId from each log line, skipping lines without both", () => {
+  const dir = mkdtempSync(join(tmpdir(), "a9-log-"));
+  try {
+    const log = join(dir, "sends.log");
+    writeFileSync(
+      log,
       [
-        sendCall(1, "orca orchestration send --to run:r --subject x --body 'A9 probe 1, no action'"),
-        sendResult(2, "msg_aa11"),
-        sendCall(3, "orca orchestration send --to run:r --body other"),
-        sendResult(4, "msg_bb22"),
-        sendCall(5, "ls A9 probe"),
-        sendResult(6, "messageId=msg_cc33"),
-      ],
-    ],
-    (p) => {
-      assert.deepEqual(sends(p, "A9 probe"), [{ id: "msg_aa11", sentAt: T0 + 2000 }]);
-    },
-  );
+        "1\tidle\tscheduled=2026-11-15T01:21:00+09:00\tsent=2026-11-15T01:21:00+0900\tmessageId=msg_aa11",
+        "2\tidle\tscheduled=2026-11-15T03:21:00+09:00\tsent=2026-11-15T03:21:01+0900\terror: dispatch_run_mismatch",
+        "",
+      ].join("\n"),
+    );
+    assert.deepEqual(sends(log), [{ id: "msg_aa11", sentAt: Date.parse("2026-11-14T16:21:00Z") }]);
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
 });
 
 test("idle send: latency is the first tool call after the send", () => {
