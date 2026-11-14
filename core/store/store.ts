@@ -18,7 +18,7 @@ import {
 } from "../contract/index.ts";
 import { appendLines, backupPath, isOwnRow, type Line, lastRowSeq, OWN_ROW_SQL, readBackup } from "./backup.ts";
 import { checkLocalFs, checkSqliteVersion, type FsProbe, type StartCheck } from "./checks.ts";
-import { type SampleReads, writeSample } from "./samples.ts";
+import { readSamples, type SampleReads, type StoredSample, writeSample } from "./samples.ts";
 import { DDL, EDGE_TRIGGERS, LOAD_SAMPLE_DDL, SCHEMA_V } from "./schema.ts";
 
 export type NewEvent<T extends EventType = EventType> = {
@@ -472,6 +472,11 @@ export class Store {
   /** The resource round's load sample at the store clock, older ones pruned in the same transaction (decision 241). */
   recordLoadSample(s: SampleReads): void {
     this.#tx(() => writeSample(this.#db, Date.parse(this.#now()), s));
+  }
+
+  /** Decision 250: the load samples after `since` (epoch ms) for the panel's card; writes nothing. */
+  loadSamples(since: number): StoredSample[] {
+    return readSamples(this.#db, since);
   }
 
   close(): void {
