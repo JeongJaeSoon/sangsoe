@@ -1,0 +1,143 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { test } from "node:test";
+import { readParts, renderResBody, renderResources, type ResState } from "../../orca-plugin/panel/resources.ts";
+import { STYLE } from "../../orca-plugin/panel/style.ts";
+import { renderStage } from "../../orca-plugin/panel/view.ts";
+import { NOW, PARTS_GOT, VIEW } from "../fixtures/panel/rc3-state.ts";
+import { scratchDir } from "../scratch.ts";
+
+// U116 (decision 248): the owner's rc.3 panel, 1070px tall, scrolled 25px at 544 with the 리소스
+// section open. Drawn here in a real browser inside the page Orca builds for an html panel (no body
+// tag, #root alone, the section mounted after it), at the panel widths the owner reads.
+
+const HEIGHT = 1070;
+const WIDTHS = [440, 544, 600, 900] as const;
+
+function chrome(): string | null {
+  const named = process.env.CHROME;
+  if (named) return named;
+  const mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  if (process.platform === "darwin" && existsSync(mac)) return mac;
+  for (const bin of ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]) {
+    const r = spawnSync("which", [bin], { encoding: "utf8" });
+    if (r.status === 0 && r.stdout.trim()) return r.stdout.trim();
+  }
+  return null;
+}
+
+const shown = async (): Promise<ResState> => readParts(async (input) => PARTS_GOT[input?.part ?? "load"], () => undefined);
+
+/** Orca's html panel page for a .ts entry, with the entry's mount reduced to what it draws. */
+function panelPage(stage: string, res: string): string {
+  const mount = `
+const st = document.createElement("style"); st.textContent = ${JSON.stringify(STYLE)}; document.head.append(st);
+const root = document.getElementById("root");
+const box = document.createElement("section"); box.id = "res"; root.after(box);
+box.innerHTML = ${JSON.stringify(res)};
+root.innerHTML = ${JSON.stringify(stage)};
+addEventListener("load", () => {
+  const d = document.documentElement;
+  const rect = (q) => { const e = document.querySelector(q); return e ? e.getBoundingClientRect().toJSON() : null; };
+  const scrollers = [...document.querySelectorAll("*")].filter((e) => {
+    const s = getComputedStyle(e);
+    return /(auto|scroll)/.test(s.overflowX + s.overflowY) && (e.scrollHeight > e.clientHeight || e.scrollWidth > e.clientWidth);
+  }).map((e) => e.id || e.className || e.tagName);
+  const sum = document.querySelector("#res summary");
+  const body = document.querySelector("#res .res-body");
+  window.measured = {
+    vh: innerHeight, docH: d.scrollHeight, hscroll: d.scrollWidth - d.clientWidth, scrollers,
+    res: rect("#res"), summary: rect("#res summary"), stamp: rect("#res .res-h"),
+    summaryWeight: Number(getComputedStyle(sum).fontWeight), bodyBorder: getComputedStyle(body).borderTopWidth,
+  };
+});`;
+  return `<!doctype html>\n<html class="light">\n<head>\n<meta charset="utf-8">\n<style id="tokens">:root{}</style>\n</head>\n<div id="root"></div>\n<script>${mount}</script>\n`;
+}
+
+type Measured = {
+  vh: number;
+  docH: number;
+  hscroll: number;
+  scrollers: string[];
+  res: DOMRect;
+  summary: DOMRect;
+  stamp: DOMRect | null;
+  summaryWeight: number;
+  bodyBorder: string;
+};
+
+/** One browser run over every width and fold state, each page in an iframe of the panel's size. */
+function measure(pages: Record<string, string>, width: (name: string) => number): Record<string, Measured> {
+  const bin = chrome();
+  assert.ok(bin, "no Chrome: set CHROME");
+  const dir = scratchDir("sangsoe-panel-");
+  for (const [name, html] of Object.entries(pages)) writeFileSync(join(dir, `${name}.html`), html);
+  const frames = Object.keys(pages)
+    .map((name) => `<iframe name="${name}" src="${name}.html" style="display:block;border:0;width:${width(name)}px;height:${HEIGHT}px"></iframe>`)
+    .join("");
+  const outer = `<!doctype html><html><body style="margin:0">${frames}<pre id="out"></pre><script>
+addEventListener("load", () => setTimeout(() => {
+  const out = {};
+  for (const f of document.querySelectorAll("iframe")) out[f.name] = f.contentWindow.measured;
+  document.getElementById("out").textContent = JSON.stringify(out);
+}, 200));</script></body></html>`;
+  writeFileSync(join(dir, "index.html"), outer);
+  const args = [
+    "--headless=new",
+    "--disable-gpu",
+    "--allow-file-access-from-files",
+    `--user-data-dir=${join(dir, "profile")}`,
+    "--window-size=1000,1200",
+    "--virtual-time-budget=5000",
+    ...(process.platform === "linux" ? ["--no-sandbox"] : []),
+    "--dump-dom",
+    `file://${join(dir, "index.html")}`,
+  ];
+  const r = spawnSync(bin, args, { encoding: "utf8", timeout: 60_000 });
+  const json = /<pre id="out">([^<]*)<\/pre>/.exec(r.stdout)?.[1];
+  assert.ok(json, `no measurement from Chrome: ${r.stderr.slice(-500)}`);
+  return JSON.parse(json.replaceAll("&quot;", '"').replaceAll("&amp;", "&")) as Record<string, Measured>;
+}
+
+const skip = !chrome() && !process.env.CI ? "no Chrome on this machine (CI requires one)" : false;
+
+test("the rc.3 panel fits 1070px at 440 / 544 / 600 / 900 with the 리소스 section open or closed", { skip }, async () => {
+  const stage = renderStage(VIEW);
+  const now = Date.parse(NOW);
+  const open = renderResources(await shown(), true, now, 24);
+  const closed = renderResources({ kind: "idle" }, false, now);
+  const pages: Record<string, string> = {};
+  for (const w of WIDTHS) {
+    pages[`open-${w}`] = panelPage(stage, open);
+    pages[`closed-${w}`] = panelPage(stage, closed);
+  }
+  const got = measure(pages, (name) => Number(name.split("-")[1]));
+  for (const [name, m] of Object.entries(got)) {
+    assert.ok(m, `${name}: the page drew`);
+    assert.equal(m.vh, HEIGHT, `${name}: the frame is the panel's height`);
+    assert.ok(m.docH <= m.vh, `${name}: the document is ${m.docH - m.vh}px taller than the panel`);
+    assert.equal(Math.round(m.vh - m.res.bottom), 0, `${name}: the 리소스 section ends at the panel's bottom`);
+    assert.ok(m.hscroll <= 0, `${name}: ${m.hscroll}px of horizontal scroll`);
+    assert.deepEqual(m.scrollers, [], `${name}: nothing scrolls inside the page`);
+  }
+  for (const w of WIDTHS) {
+    const o = got[`open-${w}`] as Measured;
+    const c = got[`closed-${w}`] as Measured;
+    // Owner point 3: the open section reads apart from the closed one, by more than its chevron.
+    assert.ok(o.summaryWeight > c.summaryWeight, `${w}: the open heading is heavier than the closed one`);
+    assert.equal(o.bodyBorder, "1px", `${w}: the open body sits in a 1px frame`);
+    // Owner point 4: the reading time and 새로 고침 sit on the heading's own line.
+    const s = o.stamp as DOMRect;
+    const mid = s.top + s.height / 2;
+    assert.ok(mid > o.summary.top && mid < o.summary.bottom, `${w}: the reading time is on the 리소스 line`);
+    assert.ok(s.right <= o.summary.right, `${w}: the reading time ends inside the line`);
+  }
+});
+
+test("owner point 5: the open section lists no 'sangsoe 가 만든 것' table and no process line", async () => {
+  const html = renderResBody(await shown(), Date.parse(NOW));
+  assert.doesNotMatch(html, /sangsoe 가 만든 것|claude 프로세스|node 프로세스|프로세스는 보여 주기만/);
+  assert.match(html, /<h3>정리 후보<\/h3>/, "the cleanup list stays");
+});
