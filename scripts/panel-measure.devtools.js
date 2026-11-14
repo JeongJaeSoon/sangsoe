@@ -20,6 +20,13 @@
 // res_space_above and res_space_below, res_card_pad_top and res_card_pad_bottom, and res_arrow_off
 // (the arrow's centre less the title's). They describe the open section; the closed one is read only
 // on a first read, before the click, and is the `folded` object.
+//
+// And the cost of the section's last read on the panel's 30-second tick (decision 257), as the panel
+// itself timed it: periodic_read_ms from the tick to its paint, periodic_parts what it asked
+// (load+made, or all three when 정리 후보 was due), periodic_paint the pieces it rewrote (none when the
+// answer was unchanged). Pass: periodic_read_ms under 7500 (a quarter of the tick) and, on a machine
+// whose load did not move, periodic_paint none or stamp. With the section not yet open and shown for
+// a tick, periodic_read_ms is null.
 (() => {
   const PARTS = ["PC 부하", "정리 후보"];
   const LIMIT_MS = 8000;
@@ -30,6 +37,11 @@
     return;
   }
   const mode = fold.open ? "refresh" : "first_open";
+  const last = res.dataset;
+  const periodic =
+    last.tickMs === undefined
+      ? { periodic_read_ms: null, periodic_note: "no tick read yet: keep the section open and the panel shown for 30 s, then rerun" }
+      : { periodic_read_ms: Number(last.tickMs), periodic_parts: last.tickParts, periodic_paint: last.tickPaint };
   const parts = {};
   const paints = [];
   const refresh = () => res.querySelector('[data-res="refresh"]');
@@ -161,7 +173,7 @@
     observer.disconnect();
     clearTimeout(timer);
     seen();
-    const out = { mode, first_read_ms: { ...parts, all: timedOut ? null : ms() }, paints_ms: paints, timed_out: timedOut, ...layout() };
+    const out = { mode, first_read_ms: { ...parts, all: timedOut ? null : ms() }, paints_ms: paints, timed_out: timedOut, ...periodic, ...layout() };
     const line = `SANGSOE_MEASURE ${JSON.stringify(out)}`;
     console.log(line);
     window.sangsoeMeasure = out;

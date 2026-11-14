@@ -1,6 +1,7 @@
 // The 리소스 section at the bottom of the panel (decision 234): folded by default, its open state in
-// Orca's plugin storage, read only when the owner opens or refreshes it. 정리 shows what it will take
-// and runs only after the second press. Declared by hand: this folder imports nothing from the core.
+// Orca's plugin storage, read when the owner opens, shows or refreshes it and, while open and shown,
+// every minute (decision 257). 정리 shows what it will take and runs only after the second press.
+// Declared by hand: this folder imports nothing from the core.
 import { CHEV, esc, type Refusal } from "./view.ts";
 
 type Reading<T> = { ok: true; value: T } | { ok: false; why: string };
@@ -41,7 +42,8 @@ export type ResState =
   | { kind: "idle" }
   /** `last`: the view a refresh started from, standing in for each part until its new answer comes; `result`: the 정리 this read follows. */
   | { kind: "reading"; got: Got; last?: ResView | undefined; result?: Reaped | undefined }
-  | { kind: "shown"; view: ResView; confirm?: boolean; running?: boolean; result?: Reaped }
+  /** `got`: the parts the view was built from, kept for a read that asks only some (absent when read whole). */
+  | { kind: "shown"; view: ResView; got?: Required<Got>; confirm?: boolean; running?: boolean; result?: Reaped }
   | { kind: "failed"; refusal: Refusal };
 
 /** The whole view from three settled parts; a part that failed is unread in its own block. */
@@ -52,6 +54,7 @@ function assemble(got: Required<Got>): ResState {
   const at = [l, m, c].flatMap((r) => (r.ok ? [r.value.at] : [])).sort()[0] ?? "";
   return {
     kind: "shown",
+    got,
     view: {
       at,
       load: l.ok ? l.value.load : no(l),
@@ -66,19 +69,30 @@ function assemble(got: Required<Got>): ResState {
 }
 
 /**
- * Asks for the three parts at once and paints after each answer. A core older than decision 235
- * refuses parts; the section is then read whole, once.
+ * Asks for the parts at once and paints after each answer. A core older than decision 235 refuses
+ * parts; the section is then read whole, once. Decision 257: `parts` asks only some, and the rest
+ * come from `kept`; a part asked again that fails keeps its `kept` answer, so a minute's failed
+ * read leaves the last reading to age into 낡음 rather than blanking it.
  */
-export async function readParts(request: (input?: { part: PartName }) => Promise<unknown>, paint: (s: ResState) => void): Promise<ResState> {
+export async function readParts(
+  request: (input?: { part: PartName }) => Promise<unknown>,
+  paint: (s: ResState) => void,
+  o: { parts?: readonly PartName[]; kept?: Got | undefined } = {},
+): Promise<ResState> {
   const failed = (e: unknown): Reply<never> => ({ ok: false, refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" } });
+  const asked = o.parts ?? PARTS;
   const got: Got = {};
+  let answered = 0;
   await Promise.all(
-    PARTS.map(async (part) => {
+    asked.map(async (part) => {
       const r = (await request({ part }).catch(failed)) as Reply<never>;
-      got[part] = r;
-      if (Object.keys(got).length < PARTS.length) paint({ kind: "reading", got: { ...got } });
+      const kept = o.kept?.[part];
+      got[part] = (!r.ok && kept?.ok ? kept : r) as never;
+      answered += 1;
+      if (answered < asked.length) paint({ kind: "reading", got: { ...got } });
     }),
   );
+  for (const p of PARTS) got[p] ??= (o.kept?.[p] ?? failed(`${p} was not asked`)) as never;
   let end: ResState;
   if (PARTS.every((p) => got[p]?.ok === false && got[p].refusal.code === "core_old")) {
     const whole = (await request().catch(failed)) as Reply<ResView>;
@@ -89,7 +103,10 @@ export async function readParts(request: (input?: { part: PartName }) => Promise
 }
 
 export const RES_OPEN_KEY = "resources.open";
-/** A reading older than this is marked 낡음: nothing refreshes it but the owner. */
+/**
+ * A reading older than this is marked 낡음 and cannot be reaped from. The minute's read keeps it
+ * fresh only while it succeeds; the oldest part decides (decision 257).
+ */
 export const STALE_MS = 5 * 60_000;
 
 const LEVEL = { ok: "보통", warn: "경고", danger: "위험" } as const;
@@ -311,30 +328,87 @@ export function repaint(el: Paintable, html: string, active: Element | null, wan
   return to ? null : (w ?? { from: key, to: key });
 }
 
+/** The body's runs, in order; the minute's read rewrites only the ones whose html changed (decision 257). */
+export const PIECES = ["stamp", "note", "load", "made", "candidates"] as const;
+export type Piece = (typeof PIECES)[number];
+export type Pieces = Record<Piece, string>;
+
+/** The body inside the fold for one state, piece by piece; `now` decides 낡음, `hours` the band's span. */
+export function resPieces(s: Exclude<ResState, { kind: "idle" | "failed" }>, now: number, hours: 6 | 24 = 6): Pieces {
+  const tools = (stamp: string, busy: boolean) =>
+    `<div class="res-h">${stamp}<button type="button" class="link" data-res="refresh"${busy ? " disabled" : ""}>새로 고침</button></div>`;
+  const note = s.result ? resultNote(s.result) : "";
+  if (s.kind === "reading") {
+    const g = s.got;
+    return {
+      stamp: tools(`<span class="fresh" aria-live="polite">읽는 중…</span>`, true),
+      note,
+      load: partBlock<Pick<ResView, "load" | "episode" | "band">>(g.load, s.last, "PC 부하", "부하를 읽는 중…", (v) => loadBlock(v, hours)),
+      // The owner's list is usually empty, so its reading row would only flash.
+      made: partBlock<Pick<ResView, "made">>(g.made, s.last, OWNED, "", madeBlock),
+      // After a 정리 the last list names what was just taken, so it does not stand in.
+      candidates: partBlock<Cands>(g.candidates, s.result ? undefined : s.last, "정리 후보", "끝난 worktree 를 GitHub·Orca 에 묻는 중…", (v) => candidates(v, null, false)),
+    };
+  }
+  const v = s.view;
+  const age = now - Date.parse(v.at);
+  const stamp = `<span class="fresh${age > STALE_MS ? " stale" : ""}">${esc(hhmm(v.at))} 읽음${age > STALE_MS ? ", 낡음" : ""}</span>`;
+  return { stamp: tools(stamp, s.running === true), note, load: loadBlock(v, hours), made: madeBlock(v), candidates: candidates(v, s, age > STALE_MS) };
+}
+
+/** A comment before each piece but the first marks where it starts: no element, so no selector sees it. */
+const mark = (p: Piece) => `<!--res:${p}-->`;
+
+export function joinPieces(p: Pieces): string {
+  return PIECES.map((k, i) => (i === 0 ? "" : mark(k)) + p[k]).join("");
+}
+
+/** The pieces whose html differs; an empty list means nothing on screen would change. */
+export function changedPieces(was: Pieces, now: Pieces): Piece[] {
+  return PIECES.filter((k) => was[k] !== now[k]);
+}
+
+/**
+ * Rewrites only `which` of a body drawn by joinPieces. Focus inside a rewritten piece goes back to
+ * the button with the same data-res, if it is still there and enabled.
+ */
+export function patchPieces(el: HTMLElement, next: Pieces, which: readonly Piece[], active: Element | null): void {
+  if (which.length === 0) return;
+  const marks = new Map<Piece, ChildNode>();
+  for (const n of el.childNodes) {
+    const k = n.nodeType === 8 ? /^res:(\w+)$/.exec(n.nodeValue ?? "")?.[1] : undefined;
+    if (k && (PIECES as readonly string[]).includes(k)) marks.set(k as Piece, n);
+  }
+  // A body not drawn by joinPieces (failed, or idle) has no marks: draw it whole.
+  if (marks.size !== PIECES.length - 1) {
+    el.innerHTML = joinPieces(next);
+    return;
+  }
+  const key = active && el.contains(active) ? active.getAttribute("data-res") : null;
+  let lost = false;
+  for (const k of [...which].sort((a, b) => PIECES.indexOf(a) - PIECES.indexOf(b))) {
+    const i = PIECES.indexOf(k);
+    const from = marks.get(k);
+    const end = marks.get(PIECES[i + 1] as Piece);
+    const range = el.ownerDocument.createRange();
+    if (from) range.setStartBefore(from);
+    else range.setStart(el, 0);
+    if (end) range.setEndBefore(end);
+    else range.setEnd(el, el.childNodes.length);
+    if (active && range.intersectsNode(active)) lost = true;
+    range.deleteContents();
+    range.insertNode(range.createContextualFragment((i === 0 ? "" : mark(k)) + next[k]));
+  }
+  if (lost && key) el.querySelector<HTMLElement>(`[data-res="${key}"]:not(:disabled)`)?.focus({ preventScroll: true });
+}
+
 /** The body inside the fold for one state; `now` decides 낡음, `hours` the band's span. */
 export function renderResBody(s: ResState, now: number, hours: 6 | 24 = 6): string {
   if (s.kind === "idle") return "";
   if (s.kind === "failed") {
     return `<p class="msg bad" role="status" title="${esc([s.refusal.code, s.refusal.reason].join(" · "))}">리소스를 읽지 못했다. <button type="button" class="link" data-res="refresh">새로 고침</button></p>`;
   }
-  const tools = (stamp: string, busy: boolean) =>
-    `<div class="res-h">${stamp}<button type="button" class="link" data-res="refresh"${busy ? " disabled" : ""}>새로 고침</button></div>`;
-  if (s.kind === "reading") {
-    const g = s.got;
-    return (
-      tools(`<span class="fresh" aria-live="polite">읽는 중…</span>`, true) +
-      (s.result ? resultNote(s.result) : "") +
-      partBlock<Pick<ResView, "load" | "episode" | "band">>(g.load, s.last, "PC 부하", "부하를 읽는 중…", (v) => loadBlock(v, hours)) +
-      // The owner's list is usually empty, so its reading row would only flash.
-      partBlock<Pick<ResView, "made">>(g.made, s.last, OWNED, "", madeBlock) +
-      // After a 정리 the last list names what was just taken, so it does not stand in.
-      partBlock<Cands>(g.candidates, s.result ? undefined : s.last, "정리 후보", "끝난 worktree 를 GitHub·Orca 에 묻는 중…", (v) => candidates(v, null, false))
-    );
-  }
-  const v = s.view;
-  const age = now - Date.parse(v.at);
-  const stamp = `<span class="fresh${age > STALE_MS ? " stale" : ""}">${esc(hhmm(v.at))} 읽음${age > STALE_MS ? ", 낡음" : ""}</span>`;
-  return `${tools(stamp, s.running === true)}${s.result ? resultNote(s.result) : ""}${loadBlock(v, hours)}${madeBlock(v)}${candidates(v, s, age > STALE_MS)}`;
+  return joinPieces(resPieces(s, now, hours));
 }
 
 /** The whole section: a fold, closed unless the owner left it open. */
