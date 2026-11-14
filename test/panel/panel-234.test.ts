@@ -73,14 +73,13 @@ test("the fold is closed by default and reads nothing until opened", () => {
   assert.match(renderResources({ kind: "shown", view: view() }, true, NOW), /<details class="fold res-fold" open>/);
 });
 
-test("open: load gauges, what sangsoe made with counts and sizes, and the candidates with why", () => {
+test("open: load gauges and the candidates with why; the counts of what sangsoe made are not drawn (decision 248)", () => {
   const html = renderResBody({ kind: "shown", view: view() }, NOW);
   assert.match(html, /PC 부하 <span class="badge t-run">경고<\/span>/);
   assert.match(html, /aria-label="CPU 1\.50 \/ 코어"><i class="t-warn" style="width:75%">/);
   assert.match(html, /aria-label="메모리 여유 40%"><i class="" style="width:40%">/);
   assert.match(html, /부하 높음: warn: load\/CPU 1\.50/);
-  assert.match(html, /<tr><td>worktree<\/td><td class="num">3<\/td><td class="num">3\.0 GB<\/td><\/tr>/);
-  assert.match(html, /<tr><td>임시 폴더<\/td><td class="num">13,201<\/td><td class="num">95 MB<\/td><\/tr>/);
+  assert.doesNotMatch(html, /sangsoe 가 만든 것|<td>worktree<\/td>|13,201/);
   assert.match(html, /title="acme-u12: \/w\/a">acme-u12<\/td><td title="끝남 \(PR #12\)">끝남 \(PR #12\)<\/td><td class="num">2\.0 MB/);
   assert.match(html, /smoke-1<\/td><td title="경로 없음: 등록만 지움">경로 없음: 등록만 지움<\/td>/);
   assert.match(html, /임시 폴더 13,000개<\/td>/);
@@ -113,7 +112,7 @@ test("reading, empty, failed, unread and stale each say so; an unread count is n
   assert.match(renderResBody({ kind: "failed", refusal: { code: "core_old", reason: "x", fix: "y" } }, NOW), /리소스를 읽지 못했다\. <button type="button" class="link" data-res="refresh">/);
   const unread = view({ made: { ...view().made, worktrees: { ok: false, why: "worktree list: runtime_unreachable" } }, worktrees: { ok: false, why: "worktree list" } });
   const html = renderResBody({ kind: "shown", view: unread }, NOW);
-  assert.match(html, /<tr><td>worktree<\/td><td colspan="2"><span class="unread" title="worktree list: runtime_unreachable">읽지 못함<\/span><\/td><\/tr>/);
+  assert.match(html, /<h3>기록됨·오너 손<\/h3><p class="ep"><span class="unread" title="worktree list: runtime_unreachable">읽지 못함<\/span><\/p>/, "a made part with no list says it was not read");
   assert.match(html, /하나라도 못 읽으면 worktree 는 정리하지 않는다/);
   assert.doesNotMatch(renderResBody({ kind: "shown", view: view() }, NOW), /낡음/);
   assert.match(renderResBody({ kind: "shown", view: view() }, Date.parse(AT) + STALE_MS + 1), /읽음, 낡음/);

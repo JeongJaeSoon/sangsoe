@@ -4,7 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## 0.1.6
 
-Everything since `v0.1.5`: decisions 230 to 240, a fix to the test of 219 and a fix to the owner's answer to a wait. The pre-releases checked them on an installed build as they came: `v0.1.6-rc.1` carried 230 to 234, `v0.1.6-rc.2` added 235 and 236, and `v0.1.6-rc.3` added 237 to 240 and the 219 test fix; the wait fix came after rc.3.
+Everything since `v0.1.5`: decisions 230 to 240, 248 and 249, a fix to the owner's answer to a wait and two test fixes. The pre-releases checked them on an installed build as they came: `v0.1.6-rc.1` carried 230 to 234, `v0.1.6-rc.2` added 235 and 236, `v0.1.6-rc.3` added 237 to 240 and the 219 test fix, and `v0.1.6-rc.4` added 248, 249, the wait fix and the measurement test fix.
 
 ### Upgrading from 0.1.5
 
@@ -29,11 +29,14 @@ Everything since `v0.1.5`: decisions 230 to 240, a fix to the test of 219 and a 
 - **A repository can ask its UI evidence for a surface and measures (238).** The panel's 리소스 section passed a browser measurement and still failed in the real Orca panel, because a `ui` evidence row counted with no measurement in it. `verify_tier.ui_evidence` in `config.json` now names, per repository, the surfaces and measures its `ui` rows must carry; land counts such a row only when its `observed` is a JSON object with one of those surfaces and a number for each measure. `evidence_record` takes `observed` and `sangsoe evidence record` takes `--observed` to write it. A repository with no entry is checked as before. The `ui-review` and `deliver-ticket` skills say a host-app panel is measured in the real host.
 - **The raw-start guard leaves other programs' sessions alone (239).** `[gate:start]` refused a raw worker start in any session on the machine, so another program's lead using its own Orca commands was blocked. It now refuses only in a session that is sangsoe's: one started from a sangsoe agent, one sangsoe opened, or one whose Task sangsoe created. That holds for every start the guard knows, a detached `claude` included. When the store or the session's first prompt cannot be read it still refuses.
 - **What only the owner clears is recorded and listed (240).** `resource_record` and `sangsoe resource record` also take a checkout, a registration, a branch, a file or a process. These are never cleared by REAPER; the 리소스 section lists them under 기록됨·오너 손 with no button, and the session that recorded them releases them once it has.
+- **The 리소스 section fits the panel and reads apart when open (248).** The owner's rc.3 panel, 1070px tall, scrolled 25px with the section open. The section no longer carries space nothing used: its empty line kept the stage's 12px padding above and below, 36px sat under its last line (now 21) and 24px under the closed heading (now 8), and the stage's bottom space is 8px instead of 16. Open, its heading is in ink and its body sits in a 1px rounded frame; closed, the heading is muted. The reading time and 새로 고침 now end the 리소스 row, left of its chevron. The 'sangsoe 가 만든 것' counts (234) are no longer drawn; `sangsoe reap plan` still prints them, and 기록됨·오너 손 stays. `scripts/panel-measure.devtools.js` measures the panel from its DevTools console: the first read of each part from opening the fold, scrolling, and where the section ends.
+- **현황's top block is shorter (249).** The `현황 · 묶음 N · 내가 할 일 N` line is no longer drawn (a screen reader still reads it as the stage's heading), and 결정 필요 and 지금 오너가 할 일 share one line when both are 0: 152px above 열린 항목 becomes 94px on the owner's 1070px panel.
 
 ### Fixes
 
 - **The panel's "back paints from memory" test no longer fails on a slow or fast machine (219).** It compared one cold render with the average of five core readings, so it failed whenever that render was slower. It now drives the panel with a stand-in page and checks that back paints the remembered screen before it asks for a fresh reading.
 - `awaitingResume` no longer counts a panel button (an `owner_action` with no session) as the owner answering a Dispatch's open wait, which names no session either: a wait now matches the owner's words only on the session it names.
+- **The measurement script's test no longer races a slow runner.** Its busy-panel case could finish the 정리 후보 read before the script was pasted on a slow CI runner; the stand-in panel now holds that read until the script runs.
 
 ## 0.1.5
 
