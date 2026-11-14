@@ -21,8 +21,10 @@ type Scene = {
   listedIn?: string;
   /** The worktree `worktree ps` files the agents under. */
   agentsIn?: string;
-  /** Host the terminal and the ps row claim; anything but local is counted, not returned. */
-  host?: string;
+  /** A second terminal row on another host beside the local target: the list is then partial. */
+  remoteTerminalRow?: boolean;
+  /** A second `worktree ps` row on another host beside the local one: the page is then partial. */
+  remotePsRow?: boolean;
 };
 
 const ok = (result: unknown): ExecResult => ({ code: 0, stdout: JSON.stringify({ ok: true, result }), stderr: "" });
@@ -38,13 +40,17 @@ function world(s: Scene = {}) {
       return ok({ dispatchId: DISPATCH, taskId: "task_1", runId: "run_1", state: "succeeded", terminal: TERM, terminalState: "retained", workspace: WS, ...s.show });
     }
     if (cmd === "terminal list") {
-      const rows = s.terminals ?? [{ handle: TERM, worktreeId: WS, executionHostId: s.host ?? "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" }];
-      const at = args[args.indexOf("--worktree") + 1];
-      return ok({ terminals: at === `id:${s.listedIn ?? WS}` ? rows : [] });
+      const rows = s.terminals ?? [{ handle: TERM, worktreeId: WS, executionHostId: "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" }];
+      if (s.remoteTerminalRow) rows.push({ handle: "term_remote", worktreeId: WS, executionHostId: "remote-1", agentIdentity: "claude", tabId: "t9", leafId: "l9" });
+      // As Orca does: scoped to the worktree when asked, every worktree's rows when not.
+      const at = args.indexOf("--worktree") >= 0 ? args[args.indexOf("--worktree") + 1] : undefined;
+      return ok({ terminals: at === undefined || at === `id:${s.listedIn ?? WS}` ? rows : [] });
     }
     if (cmd === "worktree ps") {
       const agents = s.agents ?? [{ paneKey: "tab1:leaf1", state: "done", agentType: "claude", agentWait: null }];
-      return ok({ worktrees: [{ worktreeId: s.agentsIn ?? WS, hostId: s.host ?? "local", repo: "api", path: "/work/acme/api", branch: "b", isMainWorktree: false, isArchived: false, liveTerminalCount: 1, unverifiableTerminalCount: 0, status: "x", agents }], ...(s.psTruncated ? { truncated: true } : {}) });
+      const row = (id: string, host: string) => ({ worktreeId: id, hostId: host, repo: "api", path: "/work/acme/api", branch: "b", isMainWorktree: false, isArchived: false, liveTerminalCount: 1, unverifiableTerminalCount: 0, status: "x", agents });
+      const worktrees = [row(s.agentsIn ?? WS, "local"), ...(s.remotePsRow ? [row("wt-9::/work/remote", "remote-1")] : [])];
+      return ok({ worktrees, ...(s.psTruncated ? { truncated: true } : {}) });
     }
     if (cmd === "terminal close") return s.closeFails ? bad("terminal_not_found") : ok({ closed: true });
     return bad("unexpected");
@@ -97,7 +103,8 @@ const REFUSED: [string, Scene, string | undefined, string][] = [
   ["a truncated worktree ps", { psTruncated: true }, ME, "agent_not_idle"],
   ["a terminal that is listed only under another worktree", { listedIn: "wt-2::/work/acme/web" }, ME, "terminal_not_live"],
   ["an agent row filed under another worktree with the same pane key", { agentsIn: "wt-2::/work/acme/web" }, ME, "agent_not_idle"],
-  ["a terminal on another host", { host: "remote-1" }, ME, "terminal_not_live"],
+  ["a remote row listed next to the local terminal, which makes the terminal list partial", { remoteTerminalRow: true }, ME, "terminal_not_live"],
+  ["a remote row on the worktree ps page, which makes the page partial", { remotePsRow: true }, ME, "agent_not_idle"],
   ["a sibling pane of the same tab at rest while the terminal's own pane is not listed", { agents: [{ paneKey: "tab1:leaf2", state: "idle", agentType: "claude", agentWait: null }] }, ME, "agent_not_idle"],
   ["a close Orca fails", { closeFails: true }, ME, "close_failed"],
 ];
