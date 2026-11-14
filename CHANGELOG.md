@@ -2,7 +2,14 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
-## Unreleased
+## 0.1.6-rc.6 (pre-release)
+
+Everything since `v0.1.6-rc.5`: decision 258. A pre-release for checking that a re-install leaves `sangsoe doctor` green on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
+
+### Upgrading from 0.1.6-rc.5
+
+- **Re-approve.** The Orca plugin's vendored core changed, so the plugin waits for approval again. It asks for no new capability. Have the review of the build recorded with `sangsoe review record` by someone other than the session that wrote its pull request, then run `sangsoe plugin approve`, as the README's Update section says.
+- **Restart every session that calls `start_unit`.** The version changed, so a server started under 0.1.6-rc.5 refuses `start_unit` with `server_stale`: restart it as 0.1.6-rc.1's Upgrading says.
 
 ### Fixes
 
