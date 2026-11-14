@@ -24,7 +24,7 @@ description: "Use when a sangsoe worker takes one Task from first edit to merge-
 - 리뷰어 지시문에 두 줄을 넣는다. 하네스가 저장한 파일(tool-results, 백그라운드 task 출력)은 Read tool 로만 읽는다: 작업 폴더 밖이라 `sed`·`cat`·편집은 아무도 답하지 않는 권한 프롬프트에서 멈춘다. 보고에서 비밀처럼 생긴 값은 파일 경로나 변수 이름으로만 가리키고, `KEY=value`·`key: value` 꼴의 줄로 쓰지 않는다: 비밀 검사 hook 이 보고 전체를 막는다.
 - 찾은 것을 Act-on · Consider · Noted · Dismissed 로 가르고, Act-on 이 0 인 회차가 나올 때까지 고치고 다시 받는다.
 - **판정은 리뷰한 head 에 묶인다.** 리뷰 뒤에 커밋하거나 main 을 합치면 그 판정은 낡는다. 충돌을 풀며 main 을 합쳤으면 그 합침의 차이만 다시 리뷰받는다(delta 리뷰).
-- **작성자는 자기 판정을 기록하지 않는다.** 리뷰한 head sha, 리뷰어, 리뷰 원문(남은 Act-on 수가 적힌 것)의 위치를 리드에게 보낸다. 기록은 리드가 `review_record` 로 한다(결정 111). 네 세션에서 부르면 거부된다(결정 162). 요약은 근거가 아니다.
+- **작성자는 자기 판정을 기록하지 않는다.** 리뷰한 head sha, 리뷰어, 리뷰 원문(남은 Act-on 수가 적힌 것)의 위치를 리드에게 `ask` 로 보낸다: 기록을 기다리므로 status 가 아니라 question 이다. 기록은 리드가 `review_record` 로 한다(결정 111). 네 세션에서 부르면 거부된다(결정 162). 요약은 근거가 아니다.
 
 ## 4. 증거: 검증 등급
 

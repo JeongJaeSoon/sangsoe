@@ -12,7 +12,7 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 
 | 옛 항목 | sangsoe 위치 | 남긴 것 / 버린 것 · 근거 |
 |---|---|---|
-| `skills/orchestrate` | `claude-plugin/skills/orchestrate/SKILL.md` | 남김: 깨움 처리·나누기·결정은 `decision_open`·리뷰와 land 경로. 버림: inbox 대기·카드 감시·대시보드 갱신(깨움은 Orca 메시지, 현황은 resource, 결정 120). 브리프 틀(`references/brief.md`)은 write-brief 칸 표로: 계보 `start_unit`·머지 `review_record`·`land`·검증 `evidence_record`, 회고 교훈 셋(결정 251). 버림: 부하 상한 명령·CI 대기 명령·머지 대기 시간·1분 자기 점검·READY-WAIT 줄(sangsoe 대응 없음) |
+| `skills/orchestrate` | `claude-plugin/skills/orchestrate/SKILL.md` | 남김: 깨움 처리·나누기·결정은 `decision_open`·리뷰와 land 경로. 버림: inbox 대기·카드 감시·대시보드 갱신(깨움은 Orca 메시지, 현황은 resource, 결정 120). 브리프 틀(`references/brief.md`)은 write-brief 칸 표로: 계보 `start_unit`·머지 `review_record`·`land`·`READY-WAIT` 줄·검증 `evidence_record`, 회고 교훈 셋(결정 251). 버림: 부하 상한 명령·CI 대기 명령·머지 대기 시간·1분 자기 점검(sangsoe 대응 없음) |
 | `skills/dispatch-card` | `claude-plugin/skills/start/SKILL.md`, `core/start/` | 남김: `start_unit` 한 번과 started·waiting·stopped·거부 읽기. 버림: 다른 모든 시작 경로(결정 94) |
 | `skills/end-session` | `claude-plugin/skills/end-session/SKILL.md` | 남김: 정리·`resource_record`·`handoff_save`·`worker_done` 한 번. 버림: 터미널 닫기·카드 아카이브(Orca 자동 해제, REAPER) |
 | `skills/deliver-ticket` | `claude-plugin/skills/deliver-ticket/SKILL.md`, `core/land/`, `core/verify/` | 남김: 계획·시험·독립 리뷰·V0–V3 증거·land·`merge_ready`. 버림: 직접 머지와 티켓 도구 단계(결정 93). `references/independent-review.md` 의 리뷰어 지시문 두 줄(Read 로만 읽기, 비밀 꼴 줄 금지)은 §3 으로(결정 251) |
