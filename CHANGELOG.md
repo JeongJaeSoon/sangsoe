@@ -6,6 +6,8 @@ Decision numbers refer to `docs/decisions.md`.
 
 ### Changes
 
+- **`sangsoe install` ends by listing the sessions that still run an older sangsoe MCP server (247).** After an upgrade every running session keeps the server it started with, and nothing said which ones. Install now reads the process table and prints one row per sangsoe MCP server that started before the install its path names now (or whose install is gone): its pid, its working directory and the version installed. Then one line says to restart each with `claude --continue` in its terminal. With none it prints `stale sessions: none`. It writes to no terminal, stops nothing and does not change install's exit code. `sangsoe install --stale-sessions` prints only this list. A row cannot name the version the old server runs: nothing outside the server records it, so it says "an install older than sangsoe <version>".
+
 - **A lead that holds its Run but has no Task starts workers with `start_unit` (243).** `start_unit` refused every lead without a Task (`lineage_invalid`), so a lead started outside it opened its units outside the ledger, with no `item_created` or `unit_started` row for REAPER or the evidence count to read. Such a lead now leaves `taskId` out and gets the orchestrator's checks: it holds the Run (`run-current`), names the worktree its folder is in, and that worktree has no unfinished Dispatch. It still starts no lead, and its refusals go to the owner. A lead that passes a `taskId` is now a lead only if that Task's spec starts with the lead role line, so a worker holding a Run of its own cannot pass as one.
 
 ## 0.1.6

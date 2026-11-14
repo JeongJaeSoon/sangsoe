@@ -109,6 +109,7 @@
 | 데이터·설정 남김 | README Uninstall | implemented | `core/install/install.ts:180` | |
 | 버전 어긋남 SessionStart 줄 | design.html 설치 | implemented | `core/session/session-start.ts:71`, `core/detect/queue/drift.ts:19` | Orca 쪽은 job_drift |
 | 낡은 MCP 서버 거부 | README Update | changed (결정 211·233) | `claude-plugin/mcp/tools/start_unit.ts:166`, `claude-plugin/mcp/stale.ts:9` | start_unit 만 `server_stale`. 고칠 말은 `claude --continue`(결정 233) |
+| install 끝의 낡은 세션 목록 | README Install | changed (결정 247) | `core/install/stale-sessions.ts:70`, `core/install/install.ts:133`, `cli/commands/install.ts:26` | 결정 211 ⑤ 가 버린 대안을 install 의 목록으로. 버전 대신 "지금 설치본보다 오래된 설치본", 판정은 시작 시각 대 package.json change time |
 | hook·MCP 가 CLI 찾기 | design.html 설치 | changed (결정 118) | `claude-plugin/.mcp.json:6` | plugin 옆 dist, 없으면 PATH |
 | 플러그인 경계 bin 폴더 CLI | design-appendix 플러그인 경계 | changed (결정 90) | `claude-plugin/.mcp.json:6` | plugin 안 bin 없음, CLI 는 브루 래퍼 |
 | vendor 코어 사본 | design-appendix 배치 규칙 | implemented | `orca-plugin/core-link.ts:51`, `package.json:26` | |
