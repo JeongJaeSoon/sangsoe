@@ -22,14 +22,15 @@ const guarded = resolve(real, ".local", "share", "sangsoe");
 const sqlite = require("node:sqlite") as { DatabaseSync: new (path: string, opts?: unknown) => unknown };
 const Real = sqlite.DatabaseSync;
 sqlite.DatabaseSync = class extends (Real as new (path: string, opts?: unknown) => object) {
-  constructor(path: string, opts?: unknown) {
+  constructor(...args: [string, unknown?]) {
+    const path = args[0];
     if (typeof path === "string" && path !== ":memory:") {
       const p = resolve(path);
       if (p === guarded || p.startsWith(guarded + sep)) {
         throw new Error(`test opened the real sangsoe store (${p}); pass { path } or { home } pointing at a temp folder`);
       }
     }
-    super(path, opts);
+    super(...args);
   }
 } as never;
 require("node:module").syncBuiltinESMExports();
