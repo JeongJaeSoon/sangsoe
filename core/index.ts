@@ -92,6 +92,7 @@ export {
   sampleLoad,
 } from "./capacity/capacity.ts";
 export { type RecoverPlan, type RecoverRow, recoverPlan, renderRecover } from "./recover/recover.ts";
+export { AUTH_RECOVER_LINE, type AuthOrca, type AuthRow, authRecover, renderAuthRecover } from "./recover/auth.ts";
 export * from "./graph/index.ts";
 export * from "./brief/index.ts";
 // Both declare the same four-kind union; GRAPH's is the source.
