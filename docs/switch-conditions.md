@@ -1,6 +1,6 @@
 # 전환 조건 46
 
-설계 §6 이 갈래별 개수(기반 4 · 코어 13 · 랜드 6 · 정리 8 · 감지기 5 · 패널 4 · 설치 3 · 이관 3 = 46)만 주고 목록은 구현 리드가 만든다(결정 71). 아래가 그 목록이다. 각 행의 주인 유닛이 "증거" 칸만 채운다: 시험 파일과 그 시험이 센 숫자. 비어 있는 증거 칸은 아직 충족되지 않은 조건이다. "미달" 과 "연기" 로 시작하는 칸도 아직 충족되지 않았고, 무엇이 빠졌는지와 언제 재는지를 적는다(2026-11-11 기준 B1 · B4 · C9 일부 · I1–I3 · M1). 결정 59 가 넣으라고 한 `worker_start_dispatched` 와 `one_session_two_terminals` 는 C9·D2 에 있다.
+설계 §6 이 갈래별 개수(기반 4 · 코어 13 · 랜드 6 · 정리 8 · 감지기 5 · 패널 4 · 설치 3 · 이관 3 = 46)만 주고 목록은 구현 리드가 만든다(결정 71). 아래가 그 목록이다. 각 행의 주인 유닛이 "증거" 칸만 채운다: 시험 파일과 그 시험이 센 숫자. 비어 있는 증거 칸은 아직 충족되지 않은 조건이다. "미달" 과 "연기" 로 시작하는 칸도 아직 충족되지 않았고, 무엇이 빠졌는지와 언제 재는지를 적는다(2026-11-11 기준 B1 · B4 · C9 일부 · I1–I3 · M1, 2026-11-14 결정 260 뒤로 M3 도). 결정 59 가 넣으라고 한 `worker_start_dispatched` 와 `one_session_two_terminals` 는 C9·D2 에 있다.
 
 | id | 갈래 | 검증(센 숫자로 끝난다) | 주인 | 증거 |
 |---|---|---|---|---|
@@ -49,6 +49,8 @@
 | I3 | 설치 | `uninstall` → 재설치 녹색, sqlite 보존 | U4·U24 | 연기(전환 때 U24): 가짜 호스트에서는 `core/install/install.test.ts` "uninstall also unregisters …" 가 잰다. sqlite 보존은 실제 기계에서 잰다 |
 | M1 | 이관 | R-01–R-23 23/23 이 CI 시험에 대응 | U21 | 미달: 시험이 있는 요구 19/23, 그중 전부 지키는 것 8/23. `docs/requirements-coverage.md`(🟢 8 · 🟡 11 · 🔴 3 R-06·R-20·R-21 · 단위 1 R-12 U18). `test/migrate/coverage.test.ts` 가 행과 시험 파일과 집계를 센다 |
 | M2 | 이관 | 다시 만드는 13가지 D-1–D-13 의 위치 13/13(D-1 은 결정 95 대로 plugin 안) | U21(+U6·U20) | 행 13/13: 자리가 main 에 있는 것 9(D-1 은 `claude-plugin/skills/general/`, D-7 은 pr-monitor 만 U16, D-9 는 REAPER 라운드만 U18, D-10·D-11 은 `orca-plugin/panel/`), 단위가 가져올 것 1(D-8 U17), sangsoe 밖 3(D-2–D-4). `docs/port-map.md` 가 옛 항목 166/166 을 한 행씩(`test/migrate/port-map.test.ts`) |
-| M3 | 이관 | 열린 항목·결정 읽기 전용 가져오기 + smoke 종단 한 번 | U21·U23 | 가져오기: `test/migrate/migrate.test.ts`(열린 것만 · 옛 DB 바이트 그대로 · 두 번째 실행 0건 · 제목은 event 에 없음). 이 Mac 의 실제 옛 저장소 dry run: 열린 항목 23(todo 9 · doing 1 · held 13) · 열린 결정 0 · 간선 0 · 닫힌 항목 120 · 닫힌 결정 76 · 가져오지 않는 리드·카드 행 14 · 리드 1. 쓰는 가져오기와 smoke 종단은 전환 때(U23·U24) |
+| M3 | 이관 | 열린 항목·결정 읽기 전용 가져오기 + 살아 있는 agent-skills 프로그램마다 이어받기(결정 260: 유닛 사이에서만 옮긴다, 곧 그 프로그램에 살아 있는 agent-skills 워커 Dispatch 가 0. sangsoe 리드가 그 프로그램의 Run 을 `run-use` 로 다시 쥐고, brief 가 그 Run 의 열린 Task 를 모두 보이고, 걸린 항목은 trigger 가 날짜나 PR 로 읽히거나 리드가 거둔다) + smoke 종단 한 번 | U21·U23(+U130) | 미달: 가져오기는 `test/migrate/migrate.test.ts`(열린 것만 · 옛 DB 바이트 그대로 · 두 번째 실행 0건 · 제목은 event 에 없음)가 잰다. 이 Mac 의 실제 옛 저장소(2026-11-14, `core/migrate/source.ts:84` · `:100` · `:107-110` 과 같은 SELECT 를 읽기 전용으로, dry run 이 아님): 열린 항목 95(todo 9 · doing 2 · held 84, program 칸은 모두 빔) · 열린 결정 0 · 닫힌 항목 134 · 닫힌 결정 83 · 가져오지 않는 열린 리드·카드 행 14 · 리드 1. 쓰는 가져오기(`--apply`)와 이어받기와 smoke 종단은 전환 때(U23·U24) 잰다. 남은 것: PR trigger 대소문자 항목(`core/graph/ready.ts:229` 가 소문자 owner 만 PR 로 읽어, 살아 있는 프로그램 하나의 걸린 항목이 `trigger_unclear` 였다)과 아래 오너 몫 한 줄 |
 
 합계: 기반 4 · 코어 13 · 랜드 6 · 정리 8 · 감지기 5 · 패널 4 · 설치 3 · 이관 3 = 46.
+
+오너 몫(M3, 결정 260): 옮기는 프로그램마다 그 프로그램이 PR 을 여는 저장소를 `~/.config/sangsoe/config.json` 의 `watch.repos` 에 더한다. pr-monitor 는 그 목록의 PR 만 보므로(`core/detect/pr/README.md:4`) 빠진 저장소의 PR trigger 는 머지돼도 모름으로 남는다(`core/graph/ready.ts:248`). 설정 파일은 오너가 고친다.

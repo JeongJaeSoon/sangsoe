@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **Live agent-skills programs move to sangsoe at the switch (260).** A program still running on agent-skills when the switch happens is no longer finished there. At a point where none of its workers is running, the orchestrator starts a sangsoe lead for it, and the lead takes over the program's existing Orca Run with `run-use`, so the brief reads that Run's Tasks. Nothing is copied: the Run, its Tasks, gates, messages and worktrees stay in Orca. Open items and decisions come over through `sangsoe migrate` as before, and reviews, evidence and deploy stages are recorded again when the lead next checks them. Switch condition M3 now includes this step and still has 46 conditions. M3 stays unmet until the switch measures it. Before a moved program's PR triggers can fire, a code fix for PR references whose owner has capital letters (they read as unclear) is needed, and the owner must add the program's repositories to `watch.repos`. This changes no code.
+
 ## 0.1.6
 
 Everything since `v0.1.5`: decisions 230 to 240, 248, 249, 253 and 258, a fix to the owner's answer to a wait and two test fixes. The pre-releases checked them on an installed build as they came: `v0.1.6-rc.1` carried 230 to 234, `v0.1.6-rc.2` added 235 and 236, `v0.1.6-rc.3` added 237 to 240 and the 219 test fix, `v0.1.6-rc.4` added 248, 249, the wait fix and the measurement test fix, `v0.1.6-rc.5` added 253, and `v0.1.6-rc.6` added 258.
