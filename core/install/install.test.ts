@@ -596,7 +596,7 @@ function orcaWritesTypes(dir: string): void {
   writeFileSync(join(dir, ".orca", "types", "orca", "index.d.ts"), "declare const orca: unknown;");
 }
 
-test("install, approve, then Orca's dev load writes .orca/ into the folder: doctor stays green (U128)", async (t) => {
+test("install, Orca's dev load writes .orca/ into the folder, install again: doctor stays green (U128)", async (t) => {
   const { host } = fakeHost({ orcaManifest: true });
   const { ctx, installed } = onDisk();
   await install(host, ROOT, online().ctx);
