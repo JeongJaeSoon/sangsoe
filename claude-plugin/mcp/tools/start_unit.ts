@@ -129,7 +129,11 @@ export default {
         type: "string",
         description: "The Orca repo selector (id:, name: or path:) the new worktree goes in, when it is not your own repo. Default: the repo item_create recorded, else yours.",
       },
-      taskId: { type: "string", description: "Your own Task id (lead or worker)." },
+      taskId: {
+        type: "string",
+        description:
+          "Your own Task id. A lead started outside start_unit has none and leaves it out: it must hold runId and run in worktreeId, with no unfinished Dispatch there (decision 243). A lead's Task spec must start with the lead role line.",
+      },
       runId: { type: "string", description: "The Run you hold." },
       childRole: { type: "string", enum: ["lead", "worker"] },
       task: { type: "string", description: "An existing Task id to start. Omit to create one from spec." },
