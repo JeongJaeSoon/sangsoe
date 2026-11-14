@@ -68,7 +68,7 @@
 | 배치표 ③ MCP 서버 | design.html §2 배치표 | implemented | `claude-plugin/.mcp.json:3` | tool 16(결정 223 의 `item_retire`)·resource 4 |
 | 배치표 ③ agent 정의 | design.html §2 배치표 | implemented | `claude-plugin/agents/lead.md:4` | 오케스트레이터·리드·워커 |
 | 배치표 ④ 코어 라이브러리 | design.html §2 배치표 | implemented | `core/index.ts:59` | 입구는 `core/index.ts` 하나 |
-| 배치표 ④ sqlite 파일 | design.html §2 배치표 | implemented | `core/store/store.ts:85`, `core/store/backup.ts:113` | jsonl 사본 포함(결정 183) |
+| 배치표 ④ sqlite 파일 | design.html §2 배치표 | implemented | `core/store/store.ts:86`, `core/store/backup.ts:113` | jsonl 사본 포함(결정 183) |
 | 배치표 ④ verify_tier | design.html §2 배치표 | implemented | `core/verify/verify-tier.ts:68`, `core/verify/verify-tier.ts:172` | |
 | 배치표 ④ CLI | design.html §2 배치표 | implemented | `cli/commands/doctor.ts:4`, `cli/commands/install.ts:4` | 파일 하나 = 명령 하나 |
 | 배치표 ④ land | design.html §2 배치표 | implemented | `core/land/land.ts:156` | |
@@ -109,6 +109,7 @@
 | 데이터·설정 남김 | README Uninstall | implemented | `core/install/install.ts:180` | |
 | 버전 어긋남 SessionStart 줄 | design.html 설치 | implemented | `core/session/session-start.ts:71`, `core/detect/queue/drift.ts:19` | Orca 쪽은 job_drift |
 | 낡은 MCP 서버 거부 | README Update | changed (결정 211·233) | `claude-plugin/mcp/tools/start_unit.ts:166`, `claude-plugin/mcp/stale.ts:9` | start_unit 만 `server_stale`. 고칠 말은 `claude --continue`(결정 233) |
+| install 끝의 낡은 세션 목록 | README Install | changed (결정 247) | `core/install/stale-sessions.ts:70`, `core/install/install.ts:133`, `cli/commands/install.ts:26` | 결정 211 ⑤ 가 버린 대안을 install 의 목록으로. 버전 대신 "지금 설치본보다 오래된 설치본", 판정은 시작 시각 대 package.json change time |
 | hook·MCP 가 CLI 찾기 | design.html 설치 | changed (결정 118) | `claude-plugin/.mcp.json:6` | plugin 옆 dist, 없으면 PATH |
 | 플러그인 경계 bin 폴더 CLI | design-appendix 플러그인 경계 | changed (결정 90) | `claude-plugin/.mcp.json:6` | plugin 안 bin 없음, CLI 는 브루 래퍼 |
 | vendor 코어 사본 | design-appendix 배치 규칙 | implemented | `orca-plugin/core-link.ts:51`, `package.json:26` | |
@@ -162,7 +163,7 @@
 | 흐름 틀 파일 | design-appendix 남는 파일 | implemented | `core/graph/flow.ts:131` | 사용자 틀이 기본 틀을 덮는다 |
 | 트리 경로 | design-appendix 남는 파일 | implemented | `core/install/host.ts:46` | |
 | 설정 파일 | design-appendix 남는 파일 | implemented | `core/checks/reaper-config.ts:12` | 읽기만 |
-| 브리프·리드 기록 경로 | design-appendix 남는 파일 | missing | `core/store/store.ts:85` | G8 — 그 경로를 쓰는 코드가 core·cli 에 없다 |
+| 브리프·리드 기록 경로 | design-appendix 남는 파일 | missing | `core/store/store.ts:86` | G8 — 그 경로를 쓰는 코드가 core·cli 에 없다 |
 | 압박 기록(8일·4MB) | design-appendix 남는 파일 | missing | `core/gates/record.ts:8` | G8 — 거부 기록만 있고 압박 이력 파일이 없다 |
 | 실행 출력·hook 로그 | design-appendix 남는 파일 | missing | `core/gates/record.ts:8` | G8 — 로그 폴더를 쓰는 코드가 없다 |
 | Orca plugin 이 못 싣는 넷 | design-appendix 배치 규칙 | implemented | `orca-plugin/orca-plugin.json:12` | |
@@ -331,16 +332,16 @@
 | CLI graph add·remove·ready·why·expand·critical·impact | design-appendix GRAPH: 모듈과 CLI | implemented | `cli/commands/graph-add.ts:11`, `cli/commands/graph-why.ts:15` | |
 | CLI graph sync | design-appendix GRAPH: 모듈과 CLI | changed (결정 215·217·219) | `cli/commands/graph-sync.ts:19`, `core/graph/sync.ts:58`, `core/graph/own-run.ts:39`, `core/session/record.ts:40`, `test/land/retarget-rereview.test.ts:212`, `test/detect/lead-run-s6.test.ts:99` | G22 닫힘 — queue-monitor 는 `pr_opened` 의 head·base 로 `stacked_on` 을 스스로 더하고(결정 212 ③), base 가 선행 PR 의 head 를 떠난 PR 에서는 그 간선을 뺀다. land 재요청 event 대신 재리뷰(결정 215 ②)가 문이고, 재리뷰 항목 spec 이 land 를 다시 부르라고 한다. 결정 217: CLI 도 재리뷰 항목을 만든다. 결정 219: 타이머는 그 Run 을 깨우지 않는다(실제 Orca 가 보내기를 거부한다). 그 Run 에 묶인 세션의 `UserPromptSubmit`·`Stop` hook 이 같은 호출(`syncOwnRun`)을 한다 |
 | CLI graph skip | design-appendix 신호 흐름 | changed (결정 195) | `cli/commands/graph-skip.ts:11` | |
-| CLI graph(인자 없음)·priority set·owner-text redact | design.html 의존 관리, design-appendix sqlite 스키마 | cut (결정 160) | `core/store/store.ts:420` | LATER — 오너가 우선순위나 원문 지우기를 요청한 첫 경우 |
+| CLI graph(인자 없음)·priority set·owner-text redact | design.html 의존 관리, design-appendix sqlite 스키마 | cut (결정 160) | `core/store/store.ts:425` | LATER — 오너가 우선순위나 원문 지우기를 요청한 첫 경우 |
 | CLI hook·reap run·resource record·models·version | design-appendix 신호 흐름 | implemented | `cli/commands/hook.ts:29`, `cli/commands/reap.ts:27` | 설계 본문에 이름이 없는 셸 입구 |
 | 데이터 소유 항목·결정·깨움·간선 | design.html 데이터 소유 | implemented | `core/contract/events/item_extra_set.ts:4`, `core/decision/open.ts:64` | |
-| 데이터 소유 오너의 말 | design.html 데이터 소유 | implemented | `core/store/store.ts:408` | owner_class 는 결정 162 가 짓지 않았다 |
+| 데이터 소유 오너의 말 | design.html 데이터 소유 | implemented | `core/store/store.ts:413` | owner_class 는 결정 162 가 짓지 않았다 |
 | 데이터 소유 PR·증거·등급·자원 | design.html 데이터 소유 | implemented | `core/land/land.ts:200`, `core/reaper/record.ts:200` | |
 | 데이터 소유 외부 티켓 | design.html 데이터 소유 | implemented | `core/start/start.ts:475`, `claude-plugin/mcp/tools/start_unit.ts:57` | 키 칸은 없고, `start_unit` 의 `references` 가 새 worktree 에 `reference add` 로 붙인다(`claude-plugin/skills/start/SKILL.md:44`) |
 | 간선 종류 넷 | design.html 의존 관리 | implemented | `core/graph/ready.ts:113`, `core/graph/ready.ts:137` | blocks·after·stacked_on·deploys_after |
 | GRAPH 유일 입구 | design.html 의존 관리 | implemented | `core/graph/edit.ts:9`, `core/start/item.ts:33` | 만든 뒤 간선은 GRAPH 만. 만들 때의 deps 는 Orca 가 원본이라 task-create 로 간다 |
 | 준비됨과 시작 | design.html 의존 관리 | changed (결정 202) | `core/graph/ready.ts:213`, `core/start/start.ts:436` | start_unit |
-| 신호는 event 한 줄 먼저 | design-appendix 신호 흐름 | implemented | `core/store/store.ts:350` | |
+| 신호는 event 한 줄 먼저 | design-appendix 신호 흐름 | implemented | `core/store/store.ts:355` | |
 | notify dedupe·받는 순서 | design-appendix 신호 흐름 | implemented | `core/notify/notify.ts:37`, `core/notify/notify.ts:118` | |
 | 예시 사슬 pr_merged → item_ready | design-appendix 신호 흐름 | implemented | `core/detect/queue/judge.ts:52`, `core/detect/queue/round.ts:73` | |
 | 주기 실행 한 곳 | design-appendix 신호 흐름 | implemented | `orca-plugin/timer.ts:2`, `core/detect/queue/drift.ts:1` | |
@@ -350,12 +351,13 @@
 | event 묶음 pr-monitor | design-appendix event 이름 전체 | changed (결정 195·216) | `core/detect/pr/round.ts:1`, `core/detect/pr/reviews.ts:1` | 결정 216 이 `pr_reopened` 를 더했다(`core/detect/pr/round.ts:254`, `test/land/retarget-rereview.test.ts:248`). 부록 표에는 아직 없다 |
 | event 묶음 에이전트 명령 | design-appendix event 이름 전체 | partial | `core/start/start.ts:151`, `core/brief/item_status.ts:113` | G27 — `signal` 의 loss·wait·orchestrator_correction·main_flake 종류를 쓰는 곳이 없다(`priority_set` 은 결정 160) |
 | event 묶음 오너 | design-appendix event 이름 전체 | partial | `core/owner/marks.ts:87`, `core/contract/events/owner_class.ts:4` | G28 — `owner_class` 계약과 표시를 지우는 길이 쓰는 쪽 없이 남았다(결정 162) |
-| event schema_v | design-appendix event 이름 전체 | implemented | `core/store/store.ts:140` | |
+| event schema_v | design-appendix event 이름 전체 | implemented | `core/store/store.ts:141` | |
 | SQLite 버전 하한·네트워크 FS 거부 | design-appendix sqlite 스키마 | implemented | `core/store/checks.ts:15`, `core/store/checks.ts:56` | |
-| BEGIN IMMEDIATE·WAL·busy_timeout | design-appendix sqlite 스키마 | implemented | `core/store/store.ts:227`, `core/store/store.ts:339` | |
-| dedupe_key 와 UNIQUE | design-appendix sqlite 스키마 | implemented | `core/store/schema.ts:50`, `core/store/store.ts:371` | |
+| BEGIN IMMEDIATE·WAL·busy_timeout | design-appendix sqlite 스키마 | implemented | `core/store/store.ts:228`, `core/store/store.ts:344` | |
+| dedupe_key 와 UNIQUE | design-appendix sqlite 스키마 | implemented | `core/store/schema.ts:50`, `core/store/store.ts:376` | |
 | 표 event·owner_text·counter·migration | design-appendix sqlite 스키마 | implemented | `core/store/schema.ts:34`, `core/store/schema.ts:60` | |
 | 캐시 pr_ref·gh_budget·gh_seen | design-appendix sqlite 스키마 | changed (결정 186) | `core/store/schema.ts:86`, `core/gh/client.ts:41` | 표는 예약, 한도·ETag 는 프로세스 메모리 |
+| 보존 기간 표 load_sample | 결정 241 (부록 sqlite 스키마에 없음) | changed (결정 241) | `core/store/schema.ts:115`, `core/store/samples.ts:10`, `core/detect/resource/round.ts:37` | 라운드마다 부하 표본 한 행, 24시간, 사본에 들지 않음 |
 | 뷰 owner_action·item_extra·item·evidence·edge | design-appendix sqlite 스키마 | changed (결정 160) | `core/graph/facts.ts:1`, `core/brief/item_status.ts:222` | 이름 있는 함수 없이 같은 event 를 접는다 |
 | 뷰 decision·owner_todo·item_timeline·edge_ok·ready·flow_gap·group_brief·group_items·restart_due | design-appendix sqlite 스키마 | implemented | `core/store/views/decision.ts:11`, `core/graph/ready.ts:213` | restart_due 를 부르는 쪽은 G10 |
 | 뷰 item_status 의 🚨 orphan_extra | design-appendix sqlite 스키마 | missing | `core/brief/item_status.ts:222`, `core/contract/views.ts:90` | G24 — 주석에 이름만 있고 판정이 없다 |
@@ -369,7 +371,7 @@
 | Run 범위 다섯 곳 | design-appendix 데이터 소유 | partial | `core/graph/edit.ts:192` | G24 — 넷째(고아 부가 정보 표시와 REAPER 의 거둠)가 없다 |
 | 불변식 event 인덱스 | design-appendix 데이터 소유 | partial | `core/store/schema.ts:54` | G26 — `edge_*` 의 pred 표현식 인덱스가 없다 |
 | 불변식 owner_text·edge DAG·ready·크리티컬 패스·notify·owner_todo·counter | design-appendix 데이터 소유 | implemented | `core/store/schema.ts:14`, `core/graph/critical.ts:100` | |
-| 불변식 item 전환 | design-appendix 데이터 소유 | partial | `core/contract/transitions.ts:19`, `core/store/store.ts:364` | G24 — 허용 쌍 19 는 강제, done_blockers 는 닫는 세 자리에서 적용(결정 212 ④), orphan_extra 없음 |
+| 불변식 item 전환 | design-appendix 데이터 소유 | partial | `core/contract/transitions.ts:19`, `core/store/store.ts:369` | G24 — 허용 쌍 19 는 강제, done_blockers 는 닫는 세 자리에서 적용(결정 212 ④), orphan_extra 없음 |
 | 불변식 decision | design-appendix 데이터 소유 | partial | `core/decision/open.ts:64`, `core/decision/answer.ts:57` | G25 — 키 유일·닫힘 순서는 있고 다시 묻기(`:r<n>`)가 없다 |
 | 선행 노드 종류·모름과 없음 | design-appendix 간선과 ready 계산 | implemented | `core/graph/edit.ts:26`, `core/graph/ready.ts:88` | |
 | 📅 → 🟢 쓰는 쪽 없음·왜 표 | design-appendix 간선과 ready 계산 | changed (결정 218) | `core/graph/ready.ts:262`, `core/graph/notify-ready.ts:1` | 결정 218: 항목을 스스로 잡는 것(자기 PR, 오너 gate, Orca 막힘)은 `holdOf`(`core/graph/ready.ts:76`) 하나가 답하고, 항목 상태의 🚧 와 왜 행(`core/graph/ready.ts:87`)이 그것을 읽는다 |
@@ -436,7 +438,7 @@
 | 결정 루프 오너가 직접 한 일 | design-appendix 결정 루프 | changed (결정 179) | `core/detect/pr/round.ts:216` | 연결은 부른 쪽 몫 |
 | 기존 설계 결정별 결론 | design-appendix 결정별 결론 | implemented | `core/store/schema.ts:47`, `core/start/start.ts:317` | 저장·큐·그래프·틀·역할·화면·주기 실행 |
 | 결정별 결론·후보별 판정의 스택 PR·머지 대기열 | design-appendix 결정별 결론, 후보별 판정 | partial | `core/land/land.ts:61`, `core/land/land.ts:171` | G35 — 대기열 이탈 사유 분류와 merge_group 사전 점검이 없다 |
-| 후보별 판정 나머지 영역 | design-appendix 후보별 판정 | implemented | `core/store/store.ts:339`, `claude-plugin/mcp/server.ts:1` | |
+| 후보별 판정 나머지 영역 | design-appendix 후보별 판정 | implemented | `core/store/store.ts:344`, `claude-plugin/mcp/server.ts:1` | |
 | 스무 가지 1–3 유일성·fencing·기한 | design-appendix 조사가 설계에 낸 스무 가지 | cut (결정 74) | `core/store/schema.ts:50` | 시작 유일성은 Orca Dispatch |
 | 스무 가지 4–11·14·16–20 | design-appendix 조사가 설계에 낸 스무 가지 | implemented | `core/start/start.ts:324`, `core/graph/critical.ts:20` | |
 | 스무 가지 12 /goal | design-appendix 조사가 설계에 낸 스무 가지 | changed (결정 121) | `claude-plugin/agents/worker.md:23` | |
