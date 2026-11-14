@@ -51,7 +51,8 @@ export async function closeUnit(ports: { readonly orca: OrcaAdapter; readonly st
 
   const ps = await orca.worktreePs({ limit: 1000, agentWait: true });
   if (!ps.ok) return refuse("agent_not_idle", `worktree ps: ${ps.error.code}`, "retry once Orca answers");
-  if (ps.value.truncated || ps.value.nonLocal.rows > 0) return refuse("agent_not_idle", "worktree ps is partial", "retry once Orca answers in full");
+  // Rows of other hosts do not matter: the target's row is looked up by worktree id among the local rows below.
+  if (ps.value.truncated || ps.value.omittedHostIds.includes("local")) return refuse("agent_not_idle", "worktree ps is partial", "retry once Orca answers in full");
   const paneKey = `${row.tabId}:${row.leafId}`;
   const agent = ps.value.rows.find((r) => r.worktreeId === w.workspace)?.agents.find((x) => x.paneKey === paneKey);
   if (!agent) return refuse("agent_not_idle", `no agent row for ${terminal} in worktree ps`, "Orca does not show its agent, so it is not shown idle");

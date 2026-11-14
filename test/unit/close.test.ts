@@ -23,8 +23,12 @@ type Scene = {
   agentsIn?: string;
   /** A second terminal row on another host beside the local target: the list is then partial. */
   remoteTerminalRow?: boolean;
-  /** A second `worktree ps` row on another host beside the local one: the page is then partial. */
+  /** A second `worktree ps` row on another host, for an unrelated worktree, beside the local one. */
   remotePsRow?: boolean;
+  /** The host `worktree ps` files the target's own row under. */
+  targetHost?: string;
+  /** Hosts Orca says it left out of the ps page. */
+  omitted?: string[];
 };
 
 const ok = (result: unknown): ExecResult => ({ code: 0, stdout: JSON.stringify({ ok: true, result }), stderr: "" });
@@ -49,8 +53,8 @@ function world(s: Scene = {}) {
     if (cmd === "worktree ps") {
       const agents = s.agents ?? [{ paneKey: "tab1:leaf1", state: "done", agentType: "claude", agentWait: null }];
       const row = (id: string, host: string) => ({ worktreeId: id, hostId: host, repo: "api", path: "/work/acme/api", branch: "b", isMainWorktree: false, isArchived: false, liveTerminalCount: 1, unverifiableTerminalCount: 0, status: "x", agents });
-      const worktrees = [row(s.agentsIn ?? WS, "local"), ...(s.remotePsRow ? [row("wt-9::/work/remote", "remote-1")] : [])];
-      return ok({ worktrees, ...(s.psTruncated ? { truncated: true } : {}) });
+      const worktrees = [row(s.agentsIn ?? WS, s.targetHost ?? "local"), ...(s.remotePsRow ? [row("wt-9::/work/remote", "remote-1")] : [])];
+      return ok({ worktrees, ...(s.psTruncated ? { truncated: true } : {}), ...(s.omitted ? { hostScope: { omittedHostIds: s.omitted } } : {}) });
     }
     if (cmd === "terminal close") return s.closeFails ? bad("terminal_not_found") : ok({ closed: true });
     return bad("unexpected");
@@ -84,6 +88,12 @@ test("failed and cancelled Dispatches close too", async () => {
   }
 });
 
+test("an unrelated remote worktree row on the ps page does not block closing a local unit", async () => {
+  const w = world({ remotePsRow: true });
+  assert.ok((await w.run()).ok);
+  assert.equal(w.closes().length, 1);
+});
+
 const REFUSED: [string, Scene, string | undefined, string][] = [
   ["a Dispatch that is still working", { show: { state: "ready" } }, ME, "not_final"],
   ["an abandoned Dispatch", { show: { state: "abandoned" } }, ME, "not_final"],
@@ -104,7 +114,8 @@ const REFUSED: [string, Scene, string | undefined, string][] = [
   ["a terminal that is listed only under another worktree", { listedIn: "wt-2::/work/acme/web" }, ME, "terminal_not_live"],
   ["an agent row filed under another worktree with the same pane key", { agentsIn: "wt-2::/work/acme/web" }, ME, "agent_not_idle"],
   ["a remote row listed next to the local terminal, which makes the terminal list partial", { remoteTerminalRow: true }, ME, "terminal_not_live"],
-  ["a remote row on the worktree ps page, which makes the page partial", { remotePsRow: true }, ME, "agent_not_idle"],
+  ["a worktree ps page that left the local host out", { omitted: ["local"] }, ME, "agent_not_idle"],
+  ["a target whose own worktree ps row is on another host", { targetHost: "remote-1" }, ME, "agent_not_idle"],
   ["a sibling pane of the same tab at rest while the terminal's own pane is not listed", { agents: [{ paneKey: "tab1:leaf2", state: "idle", agentType: "claude", agentWait: null }] }, ME, "agent_not_idle"],
   ["a close Orca fails", { closeFails: true }, ME, "close_failed"],
 ];
