@@ -30,8 +30,8 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 |---|---|---|
 | 워커의 worker_done(PR 없는 일) | 브리프의 완료 조건마다 실제 출력이 있나. 있으면 Task 를 닫고, 없으면 무엇이 빠졌는지 워커(살아 있으면)나 새 워커에게. 다 읽었으면 그 Dispatch 를 푼다: `start_unit` 이 연 세션은 `--keep-open` 이라 Orca 가 저절로 닫지 않는다(결정 197·207) | Orca `task-update --id <task_id> --status completed`, Orca `worker-release --dispatch <dispatch_id>` |
 | 워커의 worker_done(`merge_ready`) | `land` 가 머지했나, 예약했나, "승인되면 머지"인가. Orca 가 Task 를 닫아도 PR 이 머지될 때까지 항목은 🚧 막힘(리뷰어)으로 읽히고, 머지 확인 뒤 ✅ 가 된다(결정 175). 항목은 손대지 않는다. 항목과 PR 의 연결은 워커 카드의 Orca 참조가 원본이고 pr-monitor 가 붙인다: `orca reference list --worktree id:<worktreeId> --json`(`worktreeId` 는 `start_unit` 의 결과)에 그 PR 이 없으면 현황이 머지를 그 항목에 잇지 못한다. 그 PR 과 카드를 적어 리드는 오케스트레이터에게, 오케스트레이터는 오너에게 바로 알린다(결정 193). 보고를 다 읽었으면 그 Dispatch 를 푼다(결정 207) | Orca `worker-release --dispatch <dispatch_id>` |
-| 리뷰한 head·리뷰어·증거(리드만) | 리뷰어가 작성자가 아니고 head 가 PR 의 현재 head 인가. 맞으면 판정을 기록한다(`pr`·`head_sha`·`act_on`·`reviewer`). 그 PR 을 쓴 세션은 거부된다 | `review_record` |
-| 워커의 실행 출력(리드만) | 리뷰한 head 의 출력인가, 확인 못 한 것이 적혔나. 맞으면 등급이 묻는 `kind` 마다 증거를 기록하고, 머지 뒤에는 배포 단계를 기록한다. 그 PR 을 쓴 세션은 거부된다(결정 171) | `evidence_record` · `stage_record` |
+| 리뷰한 head·리뷰어·증거(리드만) | 리뷰어가 작성자가 아니고 head 가 PR 의 현재 head 인가. 맞으면 판정을 기록한다(`pr`·`head_sha`·`act_on`·`reviewer`). 그 PR 을 쓴 세션은 거부된다. 기록했든 못 했든 워커의 `ask` 에 Orca `reply` 로 답한다: 워커가 그 답을 기다린다 | `review_record` |
+| 워커의 실행 출력(리드만) | 리뷰한 head 의 출력인가, 확인 못 한 것이 적혔나. 맞으면 등급이 묻는 `kind` 마다 증거를 기록하고, 머지 뒤에는 배포 단계를 기록한다. 그 PR 을 쓴 세션은 거부된다(결정 171). 워커의 `ask` 에는 Orca `reply` 로 답한다 | `evidence_record` · `stage_record` |
 | "승인되면 머지" PR 이 승인됨(리드만) | 같은 `land` 요청으로 머지한다 | `land` |
 | 질문(`ask`) | 브리프와 승인 줄 안에서 답할 수 있나. 있으면 Orca `reply`, 없으면 한 단계 위로 | `decision_open`(오너 판단일 때) |
 | escalation | 네 단위 안에서 풀 수 있나. 아니면 선택지·추천·기다리는 것을 붙여 위로 | `decision_open`, 또는 리드는 Orca `send --type escalation`(Dispatch 가 없는 오케스트레이터는 status·question 형, 결정 197) |
@@ -54,7 +54,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 - 오너의 말은 `intake` skill 로 가른다.
 - 한 프로그램의 일은 그 리드에게만 보낸다. 리드의 워커에게 직접 지시하지 않는다.
-- 리드가 끝났다고 보고하면, 완료 조건별 증거를 읽기 전용 서브에이전트(`model` 은 resource `models` 의 `subagents.judge`)로 확인한 뒤에 오너에게 "끝났다"고 말한다.
+- 리드가 끝났다고 보고하면, 완료 조건별 증거를 읽기 전용 서브에이전트(`model` 은 resource `models` 의 `subagents.judge`)로 확인한 뒤에 오너에게 "끝났다"고 말한다. 그 지시문에는 `write-brief` 의 서브에이전트 지시문 두 줄을 넣는다.
 - 현황은 resource `brief` 를 그대로 보내고 판단 한 문장만 덧붙인다.
 
 ## 결정과 오너
@@ -62,6 +62,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 - 오너에게 묻는 것은 `decision_open` 하나로 한다: `subject`(`item:iNNN` 또는 `scope:<group>`), `question`(추천과 이유도 이 글에), `options`, 기다리는 Task 는 `waiters`(`{task, run}`, `run` 은 네 Run), 기다리는 Task 가 없으면 `carrier_run` 에 네 Run. 결정 키는 `subject` 와 `options` 다. 같은 결정 키가 닫혀 있으면 기존 답이 돌아오니 다시 묻지 않는다.
 - 답을 기다리는 동안 할 수 있는 일은 계속한다. 답이 없다고 기본값을 적용하지 않는다.
 - 오너의 답은 `decision_answer` 가 결정을 닫고, 게이트를 풀고, 기다리던 워커를 한 번 깨운다. 다시 불러도 같다.
+- 다른 세션에 보내는 Orca 메시지의 type 은 글의 모양이 아니라 다음 걸음으로 고른다(오너에게 묻는 것은 위의 `decision_open` 이다). 답을 기다릴 메시지는 question 이다("X 만 남았다, 끝나면 알려 달라"도 그렇다). Dispatch 가 있으면 `ask`, 없으면(오케스트레이터, Task 없는 리드) `send --type question`. 답을 기다리지 않는 보고만 status 다.
 
 ## 재시작
 
