@@ -244,7 +244,7 @@
 | | 죽은 워커 | `worker_dead` | — |
 | | 멈춘 워커. 일하는 중인데 `worktree ps --json` 의 마지막 출력·활동 시각(`lastOutputAt`·`lastActivityAt`, 에이전트 행의 `stateStartedAt`)이 설정한 분보다 오래된 워커에 쓴다(결정 87, 필드 뜻은 시험 P10 전까지 미확인). monitor 가 판정할 수 없는 입력(시각 필드가 비었거나 미래)에는 쓰지 않는다(그때는 행동 0) | `worker_stuck` | — |
 | 🚨 사유 | 새 event 종류를 더하지 않고 다섯 `event` 의 `reason` 칸에 사유를 적는다: 역할 줄 없는 sangsoe 세션은 `worker_stuck`(`no_role_line`), 시작 실패는 `worker_dead`(`start_failed`). 오류로 멈춘 워커의 `worker_dead`(`stop_failure`)는 orca-monitor 가 Orca 의 `errored` 멈춤 escalation 에서 쓴다. 사용 한도로 멈춘 것은 죽음이 아니라 `rate_limited`(`usage_limit`)다(결정 196) | `reason` · `no_role_line` · `start_failed` · `stop_failure` | — |
-| | 멈춘 Run | `run_stalled` | — |
+| | 멈춘 Run. 미완 워커가 모두 죽거나 멈춘 Run, 또는 Dispatch 없는 코디네이터(오케스트레이터, Task 없는 리드)가 일하지 않는 동안 그 Run 의 메일이 30분 넘게 읽히지 않은 Run(`coordinator` 칸, 결정 245). 멈춤 하나에 한 번 쓰고, 코디네이터의 멈춤은 오케스트레이터의 Run 이 분명할 때 그 Run 에 한 번 알린다 | `run_stalled` | — |
 | | 답 없는 결정 질문 | `waiting_decision` | — |
 | | 항목에 연결된 PR 이 열림 | `pr_opened` | — |
 | | 리뷰 요청됨(pr-monitor, 요청 id 마다. 결정 195) | `pr_review_requested` | — |

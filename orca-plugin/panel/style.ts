@@ -152,8 +152,8 @@ h3 .note { margin-left: var(--s1); font-weight: 400; }
 details.fold { margin: 0 0 var(--s3); }
 details.fold summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: var(--s2); padding: var(--s1) 0; border-bottom: 1px solid var(--rule); font-size: var(--text-sm); font-weight: 600; }
 details.fold summary::-webkit-details-marker { display: none; }
-details.fold summary::after { content: "›"; margin-left: auto; color: var(--muted); }
-details.fold[open] summary::after { content: "⌄"; }
+details.fold summary .chev { flex: none; align-self: center; width: 12px; height: 12px; margin-left: auto; color: var(--muted); }
+details.fold[open] > summary .chev { transform: rotate(90deg); }
 details.fold summary .count { color: var(--muted); font-weight: 400; }
 .done { list-style: none; margin: 0; padding: 0; }
 .done li { display: flex; gap: var(--s3); padding: var(--s2) var(--s1); border-bottom: 1px solid var(--rule); font-size: var(--text-sm); }
@@ -313,13 +313,19 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 /* The 리소스 section (decision 234): its own element under #root, so a panel repaint never touches an
    open confirm list. One quiet fold; the gauges are the only drawing in it. */
-#res { margin: auto 0 0; padding: 0 var(--gx) var(--s2); border-top: 1px solid var(--rule); }
+/* Decision 253: the closed row's text sits centred in its 36px; open, the frame ends as far above the
+   section's end as the title's text sits below its rule. */
+#res { margin: auto 0 0; padding: 0 var(--gx); border-top: 1px solid var(--rule); }
 /* Decision 248: closed, the heading is a quiet muted row; open, it is ink and the body sits in the
    panel's one emphasis, a 1px rule with rounded corners (decision 222), so the two read apart. */
 #res .res-fold { margin: 0; position: relative; }
 #res .res-fold > summary { padding: var(--s2) 0; border-bottom: 0; color: var(--muted); font-weight: 500; }
 #res .res-fold[open] > summary { color: var(--ink); font-weight: 600; }
-#res .res-fold[open] > .res-body { padding: 0 var(--s3) var(--s3); border: 1px solid var(--rule); border-radius: var(--r3); }
+/* Decision 253: the 6시간/24시간 box sits 12px in from the top and the right; 16px at the bottom puts the
+   last line's text as far from the frame as the first line's, which the 26px switch centres lower. */
+#res .res-fold[open] > .res-body { margin: 0 0 var(--s3); padding: var(--s3) var(--s3) var(--s4); border: 1px solid var(--rule); border-radius: var(--r3); }
+#res .res-body > :first-child:not(.res-h), #res .res-body > .res-h + * { margin-top: 0; }
+#res .res-body > .res-h + .load-h { padding-top: 0; }
 #res h3 { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s3); }
 /* The reading time and 새로 고침 end the 리소스 row, left of its chevron; in the DOM they stay after the
    summary, so the keyboard reaches them next and a press never toggles the fold. */

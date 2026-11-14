@@ -1,7 +1,7 @@
 // The 리소스 section at the bottom of the panel (decision 234): folded by default, its open state in
 // Orca's plugin storage, read only when the owner opens or refreshes it. 정리 shows what it will take
 // and runs only after the second press. Declared by hand: this folder imports nothing from the core.
-import { esc, type Refusal } from "./view.ts";
+import { CHEV, esc, type Refusal } from "./view.ts";
 
 type Reading<T> = { ok: true; value: T } | { ok: false; why: string };
 type Usage = { count: number; kb: number | null };
@@ -423,5 +423,5 @@ export function renderResBody(s: ResState, now: number, hours: 6 | 24 = 6): stri
 
 /** The whole section: a fold, closed unless the owner left it open. */
 export function renderResources(s: ResState, open: boolean, now: number, hours: 6 | 24 = 6): string {
-  return `<details class="fold res-fold"${open ? " open" : ""}><summary>리소스</summary><div class="res-body">${open ? renderResBody(s, now, hours) : ""}</div></details>`;
+  return `<details class="fold res-fold"${open ? " open" : ""}><summary>리소스${CHEV}</summary><div class="res-body">${open ? renderResBody(s, now, hours) : ""}</div></details>`;
 }

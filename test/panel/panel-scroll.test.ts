@@ -18,7 +18,10 @@ const HEIGHT = 1070;
 const WIDTHS = [440, 544, 600, 900] as const;
 // rc.3 left 24px under the closed heading and 36px under the open section's last line.
 const UNDER_HEADING = 8;
-const UNDER_LAST_LINE = 24;
+// Decision 253 replaces 248's 24: the card pads 16 under its last line and ends 12 above the section's
+// end, as far as the title's text sits below the rule: 8px more than rc.4 (24 → 32 on the rc.3 state,
+// counted from the last line's text box).
+const UNDER_LAST_LINE = 32;
 const STAGE_GAP = 8;
 
 const shown = async (): Promise<ResState> => readParts(async (input) => PARTS_GOT[input?.part ?? "load"], () => undefined);

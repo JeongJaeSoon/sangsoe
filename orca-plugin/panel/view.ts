@@ -371,6 +371,14 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
 const NO_GROUP =
   "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 열린 항목 절에 그 행이 나온다. 패널은 리드를 띄우지 않는다.";
 
+/**
+ * A fold's arrow (decision 253): its ink is centred in its square box, so the box centres it on the
+ * title line, and `rotate(90deg)` turns › into ⌄ about that centre. The text glyph it replaced hung
+ * off the baseline.
+ */
+export const CHEV =
+  '<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6 4.25 9.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 /** 완료 최근 N일 as one folded list (decision 199): the same rows as the ✅ count. */
 function doneFold(t: Table): string {
   const items = t.rows.map((r) => {
@@ -379,7 +387,7 @@ function doneFold(t: Table): string {
     return `<li><span>${what ? titleWithId(what) : ""}${link}</span><span class="when">${esc(when?.text ?? "")}</span></li>`;
   });
   const body = items.length === 0 ? '<p class="empty">없음</p>' : `<ul class="done">${items.join("")}</ul>`;
-  return `<details class="fold"><summary>${esc(t.title)} <span class="count">${t.count}</span></summary>${body}</details>`;
+  return `<details class="fold"><summary>${esc(t.title)} <span class="count">${t.count}</span>${CHEV}</summary>${body}</details>`;
 }
 
 // Edge kinds differ by dash pattern and by name (the name is canonical, decision 92②); the last two

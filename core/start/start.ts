@@ -89,22 +89,42 @@ const within = (dir: string, root: string) => {
 };
 
 /**
- * A lead also holds its own Run, so "no taskId" and run-current alone cannot tell it from the
- * orchestrator. What can: the orchestrator's worktree carries no unsettled Dispatch. worker-list spans
- * every Run, newest first; an unreadable or unfinished scan is a problem, never a pass.
+ * A session holding its Run with no Task (the orchestrator, or a lead started outside start_unit,
+ * decision 243) has no Dispatch in its worktree; one that has is a lead or worker dropping its Task.
+ * worker-list spans every Run, newest first; an unreadable or unfinished scan is a problem, never a pass.
  */
-async function liveDispatchIn(orca: OrcaAdapter, worktreeId: string): Promise<string | null> {
+async function liveDispatchIn(orca: OrcaAdapter, worktreeId: string, role: Role): Promise<string | null> {
+  const who = role === "lead" ? "Task 없는 리드" : "오케스트레이터";
   let cursor: string | undefined;
   for (let page = 0; page < MAX_WORKER_PAGES; page++) {
     const r = await orca.workerList({ limit: 100, ...(cursor ? { cursor } : {}) });
-    if (!r.ok) return `오케스트레이터 worktree 의 Dispatch 를 확인하지 못했다 (${r.error.code})`;
+    if (!r.ok) return `${who} worktree 의 Dispatch 를 확인하지 못했다 (${r.error.code})`;
     // Not settled is enough: a Dispatch whose liveness Orca cannot tell (after a restart) still counts.
     const own = r.value.rows.find((w) => w.workspace === worktreeId && !settled(w));
-    if (own) return `오케스트레이터라고 밝혔지만 이 worktree 에 끝나지 않은 Dispatch ${own.dispatchId} 가 있다(리드·워커 세션)`;
+    if (own) return `${who}라고 밝혔지만 이 worktree 에 끝나지 않은 Dispatch ${own.dispatchId} 가 있다(Task 를 가진 리드·워커 세션)`;
     cursor = r.value.nextCursor;
     if (!cursor) return null;
   }
-  return "오케스트레이터 worktree 의 Dispatch 확인이 페이지 상한에서 끝나지 않았다";
+  return `${who} worktree 의 Dispatch 확인이 페이지 상한에서 끝나지 않았다`;
+}
+
+/** The role a spec's first line names, read as SessionStart's readRoleLine reads it; "" when it names none. */
+function specRole(spec: unknown): { first: string; role: string } {
+  const first = typeof spec === "string" ? (spec.split("\n", 1)[0] ?? "").trim() : "";
+  return { first, role: first.startsWith(ROLE_LINE_PREFIX) ? first.slice(ROLE_LINE_PREFIX.length).trim() : "" };
+}
+
+/**
+ * Decision 243 ③: a depth-1 worker holding a Run of its own would pass every Dispatch check as a
+ * lead, so a lead's own Task must carry the lead role line. Unreadable is a problem, never a pass.
+ */
+async function leadTaskProblem(orca: OrcaAdapter, taskId: string, run: string): Promise<string | null> {
+  const r = await orca.taskList({ run, full: true });
+  if (!r.ok) return `요청자의 Task 를 읽지 못했다 (${r.error.code})`;
+  const own = r.value.find((t) => t.id === taskId) as (TaskRow & { spec?: unknown }) | undefined;
+  if (!own) return `요청자의 Task ${taskId} 가 그 Dispatch 의 Run(${run})에 없다`;
+  const { first, role } = specRole(own.spec);
+  return role === "lead" ? null : `요청자의 Task ${taskId} spec 첫 줄이 "${first.slice(0, 60)}" 라 리드가 아니다(${roleLine("lead")} 가 아니다)`;
 }
 
 /** Why GRAPH holds a Task Orca calls ready, or null when it does not. */
@@ -156,8 +176,8 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       ...(attempt ? { target: START_ATTEMPT } : {}),
     });
     let escalatedTo: string | null = null;
-    if (requester.role === "orchestrator") {
-      // Nobody above the orchestrator: the escalation ends at the owner (decision 94 (다)).
+    if (requester.role === "orchestrator" || (requester.role === "lead" && !requester.taskId)) {
+      // Nobody above it in Orca: the escalation ends at the owner (decisions 94 (다), 243).
       store.append({
         type: "escalation",
         source,
@@ -184,25 +204,31 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   // Read who is asking before judging anything, so every refusal knows whom to tell.
   let lineageProblem: string | null = null;
   let requesterDepth = 0;
-  if (requester.role !== "orchestrator") {
-    if (!requester.taskId) lineageProblem = `${requester.role} 의 Task id 가 없어 Dispatch 를 읽을 수 없다`;
+  if (requester.role !== "orchestrator" && requester.taskId) {
+    const d = await orca.dispatchShow({ task: requester.taskId });
+    if (!d.ok) lineageProblem = `요청자의 Dispatch 를 읽지 못했다 (${d.error.code})`;
     else {
-      const d = await orca.dispatchShow({ task: requester.taskId });
-      if (!d.ok) lineageProblem = `요청자의 Dispatch 를 읽지 못했다 (${d.error.code})`;
-      else {
-        const row = d.value as unknown as Json;
-        requesterDispatch = typeof row.id === "string" ? row.id : undefined;
-        requesterActive = row.status === "dispatched" && (row.completed_at ?? null) === null;
-        parentHandle = typeof row.creator_handle === "string" ? row.creator_handle : null;
-        requesterDepth = typeof row.depth === "number" ? row.depth : Number.NaN;
-        if (!requesterDispatch || Number.isNaN(requesterDepth)) lineageProblem = "요청자의 Dispatch 에 id·depth 가 없다";
-        else if (row.run_id === requester.runId) lineageProblem = "요청자의 Dispatch 가 시작하려는 Run 안에 있다(그 Run 을 쥔 쪽이 아니다)";
+      const row = d.value as unknown as Json;
+      requesterDispatch = typeof row.id === "string" ? row.id : undefined;
+      requesterActive = row.status === "dispatched" && (row.completed_at ?? null) === null;
+      parentHandle = typeof row.creator_handle === "string" ? row.creator_handle : null;
+      requesterDepth = typeof row.depth === "number" ? row.depth : Number.NaN;
+      if (!requesterDispatch || Number.isNaN(requesterDepth)) lineageProblem = "요청자의 Dispatch 에 id·depth 가 없다";
+      else if (row.run_id === requester.runId) lineageProblem = "요청자의 Dispatch 가 시작하려는 Run 안에 있다(그 Run 을 쥔 쪽이 아니다)";
+      else if (requester.role === "lead") {
+        lineageProblem =
+          typeof row.run_id === "string" && row.run_id !== ""
+            ? await leadTaskProblem(orca, requester.taskId, row.run_id)
+            : "요청자의 Dispatch 에 Run 이 없다";
       }
     }
+  } else if (requester.role === "worker") {
+    lineageProblem = "worker 의 Task id 가 없어 Dispatch 를 읽을 수 없다";
   } else if (requester.taskId) {
     lineageProblem = "오케스트레이터는 Dispatch 를 가진 세션이 아니다";
   } else if (requester.worktreeId) {
-    lineageProblem = await liveDispatchIn(orca, requester.worktreeId);
+    // Decision 243: a lead with no Task holds its Run as the orchestrator does and gets the same check.
+    lineageProblem = await liveDispatchIn(orca, requester.worktreeId, requester.role);
   }
   if (!lineageProblem && !requester.worktreeId && requester.role !== "orchestrator") {
     lineageProblem = `${requester.role} 는 자기 worktree 를 밝힌다(worktree 없이 시작하는 것은 오케스트레이터뿐이다)`;
@@ -223,7 +249,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   if (lineageProblem) return refuse("lineage_invalid", lineageProblem);
   if (requester.role === "worker") return refuse("lineage_invalid", "워커는 세션을 시작하지 않는다");
   if (requester.role === "lead" && req.childRole === "lead") return refuse("lineage_invalid", "리드는 리드를 시작하지 않는다");
-  if (requester.role === "lead" && requesterDepth !== 1) {
+  if (requester.role === "lead" && requester.taskId && requesterDepth !== 1) {
     return refuse("lineage_invalid", `리드의 Dispatch 깊이가 ${requesterDepth} 이다(오케스트레이터의 자식은 1)`);
   }
   const current = await orca.runCurrent();
@@ -257,7 +283,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   } else if (innermost) {
     // Decision 217: [gate:delegate] keeps the orchestrator from asking Orca which worktree it is in, so
     // start_unit takes the one its folder is in, under the same live-Dispatch check a declared one gets.
-    const live = await liveDispatchIn(orca, innermost.id);
+    const live = await liveDispatchIn(orca, innermost.id, requester.role);
     if (live) return refuse("lineage_invalid", live);
     requester = { ...requester, worktreeId: innermost.id };
   } else {
@@ -350,8 +376,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   // SessionStart takes the role from the spec's first line, and Orca cannot rewrite a spec: an
   // existing Task written for another role would start this child as that role.
   // Read as SessionStart's readRoleLine reads it (core/session imports this module, so not shared).
-  const first = typeof task.spec === "string" ? (task.spec.split("\n", 1)[0] ?? "").trim() : "";
-  const role = first.startsWith(ROLE_LINE_PREFIX) ? first.slice(ROLE_LINE_PREFIX.length).trim() : "";
+  const { first, role } = specRole(task.spec);
   if ("id" in req.task && role !== req.childRole) {
     return refuse(
       "lineage_invalid",
