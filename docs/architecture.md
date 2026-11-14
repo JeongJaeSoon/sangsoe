@@ -52,7 +52,7 @@
 
 - 토큰 O 폴더(`skills/`·`agents/`)에는 코드 파일이 없다. 토큰 X 폴더에는 프롬프트가 없다.
 - 다른 칸은 코어를 `core/index.ts` 로만 import 한다. 두 plugin 사이의 연결점은 코어(sqlite)와 Orca CLI 둘뿐이다(결정 78 다).
-- 에이전트는 MCP 만 쓰고, CLI 는 셸 호출자 여섯 행만 쓴다. plugin worker 는 자기 폴더 밖을 정적으로 import 하지 않고 `orca-plugin/core-link.ts` 한 곳에서 코어를 불러온다(결정 75 나, 132·136·152).
+- 에이전트는 MCP 만 쓰고, CLI 는 셸 호출자 여섯 행과 `[gate:pressure]` 거부 뒤 에이전트가 백그라운드로 띄우는 `sangsoe pressure wait` 만 쓴다(결정 256). plugin worker 는 자기 폴더 밖을 정적으로 import 하지 않고 `orca-plugin/core-link.ts` 한 곳에서 코어를 불러온다(결정 75 나, 132·136·152).
 - Orca 가 원본인 사실은 sqlite 에 복사하지 않는다(결정 74).
 - OS 상주 작업·자체 상주 프로세스·포트는 두지 않는다. 주기 감지는 ② 의 worker 타이머다(결정 75 라).
 
@@ -85,7 +85,7 @@
 | 입구 | 파일 | default export | 호출자 |
 |---|---|---|---|
 | MCP 서버 `claude-plugin/mcp/server.ts`(stdio) | `claude-plugin/mcp/tools/<name>.ts`, `resources/<name>.ts` | `ToolDef`·`ResourceDef`(`claude-plugin/mcp/contract.ts`) | 에이전트 전부 |
-| CLI 라우터 `cli/main.ts` | `cli/commands/<name>.ts`(두 낱말 이름은 `-` 로: `plugin approve` → `plugin-approve.ts`) | `CommandDef`(`cli/contract.ts`) | 셸 호출자 여섯 행 |
+| CLI 라우터 `cli/main.ts` | `cli/commands/<name>.ts`(두 낱말 이름은 `-` 로: `plugin approve` → `plugin-approve.ts`) | `CommandDef`(`cli/contract.ts`) | 셸 호출자 여섯 행, 에이전트의 `pressure wait`(결정 256) |
 
 - 결과는 `Outcome` 하나: `{ ok: true, value }` 또는 `{ ok: false, refusal: { code, reason, fix } }`. MCP 는 `isError` 와 JSON 본문으로, CLI 는 종료 코드(0 성공 · 1 거부 · 2 사용법 오류)와 `--json` 출력으로 낸다. 사람에게 보고만 하는 CLI 명령(`install`·`uninstall`·`doctor`·`plugin approve`)은 `Report`(`{ code, lines }`)를 돌려준다. 명령은 호스트(`Host`)를 인자로 받아 시험이 가짜를 넣는다.
 - 모르는 명령·인자·tool·입력 칸은 코어 함수에 닿기 전에 입구가 거부하고 맞는 형태(사용법 줄, 입력 칸 목록)를 보인다. `--help` 도 아무것도 부르지 않는다.
