@@ -217,11 +217,12 @@ test("a cut-short terminal list leaves the orchestrator unplaced, so nothing is 
 
 test("a newer unread mail after the coordinator's last turn is noticed even with an older one before that turn", async () => {
   // oldUnread keeps the newest mail old enough to count; the older mail before the turn never hides it.
-  const s = setup([lead("done", T0 - 10 * MIN), orch("working", T0)]);
+  // The thread's case: unread mail aged 60 and 40 minutes, the coordinator idle since 50 minutes ago.
+  const s = setup([lead("done", T0 - 50 * MIN), orch("working", T0)]);
   leadSpoke(s);
+  s.send(`run:${LEAD_RUN}`, T0 - 60 * MIN);
   s.send(`run:${LEAD_RUN}`, T0 - 40 * MIN);
-  s.send(`run:${LEAD_RUN}`, T0 - 5 * MIN);
-  await runMonitor("orca", s.deps(T0 + (N + 2) * MIN));
+  await runMonitor("orca", s.deps(T0));
   assert.deepEqual(s.stalled().map((e) => e.payload), [{ run: LEAD_RUN, coordinator: "term_lead" }]);
 });
 
