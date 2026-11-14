@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **Model drift is shown (254).** When a session start_unit started resolved to a model other than the one the model table expects for the alias it was given, `sangsoe doctor`'s `model-table` row adds one notice naming the alias, the table's model and the resolved one, with the likely cause (the alias moved, a pin in the owner's settings, or another tier's model). The item detail in `sangsoe brief` adds `세션 <resolved> (표 <expected>)` to its model line. Both compare rows the store already has and store nothing new; a drift is one line however many sessions show it and is gone once the newest session for that alias matches the table.
+
 ## 0.1.6-rc.4 (pre-release)
 
 Everything since `v0.1.6-rc.3`: decisions 248 and 249 and a fix to the owner's answer to a wait. A pre-release for checking the 리소스 section and 현황's top block on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
