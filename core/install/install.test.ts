@@ -312,6 +312,37 @@ test("decision 228: with rules missing the one row still warns with its fix and 
   );
 });
 
+const compactRows = (lines: readonly string[]) => lines.filter((l) => /^\S+ +auto-compact window: /.test(l));
+
+test("decision 264: doctor warns, without failing, when the window is missing or lower, and passes equal or higher", async () => {
+  const env = (v: string) => ({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: v } });
+  const fix = " — fix: sangsoe install --auto-compact (from a Claude Code ! line: read the diff it prints, then run sangsoe install --auto-compact --yes)";
+  const path = `${DEFAULT_DIR}/settings.json`;
+  const tail = ": a long session compacts earlier than it should";
+
+  const missing = await doctor(fakeHost().host, ROOT, online());
+  assert.deepEqual(compactRows(missing.lines), [`warn     auto-compact window: ${path} (missing or not JSON): CLAUDE_CODE_AUTO_COMPACT_WINDOW is not set (want at least 600000)${tail}${fix}`], missing.lines.join("\n"));
+
+  const lower = await doctor(withSettings(fakeHost().host, DEFAULT_DIR, env("350000")), ROOT, online());
+  assert.deepEqual(compactRows(lower.lines), [`warn     auto-compact window: ${path}: 350000, below 600000${tail}${fix}`], lower.lines.join("\n"));
+
+  for (const [v, shown] of [["600000", "600000"], ["900000", "900000, above 600000, kept"]] as const) {
+    const r = await doctor(withSettings(fakeHost().host, DEFAULT_DIR, env(v)), ROOT, online());
+    assert.deepEqual(compactRows(r.lines), [`ok       auto-compact window: ${path}: ${shown}`], r.lines.join("\n"));
+  }
+  assert.equal(lower.code, (await doctor(withSettings(fakeHost().host, DEFAULT_DIR, env("600000")), ROOT, online())).code, "a warn leaves the exit code alone");
+});
+
+test("decision 264: with Orca on another profile, doctor reports the value of each", async () => {
+  const { host } = fakeHost({ orcaHome: ORCA_DIR, profiles: { [ORCA_DIR]: { markets: added(), plugins: [{ id: "sangsoe@sangsoe", version: V, scope: "user", enabled: true }] } } });
+  withSettings(host, DEFAULT_DIR, { env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "600000" } });
+  withSettings(host, ORCA_DIR, { env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "350000" } });
+  const r = await doctor(host, ROOT, online());
+  const row = compactRows(r.lines)[0] ?? "";
+  assert.match(row, /^warn +auto-compact window: /);
+  assert.ok(row.includes(`${DEFAULT_DIR}/settings.json: 600000; ${ORCA_DIR}/settings.json: 350000, below 600000`), row);
+});
+
 test("decision 221: uninstall removes the rules sangsoe recorded adding, and says so", () => {
   const record = join(HOME, ".local/share/sangsoe/permissions.json");
   const settingsPath = join(DEFAULT_DIR, "settings.json");

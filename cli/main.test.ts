@@ -49,6 +49,15 @@ for (const argv of [["install", "--bogus"], ["uninstall", "now"], ["doctor", "--
   });
 }
 
+// Decision 264: --auto-compact is its own step and takes only --yes.
+for (const argv of [["install", "--auto-compact", "--permissions"], ["install", "--auto-compact", "--scope", "user"], ["install", "--auto-compact", "--stale-sessions"]]) {
+  test(`${argv.join(" ")} is refused before anything is read or written`, async () => {
+    const r = await run(argv, { host: touchless(), checkContext: noChecks });
+    assert.equal(r.code, 1);
+    assert.match(r.out, /\[invalid_input\]/);
+  });
+}
+
 // Decision 221: the permissions flags are refused before anything is read or written.
 for (const argv of [["install", "--yes"], ["install", "--scope", "user"], ["install", "--permissions", "--scope", "global"]]) {
   test(`${argv.join(" ")} is refused and touches nothing`, async () => {
