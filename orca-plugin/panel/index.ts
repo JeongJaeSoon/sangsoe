@@ -1,8 +1,28 @@
 /// <reference lib="dom" />
 // The sangsoe html panel (decision 92): three stages down and back, decision and 완료 buttons. Every
 // button is a plugin.request to the worker, which calls the core; the panel changes nothing itself.
-import { panelReads } from "./refresh.ts";
-import { type Reaped, RES_OPEN_KEY, type ResState, readParts, reapTargets, renderResBody, repaint, FOCUS_AFTER, type Want, renderResources, STALE_MS } from "./resources.ts";
+import { foldReads, panelReads, tickParts } from "./refresh.ts";
+import {
+  changedPieces,
+  FOCUS_AFTER,
+  joinPieces,
+  PARTS,
+  type PartName,
+  PIECES,
+  type Pieces,
+  patchPieces,
+  type Reaped,
+  RES_OPEN_KEY,
+  type ResState,
+  readParts,
+  reapTargets,
+  renderResBody,
+  renderResources,
+  repaint,
+  resPieces,
+  STALE_MS,
+  type Want,
+} from "./resources.ts";
 import { STYLE } from "./style.ts";
 import {
   type Act,
@@ -57,17 +77,21 @@ export function panelRoot(doc: RootDoc): HTMLElement {
 
 /**
  * The 리소스 fold (decision 234) in its own element after #root, so the panel's own repaints never
- * reach it. It reads only when opened or refreshed, and 정리 runs on the confirm button alone.
+ * reach it. It reads when opened, shown again or refreshed, and on the panel's interval tick while
+ * open and shown (decision 257); 정리 runs on the confirm button alone. Returns what that tick calls.
  */
-function mountResources(after: HTMLElement): void {
+function mountResources(after: HTMLElement): () => void {
   const box = document.createElement("section");
   box.id = "res";
   after.after(box);
   let state: ResState = { kind: "idle" };
   let open = false;
   let hours: 6 | 24 = 6;
+  /** What the body shows now, piece by piece; null when it was drawn some other way. */
+  let drawn: Pieces | null = null;
   const draw = () => {
     box.innerHTML = renderResources(state, open, Date.now(), hours);
+    drawn = null;
   };
   let want: Want | null = null;
   // A click anywhere else drops a press still waiting for its button.
@@ -76,27 +100,85 @@ function mountResources(after: HTMLElement): void {
   });
   const body = () => {
     const el = box.querySelector<HTMLElement>(".res-body");
+    if (!el) return;
     // A reading shrinks the body and the browser clamps its scroll: the owner's place comes back with the content.
-    const at = el?.scrollTop ?? 0;
-    if (el) want = repaint(el, renderResBody(state, Date.now(), hours), document.activeElement, want);
-    if (el && at > 0) el.scrollTop = at;
+    const at = el.scrollTop;
+    drawn = state.kind === "shown" || state.kind === "reading" ? resPieces(state, Date.now(), hours) : null;
+    want = repaint(el, drawn ? joinPieces(drawn) : renderResBody(state, Date.now(), hours), document.activeElement, want);
+    if (at > 0) el.scrollTop = at;
   };
   const failed = (e: unknown) => ({ ok: false as const, refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" } });
-  // Decision 235: three parts asked together, each painted as it comes.
+  const ask = (input?: { part: PartName }) => orca.plugin.request("panel.resources", input);
+  // One read at a time, whoever asks (decision 257).
+  let flight: Promise<void> | null = null;
+  const solo = (fn: () => Promise<void>): Promise<void> => {
+    const p: Promise<void> = fn().finally(() => {
+      if (flight === p) flight = null;
+    });
+    flight = p;
+    return p;
+  };
+  /** When the 정리 후보 now shown was asked for; only an answer that was read and applied moves it. */
+  let candidatesAt = Number.NEGATIVE_INFINITY;
+  // Decision 235: three parts asked together, each painted as it comes. A read the owner asks for
+  // shows its reading row at once and starts when a tick's read still running has ended.
   const read = async (result?: Reaped) => {
     const last = state.kind === "shown" ? state.view : undefined;
     state = { kind: "reading", got: {}, last, result };
     body();
-    const end = await readParts(
-      (input) => orca.plugin.request("panel.resources", input),
-      (s) => {
+    while (flight) await flight.catch(() => undefined);
+    await solo(async () => {
+      const asked = Date.now();
+      const end = await readParts(ask, (s) => {
         state = s.kind === "reading" ? { ...s, last, result } : s;
         body();
-      },
-    );
-    state = end.kind === "shown" && result ? { ...end, result } : end;
-    body();
+      });
+      if (end.kind === "shown" && end.got?.candidates.ok) candidatesAt = asked;
+      state = end.kind === "shown" && result ? { ...end, result } : end;
+      body();
+    });
   };
+  /**
+   * Decision 257: the read on the panel's interval tick, and the one on showing the section again.
+   * Nothing says it is reading; its answer rewrites only the pieces whose html changed, and is
+   * dropped if the owner opened the confirm list, started 정리 or asked for a read meanwhile. #res
+   * keeps what the last tick's read cost (data-tick-ms, -parts, -paint) for panel-measure.
+   */
+  const quiet = async (why: "show" | "tick") => {
+    if (state.kind !== "shown") return;
+    // A view read whole (a core older than decision 235) cannot be read in parts: a tick would read
+    // 정리 후보 every time, so it waits for show, open or 새로 고침 as before.
+    if (why === "tick" && !state.got) return;
+    const t0 = performance.now();
+    const asked = Date.now();
+    const kept = state.got;
+    const parts = why === "show" || !kept ? PARTS : tickParts(asked, candidatesAt);
+    const end = await readParts(ask, () => undefined, { parts, kept });
+    const s = state;
+    if (s.kind !== "shown" || s.confirm || s.running) return;
+    if (end.kind === "shown") {
+      state = s.result ? { ...end, result: s.result } : end;
+      // A 정리 후보 that failed keeps the kept answer: the next tick asks again.
+      const c = end.got?.candidates;
+      if (parts.includes("candidates") && c?.ok && c !== kept?.candidates) candidatesAt = asked;
+    }
+    const el = box.querySelector<HTMLElement>(".res-body");
+    if (!el) return;
+    const next = resPieces(state as Extract<ResState, { kind: "shown" }>, Date.now(), hours);
+    const which = drawn ? changedPieces(drawn, next) : PIECES;
+    patchPieces(el, next, which, document.activeElement);
+    drawn = next;
+    if (why !== "tick") return;
+    box.dataset.tickMs = String(Math.round(performance.now() - t0));
+    box.dataset.tickParts = parts.join("+");
+    box.dataset.tickPaint = which.length === 0 ? "none" : which.join("+");
+  };
+  const loop = foldReads({
+    read: (why) => solo(() => quiet(why)),
+    may: () => !flight && state.kind === "shown" && !state.confirm && !state.running,
+    shown: () => open && document.visibilityState === "visible",
+  });
+  document.addEventListener("visibilitychange", loop.sync);
   const run = async () => {
     if (state.kind !== "shown" || state.running) return;
     const view = state.view;
@@ -132,6 +214,7 @@ function mountResources(after: HTMLElement): void {
     void orca.storage?.set(RES_OPEN_KEY, open).catch(() => undefined);
     if (open && (state.kind === "idle" || state.kind === "failed")) void read();
     else body();
+    loop.sync();
   }, true);
   box.addEventListener("click", (ev) => {
     const el = (ev.target as Element).closest<HTMLElement>("[data-res]");
@@ -164,7 +247,9 @@ function mountResources(after: HTMLElement): void {
       open = true;
       draw();
       void read();
+      loop.sync();
     });
+  return loop.tick;
 }
 
 function mount(): void {
@@ -172,7 +257,7 @@ function mount(): void {
   style.textContent = STYLE;
   document.head.append(style);
   const root = panelRoot(document);
-  mountResources(root);
+  const resTick = mountResources(root);
 
   let stack: Target[] = [];
   let tab: Tab = "all";
@@ -236,6 +321,7 @@ function mount(): void {
   // it is shown again, and on the status bar's interval; a failed reading waits for 새로 고침.
   const reads = panelReads({
     read: () => draw(true),
+    tick: resTick,
     may: () => {
       const formOpen = [...root.querySelectorAll<HTMLElement>("tr.other")].some((f) => !f.hidden);
       return autoRefresh({ visible: document.visibilityState === "visible", lastOk, busy, formOpen });

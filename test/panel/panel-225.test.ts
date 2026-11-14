@@ -105,9 +105,9 @@ test("(11) an item card's head names its state in a badge; the wide column shows
   const blocked = rows.find((r) => r.cells[0]?.text === "🚧" && !r.id.startsWith("lead:"));
   assert.ok(ready && blocked, "the world has a 🟢 and a 🚧 item");
   const html = renderStage(one);
-  assert.match(rowOf(html, ready.id), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🟢<\/span><span class="badge st">준비됨<\/span><\/td>/);
-  assert.match(rowOf(html, blocked.id), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
-  assert.match(rowOf(html, "lead:api-migration"), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
+  assert.match(rowOf(html, ready.id), /^<tr[^>]*><td><span class="mk em" aria-hidden="true">🟢<\/span><span class="badge st">준비됨<\/span><\/td>/);
+  assert.match(rowOf(html, blocked.id), /^<tr[^>]*><td><span class="mk em" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
+  assert.match(rowOf(html, "lead:api-migration"), /^<tr[^>]*><td><span class="mk em" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
   assert.match(rule(NARROW, ".tbl tr.lead .st"), /clip-path: inset\(50%\);/);
   assert.doesNotMatch(rule(WIDE, ".tbl .st"), /display: none;/);
   assert.match(rule(NARROW, ".tbl .st"), /display: inline-block;/);
@@ -141,7 +141,7 @@ test("(5) a graph row with nothing under its title line draws no rule and no emp
 
 test("(6) state words are badges in the graph tables, toned by state, flags kept beside them", () => {
   const html = renderStage(grp);
-  assert.match(html, /<span class="badge t-run">진행 중<\/span> 🚨/);
+  assert.match(html, /<span class="badge t-run">진행 중<\/span><span class="sr"> <\/span><span class="fl">🚨<\/span>/);
   assert.match(html, /<span class="badge">예정<\/span>/);
   assert.match(html, /<span class="badge t-bad">막힘<\/span>/);
   assert.match(html, /<span class="badge">열림<\/span>/, "a state word with no marker is a badge too");

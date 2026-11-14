@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 
 // Headless Chrome for the panel's layout tests (U116): the page is drawn as Orca draws an html panel,
 // and the page itself writes what it measured into <pre id="out">, which --dump-dom returns.
@@ -41,6 +42,19 @@ export function dump(dir: string, index: string, budgetMs = 5000): unknown {
   const json = /<pre id="out">([^<]*)<\/pre>/.exec(r.stdout)?.[1];
   assert.ok(json, `no measurement from Chrome: ${r.stderr.slice(-500)}`);
   return JSON.parse(json.replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&"));
+}
+
+/** The panel entry and what it imports, written under `dir` as the browser module files Orca serves. */
+export function transpilePanel(dir: string): void {
+  const root = new URL("../../", import.meta.url).pathname;
+  mkdirSync(join(dir, "orca-plugin/panel"), { recursive: true });
+  for (const f of ["timer.ts", "panel/index.ts", "panel/refresh.ts", "panel/resources.ts", "panel/style.ts", "panel/view.ts"]) {
+    const src = readFileSync(join(root, "orca-plugin", f), "utf8");
+    const out = ts.transpileModule(src, {
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, rewriteRelativeImportExtensions: true, verbatimModuleSyntax: true },
+    });
+    writeFileSync(join(dir, "orca-plugin", f.replace(/\.ts$/, ".js")), out.outputText);
+  }
 }
 
 /** Orca's html panel page for a .ts entry (the frame bridge aside): no body tag, #root alone. */

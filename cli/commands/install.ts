@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline/promises";
-import { install, installPermissions, type Scope, SCOPES, staleSessions, treeRoot } from "../../core/index.ts";
+import { install, installAutoCompact, installPermissions, type Scope, SCOPES, staleSessions, treeRoot } from "../../core/index.ts";
 import type { CommandDef } from "../contract.ts";
 
 async function askOnTerminal(text: string): Promise<boolean> {
@@ -15,19 +15,32 @@ async function askOnTerminal(text: string): Promise<boolean> {
 
 export default {
   name: "install",
-  summary: "register this tree with Claude Code and Orca (idempotent), then run doctor; --permissions adds the allow rules sangsoe's sessions need",
-  usage: "[--permissions [--scope user|project|local] [--yes]] | --stale-sessions",
-  options: { permissions: { type: "boolean" }, scope: { type: "string" }, yes: { type: "boolean" }, "stale-sessions": { type: "boolean" } },
+  summary:
+    "register this tree with Claude Code and Orca (idempotent), then run doctor; --permissions adds the allow rules sangsoe's sessions need; --auto-compact sets the auto-compact window",
+  usage: "[--permissions [--scope user|project|local] [--yes]] | [--auto-compact [--yes]] | --stale-sessions",
+  options: {
+    permissions: { type: "boolean" },
+    "auto-compact": { type: "boolean" },
+    scope: { type: "string" },
+    yes: { type: "boolean" },
+    "stale-sessions": { type: "boolean" },
+  },
   run: ({ values, host, checkContext }) => {
     if (values["stale-sessions"] === true) {
-      if (values.permissions !== undefined || values.scope !== undefined || values.yes !== undefined) {
+      if (values.permissions !== undefined || values["auto-compact"] !== undefined || values.scope !== undefined || values.yes !== undefined) {
         return { ok: false, refusal: { code: "invalid_input", reason: "--stale-sessions only lists, so it takes no other flag", fix: "sangsoe install --stale-sessions" } };
       }
       return { code: 0, lines: staleSessions(host) };
     }
+    if (values["auto-compact"] === true) {
+      if (values.permissions !== undefined || values.scope !== undefined) {
+        return { ok: false, refusal: { code: "invalid_input", reason: "--auto-compact is its own step: it takes only --yes (it writes the user-level profiles, so no --scope)", fix: "sangsoe install --auto-compact" } };
+      }
+      return installAutoCompact(host, { yes: values.yes === true, ...(process.stdin.isTTY ? { ask: askOnTerminal } : {}) });
+    }
     if (values.permissions !== true) {
       if (values.scope !== undefined || values.yes !== undefined) {
-        return { ok: false, refusal: { code: "invalid_input", reason: "--scope and --yes go with --permissions", fix: "sangsoe install --permissions --scope user" } };
+        return { ok: false, refusal: { code: "invalid_input", reason: "--scope and --yes go with --permissions or --auto-compact", fix: "sangsoe install --permissions --scope user" } };
       }
       const root = treeRoot(host);
       return install(host, root, checkContext(root));

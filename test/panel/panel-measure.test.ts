@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import ts from "typescript";
 import { RES_OPEN_KEY } from "../../orca-plugin/panel/resources.ts";
+import { REFRESH_MS } from "../../orca-plugin/panel/view.ts";
 import { PARTS_GOT, VIEW } from "../fixtures/panel/rc3-state.ts";
 import { scratchDir } from "../scratch.ts";
-import { dump, noBrowser, orcaPage } from "./browser.ts";
+import { dump, noBrowser, orcaPage, transpilePanel } from "./browser.ts";
 
 // U116: the DevTools measurement script, run on the panel's own entry (index.ts) mounted in Orca's
 // html page behind a frozen bridge like Orca's, the way the owner pastes it into the real panel.
@@ -15,23 +15,15 @@ const ROOT = new URL("../../", import.meta.url).pathname;
 const SCRIPT = readFileSync(join(ROOT, "scripts/panel-measure.devtools.js"), "utf8");
 const DELAY = { load: 120, made: 60, candidates: 300 } as const;
 
-/** The panel entry and what it imports, as the browser module files Orca serves. */
-function transpile(dir: string): void {
-  mkdirSync(join(dir, "orca-plugin/panel"), { recursive: true });
-  for (const f of ["timer.ts", "panel/index.ts", "panel/refresh.ts", "panel/resources.ts", "panel/style.ts", "panel/view.ts"]) {
-    const src = readFileSync(join(ROOT, "orca-plugin", f), "utf8");
-    const out = ts.transpileModule(src, {
-      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, rewriteRelativeImportExtensions: true, verbatimModuleSyntax: true },
-    });
-    writeFileSync(join(dir, "orca-plugin", f.replace(/\.ts$/, ".js")), out.outputText);
-  }
-}
-
 /**
  * Orca's bridge object is frozen down to plugin.request, so the script cannot wrap it either. With
  * `hold`, the 정리 후보 answer waits for releaseHeld(), so a read stays running however slow the runner.
  */
-const bridge = (open: boolean, hold = false) => `<script>
+const bridge = (open: boolean, hold = false, tickMs = 0) => `<script>
+if (${tickMs}) {
+  const fast = setInterval;
+  window.setInterval = (fn, ms, ...a) => fast(fn, ms === ${REFRESH_MS} ? ${tickMs} : ms, ...a);
+}
 const view = ${JSON.stringify(VIEW)};
 const parts = ${JSON.stringify(PARTS_GOT)};
 const delay = ${JSON.stringify(DELAY)};
@@ -99,6 +91,9 @@ type Out = {
   drawer_max_height?: number | null;
   viewport_height?: number;
   drawer_pass?: boolean;
+  periodic_read_ms: number | null;
+  periodic_parts?: string;
+  periodic_paint?: string;
 } & Spacing & { folded?: Spacing };
 
 type Spacing = {
@@ -126,7 +121,7 @@ function uneven(at: string, m: Spacing | undefined, open: boolean): string[] {
 
 test("the measurement script times the first open per part and the panel's layout, on the panel's own DOM", { skip: noBrowser }, (t) => {
   const dir = scratchDir("sangsoe-measure-");
-  transpile(dir);
+  transpilePanel(dir);
   const entry = '<script type="module" src="./orca-plugin/panel/index.js"></script>\n';
   const pages = {
     closed: orcaPage(bridge(false), entry + run()),
@@ -135,6 +130,8 @@ test("the measurement script times the first open per part and the panel's layou
     reread: orcaPage(bridge(true), entry + run(1000, `document.querySelector("#res details.res-fold").open = false;`)),
     // Pasted while the panel's own first read is still running, late enough that an unheld read has ended.
     busy: orcaPage(bridge(true, true), entry + runWhileReading()),
+    // Decision 257: the panel's tick shortened to 1 s, so two ticks have read before the paste.
+    periodic: orcaPage(bridge(true, false, 1000), entry + run(2600)),
   };
   for (const [name, html] of Object.entries(pages)) writeFileSync(join(dir, `${name}.html`), html);
   const frames = Object.keys(pages).map((n) => `<iframe name="${n}" src="${n}.html" style="display:block;border:0;width:544px;height:1070px"></iframe>`).join("\n");
@@ -149,7 +146,7 @@ const read = () => {
 };
 addEventListener("load", () => setTimeout(read, 100));
 </script></body></html>`;
-  const got = dump(dir, outer, 20_000) as { closed: Out; open: Out; reread: Out; busy: Out };
+  const got = dump(dir, outer, 20_000) as { closed: Out; open: Out; reread: Out; busy: Out; periodic: Out };
   assert.match(got.reread.error ?? "", /^already_read/, "a frame that has read once gives no first-read times");
   assert.equal(got.reread.first_read_ms, undefined);
   assert.match(got.busy.error ?? "", /^busy/, "a read already running is not timed as a refresh");
@@ -189,5 +186,54 @@ addEventListener("load", () => setTimeout(read, 100));
     assert.ok((m.drawer_top ?? -1) >= 0 && (m.drawer_max_height ?? Infinity) < (m.viewport_height ?? 0));
   }
   assert.equal(o.folded, undefined, "a refresh never sees the section closed");
-  assert.deepEqual([...uneven("closed", c.folded, false), ...uneven("first open", c, true), ...uneven("refresh", o, true)], []);
+  assert.equal(o.periodic_read_ms, null, "no tick has read in a 30-second panel pasted at 1 s");
+
+  const p = got.periodic;
+  assert.equal(p.mode, "refresh");
+  assert.equal(p.periodic_parts, "load+made");
+  assert.equal(p.periodic_paint, "none", "the fixture's answer does not change");
+  const tickMs = p.periodic_read_ms ?? -1;
+  assert.ok(tickMs >= DELAY.load && tickMs < DELAY.candidates, `a tick waits for its slower part, load: ${tickMs}ms`);
+  assert.ok(tickMs < 7500, "the script's pass rule");
+  // The bodies measured here carry decision 257's comment marks between pieces; 253's pairs still hold.
+  assert.deepEqual([...uneven("closed", c.folded, false), ...uneven("first open", c, true), ...uneven("refresh", o, true), ...uneven("after ticks", p, true)], []);
+  for (const m of [c, o] as (Out & EmojiGap)[]) assert.deepEqual(unevenEmoji(`${m.mode} 544`, m, ["sumline", "foot", "fold_title", "group_head"]), []);
+});
+
+type EmojiGap = { emoji_gap: Record<string, number | null>; emoji_gap_spread: number | null };
+
+/** U129 (decision 259): the gap after an emoji, each place within 1px of the others; returns what is not. */
+function unevenEmoji(at: string, m: Partial<EmojiGap>, need: string[]): string[] {
+  const g = m.emoji_gap;
+  if (!g) return [`${at}: no emoji_gap measured`];
+  const out = need.filter((k) => typeof g[k] !== "number").map((k) => `${at}: no emoji gap read at ${k}`);
+  const seen = Object.values(g).filter((v): v is number => typeof v === "number");
+  if (m.emoji_gap_spread !== Math.round((Math.max(...seen) - Math.min(...seen)) * 10) / 10) out.push(`${at}: emoji_gap_spread ${m.emoji_gap_spread} is not the places' spread`);
+  if (!(Math.max(...seen) - Math.min(...seen) <= 1)) out.push(`${at}: emoji gaps differ by more than 1px: ${JSON.stringify(g)}`);
+  return out;
+}
+
+test("the emoji gap is the same in every place at the owner's 455px and at 900px", { skip: noBrowser }, (t) => {
+  const dir = scratchDir("sangsoe-emoji-gap-");
+  transpilePanel(dir);
+  const entry = '<script type="module" src="./orca-plugin/panel/index.js"></script>\n';
+  const widths = [455, 900];
+  for (const w of widths) writeFileSync(join(dir, `w${w}.html`), orcaPage(bridge(true), entry + run()));
+  const frames = widths.map((w) => `<iframe name="w${w}" src="w${w}.html" style="display:block;border:0;width:${w}px;height:1070px"></iframe>`).join("\n");
+  const outer = `<!doctype html><html><body style="margin:0">
+${frames}
+<pre id="out"></pre><script>
+const read = () => {
+  const got = {};
+  for (const f of document.querySelectorAll("iframe")) got[f.name] = f.contentWindow.sangsoeMeasure ?? null;
+  if (Object.values(got).some((v) => v === null)) return setTimeout(read, 100);
+  document.getElementById("out").textContent = JSON.stringify(got);
+};
+addEventListener("load", () => setTimeout(read, 100));
+</script></body></html>`;
+  const got = dump(dir, outer, 20_000) as Record<string, Out & EmojiGap>;
+  t.diagnostic(`SANGSOE_EMOJI_GAP ${JSON.stringify(Object.fromEntries(Object.entries(got).map(([k, v]) => [k, v.emoji_gap])))}`);
+  assert.deepEqual(unevenEmoji("455", got.w455 ?? {}, ["sumline", "foot", "fold_title", "group_head"]), []);
+  assert.equal(got.w455?.emoji_gap.state_cell, null, "a narrow card hides the state mark; its head carries it");
+  assert.deepEqual(unevenEmoji("900", got.w900 ?? {}, ["sumline", "foot", "fold_title", "state_cell"]), []);
 });

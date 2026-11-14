@@ -7,6 +7,7 @@ export const STYLE = `
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
   --text-xs: 11px; --text-sm: 12px; --text-base: 13px; --text-md: 15px;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --emoji-gap: var(--s1);
   /* The one side gutter: header, tab row, breadcrumb and content line up on it (decision 219 (7)). */
   --gx: var(--s3);
   --r1: 4px; --r2: 6px; --r3: 8px; --dur: 120ms;
@@ -139,6 +140,9 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .badge.t-run { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 45%, var(--paper)); background: color-mix(in oklab, var(--accent) 8%, var(--paper)); }
 .badge.t-done, .badge.t-gone { color: var(--muted); }
 .badge.cnt { margin-left: var(--s2); }
+/* Decision 259: the one gap between an emoji and its label, before it (.em) or after a badge (.fl). */
+.em { margin-right: var(--emoji-gap); }
+.fl { margin-left: var(--emoji-gap); }
 /* The badge's 11px em: 4em leaves the time beside it four glyphs at 13px ("119m", 34px) and its 8px gap. */
 .who .badge { min-width: 0; max-width: min(14em, calc(100% - 4em)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who .age { margin-left: var(--s2); color: var(--muted); }
@@ -236,7 +240,6 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl col.c-state { width: 8.5em; }
   .tbl col.c-acts { width: 200px; }
   .tbl .mk { vertical-align: middle; }
-  .tbl .mk + .st { margin-left: var(--s1); }
   .tbl tr.lead td { background: var(--tint-2); }
   .tbl:not(:has(tr.lead)) tbody tr:nth-child(even of :where(:not(.other))) td { background: var(--tint-1); }
   .tbl:not(:has(tr.lead)) tbody tr:hover td { background: var(--paper-2); }
@@ -283,14 +286,14 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl tr.oneline td.brk { display: none; }
   .tbl tr.oneline td.age { order: -2; }
   /* A group row heads its item cards instead of being one more card beside them. */
-  .tbl tr.lead { margin-top: var(--s3); padding: var(--s1) 0 0; border-color: transparent; }
+  .tbl tr.lead { margin-top: var(--s3); padding: var(--s1) 0 0; border-color: transparent; column-gap: var(--emoji-gap); }
   .tbl tr.lead:first-child { margin-top: 0; }
   .tbl tr.lead td { border: 0; }
   .tbl tr.lead td.title { display: flex; align-items: center; }
   /* A group head is one line: who and how long show on the item cards under it. */
   .tbl tr.lead td[data-l], .tbl tr.lead td.brk { display: none; }
   /* The head line keeps the bare mark decision 225 (11) drew; its word stays for screen readers. */
-  .tbl tr.lead .mk { display: inline; }
+  .tbl tr.lead .mk { display: inline; margin-right: 0; }
   .tbl tr.lead .st { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .tbl tr.lead .go { display: inline; flex: none; margin-left: auto; padding-left: var(--s3); color: var(--link); font-size: var(--text-xs); font-weight: 500; }
   .tbl tr.lead:hover .go, .tbl tr.lead:focus-visible .go { text-decoration: underline; text-underline-offset: 2px; }
