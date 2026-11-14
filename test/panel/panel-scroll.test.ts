@@ -15,6 +15,10 @@ import { dump, noBrowser, orcaPage } from "./browser.ts";
 
 const HEIGHT = 1070;
 const WIDTHS = [440, 544, 600, 900] as const;
+// rc.3 left 24px under the closed heading and 36px under the open section's last line.
+const UNDER_HEADING = 8;
+const UNDER_LAST_LINE = 24;
+const STAGE_GAP = 8;
 
 const shown = async (): Promise<ResState> => readParts(async (input) => PARTS_GOT[input?.part ?? "load"], () => undefined);
 
@@ -35,7 +39,15 @@ addEventListener("load", () => {
   }).map((e) => e.id || e.className || e.tagName);
   const sum = document.querySelector("#res summary");
   const body = document.querySelector("#res .res-body");
+  const texts = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, (n) => (n.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP));
+  let lastText = null;
+  while (texts.nextNode()) lastText = texts.currentNode;
+  const line = document.createRange();
+  if (lastText) line.selectNodeContents(lastText);
+  const stageEnd = document.querySelector("#root main")?.lastElementChild;
   window.measured = {
+    lastLine: lastText ? line.getBoundingClientRect().bottom : null,
+    stageEnd: stageEnd ? stageEnd.getBoundingClientRect().bottom : null,
     vh: innerHeight, docH: d.scrollHeight, contentH: Math.round(document.getElementById("root").getBoundingClientRect().height + document.getElementById("res").getBoundingClientRect().height), hscroll: d.scrollWidth - d.clientWidth, scrollers,
     res: rect("#res"), summary: rect("#res summary"), stamp: rect("#res .res-h"),
     summaryWeight: Number(getComputedStyle(sum).fontWeight), bodyBorder: getComputedStyle(body).borderTopWidth,
@@ -55,6 +67,8 @@ type Measured = {
   stamp: DOMRect | null;
   summaryWeight: number;
   bodyBorder: string;
+  lastLine: number | null;
+  stageEnd: number | null;
 };
 
 /** One browser run over every width and fold state, each page in an iframe of the panel's size. */
@@ -84,7 +98,7 @@ test("the rc.3 panel fits 1070px at 440 / 544 / 600 / 900 with the 리소스 sec
     pages[`closed-${w}`] = panelPage(stage, closed);
   }
   const got = measure(pages, (name) => Number(name.split("-")[1]));
-  t.diagnostic(Object.entries(got).map(([k, m]) => `${k} content ${m?.contentH} docH ${m?.docH} vh ${m?.vh} resBottom ${m?.res.bottom} underHeading ${m ? m.vh - m.summary.bottom : "?"} hscroll ${m?.hscroll}`).join("; "));
+  t.diagnostic(Object.entries(got).map(([k, m]) => `${k} content ${m?.contentH} docH ${m?.docH} vh ${m?.vh} resBottom ${m?.res.bottom} underHeading ${m ? m.vh - m.summary.bottom : "?"} underLastLine ${m?.lastLine ? Math.round(m.vh - m.lastLine) : "-"} hscroll ${m?.hscroll}`).join("; "));
   for (const [name, m] of Object.entries(got)) {
     assert.ok(m, `${name}: the page drew`);
     assert.equal(m.vh, HEIGHT, `${name}: the frame is the panel's height`);
@@ -104,7 +118,22 @@ test("the rc.3 panel fits 1070px at 440 / 544 / 600 / 900 with the 리소스 sec
     const mid = s.top + s.height / 2;
     assert.ok(mid > o.summary.top && mid < o.summary.bottom, `${w}: the reading time is on the 리소스 line`);
     assert.ok(s.right <= o.summary.right, `${w}: the reading time ends inside the line`);
+    // Owner points 1 and 2: the blank under the closed heading and under the open section's last line.
+    assert.ok(c.vh - c.summary.bottom <= UNDER_HEADING, `${w}: ${c.vh - c.summary.bottom}px blank under the closed 리소스 line`);
+    const underLast = Math.round(o.vh - (o.lastLine as number));
+    assert.ok(underLast <= UNDER_LAST_LINE, `${w}: ${underLast}px blank under the open section's last line`);
   }
+});
+
+test("a stage taller than the panel keeps a gap above the 리소스 section's rule", { skip: noBrowser }, async () => {
+  const rows = Array.from({ length: 60 }, (_, i) => ({ id: `i${100 + i}`, cells: [{ text: "📅" }, { text: `i${100 + i} acme task ${i}` }, { text: "—" }, { text: "선행 대기" }, { text: "—" }] }));
+  const long = { ...VIEW, model: { ...VIEW.model, inProgress: { ...VIEW.model.inProgress, count: 60, rows } } } as typeof VIEW;
+  const closed = renderResources({ kind: "idle" }, false, Date.parse(NOW));
+  const got = measure({ "long-544": panelPage(renderStage(long), closed) }, () => 544);
+  const m = got["long-544"] as Measured;
+  assert.ok(m.docH > m.vh, `the stage is taller than the panel (${m.docH} vs ${m.vh})`);
+  const gap = Math.round(m.res.top - (m.stageEnd as number));
+  assert.ok(gap >= STAGE_GAP, `${gap}px between the stage's last line and the 리소스 rule`);
 });
 
 test("owner point 5: the open section lists no 'sangsoe 가 만든 것' table and no process line", async () => {

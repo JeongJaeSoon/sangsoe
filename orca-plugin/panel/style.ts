@@ -69,8 +69,8 @@ code { font-family: var(--font-mono); font-size: var(--text-xs); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: break-word; min-width: 0; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-/* No bottom space of its own: the 리소스 section's rule and heading row already set the stage apart (decision 248). */
-#root { flex: none; padding: 0; container: panel / inline-size; }
+/* 8px, not rc.3's 16: a stage taller than the panel still ends clear of the 리소스 rule (decision 248). */
+#root { flex: none; padding: 0 0 var(--s2); container: panel / inline-size; }
 /* The header, and a detail screen's back line under it, stay at the top together (decision 225 (4)). */
 .bar { position: sticky; top: 0; z-index: 2; background: var(--paper); }
 .top { display: flex; align-items: center; gap: var(--s2); height: 36px; padding: 0 var(--gx); border-bottom: 1px solid var(--rule); background: var(--paper); }
