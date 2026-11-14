@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline/promises";
-import { install, installPermissions, type Scope, SCOPES, treeRoot } from "../../core/index.ts";
+import { install, installPermissions, type Scope, SCOPES, staleSessions, treeRoot } from "../../core/index.ts";
 import type { CommandDef } from "../contract.ts";
 
 async function askOnTerminal(text: string): Promise<boolean> {
@@ -16,9 +16,15 @@ async function askOnTerminal(text: string): Promise<boolean> {
 export default {
   name: "install",
   summary: "register this tree with Claude Code and Orca (idempotent), then run doctor; --permissions adds the allow rules sangsoe's sessions need",
-  usage: "[--permissions [--scope user|project|local] [--yes]]",
-  options: { permissions: { type: "boolean" }, scope: { type: "string" }, yes: { type: "boolean" } },
+  usage: "[--permissions [--scope user|project|local] [--yes]] | --stale-sessions",
+  options: { permissions: { type: "boolean" }, scope: { type: "string" }, yes: { type: "boolean" }, "stale-sessions": { type: "boolean" } },
   run: ({ values, host, checkContext }) => {
+    if (values["stale-sessions"] === true) {
+      if (values.permissions !== undefined || values.scope !== undefined || values.yes !== undefined) {
+        return { ok: false, refusal: { code: "invalid_input", reason: "--stale-sessions only lists, so it takes no other flag", fix: "sangsoe install --stale-sessions" } };
+      }
+      return { code: 0, lines: staleSessions(host) };
+    }
     if (values.permissions !== true) {
       if (values.scope !== undefined || values.yes !== undefined) {
         return { ok: false, refusal: { code: "invalid_input", reason: "--scope and --yes go with --permissions", fix: "sangsoe install --permissions --scope user" } };

@@ -359,6 +359,8 @@ export interface OrcaAdapter {
   terminalList(a: { worktree?: string }): Promise<OrcaResult<LocalRows<TerminalRow>>>;
   /** One terminal by its handle, never `--all` (decision 202): only a handle start_unit recorded. */
   terminalClose(a: { terminal: string }): Promise<OrcaResult<Receipt>>;
+  /** Owner-run `sangsoe recover auth --send` only (decision 246); the plugin never writes to a terminal (136). */
+  terminalSend(a: { terminal: string; text: string; enter?: boolean; waitSubmit?: number }, o?: WriteOptions): Promise<OrcaResult<Receipt>>;
   /** The repo's setup script as Orca holds it (`hookSettings.scripts.setup`); "" when none. */
   repoShow(a: { repo: string }): Promise<OrcaResult<{ setup: string }>>;
   /** Listeners tied to one worktree; `non_local_host` when Orca scanned another host (decision 88). */

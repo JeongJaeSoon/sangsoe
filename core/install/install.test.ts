@@ -4,7 +4,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { diskHash } from "../../test/dir-hash.ts";
 import { createFakeOrca, type FakeReply } from "../../test/fake-orca/index.ts";
+import { scratchDir } from "../../test/scratch.ts";
 import type { CheckContext, PluginBuild } from "../checks/index.ts";
 import { landAllowRules } from "../checks/land-allowed.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
@@ -142,7 +144,29 @@ function fakeHost(
   return { host, calls, state, profiles };
 }
 
-const writes = (calls: string[]) => calls.filter((c) => !/ list --json$|--version$/.test(c));
+// `ps` is decision 247's read of the process table.
+const writes = (calls: string[]) => calls.filter((c) => !/ list --json$|--version$|^ps /.test(c));
+
+test("decision 247: install ends with the stale-session list, one line when none, and it never changes the exit code", async () => {
+  const { host } = fakeHost();
+  const none = await install(host, ROOT, online().ctx);
+  assert.equal(none.code, 0, none.lines.join("\n"));
+  assert.equal(none.lines.at(-1), "stale sessions: none");
+
+  const gone = join(tmpdir(), "sangsoe-install-test-gone", "claude-plugin", "mcp", "server.js");
+  const run = host.run;
+  host.run = (cmd, args, env) =>
+    cmd === "ps" ? { code: 0, stdout: `  11  1-00:00:00 node ${gone}\n  12  00:05 node ${gone}\n  13  00:05 node /x/other.js\n`, stderr: "" } : run(cmd, args, env);
+  const two = await install(host, ROOT, online().ctx);
+  assert.equal(two.code, 0, two.lines.join("\n"));
+  const tail = two.lines.slice(two.lines.indexOf("") + 1).filter((l) => /^stale sessions|^ {2}pid |^restart each/.test(l));
+  assert.equal(tail.length, 4, two.lines.join("\n"));
+  assert.match(tail[0] ?? "", /^stale sessions: 2 sangsoe MCP servers/);
+  assert.match(tail[1] ?? "", /^ {2}pid 11 .*installed none$/);
+  assert.match(tail[2] ?? "", /^ {2}pid 12 /);
+  assert.match(tail[3] ?? "", /^restart each with claude --continue in its terminal/);
+  assert.equal(two.lines.at(-1), tail[3], "the list is the last thing install prints");
+});
 
 test("first install adds the marketplace at the tree root and installs the plugin at user scope", async () => {
   const { host, calls } = fakeHost();
@@ -557,6 +581,64 @@ test("an installed plugin folder equal to its build and reviewed head is green",
   const { ctx } = hashes({ installed: "sha256-same", built: "sha256-same" });
   const r = await doctor(host, ROOT, { ctx });
   assert.ok(r.lines.some((l) => /^ok +orca-plugin-content: /.test(l)), r.lines.join("\n"));
+});
+
+// Real folders and an inspect that hashes what is on disk, `.orca/` included, as Orca's does.
+function onDisk(edit?: (installed: string) => void) {
+  const root = scratchDir("sangsoe-u128-doctor-");
+  const built = join(root, "tree", "orca-plugin");
+  const installed = join(root, "libexec", "orca-plugin");
+  for (const d of [built, installed]) {
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, "orca-plugin.json"), '{"id":"sangsoe"}');
+    writeFileSync(join(d, "main.ts"), "export {};");
+  }
+  edit?.(installed);
+  const replies = {
+    "plugin-inspect": (args: readonly string[]): RunResult => {
+      const hash = diskHash(args[2] ?? "");
+      return hash
+        ? { code: 0, stdout: JSON.stringify({ ok: true, result: { contentHash: hash } }), stderr: "" }
+        : { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "invalid_plugin" } }), stderr: "" };
+    },
+  };
+  const pluginBuild: PluginBuild = {
+    dir: installed,
+    buildCommit: async () => BUILT,
+    reviewedHead: async () => BUILT,
+    fetchTree: async () => ({ dir: built, dispose: async () => {} }),
+  };
+  return { installed, ...orcaCtx({ replies, pluginBuild }) };
+}
+
+// What `orca plugin dev load` writes into the folder it loads (`orca plugin types --help`).
+function orcaWritesTypes(dir: string): void {
+  mkdirSync(join(dir, ".orca", "types", "orca"), { recursive: true });
+  writeFileSync(join(dir, ".orca", ".gitignore"), "*");
+  writeFileSync(join(dir, ".orca", "types", "orca", "index.d.ts"), "declare const orca: unknown;");
+}
+
+test("install, Orca's dev load writes .orca/ into the folder, install again: doctor stays green (U128)", async (t) => {
+  const { host } = fakeHost({ orcaManifest: true });
+  const { ctx, installed } = onDisk();
+  await install(host, ROOT, online().ctx);
+  const before = await doctor(host, ROOT, { ctx });
+  assert.ok(before.lines.some((l) => /^ok +orca-plugin-content: /.test(l)), before.lines.join("\n"));
+  orcaWritesTypes(installed);
+  await install(host, ROOT, online().ctx);
+  const r = await doctor(host, ROOT, { ctx });
+  show(t, r);
+  assert.ok(r.lines.some((l) => /^ok +orca-plugin-content: /.test(l)), r.lines.join("\n"));
+});
+
+test("an edit outside .orca/ still fails doctor when Orca's .orca/ is there too (U128)", async () => {
+  const { host } = fakeHost({ orcaManifest: true });
+  const { ctx } = onDisk((installed) => {
+    orcaWritesTypes(installed);
+    writeFileSync(join(installed, "main.ts"), "export const edited = 1;");
+  });
+  const r = await doctor(host, ROOT, { ctx });
+  assert.ok(r.lines.some((l) => /^FAIL +orca-plugin-content: .* — fix: sangsoe plugin approve$/.test(l)), r.lines.join("\n"));
 });
 
 test("an installed folder Orca cannot inspect, while its build has a plugin, fails", async () => {
