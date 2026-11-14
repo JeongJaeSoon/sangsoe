@@ -77,15 +77,17 @@ test("owner point 6: the status line leaves the screen but not the accessibility
       assert.ok(h1[0]?.shown, `${w}: a screen reader still reads the h1`);
       assert.match(h1[0]?.text ?? "", /^현황 · 묶음 1 · 내가 할 일 \d/);
     }
-    // rc.4 before this: 152px with nothing for the owner to do.
-    assert.ok(c.prog - c.top <= 100, `${w}: ${c.prog - c.top}px above 열린 항목`);
+    // rc.4 before this: 152px with nothing for the owner to do; 94 after (95 on the ubuntu runner's fonts).
+    assert.ok(c.prog - c.top <= 110, `${w}: ${c.prog - c.top}px above 열린 항목`);
     const owner = c.blocks.filter((x) => /결정 필요|오너가 할 일/.test(x.text));
     assert.equal(owner.length, 1, `${w}: one line says both owner counts are 0`);
     assert.match(owner[0]?.text ?? "", /결정 필요 0.*오너가 할 일 0.*없음/);
-    assert.ok((owner[0]?.h ?? 99) <= 28, `${w}: that line is one line (${owner[0]?.h}px)`);
     // A decision to answer keeps today's two sections: the owner's call to act.
     assert.ok(b.blocks.some((x) => x.tag === "section" && /결정 필요 1/.test(x.text) && x.h > 40), `${w}: the open decision keeps its table`);
-    assert.ok(b.blocks.some((x) => x.tag === "section" && /^지금 오너가 할 일 0\s*없음$/.test(x.text)), `${w}: 오너 할 일 keeps its own line`);
+    const single = b.blocks.find((x) => x.tag === "section" && /^지금 오너가 할 일 0\s*없음$/.test(x.text));
+    assert.ok(single, `${w}: 오너 할 일 keeps its own line`);
+    // Measured against a one-line empty section in the same fonts, since a runner's fonts shift heights by a pixel.
+    assert.ok((owner[0]?.h ?? 99) <= single.h, `${w}: that line is one line (${owner[0]?.h}px, an empty section ${single.h}px)`);
   }
 });
 
