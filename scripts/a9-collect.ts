@@ -1,15 +1,15 @@
 // Probe A9 (decision 261): did Orca message delivery alone wake a top-level orchestrator session?
-// Token-free, read-only. Inputs are the two records that already exist, the Orca inbox rows of the probe's
-// mailbox (`orca orchestration inbox --terminal <mailbox> --full --json`) and the session transcript(s);
-// the result is a table on stdout. Nothing is written anywhere.
+// Token-free, read-only. Two records that already exist are joined by Orca's messageId; nothing is stored:
+//   sender side   the sending session's transcript: the `orca orchestration send` result (messageId=...) and its time
+//   receiver side the probe session's transcript(s): the `check` tool_result that carries the id, and the first tool call
+// The result is a table on stdout.
 //
-//   node scripts/a9-collect.ts <inbox.json> <transcript.jsonl>... [--subject-prefix "A9 probe"]
+//   node scripts/a9-collect.ts <sender.jsonl> <probe.jsonl>... [--subject-prefix "A9 probe"]
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 export const MAX_LATENCY_S = 120;
 export const MAX_MIDTURN_S = 60;
-const WAKE_LINE = /You have \d+ orchestration message/;
 
 export type Outcome = "woken" | "unread" | "no-action" | "slow" | "duplicate";
 export type Kind = "idle" | "mid-turn";
@@ -29,6 +29,8 @@ interface Line {
   toolUse: boolean;
   toolResult: boolean;
   endTurn: boolean;
+  commands: { id: string; command: string }[];
+  resultIds: string[];
 }
 
 function parseTranscript(files: string[]): Line[] {
@@ -53,6 +55,10 @@ function parseTranscript(files: string[]): Line[] {
         toolUse: parts.some((p) => p.type === "tool_use"),
         toolResult: parts.some((p) => p.type === "tool_result"),
         endTurn: msg.stop_reason === "end_turn",
+        commands: parts
+          .filter((p) => p.type === "tool_use")
+          .map((p) => ({ id: String(p.id ?? ""), command: String((p.input as { command?: unknown } | undefined)?.command ?? "") })),
+        resultIds: parts.filter((p) => p.type === "tool_result").map((p) => String(p.tool_use_id ?? "")),
       });
     }
   }
@@ -74,49 +80,48 @@ function turns(lines: Line[]): { start: number; end: number }[] {
   return out;
 }
 
-export interface InboxRow {
+export interface Send {
   id: string;
-  subject?: string;
-  createdAt?: string | number;
-  created_at?: string | number;
-  readAt?: string | number | null;
-  read_at?: string | number | null;
+  sentAt: number;
 }
 
-const when = (v: string | number | null | undefined): number | null => {
-  if (v === null || v === undefined) return null;
-  const n = typeof v === "number" ? v : Date.parse(v);
-  return Number.isNaN(n) ? null : n;
-};
+// The sends are the `orca orchestration send` calls (whose command contains the prefix) with the messageId Orca returned.
+export function sends(senderFiles: string[], subjectPrefix = ""): Send[] {
+  const lines = parseTranscript(senderFiles);
+  const wanted = new Map<string, true>();
+  for (const l of lines) {
+    for (const c of l.commands) {
+      if (c.command.includes("orchestration send") && c.command.includes(subjectPrefix)) wanted.set(c.id, true);
+    }
+  }
+  const out: Send[] = [];
+  for (const l of lines) {
+    if (!l.toolResult || !l.resultIds.some((id) => wanted.has(id))) continue;
+    const m = /messageId=(msg_[A-Za-z0-9]+)/.exec(l.text);
+    if (m?.[1]) out.push({ id: m[1], sentAt: l.ts });
+  }
+  return out;
+}
 
-export function collect(inbox: InboxRow[], transcriptFiles: string[], subjectPrefix = ""): Row[] {
-  const lines = parseTranscript(transcriptFiles);
+export function collect(sent: Send[], probeFiles: string[]): Row[] {
+  const lines = parseTranscript(probeFiles);
   const span = turns(lines);
   const rows: Row[] = [];
-  for (const m of inbox) {
-    if (subjectPrefix && !(m.subject ?? "").startsWith(subjectPrefix)) continue;
-    const created = when(m.createdAt ?? m.created_at);
-    if (created === null) continue;
-    const read = when(m.readAt ?? m.read_at);
-    const turn = span.find((t) => created >= t.start && created <= t.end);
+  for (const s of sent) {
+    const turn = span.find((t) => s.sentAt >= t.start && s.sentAt <= t.end);
     const kind: Kind = turn ? "mid-turn" : "idle";
-    // Join key: the message id in the transcript (a `check` result), else the wake line the delivery inserted.
-    const idHits = lines.filter((l) => l.role === "user" && l.ts >= created && l.text.includes(m.id));
-    const wakeHits = lines.filter((l) => l.role === "user" && !l.toolResult && l.ts >= created && WAKE_LINE.test(l.text));
-    const seen = idHits.length > 0 ? idHits : wakeHits.slice(0, 1);
-    const base = { id: m.id, createdAt: created, kind };
-    if (read === null) {
+    const base = { id: s.id, createdAt: s.sentAt, kind };
+    const hits = lines.filter((l) => l.role === "user" && l.toolResult && l.ts >= s.sentAt && l.text.includes(s.id));
+    if (hits.length === 0) {
       rows.push({ ...base, outcome: "unread", latencyS: null });
       continue;
     }
-    // Duplicate handling counts only distinct ids hits in separate lines, never the wake line next to them.
-    if (idHits.filter((l) => l.toolResult).length > 1) {
+    if (hits.length > 1) {
       rows.push({ ...base, outcome: "duplicate", latencyS: null });
       continue;
     }
-    const from = kind === "mid-turn" && turn ? turn.end : created;
-    const first = seen[0];
-    const act = first && lines.find((l) => l.role === "assistant" && l.toolUse && l.ts >= from && l.ts >= first.ts);
+    const from = kind === "mid-turn" && turn ? turn.end : s.sentAt;
+    const act = lines.find((l) => l.role === "assistant" && l.toolUse && l.ts >= from);
     if (!act) {
       rows.push({ ...base, outcome: "no-action", latencyS: null });
       continue;
@@ -143,7 +148,7 @@ export function verdict(rows: Row[]): Verdict {
 }
 
 export function table(rows: Row[]): string {
-  const head = "id\tcreated_at\tkind\toutcome\tlatency_s";
+  const head = "id\tsent_at\tkind\toutcome\tlatency_s";
   const body = rows.map((r) => [r.id, new Date(r.createdAt).toISOString(), r.kind, r.outcome, r.latencyS?.toFixed(1) ?? "-"].join("\t"));
   const v = verdict(rows);
   return [head, ...body, `sends=${v.total} failed=${v.failed} max_latency_s=${v.maxLatencyS.toFixed(1)} pass=${v.pass}`].join("\n");
@@ -153,11 +158,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const i = args.indexOf("--subject-prefix");
   const prefix = i >= 0 ? (args.splice(i, 2)[1] ?? "") : "";
-  const [inboxFile, ...transcripts] = args;
-  if (!inboxFile || transcripts.length === 0) {
-    console.error("usage: a9-collect.ts <inbox.json> <transcript.jsonl>... [--subject-prefix <text>]");
+  const [senderFile, ...probe] = args;
+  if (!senderFile || probe.length === 0) {
+    console.error("usage: a9-collect.ts <sender.jsonl> <probe.jsonl>... [--subject-prefix <text>]");
     process.exit(2);
   }
-  const parsed = JSON.parse(readFileSync(inboxFile, "utf8")) as { result?: { messages?: InboxRow[] }; messages?: InboxRow[] };
-  console.log(table(collect(parsed.result?.messages ?? parsed.messages ?? [], transcripts, prefix)));
+  console.log(table(collect(sends([senderFile], prefix), probe)));
 }
