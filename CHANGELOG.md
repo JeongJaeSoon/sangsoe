@@ -8,6 +8,19 @@ Decision numbers refer to `docs/decisions.md`.
 
 - **One command brings back every session stopped on a lost login (246).** After signing in once with `/login`, `sangsoe recover auth` lists each session whose latest stop was a lost login and that has not ended a turn since (237): a Dispatch's stop, or the wait of a session holding none. For each one it shows the terminal it would send to, or why it skips it: the Dispatch has finished or its terminal is not live, or the session's worktree has no agent terminal or more than one. This dry run sends and records nothing. `sangsoe recover auth --send` sends each listed terminal one fixed line, through Orca's `terminal send`, asking the session to carry on. It records one `owner_action` per line it sent, keyed by the stop, so running it again sends nothing to a stop it already sent to. A send Orca refused before any text reached the terminal (an unknown terminal handle, or a prompt it would not type over an open menu) is tried again on the next run. Any other failure may have typed the line, such as a lost response or a submit wait that timed out. Such a send is retried only under Orca's request id; if it is still unknown, it is recorded as possibly delivered and never sent again. The command exits 1 when an Orca read fails, a list comes back cut short, or a send fails or is still unknown. `--db <path>` reads another existing store. A session that still holds the old token stops again. For a session holding no Dispatch, that second stop is the same open wait: its row says the line was already sent and names the restart that 237 describes. Only this command writes to a terminal. The Orca plugin still has no capability to do so (136).
 
+## 0.1.6-rc.4 (pre-release)
+
+Everything since `v0.1.6-rc.3`: decision 248 and a fix to the owner's answer to a wait. A pre-release for checking the 리소스 section on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
+
+### Upgrading from 0.1.6-rc.3
+
+- **Re-approve.** The Orca plugin's content and its vendored core changed, so the plugin waits for approval again. It asks for no new capability. Have the review of the build recorded with `sangsoe review record` by someone other than the session that wrote its pull request, then run `sangsoe plugin approve`, as the README's Update section says.
+- **Restart every session that calls `start_unit`.** The version changed, so a server started under 0.1.6-rc.3 refuses `start_unit` with `server_stale`: restart it as 0.1.6-rc.1's Upgrading says.
+
+### Changes
+
+- **The 리소스 section fits the panel and reads apart when open (248).** The owner's rc.3 panel, 1070px tall, scrolled 25px with the section open. The section no longer carries space nothing used: its empty line kept the stage's 12px padding above and below, 36px sat under its last line (now 21) and 24px under the closed heading (now 8), and the stage's bottom space is 8px instead of 16. Open, its heading is in ink and its body sits in a 1px rounded frame; closed, the heading is muted. The reading time and 새로 고침 now end the 리소스 row, left of its chevron. The 'sangsoe 가 만든 것' counts are no longer drawn; `sangsoe reap plan` still prints them, and 기록됨·오너 손 stays. `scripts/panel-measure.devtools.js` measures the panel from its DevTools console: the first read of each part from opening the fold, scrolling, and where the section ends.
+
 ### Fixes
 
 - `awaitingResume` no longer counts a panel button (an `owner_action` with no session) as the owner answering a Dispatch's open wait, which names no session either: a wait now matches the owner's words only on the session it names.
