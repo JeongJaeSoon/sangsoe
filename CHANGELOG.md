@@ -4,7 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## 0.1.6
 
-Everything since `v0.1.5`: decisions 230 to 240, 248, 249 and 253, a fix to the owner's answer to a wait and two test fixes. The pre-releases checked them on an installed build as they came: `v0.1.6-rc.1` carried 230 to 234, `v0.1.6-rc.2` added 235 and 236, `v0.1.6-rc.3` added 237 to 240 and the 219 test fix, `v0.1.6-rc.4` added 248, 249, the wait fix and the measurement test fix, and `v0.1.6-rc.5` added 253.
+Everything since `v0.1.5`: decisions 230 to 240, 248, 249, 253 and 258, a fix to the owner's answer to a wait and two test fixes. The pre-releases checked them on an installed build as they came: `v0.1.6-rc.1` carried 230 to 234, `v0.1.6-rc.2` added 235 and 236, `v0.1.6-rc.3` added 237 to 240 and the 219 test fix, `v0.1.6-rc.4` added 248, 249, the wait fix and the measurement test fix, `v0.1.6-rc.5` added 253, and `v0.1.6-rc.6` added 258.
 
 ### Upgrading from 0.1.5
 
@@ -38,6 +38,7 @@ Everything since `v0.1.5`: decisions 230 to 240, 248, 249 and 253, a fix to the 
 - **The panel's "back paints from memory" test no longer fails on a slow or fast machine (219).** It compared one cold render with the average of five core readings, so it failed whenever that render was slower. It now drives the panel with a stand-in page and checks that back paints the remembered screen before it asks for a fresh reading.
 - `awaitingResume` no longer counts a panel button (an `owner_action` with no session) as the owner answering a Dispatch's open wait, which names no session either: a wait now matches the owner's words only on the session it names.
 - **The measurement script's test no longer races a slow runner.** Its busy-panel case could finish the 정리 후보 read before the script was pasted on a slow CI runner; the stand-in panel now holds that read until the script runs.
+- **A re-install no longer makes `sangsoe doctor` fail `orca-plugin-content` (258).** `orca plugin dev load` writes its own `.orca/` folder (TypeScript typings and a `.gitignore`) into the plugin folder it loads, and `orca plugin inspect` counted it, so the installed folder never matched its build commit's tree once install had loaded it. `sangsoe plugin approve` and `sangsoe doctor` now leave a top-level `.orca/` directory out of the content they compare; any other change to the folder still fails. A folder without `.orca/` hashes as it did before, so this fix alone would not ask for approval again; the re-approval under Upgrading comes from the new build's folder and content.
 
 ## 0.1.5
 
