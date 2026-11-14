@@ -72,7 +72,10 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; overflow-wrap
 /* 8px, not rc.3's 16: a stage taller than the panel still ends clear of the 리소스 rule (decision 248). */
 #root { flex: none; padding: 0 0 var(--s2); container: panel / inline-size; }
 /* The header, and a detail screen's back line under it, stay at the top together (decision 225 (4)). */
-.bar { position: sticky; top: 0; z-index: 2; background: var(--paper); }
+/* Above the 리소스 sheet (z-index 3): the header's menu hangs from here and must open over an open sheet. */
+.bar { position: sticky; top: 0; z-index: 4; background: var(--paper); }
+/* The pinned 리소스 bar covers the viewport's bottom 37px: a focused row scrolls clear of it. */
+html { scroll-padding-bottom: 40px; }
 .top { display: flex; align-items: center; gap: var(--s2); height: 36px; padding: 0 var(--gx); border-bottom: 1px solid var(--rule); background: var(--paper); }
 .brand { display: inline-flex; align-items: center; gap: var(--s2); font-weight: 600; font-size: var(--text-base); white-space: nowrap; }
 .brand .ic { width: 16px; height: 16px; color: var(--muted); }

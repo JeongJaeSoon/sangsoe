@@ -76,7 +76,10 @@ function mountResources(after: HTMLElement): void {
   });
   const body = () => {
     const el = box.querySelector<HTMLElement>(".res-body");
+    // A reading shrinks the body and the browser clamps its scroll: the owner's place comes back with the content.
+    const at = el?.scrollTop ?? 0;
     if (el) want = repaint(el, renderResBody(state, Date.now(), hours), document.activeElement, want);
+    if (el && at > 0) el.scrollTop = at;
   };
   const failed = (e: unknown) => ({ ok: false as const, refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" } });
   // Decision 235: three parts asked together, each painted as it comes.
@@ -108,10 +111,12 @@ function mountResources(after: HTMLElement): void {
   // Escape closes one layer at a time (decision 262): an open confirm, then a menu (the panel's own
   // handler, which this one leaves to it), then the sheet, with the keyboard back on its heading.
   document.addEventListener("keydown", (ev) => {
-    if (ev.key !== "Escape" || !open) return;
+    if (ev.key !== "Escape" || !open || ev.isComposing) return;
     if (state.kind === "shown" && state.confirm) {
       state = { ...state, confirm: false };
+      want = { from: "cancel", to: FOCUS_AFTER.cancel ?? "ask" };
       body();
+      ev.stopImmediatePropagation();
       return;
     }
     if (document.querySelector("details.menu[open]")) return;
