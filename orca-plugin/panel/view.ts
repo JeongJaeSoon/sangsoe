@@ -176,7 +176,7 @@ export function errorNote(r: Refusal): string {
  * Decision 259: the gap after an emoji is the `.em` class's, never a literal space. `html` is escaped
  * text; an emoji with nothing after it (a flag at the end) has no label to set apart.
  */
-export const emo = (html: string): string => html.replace(/(\p{Extended_Pictographic}️?) +(?=[^\s\p{Extended_Pictographic}])/gu, '<span class="em">$1</span>');
+export const emo = (html: string): string => html.replace(/(\p{Extended_Pictographic}️?) +(?=[^\s\p{Extended_Pictographic}])/gu, '<span class="em">$1<span class="sr"> </span></span>');
 const txt = (s: string): string => emo(esc(s));
 
 function cellHtml(c: Cell): string {

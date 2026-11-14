@@ -91,7 +91,7 @@ test("an owner item the panel pressed into ⏳ 검증 대기 keeps its 완료 of
   assert.ok(renderStage(v).includes(done));
   const pressed = renderStage(v, "all", {}, new Set([owner.ref]));
   assert.ok(!pressed.includes(done), "no 완료 act on the pressed row");
-  assert.match(pressed, /<button type="button" class="btn" disabled><span class="em">⏳<\/span>검증 대기<\/button>/);
+  assert.match(pressed, /<button type="button" class="btn" disabled><span class="em">⏳<span class="sr"> <\/span><\/span>검증 대기<\/button>/);
 
   const pending = new Set([owner.ref, "i999"]);
   prunePending(pending, v.todo);

@@ -16,28 +16,35 @@ const view = async (target: { group?: string; item?: string }): Promise<PanelVie
 };
 const rule = (sel: string) => new RegExp(`(?:^|\\n)\\s*${sel.replace(/[.()[\]"=*+>:]/g, "\\$&")} \\{[^}]*`).exec(STYLE)?.[0] ?? "";
 const textOf = (html: string) => html.replace(/<[^>]*>/g, "");
+const drawn = (html: string) => html.replace(/<span class="sr"> <\/span>/g, "");
 const LITERAL = /\p{Extended_Pictographic}️? +[^\s\p{Extended_Pictographic}]/u;
 
 test("259: emo() takes the space after an emoji into one class and leaves everything else", () => {
-  assert.equal(emo("✅ 완료 3건"), '<span class="em">✅</span>완료 3건');
-  assert.equal(emo("⏸️ 보류"), '<span class="em">⏸️</span>보류');
-  assert.equal(emo("완료 ✅ 7일 · 🔄 진행 중"), '완료 <span class="em">✅</span>7일 · <span class="em">🔄</span>진행 중');
+  assert.equal(emo("✅ 완료 3건"), '<span class="em">✅<span class="sr"> </span></span>완료 3건');
+  assert.equal(emo("⏸️ 보류"), '<span class="em">⏸️<span class="sr"> </span></span>보류');
+  assert.equal(emo("완료 ✅ 7일 · 🔄 진행 중"), '완료 <span class="em">✅<span class="sr"> </span></span>7일 · <span class="em">🔄<span class="sr"> </span></span>진행 중');
   assert.equal(emo("오래된 🚧"), "오래된 🚧", "an emoji with no label after it has no gap to set");
   assert.equal(emo("🙋🚨"), "🙋🚨");
-  assert.equal(emo("🚧 막힘 &amp; 보류"), '<span class="em">🚧</span>막힘 &amp; 보류');
+  assert.equal(emo("🚧 막힘 &amp; 보류"), '<span class="em">🚧<span class="sr"> </span></span>막힘 &amp; 보류');
   assert.equal(emo("진행 중"), "진행 중");
+});
+
+test("259: a screen reader still hears the space after an emoji, and the screen draws none", () => {
+  const html = emo("✅ 완료 3건");
+  assert.equal(textOf(html), "✅ 완료 3건", "the text keeps the word boundary between the emoji and its label");
+  assert.match(html, /<span class="em">✅<span class="sr"> <\/span><\/span>완료 3건/, "the space is visually hidden, so the gap is the variable alone");
 });
 
 test("259: no screen draws an emoji and its label apart by a literal space", async () => {
   const pages = [renderStage(VIEW), renderStage(await view({})), renderStage(await view({ group: "api-migration" })), renderStage(await view({ item: "i031" }))];
   for (const html of pages) {
     assert.ok(/\p{Extended_Pictographic}/u.test(textOf(html)), "the page has emoji to check");
-    assert.doesNotMatch(textOf(html), LITERAL);
+    assert.doesNotMatch(textOf(drawn(html)), LITERAL);
   }
   const fold = /<summary>.*?<\/summary>/s.exec(renderStage(VIEW))?.[0] ?? "";
-  assert.match(fold, /<span class="em">✅<\/span>완료 최근 7일/);
-  assert.match(renderStage(VIEW), /<p class="sumline"><span class="em">✅<\/span>완료 16건 · <span class="em">🔄<\/span>진행 중 0건/);
-  assert.doesNotMatch(textOf(stateBadge("🔄 진행 중 🚨")), LITERAL);
+  assert.match(fold, /<span class="em">✅<span class="sr"> <\/span><\/span>완료 최근 7일/);
+  assert.match(renderStage(VIEW), /<p class="sumline"><span class="em">✅<span class="sr"> <\/span><\/span>완료 16건 · <span class="em">🔄<span class="sr"> <\/span><\/span>진행 중 0건/);
+  assert.doesNotMatch(textOf(drawn(stateBadge("🔄 진행 중 🚨"))), LITERAL);
   assert.match(stateBadge("🔄 진행 중 🚨"), /<span class="badge t-run">진행 중<\/span><span class="fl">🚨<\/span>$/);
 });
 

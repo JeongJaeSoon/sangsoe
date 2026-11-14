@@ -37,7 +37,7 @@ test("0 groups: 현황 says how a group comes to be, under 진행 중; with grou
 test("완료 최근 7일 folds into a list on 현황 and on the group, one item per done row", () => {
   for (const v of [overview, group]) {
     const html = renderStage(v);
-    const fold = /<details class="fold"><summary><span><span class="em">✅<\/span>완료 최근 7일<\/span> <span class="count">2<\/span><svg class="chev"[^>]*aria-hidden="true">.*?<\/svg><\/summary>(.*?)<\/details>/s.exec(html)?.[1] ?? "";
+    const fold = /<details class="fold"><summary><span><span class="em">✅<span class="sr"> <\/span><\/span>완료 최근 7일<\/span> <span class="count">2<\/span><svg class="chev"[^>]*aria-hidden="true">.*?<\/svg><\/summary>(.*?)<\/details>/s.exec(html)?.[1] ?? "";
     assert.equal([...fold.matchAll(/<li>/g)].length, 2, "two rows");
     assert.match(fold, /<span class="id">i024<\/span>인덱스 추가 <a href="https:\/\/github.com\/acme\/api\/pull\/38"/);
   }
@@ -47,10 +47,10 @@ test("group summary tiles: 우선순위, 진행, 막힘, 남은 것 with its spl
   const html = renderStage(group);
   const figs = /<dl class="figs"[^>]*>(.*?)<\/dl>/s.exec(html)?.[1] ?? "";
   assert.deepEqual(
-    [...figs.matchAll(/<dt>(.*?)<\/dt>/g)].map((x) => (x[1] ?? "").replace(/<span class="em">([^<]*)<\/span>/g, "$1 ")),
+    [...figs.matchAll(/<dt>(.*?)<\/dt>/g)].map((x) => (x[1] ?? "").replace(/<span class="em">([^<]*)<span class="sr"> <\/span><\/span>/g, "$1 ")),
     ["우선순위", "🔄 진행 중", "🚧 막힘", "남은 것", "✅ 7일", "🙋 오너", "🚨 플래그"],
   );
-  assert.match(figs, /<dd>7 <small><span class="em">📅<\/span>5, <span class="em">🟢<\/span>2, <span class="em">⏸️<\/span>0<\/small><\/dd>/);
+  assert.match(figs, /<dd>7 <small><span class="em">📅<span class="sr"> <\/span><\/span>5, <span class="em">🟢<span class="sr"> <\/span><\/span>2, <span class="em">⏸️<span class="sr"> <\/span><\/span>0<\/small><\/dd>/);
 });
 
 test("최근 전환, 크리티컬 패스 (상태 · 단계 이름), 스택 PR 체인, 릴리스 묶음, 끊긴 선행 and 간선 N are drawn", () => {
