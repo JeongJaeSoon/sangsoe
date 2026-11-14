@@ -207,6 +207,8 @@ export {
   type WorktreeSettings,
   advisorCalls,
   callCost as advisorCallCost,
+  type Drift as ModelDrift,
+  modelDrift,
   localDay,
   modelsMarkdown,
   modelsView,

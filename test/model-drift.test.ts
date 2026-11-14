@@ -13,16 +13,21 @@ import {
   type BriefSnapshot,
   buildItem,
   MODEL_CATALOG as CATALOG,
+  defaultDbPath,
   modelDrift,
   modelTable,
   replayJsonl,
+  Store,
   VERIFIED_WITH_CLAUDE_CODE,
 } from "../core/index.ts";
-import { defaultDbPath, Store } from "../core/store/store.ts";
 
-const everyday = CATALOG.find((r) => r.tier === "everyday");
-const primary = CATALOG.find((r) => r.tier === "primary");
-assert.ok(everyday && primary);
+const row = (tier: string) => {
+  const r = CATALOG.find((c) => c.tier === tier);
+  assert.ok(r, tier);
+  return r;
+};
+const everyday = row("everyday");
+const primary = row("primary");
 // A release the table has not seen yet, built from the table so no model name is written here.
 const MOVED = `${everyday.currentId}-next`;
 

@@ -8,7 +8,10 @@ import {
   CATALOG,
   catalogAgeDays,
   compareVersions,
+  type Drift,
+  driftText,
   localDay,
+  modelDrift,
   PIN_KEYS,
   STALE_DAYS,
   spend,
@@ -93,18 +96,33 @@ const RANK: Record<CheckStatus, number> = { ok: 0, notice: 1, warn: 2, fail: 3 }
 
 /** Decision 200: today's advisor calls and estimated cost, read from the store; nothing without one. */
 export function spendToday(home: string, now: Date): string | undefined {
-  const path = defaultDbPath(home);
-  if (!existsSync(path)) return undefined;
   // A spend line is extra: an unreadable or locked store must not fail the model-table row.
   try {
-    const store = Store.open({ path });
-    try {
-      return `오늘 ${spendText(spend(store.events({ type: "advisor_used" }), { day: localDay(now) }))}`;
-    } finally {
-      store.close();
-    }
+    const used = readStore(home, (s) => spend(s.events({ type: "advisor_used" }), { day: localDay(now) }));
+    return used && `오늘 ${spendText(used)}`;
   } catch (err) {
     return `오늘 advisor 사용을 읽지 못함 (${(err as Error).message})`;
+  }
+}
+
+/** Decision 254: started sessions whose resolved model drifted; an unreadable store is the spend line's to name. */
+export function sessionDrifts(home: string, pins: readonly string[]): Drift[] {
+  try {
+    const events = readStore(home, (s) => [...s.events({ type: "unit_started" }), ...s.events({ type: "session_started" })]);
+    return events ? modelDrift(events.sort((a, b) => a.seq - b.seq), pins) : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStore<T>(home: string, read: (store: Store) => T): T | undefined {
+  const path = defaultDbPath(home);
+  if (!existsSync(path)) return undefined;
+  const store = Store.open({ path });
+  try {
+    return read(store);
+  } finally {
+    store.close();
   }
 }
 
@@ -132,6 +150,7 @@ export const modelTable: Check = {
     if (pins.length > 0) {
       findings.push({ status: "notice", text: `alias 고정 ${pins.length}개: ${pins.join(" · ")} — 풀린 모델은 상태 줄로 확인`, fix: PIN_FIX });
     }
+    for (const d of sessionDrifts(home, pins)) findings.push({ status: "notice", text: driftText(d), fix: d.cause === "alias_moved" ? FIX : PIN_FIX });
     // Decision 202: the advisor goes through each new worktree's local settings, not the owner's key.
     // Only where that file cannot be written does the owner's key (decision 187) matter.
     if (env.CLAUDE_CODE_DISABLE_ADVISOR_TOOL) {

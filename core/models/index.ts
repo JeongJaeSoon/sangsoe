@@ -1,5 +1,6 @@
 import { CATALOG, type CatalogRow, CLASS_KIND, EFFORTS, type Effort, KINDS, type Kind, POLICY, TIERS, type Tier, UNIT_CLASSES, type UnitClass } from "./table.ts";
 
+export * from "./drift.ts";
 export * from "./spend.ts";
 export * from "./table.ts";
 export * from "./view.ts";
