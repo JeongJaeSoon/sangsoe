@@ -1,7 +1,7 @@
 <!-- layout: slot=③ layer=실행 tokens=free -->
 # claude-plugin/mcp/tools — MCP tool 하나 = 파일 하나 · 실행 · 토큰 X
 
-**에이전트는 sangsoe 를 MCP 로만 부른다.** 오케스트레이터·리드·워커는 이 폴더의 tool 을 쓰고, Bash 로 `sangsoe` CLI 를 부르지 않는다. CLI 는 MCP 를 쓸 수 없는 셸 호출자(시작 hook · 막는 hook · 기록 hook · 오너 전용 skill 의 상태 주입 줄 · 사람 터미널·시험·CI · `sangsoe plugin approve`)의 입구다(결정 75 나).
+**에이전트는 sangsoe 를 MCP 로만 부른다.** 오케스트레이터·리드·워커는 이 폴더의 tool 을 쓰고, Bash 로 `sangsoe` CLI 를 부르지 않는다. 예외는 하나, `[gate:pressure]` 거부가 이름 대는 `sangsoe pressure wait` 를 백그라운드로 띄우는 것이다(결정 256). CLI 는 MCP 를 쓸 수 없는 셸 호출자(시작 hook · 막는 hook · 기록 hook · 오너 전용 skill 의 상태 주입 줄 · 사람 터미널·시험·CI · `sangsoe plugin approve`)와 그 wait 의 입구다(결정 75 나).
 
 ## tool 파일 하나를 더하는 법
 

@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **A session refused by `[gate:pressure]` is woken when the load drops (256).** The refusal now tells the session to start `sangsoe pressure wait` with `run_in_background: true`. The command reads the same load judgment the gate reads every 30 seconds and ends when it is ok twice in a row, or after 2 hours; Claude Code wakes the session when a background command ends, so the session runs the refused call again once. Nothing is queued or stored, and the wait calls neither Orca nor a model. The delegate gate lets the orchestrator run it.
+
 ## 0.1.6-rc.5 (pre-release)
 
 Everything since `v0.1.6-rc.4`: decision 253. A pre-release for checking the 리소스 section's spacing and its arrow on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
