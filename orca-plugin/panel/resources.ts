@@ -343,5 +343,5 @@ export function renderResBody(s: ResState, now: number, hours: 6 | 24 = 6): stri
 
 /** The whole section: a fold, closed unless the owner left it open. */
 export function renderResources(s: ResState, open: boolean, now: number, hours: 6 | 24 = 6): string {
-  return `<details class="fold res-fold"${open ? " open" : ""}><summary>리소스${CHEV}</summary><div class="res-body">${open ? renderResBody(s, now, hours) : ""}</div></details>`;
+  return `<details class="fold res-fold"${open ? " open" : ""}><summary>리소스${CHEV}</summary><div class="res-body" tabindex="0" role="region" aria-label="리소스">${open ? renderResBody(s, now, hours) : ""}</div></details>`;
 }

@@ -20,6 +20,8 @@
 // scrollTop and height before and after, drawer_max_height against viewport_height, and drawer_pass,
 // true when the board did not move or grow and the drawer lies inside the viewport.
 //
+// card_second_line_max and card_second_line_pass: the most lines any card's status text takes (rule: 1).
+//
 // It also reads the section's spacing from the glyphs' ink (decision 253), each pair even within 2px:
 // res_space_above and res_space_below, res_card_pad_top and res_card_pad_bottom, and res_arrow_off
 // (the arrow's centre less the title's). They describe the open section; the closed one is read only
@@ -160,6 +162,18 @@
     return { ...out, drawer_pass: pass };
   };
 
+  // Owner UI 10 (decision 262): a card's status text is one line. Counted only for rows drawn as cards
+  // (a flex row), by the text cell's height over its line height.
+  const cardLines = () => {
+    const lines = [...document.querySelectorAll("#root tr[data-id]")]
+      .filter((tr) => getComputedStyle(tr).display === "flex")
+      .flatMap((tr) => [...tr.querySelectorAll("td.mid")])
+      .filter((td) => getComputedStyle(td).display !== "none")
+      .map((td) => Math.round(td.getBoundingClientRect().height / (parseFloat(getComputedStyle(td).lineHeight) || 16)));
+    const max = Math.max(1, ...lines);
+    return { card_second_line_max: max, card_second_line_pass: max === 1 };
+  };
+
   const layout = () => {
     const d = document.documentElement;
     const r = res.getBoundingClientRect();
@@ -184,6 +198,7 @@
       tail: foot?.textContent.trim().slice(0, 80) ?? "",
       ...spacing(),
       ...drawer(),
+      ...cardLines(),
       folded,
     };
   };

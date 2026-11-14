@@ -90,6 +90,8 @@ type Out = {
   res_gap_to_page_end: number;
   stamp_on_heading: boolean;
   tail: string;
+  card_second_line_max: number;
+  card_second_line_pass: boolean;
   drawer_open: boolean;
   drawer_top?: number;
   board_scroll_before?: number;
@@ -181,6 +183,7 @@ addEventListener("load", () => setTimeout(read, 100));
     assert.match(m.tail, /상세: sangsoe brief/);
   }
   for (const m of [c, o]) {
+    assert.equal(m.card_second_line_pass, true, `a card's status text takes ${m.card_second_line_max} lines`);
     assert.equal(m.drawer_open, true);
     assert.equal(m.drawer_pass, true, `the drawer passes its own rule: ${JSON.stringify([m.drawer_top, m.board_scroll_before, m.board_scroll_after, m.drawer_max_height, m.viewport_height])}`);
     assert.ok((m.drawer_top ?? -1) >= 0 && (m.drawer_max_height ?? Infinity) < (m.viewport_height ?? 0));

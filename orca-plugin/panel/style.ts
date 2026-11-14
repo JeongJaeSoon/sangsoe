@@ -265,8 +265,10 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl td[data-l]::before { content: attr(data-l); color: var(--muted); margin-right: var(--s1); font-size: var(--text-xs); }
   /* Decision 225 (2)(3)(7): the PR stays one line, the middle text takes what is left for at most two
      lines, and who (a cut badge) and the elapsed time end the meta line at the card's right edge. */
-  .tbl:not(.gt) td.pr { flex: 0 1 auto; max-width: 10em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tbl:not(.gt) td.mid { flex: 1 1 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  /* Decision 262 (owner UI 10) replaces the two lines: the status text is one line cut with an ellipsis
+     (its title holds it whole), never broken inside a Korean word, and the PR and who never shrink. */
+  .tbl:not(.gt) td.pr { flex: 0 0 auto; max-width: 10em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tbl:not(.gt) td.mid { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: keep-all; overflow-wrap: normal; }
   .tbl:not(.gt) td.who { flex: none; display: flex; align-items: center; margin-left: auto; max-width: 55%; }
   .tbl:not(.gt) td.age, .tbl .who .age { flex: none; margin-left: auto; padding-left: var(--s2); color: var(--muted); }
   .tbl td.age::before { content: none; }
@@ -323,13 +325,22 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 #res .res-fold[open] > summary { color: var(--ink); font-weight: 600; }
 /* Decision 253: the 6시간/24시간 box sits 12px in from the top and the right; 16px at the bottom puts the
    last line's text as far from the frame as the first line's, which the 26px switch centres lower. */
-#res .res-fold[open] > .res-body { margin: 0; padding: var(--s3) var(--s3) var(--s4); border: 0; max-height: calc(100dvh - var(--res-bar) - var(--s6)); overflow-y: auto; overscroll-behavior: contain; }
+#res .res-fold[open] > .res-body { margin: 0; padding: var(--s3) var(--s3) var(--s4); border: 0; max-height: calc(100dvh - 80px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 /* Decision 262: the section stays pinned to the panel's bottom and its bar keeps its place in the page,
    so opening it never moves the board. Open, the fold is a sheet over the board that rises from the
-   bar's place: its heading is the sheet's head and its body scrolls inside it when taller than the panel. */
-#res .res-fold[open] { position: absolute; left: var(--gx); right: var(--gx); bottom: 0; z-index: 1; background: var(--paper); border: 1px solid var(--rule); border-bottom: 0; border-radius: var(--r3) var(--r3) 0 0; box-shadow: 0 -4px 16px color-mix(in oklab, var(--ink) 12%, transparent); }
-#res .res-fold[open] > summary { padding-inline: var(--s3); }
+   bar's place: popover surface, a rule and rounded top corners, no scrim (the board's strip above keeps
+   the owner's place, and emphasis is a border, decision 222). Its heading is the sheet's head; the body
+   scrolls inside it, leaving 44px for the panel's own header. A very short panel gives that gap up. */
+#res { --sheet-shadow: rgb(0 0 0 / 0.12); }
+@media (prefers-color-scheme: dark) { :root:not(.light):not([data-theme="light"]) #res { --sheet-shadow: rgb(0 0 0 / 0.4); } }
+:root.dark #res, :root[data-theme="dark"] #res { --sheet-shadow: rgb(0 0 0 / 0.4); }
+#res .res-fold[open] { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; background: var(--pop); color: var(--pop-ink); border-top: 1px solid var(--rule); border-radius: var(--r3) var(--r3) 0 0; box-shadow: 0 -4px 16px var(--sheet-shadow); transform-origin: bottom; transition: transform calc(var(--dur) * 1.5) ease-out, opacity calc(var(--dur) * 1.5) ease-out; }
+/* It grows from its bottom edge: a translate would add 12px to the page's scroll height while it plays. */
+@starting-style { #res .res-fold[open] { transform: scaleY(0.94); opacity: 0.6; } }
+#res .res-fold[open] > summary { padding-inline: var(--s3); border-bottom: 1px solid var(--rule); }
 #res .res-fold[open] .res-h { right: calc(var(--s5) + var(--s3)); }
+@media (max-height: 320px) { #res .res-fold[open] > .res-body { max-height: calc(100dvh - var(--res-bar)); } }
+@media (prefers-reduced-motion: reduce) { #res .res-fold[open] { transition: none; } }
 #res .res-body > :first-child:not(.res-h), #res .res-body > .res-h + * { margin-top: 0; }
 #res .res-body > .res-h + .load-h { padding-top: 0; }
 #res h3 { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s3); }

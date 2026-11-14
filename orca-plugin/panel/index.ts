@@ -105,6 +105,21 @@ function mountResources(after: HTMLElement): void {
     else state = { kind: "failed", refusal: r.refusal };
     body();
   };
+  // Escape closes one layer at a time (decision 262): an open confirm, then a menu (the panel's own
+  // handler, which this one leaves to it), then the sheet, with the keyboard back on its heading.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || !open) return;
+    if (state.kind === "shown" && state.confirm) {
+      state = { ...state, confirm: false };
+      body();
+      return;
+    }
+    if (document.querySelector("details.menu[open]")) return;
+    const fold = box.querySelector<HTMLDetailsElement>("details.res-fold");
+    if (!fold) return;
+    fold.open = false;
+    fold.querySelector("summary")?.focus();
+  }, true);
   box.addEventListener("toggle", (ev) => {
     const d = ev.target as HTMLDetailsElement;
     if (!d.matches(".res-fold")) return;

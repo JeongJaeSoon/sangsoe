@@ -69,7 +69,7 @@ test("preview pages for the screenshots (only with PANEL_PREVIEW_DIR)", { skip: 
 
 test("the fold is closed by default and reads nothing until opened", () => {
   const html = renderResources({ kind: "idle" }, false, NOW);
-  assert.equal(html, `<details class="fold res-fold"><summary>리소스${CHEV}</summary><div class="res-body"></div></details>`);
+  assert.equal(html, `<details class="fold res-fold"><summary>리소스${CHEV}</summary><div class="res-body" tabindex="0" role="region" aria-label="리소스"></div></details>`);
   assert.match(renderResources({ kind: "shown", view: view() }, true, NOW), /<details class="fold res-fold" open>/);
 });
 

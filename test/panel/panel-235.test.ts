@@ -206,7 +206,7 @@ test("F2 rules: the section is pushed to the panel's bottom when the stage is sh
 test("F3 rules: the section adds no space of its own below it, and only its open body scrolls inside the sheet", () => {
   const res = STYLE.slice(STYLE.indexOf("/* The 리소스 section"));
   assert.equal(res.match(/overflow(-y)?: (auto|scroll)/g)?.length, 1, "one scroller: the open body");
-  assert.match(rule("#res .res-fold[open] > .res-body"), /max-height: calc\(100dvh - var\(--res-bar\) - var\(--s6\)\); overflow-y: auto;/);
+  assert.match(rule("#res .res-fold[open] > .res-body"), /max-height: calc\(100dvh - 80px\); overflow-y: auto;/);
   assert.doesNotMatch(rule("#res"), /margin: 0 0 var/, "the section rule's 24px never lands under it");
   assert.match(rule("#root"), /flex: none;/, "the stage keeps its own height above the section");
 });
