@@ -187,27 +187,16 @@ function loadBlock(v: Pick<ResView, "load" | "episode" | "band">, hours: 6 | 24)
   return `${head(` <span class="badge ${l.level === "ok" ? "" : l.level === "warn" ? "t-run" : "t-bad"}">${LEVEL[l.level]}</span>`)}${rows.join("")}${ep}${band}`;
 }
 
+const OWNED = "기록됨·오너 손";
+
+/**
+ * Decision 248: of the made part the panel draws only the owner's list (decision 240); the counts it
+ * also carries stay for `sangsoe reap plan`. A failed part has no list, so it says it was not read.
+ */
 function madeBlock(v: Pick<ResView, "made">): string {
-  const cell = <T>(r: Reading<T>, f: (x: T) => [string, string]) => {
-    if (!r.ok) return `<td colspan="2">${unread(r.why)}</td>`;
-    const [count, kb] = f(r.value);
-    return `<td class="num">${count}</td><td class="num">${kb}</td>`;
-  };
-  const usage = (u: Usage): [string, string] => [n(u.count), size(u.kb)];
   const m = v.made;
-  const rows: [string, string][] = [
-    ["worktree", cell(m.worktrees, usage)],
-    ["터미널", cell(m.terminals, (t) => [n(t.count), ""])],
-    ["claude 프로세스", cell(m.processes, (p) => usage(p.claude))],
-    ["node 프로세스", cell(m.processes, (p) => usage(p.node))],
-    ["임시 폴더", cell(m.tmp, usage)],
-  ];
-  return (
-    `<h3>sangsoe 가 만든 것</h3><table class="tbl res"><thead><tr><th>종류</th><th class="num">개수</th><th class="num">크기</th></tr></thead><tbody>` +
-    rows.map(([k, c]) => `<tr><td>${k}</td>${c}</tr>`).join("") +
-    `</tbody></table><p class="foot">프로세스는 보여 주기만 한다. 끝내지 않는다.</p>` +
-    ownedBlock(m.recorded ?? [])
-  );
+  if (m.recorded === undefined && !m.worktrees.ok) return `<h3>${OWNED}</h3><p class="ep">${unread(m.worktrees.why)}</p>`;
+  return ownedBlock(m.recorded ?? []);
 }
 
 const KIND: Record<string, string> = { checkout: "checkout", registration: "등록", branch: "브랜치", file: "파일", process: "프로세스" };
@@ -220,7 +209,7 @@ function ownedBlock(rows: NonNullable<ResView["made"]["recorded"]>): string {
     return `<tr><td class="k">${esc(kind)}</td><td title="${esc(`${r.ref} · ${hhmm(r.since)}부터`)}">${esc(r.ref)}</td><td class="o" title="${esc(r.owner)}">${esc(r.owner)}</td></tr>`;
   };
   return (
-    `<h3>기록됨·오너 손</h3><table class="tbl res owned"><thead><tr><th class="k">종류</th><th>이름</th><th class="o">소유</th></tr></thead><tbody>` +
+    `<h3>${OWNED}</h3><table class="tbl res owned"><thead><tr><th class="k">종류</th><th>이름</th><th class="o">소유</th></tr></thead><tbody>` +
     rows.map(tr).join("") +
     `</tbody></table><p class="foot">sangsoe 는 이것을 치우지 않는다. 기록한 쪽이 내리고 released 로 남긴다.</p>`
   );
@@ -286,9 +275,12 @@ function resultNote(r: Reaped): string {
   return `<p class="msg" role="status"${title ? ` title="${esc(title)}"` : ""}>${esc(parts.join(", ") + tail)}</p>`;
 }
 
-/** One part while the others are still read: drawn when it came, else the last read's, else what is being read. */
+/**
+ * One part while the others are still read: drawn when it came, else the last read's, else what is
+ * being read. With no `what` a part still being read draws nothing.
+ */
 function partBlock<T>(r: Reply<T> | undefined, last: T | undefined, title: string, what: string, draw: (v: T) => string): string {
-  if (!r || (!r.ok && r.refusal.code === "core_old")) return last ? draw(last) : pending(title, what);
+  if (!r || (!r.ok && r.refusal.code === "core_old")) return last ? draw(last) : what ? pending(title, what) : "";
   return r.ok ? draw(r.value) : `<h3>${title}</h3><p class="ep">${unread(r.refusal.reason)}</p>`;
 }
 
@@ -333,7 +325,8 @@ export function renderResBody(s: ResState, now: number, hours: 6 | 24 = 6): stri
       tools(`<span class="fresh" aria-live="polite">읽는 중…</span>`, true) +
       (s.result ? resultNote(s.result) : "") +
       partBlock<Pick<ResView, "load" | "episode" | "band">>(g.load, s.last, "PC 부하", "부하를 읽는 중…", (v) => loadBlock(v, hours)) +
-      partBlock<Pick<ResView, "made">>(g.made, s.last, "sangsoe 가 만든 것", "worktree·터미널·프로세스·임시 폴더를 읽는 중…", madeBlock) +
+      // The owner's list is usually empty, so its reading row would only flash.
+      partBlock<Pick<ResView, "made">>(g.made, s.last, OWNED, "", madeBlock) +
       // After a 정리 the last list names what was just taken, so it does not stand in.
       partBlock<Cands>(g.candidates, s.result ? undefined : s.last, "정리 후보", "끝난 worktree 를 GitHub·Orca 에 묻는 중…", (v) => candidates(v, null, false))
     );
