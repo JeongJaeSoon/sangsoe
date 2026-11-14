@@ -21,8 +21,8 @@
 | 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 80 | 11 | 2 | 6 | 16 |
 | 3. 데이터 · MCP · CLI · GRAPH | 81 | 53 | 6 | 1 | 3 | 18 |
 | 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 34 | 4 | 4 | 6 | 9 |
-| 5. 결정이 자르거나 바꾼 것 | 45 | 0 | 0 | 0 | 13 | 32 |
-| 합계 | 437 | 263 | 30 | 16 | 29 | 99 |
+| 5. 결정이 자르거나 바꾼 것 | 46 | 0 | 0 | 0 | 13 | 33 |
+| 합계 | 438 | 263 | 30 | 16 | 29 | 100 |
 
 `partial`·`missing` 46행은 갭 27개(`G1`–`G36` 에서 U77 이 고친 `G2`, U76 이 고친 `G13` `G16`, 결정 212 가 닫은 `G10`·`G11`·`G23`·`G29`, 결정 215 가 닫은 `G22`·`G31` 을 뺀 것)로 묶인다. 제안은 NOW 0 · LATER 23 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
 
@@ -65,7 +65,7 @@
 | 배치표 ③ 막는 hook | design.html §2 배치표 | changed (결정 208) | `claude-plugin/hooks/hooks.json:10`, `core/gates/start.ts:151` | 시작하지 못하면 통과, 검사가 실패하면 막음 |
 | 배치표 ③ 기록 hook | design.html §2 배치표 | implemented | `claude-plugin/hooks/hooks.json:19` | UserPromptSubmit·Stop·Notification·PostToolUse·PostCompact·SessionEnd |
 | 배치표 ③ skill | design.html §2 배치표 | changed (결정 120) | `claude-plugin/.claude-plugin/plugin.json:7` | sangsoe skill 열하나 + general |
-| 배치표 ③ MCP 서버 | design.html §2 배치표 | implemented | `claude-plugin/.mcp.json:3` | tool 16(결정 223 의 `item_retire`)·resource 4 |
+| 배치표 ③ MCP 서버 | design.html §2 배치표 | implemented | `claude-plugin/.mcp.json:3` | tool 17(결정 223 의 `item_retire`, 결정 263 의 `unit_close`)·resource 4 |
 | 배치표 ③ agent 정의 | design.html §2 배치표 | implemented | `claude-plugin/agents/lead.md:4` | 오케스트레이터·리드·워커 |
 | 배치표 ④ 코어 라이브러리 | design.html §2 배치표 | implemented | `core/index.ts:59` | 입구는 `core/index.ts` 하나 |
 | 배치표 ④ sqlite 파일 | design.html §2 배치표 | implemented | `core/store/store.ts:86`, `core/store/backup.ts:113` | jsonl 사본 포함(결정 183) |
@@ -117,7 +117,7 @@
 | doctor claude·claude profile | README Claude profiles | implemented | `core/install/doctor.ts:146`, `core/install/doctor.ts:150` | |
 | doctor orca claude profile | README Claude profiles | implemented | `core/install/doctor.ts:96` | |
 | doctor land allow | README Install | changed (결정 228) | `core/install/doctor.ts:130`, `core/checks/land-allowed.ts:26` | 따로 행이 없다. `permissions` warn 행 끝에 land 가 다른 규칙으로 허락되는지 적는다. 설정은 쓰지 않는다. 줄 번호는 U95 기준 |
-| doctor permissions | README Install 2·5 | changed (결정 221·224·228) | `core/install/doctor.ts:129`, `core/install/permissions.ts:333` | N of M, 모자라면 warn. 고칠 말에 `!` 줄의 `--yes` 줄도 적는다(결정 224). 16 of 16 이면 land 도 덮는다(결정 228). 줄 번호는 U95 기준 |
+| doctor permissions | README Install 2·5 | changed (결정 221·224·228) | `core/install/doctor.ts:129`, `core/install/permissions.ts:333` | N of M, 모자라면 warn. 고칠 말에 `!` 줄의 `--yes` 줄도 적는다(결정 224). 17 of 17 이면 land 도 덮는다(결정 228, 규칙은 결정 263 으로 16 → 17). 줄 번호는 U95 기준 |
 | install --auto-compact | README Install 3 | changed (결정 264) | `cli/commands/install.ts:35`, `core/install/auto-compact.ts:6`, `core/install/auto-compact.ts:51`, `core/install/settings-json.ts:202` | 옵트인. 상수 하나(`AUTO_COMPACT_WINDOW`), `--permissions` user 범위와 같은 두 프로필(`core/install/permissions.ts:175`), diff 와 이전→이후 줄, `--yes` 일 때만 쓰기, 백업, env 안의 키 하나만 바꾸고 더 큰 값은 낮추지 않는다 |
 | doctor auto-compact window | README Install 5 | changed (결정 264) | `core/install/doctor.ts:136`, `core/install/auto-compact.ts:35` | 프로필마다 유효 값(없음·낮음·같음·큼), 없거나 낮으면 warn 과 고칠 말, 큰 값은 통과. 종료 코드는 그대로 |
 | doctor claude marketplace | README Install | implemented | `core/install/doctor.ts:156` | 경로가 트리와 다르면 FAIL |
@@ -322,7 +322,7 @@
 | MCP resource brief | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/resources/brief.ts:6` | |
 | MCP resource ready·item_timeline | design.html MCP 인터페이스 | changed (결정 162) | `claude-plugin/mcp/resources/ready.ts:15`, `claude-plugin/mcp/resources/item_timeline.ts:14` | |
 | MCP resource models | design.html MCP 인터페이스 | changed (결정 164) | `claude-plugin/mcp/resources/models.ts:15` | |
-| 설계에 없는 tool·resource 파일 | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/collect.ts:23` | tool 16·resource 4. 결정 223 의 `item_retire` 하나만 설계 본문에 아직 없다 |
+| 설계에 없는 tool·resource 파일 | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/collect.ts:23` | tool 17·resource 4. 결정 223 의 `item_retire` 와 결정 263 의 `unit_close` 가 설계 본문에 아직 없다 |
 | plugin 이 싣는 서버 | design-appendix MCP 인터페이스 | implemented | `claude-plugin/.mcp.json:1`, `claude-plugin/mcp/server.ts:184` | stdio |
 | 서버 메서드 | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/server.ts:57`, `claude-plugin/mcp/server.ts:75` | prompts·구독 없음 |
 | CLI brief·todo | design-appendix MCP 인터페이스 | implemented | `cli/commands/brief.ts:34`, `cli/commands/todo.ts:11` | |
@@ -499,6 +499,7 @@
 | 언제나 --effort | decisions.md 결정 172 | changed (결정 209) | `core/start/start.ts:435` | |
 | 디스크 문턱 기본값 | decisions.md 결정 115 | changed (결정 210) | `core/capacity/capacity.ts:27` | |
 | 돌던 세션 재시작 안내 | decisions.md 결정 208 | changed (결정 211) | `claude-plugin/mcp/tools/start_unit.ts:168` | server_stale |
+| 끝난 단위의 에이전트 터미널 닫기 | decisions.md 결정 62·197·202 "`terminal close` 는 부르지 않는다" | changed (결정 263) | `core/unit/close.ts:28`, `claude-plugin/mcp/tools/unit_close.ts:9`, `core/install/permissions.ts:29` | `worker-release` 가 먼저, `retained` 로 남은 것만 `unit_close`. 규칙은 `--tab` 을 가르지 못해(결정 263 ⑦) 안전은 tool 이 지킨다. design.html·부록은 아직 이 tool 을 세지 않는다(`TOOLS_NOT_IN_DESIGN`) |
 
 ## 6. 이 대조가 읽지 않은 것
 
