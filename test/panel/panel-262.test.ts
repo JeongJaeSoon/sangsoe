@@ -116,7 +116,8 @@ addEventListener("load", () => setTimeout(() => { document.getElementById("out")
   const got = dump(dir, outer) as Record<"withPr" | "plain", { over: number; h: number; scrollW: number; clientW: number; title: string; prW: number | null; prScrollW: number | null }>;
   capture(dir, "index.html", "cards-455.png", 455, 700);
   for (const [name, m] of Object.entries(got)) {
-    assert.ok(m.h <= 16, `${name}: the status text is ${m.h}px tall, one 16px line`);
+    // One 16px line is 16-17px depending on the font; a second line would make it 32 or more.
+    assert.ok(m.h < 24, `${name}: the status text is ${m.h}px tall, more than one line`);
     assert.equal(m.title, text, `${name}: the title holds the whole text`);
     assert.ok(m.over <= 0, `${name}: 누가 runs ${m.over}px past the card's edge`);
   }
