@@ -33,7 +33,9 @@ export function openWaits(events: readonly StoredEvent[]): StoredEvent[] {
   return events.filter((e) => e.type === "waiting_human" && !released.has(String(e.seq)));
 }
 
+// A row and a wait that both name no session (a panel button, a Dispatch's wait) are not a match.
 const ownerSpokeAfter = (events: readonly StoredEvent[], w: StoredEvent) =>
+  typeof w.payload.session === "string" &&
   events.some((e) => e.type === "owner_action" && e.seq > w.seq && e.payload.cc_session === w.payload.session);
 
 /** Open waits the owner has answered in chat while the session has not moved yet: `입력 확인됨 · 재개 대기`. */

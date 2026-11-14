@@ -8,6 +8,23 @@ Decision numbers refer to `docs/decisions.md`.
 
 - **A lead or orchestrator that simply stops is noticed (245).** A coordinator that holds no Dispatch (the orchestrator, or a lead started without a Task) could end its turn and leave its Run's mail unread for hours, with no row anywhere: Orca's stop mail covers only Dispatch holders, and `run_stalled` looked only at workers. orca-monitor now writes `run_stalled` (with the coordinator's terminal handle) once when mail to that Run has sat unread 30 minutes and the coordinator's agent in `worktree ps` has not worked since it arrived, and sends one notice to the orchestrator's Run (none when that is not clear, including when some Run's live coordinator could not be placed; a stopped orchestrator, or any Run that is the only top, is left to its row on the panel). The notice's first line names the Run and the coordinator. Unread mail from before the coordinator's last turn does not hide mail that came after it, and the next turn ends the stall, so a later stall is noticed again. It reads Orca only: the read flag and the message's `created_at`, run and sender pane (which the adapter now keeps), `run-show`, `terminal list` and the ps agent's state; no screen text and nothing new in the store. A dry run lists the coordinators it found.
 
+## 0.1.6-rc.4 (pre-release)
+
+Everything since `v0.1.6-rc.3`: decision 248 and a fix to the owner's answer to a wait. A pre-release for checking the 리소스 section on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
+
+### Upgrading from 0.1.6-rc.3
+
+- **Re-approve.** The Orca plugin's content and its vendored core changed, so the plugin waits for approval again. It asks for no new capability. Have the review of the build recorded with `sangsoe review record` by someone other than the session that wrote its pull request, then run `sangsoe plugin approve`, as the README's Update section says.
+- **Restart every session that calls `start_unit`.** The version changed, so a server started under 0.1.6-rc.3 refuses `start_unit` with `server_stale`: restart it as 0.1.6-rc.1's Upgrading says.
+
+### Changes
+
+- **The 리소스 section fits the panel and reads apart when open (248).** The owner's rc.3 panel, 1070px tall, scrolled 25px with the section open. The section no longer carries space nothing used: its empty line kept the stage's 12px padding above and below, 36px sat under its last line (now 21) and 24px under the closed heading (now 8), and the stage's bottom space is 8px instead of 16. Open, its heading is in ink and its body sits in a 1px rounded frame; closed, the heading is muted. The reading time and 새로 고침 now end the 리소스 row, left of its chevron. The 'sangsoe 가 만든 것' counts are no longer drawn; `sangsoe reap plan` still prints them, and 기록됨·오너 손 stays. `scripts/panel-measure.devtools.js` measures the panel from its DevTools console: the first read of each part from opening the fold, scrolling, and where the section ends.
+
+### Fixes
+
+- `awaitingResume` no longer counts a panel button (an `owner_action` with no session) as the owner answering a Dispatch's open wait, which names no session either: a wait now matches the owner's words only on the session it names.
+
 ## 0.1.6-rc.3 (pre-release)
 
 Everything since `v0.1.6-rc.2`: decisions 237 to 240 and a fix to the test of 219. A pre-release for checking the hooks and gates, the 리소스 section and doctor on an installed build; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
