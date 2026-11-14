@@ -14,15 +14,29 @@ const numberOf = (ref: string) => Number(ref.slice(ref.indexOf("#") + 1));
 /**
  * Pairs among the open PRs that share a repository and base, with the paths both change (a rename
  * counts under its old and new path). Only a base with two or more open PRs reads its file lists; a
- * list not read whole leaves that PR's pairs unjudged and named in `unseen` (decision 201).
+ * list not read whole leaves that PR's pairs unjudged and named in `unseen` (decision 201). A rate
+ * limit or a GitHub that did not answer stops the reads, so a stalled read costs one timeout, not one
+ * per PR. With `repos` given, a repository no longer in it is not read: its rows may never close.
  */
 export async function prOverlaps(o: { events: readonly StoredEvent[]; gh: GhClient; repos?: readonly string[] }): Promise<Overlaps> {
+  const watched = o.repos && o.repos.length > 0 ? new Set(o.repos.map((r) => r.toLowerCase())) : undefined;
   const groups = new Map<string, string[]>();
   for (const p of foldFacts(o.events).prs.values()) {
     if (!p.opened || p.merged || p.closed || p.base === undefined) continue;
-    const k = `${p.pr.slice(0, p.pr.indexOf("#"))}\n${p.base}`;
+    const repo = p.pr.slice(0, p.pr.indexOf("#"));
+    if (watched && !watched.has(repo)) continue;
+    const k = `${repo}\n${p.base}`;
     groups.set(k, [...(groups.get(k) ?? []), p.pr]);
   }
+  let halted: string | undefined;
+  const gh: GhClient = {
+    get: async <T>(path: string, opts?: { conditional?: boolean }) => {
+      const r = await o.gh.get<T>(path, opts);
+      if (r.kind === "rate_limited") halted = `rate limited until ${new Date(r.resetAt * 1000).toISOString().replace(/\.\d+Z$/, "Z")}`;
+      else if (r.kind === "error" && r.status === null) halted = `GitHub did not answer: ${r.message}`;
+      return r;
+    },
+  };
   const overlaps: Overlap[] = [];
   const unseen: string[] = [];
   for (const [k, members] of groups) {
@@ -33,9 +47,13 @@ export async function prOverlaps(o: { events: readonly StoredEvent[]; gh: GhClie
     const prs = members.sort((a, b) => numberOf(a) - numberOf(b));
     const paths = new Map<string, Set<string>>();
     for (const pr of prs) {
-      const d = await readDiff(o.gh, given, numberOf(pr));
+      if (halted) {
+        unseen.push(`${pr}: PR files not read (${halted})`);
+        continue;
+      }
+      const d = await readDiff(gh, given, numberOf(pr));
       if (d.kind === "ok") paths.set(pr, new Set(d.data.flatMap((f) => (f.previousPath ? [f.path, f.previousPath] : [f.path]))));
-      else unseen.push(`${pr} files: ${d.kind === "rate_limited" ? "rate limited" : d.why}`);
+      else unseen.push(`${pr}: ${halted ? `PR files not read (${halted})` : d.kind === "unreadable" ? d.why : "PR files not read"}`);
     }
     for (const [i, a] of prs.entries()) {
       for (const b of prs.slice(i + 1)) {
