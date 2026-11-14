@@ -238,7 +238,7 @@
 | 독립 리뷰 | design-appendix 당사자 원칙 표 | implemented | `core/approve/review-verdict.ts:74`, `core/land/land.ts:190` | |
 | 당사자 게이트 수 | design-appendix 당사자 원칙 표 | changed (결정 94) | `core/gates/index.ts:14` | 막는 게이트는 넷이 아니라 여섯(시작 가드·보고 주소) |
 | Orca 메시지·plugin 타이머·패널 | design-appendix 당사자 원칙 표 | implemented | `orca-plugin/timer.ts:53`, `orca-plugin/main.ts:114` | |
-| 압박 게이트 | design-appendix 게이트와 원칙 | partial | `core/gates/pressure.ts:20` | G17 — 기다릴 순서를 알려 주지 않고, 무거운 작업은 start_unit·compose up·worktree create 만 맞춘다 |
+| 압박 게이트 | design-appendix 게이트와 원칙 | partial | `core/gates/pressure.ts:20` | G17 — 기다릴 순서를 알려 주지 않고(큐는 두지 않는다. 부하가 내려간 때는 `sangsoe pressure wait` 가 알린다, 결정 256), 무거운 작업은 start_unit·compose up·worktree create 만 맞춘다 |
 | 루프 게이트 | design-appendix 게이트와 원칙 | implemented | `core/gates/sleep-loop.ts:7` | |
 | 위임 게이트 | design-appendix 게이트와 원칙 | implemented | `core/gates/delegate.ts:55`, `core/gates/delegate.ts:69` | |
 | 자기 머지 게이트 | design-appendix 게이트와 원칙 | implemented | `core/gates/self-land.ts:60` | |
@@ -589,5 +589,6 @@
 | 248 | 결정 235 의 리소스 절(바닥에 붙고 제 아래 여백 없음, 세 부분)과 240 ④ "sangsoe 가 만든 것 아래의 기록됨·오너 손 표". 세 페이지에는 리소스 절이 아직 없다 | 메모: 결정 248 을 새로 적고 패널을 고쳤다(U116, v0.1.6). 여백(#res .empty·몸체·절·#root 아래), 펼침 구분, 리소스 줄의 읽은 시각, "만든 것" 표를 그리지 않음. 수집은 `sangsoe reap plan` 이 써서 둔다 | `orca-plugin/panel/style.ts`, `orca-plugin/panel/resources.ts`, `scripts/panel-measure.devtools.js` |
 | 249 | 결정 89 "앞의 둘은 비어도 제목과 없음", 169 "0 절은 제목 한 줄", 11·25 "현황 맨 위 내가 할 일 띠". 세 페이지는 패널 1단계의 첫 줄을 적지 않는다 | 메모: 결정 249 를 새로 적고 패널을 고쳤다(U117, v0.1.6-rc.4). 첫 줄은 `.sr` h1, 두 0 절은 한 줄. 채팅 첫 줄(`core/brief/render.ts:46`)은 그대로 | `orca-plugin/panel/view.ts` `overview` |
 | 253 | 결정 248 ② 의 리소스 절 여백과 그 시험의 "펼친 절 마지막 줄 아래 24px". 세 페이지에는 리소스 절이 아직 없다 | 메모: 결정 253 을 새로 적고 패널을 고쳤다(U123, v0.1.6). 접힘·펼침 위아래, 틀 안 위아래, 꺾쇠 가운데를 2px 안으로 맞추고 측정 스크립트가 잰다 | `orca-plugin/panel/style.ts`, `orca-plugin/panel/view.ts` `CHEV`, `scripts/panel-measure.devtools.js` |
+| 256 | 부록 게이트의 압박 게이트 문구 "Nothing was queued: run the same call again once the load drops" 와 결정 75 나 의 "에이전트는 CLI 를 부르지 않는다". 그 문구는 그때를 알리는 길을 말하지 않았다 | 메모: 결정 256 을 새로 적고 게이트 문구에 `sangsoe pressure wait`(백그라운드, 게이트 판정 ok 연속 2회 또는 2시간에 끝)를 더했다(U126, 0.1.8 B6). delegate 게이트가 오케스트레이터의 그 명령을 조율로 받는다. 큐·저장·Orca 호출 없음 | `core/gates/pressure.ts`, `core/gates/pressure-wait.ts`, `core/gates/delegate.ts` `SUB.sangsoe`, `cli/commands/pressure-wait.ts` |
 
 첫 빌드 시험 T1–T6 의 결과는 `test-outcomes.md` 의 행이다. 여섯 모두 통과다. T5 는 두 행이다: "워커는 자기 Run 에 Task 를 만들지 못한다"(U10)와, U93 이 Run 을 쥔 리드 세션에서 돌린 이중 시작 거부 · 세 번 실패 차단이다(`smoke-run.md` 3절 끝). 한 번 시작된 Task 는 실패 세기 앞에서 `already_dispatched` 로 멈추므로 버리는 항목 둘을 썼다. 컷오프 항목은 없는 저장소 선택자로 `worktree create` 를 세 번 실패시켜 `loop_detected{start_failed_3x}` 를 남겼고, 넷째는 `stopped` 였다. 이중 시작 항목은 둘째 호출이 `waiting already_dispatched` 였다. 코드는 결정 114 그대로다: 시작 함수는 `worker-start` 전에 그 Task 의 세는 실패를 세어 세 번이면 `stopped` 로 돌려주고(`core/start/start.ts:316-334`), 이어 Task 상태를 읽어 `dispatched` 이면 `already_dispatched` 로 돌려준다(`:341`).

@@ -418,6 +418,7 @@
 | priority | 우선순위를 정한다 | `sangsoe priority set` | — |
 | owner-text redact | 원문을 지운다(오너 승인 필요) | `sangsoe owner-text redact` | — |
 | hook | Claude Code hook 의 입구. PreToolUse 한 번의 게이트 판정이나 기록 hook 하나를 표준 입력으로 받는다. `--replay` 는 실제 명령 모음으로 게이트를 잰다 | `sangsoe hook` | — |
+| pressure wait | `[gate:pressure]` 에 거부된 세션이 `run_in_background` 로 띄우는 기다림. 게이트와 같은 부하 판정이 30초 간격으로 두 번 이어 ok 이면(또는 2시간 뒤) 한 줄을 내고 끝나, 그 끝이 세션을 한 번 깨운다. 저장·Orca 호출·토큰 없음. 에이전트가 부르는 유일한 CLI 다(결정 256) | `sangsoe pressure wait` | 압박 큐 |
 | monitor run | monitor 라운드 한 번. Orca plugin worker 의 타이머와 같은 함수다. `--dry-run` 은 쓸 event 와 Orca 쓰기를 보이기만 한다 | `sangsoe monitor run` | — |
 | reap run | REAPER 라운드 한 번(표시 → 정리). `--dry-run`·`--mark-only` 는 아무것도 지우지 않는다 | `sangsoe reap run` | — |
 | resource record | 막 만든 Docker id(또는 compose 프로젝트의 id 전부)를 소유자와 함께 `resource` 로 남긴다. checkout·등록·브랜치·파일·프로세스도 받지만 이것은 오너 몫이라 패널에 보이기만 하고 치우지 않는다(결정 240). MCP `resource_record` 와 같은 함수다 | `sangsoe resource record` | — |

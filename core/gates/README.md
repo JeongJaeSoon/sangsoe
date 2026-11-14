@@ -8,7 +8,8 @@ PreToolUse hook 한 번(이벤트당 프로세스 하나)이 여기 함수를 �
 | `start.ts` | 시작 가드 `[gate:start]`: 코어를 우회하는 세션 시작 거부(결정 94 마). 메시지에 MCP tool `start_unit` 과 사람용 `sangsoe item new` |
 | `report-address.ts` | 모양 검사 `[gate:report-address]`: `term_` 보고 주소 거부(결정 80 N8) |
 | `sleep-loop.ts` | `[gate:sleep-loop]`: 포그라운드 sleep 반복. Monitor·`run_in_background` 는 안 본다 |
-| `pressure.ts` | `[gate:pressure]`: 부하가 warn·danger 일 때 무거운 시작(compose up · worktree 생성 · `start_unit`). 부하 판정은 `core/capacity` 의 `judgeLoad` 하나 |
+| `pressure.ts` | `[gate:pressure]`: 부하가 warn·danger 일 때 무거운 시작(compose up · worktree 생성 · `start_unit`). 부하 판정은 `core/capacity` 의 `judgeLoad` 하나. 거부 사유가 `sangsoe pressure wait` 를 백그라운드로 띄우라고 한다(결정 256) |
+| `pressure-wait.ts` | `sangsoe pressure wait` 의 몸: 게이트와 같은 판정을 30초마다 읽어 ok 가 두 번 이어지면(또는 2시간 뒤) 한 줄을 내고 끝난다. 그 끝이 세션을 한 번 깨운다. 저장·Orca 호출 없음 |
 | `delegate.ts` | `[gate:delegate]`: 오케스트레이터 본 대화의 조율 밖 도구 호출 |
 | `self-land.ts` | `[gate:self-land]`: 역할 세션의 직접 `gh pr merge`, 열린 PR 을 land 요청 없이 둔 워커의 `worker_done`. 열린 PR 을 읽지 못한 `worker_done` 도 `READY-WAIT` 줄이 없으면 한국어 한 줄로 막는다(결정 201) |
 | `done-blockers.ts` | `[gate:done-blockers]`: 역할 세션의 `orca orchestration task-update --status completed` 를 `done_blockers` 가 남아 있으면 막고 막는 것을 적는다. 저장소나 그 Run 의 `task-list --full` 을 못 읽어도 막는다. 사람 세션(general)은 보지 않는다(결정 212) |
