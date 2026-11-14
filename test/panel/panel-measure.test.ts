@@ -45,16 +45,21 @@ Object.defineProperty(window, "orca", { value: Object.freeze({
 }) });
 </script>\n`;
 
-const run = `<script>
-addEventListener("load", () => setTimeout(() => {
-  const s = document.createElement("script");
-  s.textContent = ${JSON.stringify(SCRIPT)};
-  document.body.append(s);
-}, 1000));
+/** Paste the script `at` ms after load, after `before` ran at 700 ms (the first read has ended by then). */
+const run = (at = 1000, before = "") => `<script>
+addEventListener("load", () => {
+  setTimeout(() => { ${before} }, 700);
+  setTimeout(() => {
+    const s = document.createElement("script");
+    s.textContent = ${JSON.stringify(SCRIPT)};
+    document.body.append(s);
+  }, ${at});
+});
 </script>\n`;
 
 type Out = {
   mode: string;
+  error?: string;
   first_read_ms: Record<string, number | null>;
   paints_ms: number[];
   timed_out: boolean;
@@ -72,11 +77,18 @@ test("the measurement script times the first open per part and the panel's layou
   const dir = scratchDir("sangsoe-measure-");
   transpile(dir);
   const entry = '<script type="module" src="./orca-plugin/panel/index.js"></script>\n';
-  writeFileSync(join(dir, "closed.html"), orcaPage(bridge(false), entry + run));
-  writeFileSync(join(dir, "open.html"), orcaPage(bridge(true), entry + run));
+  const pages = {
+    closed: orcaPage(bridge(false), entry + run()),
+    open: orcaPage(bridge(true), entry + run()),
+    // Read, then folded without reloading the frame: opening it again would only repaint that reading.
+    reread: orcaPage(bridge(true), entry + run(1000, `document.querySelector("#res details.res-fold").open = false;`)),
+    // Pasted while the panel's own first read is still running.
+    busy: orcaPage(bridge(true), entry + run(100)),
+  };
+  for (const [name, html] of Object.entries(pages)) writeFileSync(join(dir, `${name}.html`), html);
+  const frames = Object.keys(pages).map((n) => `<iframe name="${n}" src="${n}.html" style="display:block;border:0;width:544px;height:1070px"></iframe>`).join("\n");
   const outer = `<!doctype html><html><body style="margin:0">
-<iframe name="closed" src="closed.html" style="display:block;border:0;width:544px;height:1070px"></iframe>
-<iframe name="open" src="open.html" style="display:block;border:0;width:544px;height:1070px"></iframe>
+${frames}
 <pre id="out"></pre><script>
 const read = () => {
   const got = {};
@@ -86,7 +98,11 @@ const read = () => {
 };
 addEventListener("load", () => setTimeout(read, 100));
 </script></body></html>`;
-  const got = dump(dir, outer, 20_000) as { closed: Out; open: Out };
+  const got = dump(dir, outer, 20_000) as { closed: Out; open: Out; reread: Out; busy: Out };
+  assert.match(got.reread.error ?? "", /^already_read/, "a frame that has read once gives no first-read times");
+  assert.equal(got.reread.first_read_ms, undefined);
+  assert.match(got.busy.error ?? "", /^busy/, "a read already running is not timed as a refresh");
+  assert.equal(got.busy.first_read_ms, undefined);
   t.diagnostic(`SANGSOE_MEASURE ${JSON.stringify(got)}`);
 
   const c = got.closed;

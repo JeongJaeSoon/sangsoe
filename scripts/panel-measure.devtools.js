@@ -8,6 +8,10 @@
 // With the fold already open it presses 새로 고침 and times the re-read instead; the parts cannot be
 // told apart then, because the last reading stays in place until each new answer comes.
 //
+// It refuses, with an error field and no times, when the frame has read once already (step 2 skipped)
+// or a read is still running. Only PC 부하 and 정리 후보 get a time of their own: the made part draws
+// nothing while it is read, so the page cannot see it arrive; `all` covers it.
+//
 // It is done when 새로 고침 is enabled again and no part shows a reading row, or after 8 s
 // (timed_out). The panel's `orca` bridge is frozen, so nothing here wraps a request: every time is
 // read from the page, from the click to the paint.
@@ -28,6 +32,18 @@
     const b = refresh();
     return !!b && !b.disabled && !res.querySelector(".pending");
   };
+  // A fold closed after a read keeps that reading; opening it again only repaints it, with no request.
+  const refused =
+    mode === "first_open" && fold.querySelector(".res-body")?.childElementCount
+      ? "already_read: this frame has read once; close the panel, open it again and rerun"
+      : mode === "refresh" && !done()
+        ? "busy: a read is running; rerun once 새로 고침 is enabled"
+        : null;
+  if (refused) {
+    window.sangsoeMeasure = { mode, error: refused };
+    console.log("SANGSOE_MEASURE", JSON.stringify(window.sangsoeMeasure));
+    return;
+  }
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const seen = () => {
