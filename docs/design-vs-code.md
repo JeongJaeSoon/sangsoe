@@ -190,7 +190,7 @@
 | 감지 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `core/session/record.ts:180`, `core/owner/probe.ts:157` | 사실·표지·close_suggested 만 |
 | 실행 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `core/session/record.ts:103`, `core/owner/done.ts:22` | 결정 173·181 |
 | 판단 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `claude-plugin/mcp/tools/decision_answer.ts:14`, `claude-plugin/agents/orchestrator.md:49` | 결정 179 |
-| 에이전트는 MCP 만 | design.html §3 호출 경로 규칙 | implemented | `claude-plugin/mcp/server.ts:38`, `test/judgment-layer.test.ts:61` | |
+| 에이전트는 MCP 만 | design.html §3 호출 경로 규칙 | implemented | `claude-plugin/mcp/server.ts:38`, `test/judgment-layer.test.ts:61` | 예외 하나: `[gate:pressure]` 거부 뒤 백그라운드 `sangsoe pressure wait`(결정 256) |
 | plugin worker 의 코어 import | design.html §3 호출 경로 규칙 | implemented | `orca-plugin/core-link.ts:64` | 결정 132 |
 | SessionStart hook → CLI | design.html §3 호출 경로 규칙 | implemented | `claude-plugin/hooks/hooks.json:17`, `claude-plugin/hooks/record.sh:8` | |
 | 막는 hook → CLI | design.html §3 호출 경로 규칙 | implemented | `claude-plugin/hooks/hooks.json:11`, `claude-plugin/hooks/pre-tool-use.sh:21` | 결정 208 |
