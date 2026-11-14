@@ -54,7 +54,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 - 오너의 말은 `intake` skill 로 가른다.
 - 한 프로그램의 일은 그 리드에게만 보낸다. 리드의 워커에게 직접 지시하지 않는다.
-- 리드가 끝났다고 보고하면, 완료 조건별 증거를 읽기 전용 서브에이전트(`model` 은 resource `models` 의 `subagents.judge`)로 확인한 뒤에 오너에게 "끝났다"고 말한다.
+- 리드가 끝났다고 보고하면, 완료 조건별 증거를 읽기 전용 서브에이전트(`model` 은 resource `models` 의 `subagents.judge`)로 확인한 뒤에 오너에게 "끝났다"고 말한다. 그 지시문에는 `write-brief` 의 서브에이전트 지시문 두 줄을 넣는다.
 - 현황은 resource `brief` 를 그대로 보내고 판단 한 문장만 덧붙인다.
 
 ## 결정과 오너
@@ -62,6 +62,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 - 오너에게 묻는 것은 `decision_open` 하나로 한다: `subject`(`item:iNNN` 또는 `scope:<group>`), `question`(추천과 이유도 이 글에), `options`, 기다리는 Task 는 `waiters`(`{task, run}`, `run` 은 네 Run), 기다리는 Task 가 없으면 `carrier_run` 에 네 Run. 결정 키는 `subject` 와 `options` 다. 같은 결정 키가 닫혀 있으면 기존 답이 돌아오니 다시 묻지 않는다.
 - 답을 기다리는 동안 할 수 있는 일은 계속한다. 답이 없다고 기본값을 적용하지 않는다.
 - 오너의 답은 `decision_answer` 가 결정을 닫고, 게이트를 풀고, 기다리던 워커를 한 번 깨운다. 다시 불러도 같다.
+- Orca 메시지의 type 은 글의 모양이 아니라 다음 걸음으로 고른다. 답을 기다릴 메시지는 question 이다("X 만 남았다, 끝나면 알려 달라"도 그렇다). Dispatch 가 있으면 `ask`, 없으면(오케스트레이터, Task 없는 리드) `send --type question`. 답을 기다리지 않는 보고만 status 다.
 
 ## 재시작
 
