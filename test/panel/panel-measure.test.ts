@@ -181,4 +181,43 @@ addEventListener("load", () => setTimeout(read, 100));
   assert.ok(tickMs < 7500, "the script's pass rule");
   // The bodies measured here carry decision 257's comment marks between pieces; 253's pairs still hold.
   assert.deepEqual([...uneven("closed", c.folded, false), ...uneven("first open", c, true), ...uneven("refresh", o, true), ...uneven("after ticks", p, true)], []);
+  for (const m of [c, o] as (Out & EmojiGap)[]) assert.deepEqual(unevenEmoji(`${m.mode} 544`, m, ["sumline", "foot", "fold_title", "group_head"]), []);
+});
+
+type EmojiGap = { emoji_gap: Record<string, number | null>; emoji_gap_spread: number | null };
+
+/** U129 (decision 259): the gap after an emoji, each place within 1px of the others; returns what is not. */
+function unevenEmoji(at: string, m: Partial<EmojiGap>, need: string[]): string[] {
+  const g = m.emoji_gap;
+  if (!g) return [`${at}: no emoji_gap measured`];
+  const out = need.filter((k) => typeof g[k] !== "number").map((k) => `${at}: no emoji gap read at ${k}`);
+  const seen = Object.values(g).filter((v): v is number => typeof v === "number");
+  if (m.emoji_gap_spread !== Math.round((Math.max(...seen) - Math.min(...seen)) * 10) / 10) out.push(`${at}: emoji_gap_spread ${m.emoji_gap_spread} is not the places' spread`);
+  if (!(Math.max(...seen) - Math.min(...seen) <= 1)) out.push(`${at}: emoji gaps differ by more than 1px: ${JSON.stringify(g)}`);
+  return out;
+}
+
+test("the emoji gap is the same in every place at the owner's 455px and at 900px", { skip: noBrowser }, (t) => {
+  const dir = scratchDir("sangsoe-emoji-gap-");
+  transpilePanel(dir);
+  const entry = '<script type="module" src="./orca-plugin/panel/index.js"></script>\n';
+  const widths = [455, 900];
+  for (const w of widths) writeFileSync(join(dir, `w${w}.html`), orcaPage(bridge(true), entry + run()));
+  const frames = widths.map((w) => `<iframe name="w${w}" src="w${w}.html" style="display:block;border:0;width:${w}px;height:1070px"></iframe>`).join("\n");
+  const outer = `<!doctype html><html><body style="margin:0">
+${frames}
+<pre id="out"></pre><script>
+const read = () => {
+  const got = {};
+  for (const f of document.querySelectorAll("iframe")) got[f.name] = f.contentWindow.sangsoeMeasure ?? null;
+  if (Object.values(got).some((v) => v === null)) return setTimeout(read, 100);
+  document.getElementById("out").textContent = JSON.stringify(got);
+};
+addEventListener("load", () => setTimeout(read, 100));
+</script></body></html>`;
+  const got = dump(dir, outer, 20_000) as Record<string, Out & EmojiGap>;
+  t.diagnostic(`SANGSOE_EMOJI_GAP ${JSON.stringify(Object.fromEntries(Object.entries(got).map(([k, v]) => [k, v.emoji_gap])))}`);
+  assert.deepEqual(unevenEmoji("455", got.w455 ?? {}, ["sumline", "foot", "fold_title", "group_head"]), []);
+  assert.equal(got.w455?.emoji_gap.state_cell, null, "a narrow card hides the state mark; its head carries it");
+  assert.deepEqual(unevenEmoji("900", got.w900 ?? {}, ["sumline", "foot", "fold_title", "state_cell"]), []);
 });

@@ -21,6 +21,10 @@
 // (the arrow's centre less the title's). They describe the open section; the closed one is read only
 // on a first read, before the click, and is the `folded` object.
 //
+// emoji_gap (decision 259) is the gap after an emoji at each place the panel draws one (sumline, foot,
+// fold_title, group_head, state_cell; null where this width does not draw it), and emoji_gap_spread
+// the largest less the smallest. It is done when the spread is 1px or less.
+//
 // And the cost of the section's last read on the panel's 30-second tick (decision 257), as the panel
 // itself timed it: periodic_read_ms from the tick to its paint, periodic_parts what it asked
 // (load+made, or all three when 정리 후보 was due), periodic_paint the pieces it rewrote (none when the
@@ -142,6 +146,45 @@
     }
   };
 
+  /**
+   * The gap after an emoji (decision 259), per place, in px: from the emoji's right edge to the left
+   * edge of what is drawn next (a badge's border, a label's first glyph). Each place is null when the
+   * panel does not draw it at this width (a narrow card hides the state mark, a wide row has no head).
+   * They are drawn by one rule, so they differ by at most 1px.
+   */
+  const emojiGaps = () => {
+    const shown = (e) => !!e && getComputedStyle(e).display !== "none" && getComputedStyle(e).position !== "absolute" && e.getClientRects().length > 0;
+    const left = (n) => {
+      if (n?.nodeType === Node.TEXT_NODE) {
+        const i = n.textContent.search(/\S/);
+        if (i < 0) return null;
+        const r = document.createRange();
+        r.setStart(n, i);
+        r.setEnd(n, i + 1);
+        return r.getClientRects()[0]?.left ?? null;
+      }
+      return n?.nodeType === Node.ELEMENT_NODE && shown(n) ? n.getBoundingClientRect().left : null;
+    };
+    const after = (em) => {
+      const l = em && shown(em) ? left(em.nextSibling) : null;
+      return l === null ? null : px(l - em.getBoundingClientRect().right);
+    };
+    const mark = [...document.querySelectorAll("tbody .mk")].find(shown);
+    const head = mark?.closest("tr.lead");
+    const title = head?.querySelector("td.title");
+    const next = mark?.nextElementSibling;
+    const out = {
+      sumline: after(document.querySelector(".sumline .em")),
+      foot: after(document.querySelector(".foot .em")),
+      fold_title: after(document.querySelector("details.fold:not(.res-fold) > summary .em")),
+      // A narrow head's mark ends its cell: its label is the next cell's first glyph.
+      group_head: head && title && shown(title) && !shown(next) ? px(title.getBoundingClientRect().left + parseFloat(getComputedStyle(title).paddingLeft) - mark.getBoundingClientRect().right) : null,
+      state_cell: shown(next) ? px(next.getBoundingClientRect().left - mark.getBoundingClientRect().right) : null,
+    };
+    const seen = Object.values(out).filter((v) => v !== null);
+    return { emoji_gap: out, emoji_gap_spread: seen.length ? px(Math.max(...seen) - Math.min(...seen)) : null };
+  };
+
   const layout = () => {
     const d = document.documentElement;
     const r = res.getBoundingClientRect();
@@ -165,6 +208,7 @@
       stamp_on_heading: !!stamp && stamp.top + stamp.height / 2 > sum.top && stamp.top + stamp.height / 2 < sum.bottom,
       tail: foot?.textContent.trim().slice(0, 80) ?? "",
       ...spacing(),
+      ...emojiGaps(),
       folded,
     };
   };
