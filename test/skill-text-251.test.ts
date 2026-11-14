@@ -54,8 +54,16 @@ for (const [name, where] of [
   });
 }
 
-test("sangsoe-1 (deliver-ticket): the request to record a verdict goes by ask", () => {
+test("sangsoe-1 (deliver-ticket): the requests to record a verdict and evidence go by ask", () => {
   assert.match(section(skill("deliver-ticket"), "3. 독립 리뷰"), /리드에게 `ask` 로 보낸다/);
+  assert.match(section(skill("deliver-ticket"), "4. 증거: 검증 등급"), /리드에게 `ask` 로 보내고/);
+});
+
+test("sangsoe-1 (orchestrate): the lead answers the worker's ask after recording a verdict or evidence", () => {
+  const text = skill("orchestrate");
+  for (const cell of ["리뷰한 head·리뷰어·증거(리드만)", "워커의 실행 출력(리드만)"]) {
+    assert.match(row(text, cell), /`ask` 에.*`reply`/, `${cell} row does not reply to the worker's ask`);
+  }
 });
 
 for (const [name, where] of [
