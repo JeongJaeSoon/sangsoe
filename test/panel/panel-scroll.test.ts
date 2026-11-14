@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { readParts, renderResBody, renderResources, type ResState } from "../../orca-plugin/panel/resources.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
 import { renderStage } from "../../orca-plugin/panel/view.ts";
+import { loadHistory } from "../fixtures/panel/load-history.ts";
 import { NOW, PARTS_GOT, VIEW } from "../fixtures/panel/rc3-state.ts";
 import { scratchDir } from "../scratch.ts";
 import { dump, noBrowser, orcaPage } from "./browser.ts";
@@ -21,6 +22,12 @@ const UNDER_LAST_LINE = 24;
 const STAGE_GAP = 8;
 
 const shown = async (): Promise<ResState> => readParts(async (input) => PARTS_GOT[input?.part ?? "load"], () => undefined);
+// Decision 250: the same panel with a full day of samples, so the 24-hour card is in the open section.
+const CARD_MAX = 150;
+const withCard = async (): Promise<ResState> => {
+  const load = PARTS_GOT.load.ok ? { ok: true as const, value: { ...PARTS_GOT.load.value, history: { ok: true as const, value: loadHistory(NOW) } } } : PARTS_GOT.load;
+  return readParts(async (input) => (input?.part === "load" || !input ? load : PARTS_GOT[input.part]), () => undefined);
+};
 
 /** Orca's html panel page for a .ts entry, with the entry's mount reduced to what it draws. */
 function panelPage(stage: string, res: string): string {
@@ -49,7 +56,7 @@ addEventListener("load", () => {
     lastLine: lastText ? line.getBoundingClientRect().bottom : null,
     stageEnd: stageEnd ? stageEnd.getBoundingClientRect().bottom : null,
     vh: innerHeight, docH: d.scrollHeight, contentH: Math.round(document.getElementById("root").getBoundingClientRect().height + document.getElementById("res").getBoundingClientRect().height), hscroll: d.scrollWidth - d.clientWidth, scrollers,
-    res: rect("#res"), summary: rect("#res summary"), stamp: rect("#res .res-h"),
+    res: rect("#res"), summary: rect("#res summary"), stamp: rect("#res .res-h"), card: rect("#res .spark"),
     summaryWeight: Number(getComputedStyle(sum).fontWeight), bodyBorder: getComputedStyle(body).borderTopWidth,
   };
 });`;
@@ -65,6 +72,7 @@ type Measured = {
   res: DOMRect;
   summary: DOMRect;
   stamp: DOMRect | null;
+  card: DOMRect | null;
   summaryWeight: number;
   bodyBorder: string;
   lastLine: number | null;
@@ -122,6 +130,21 @@ test("the rc.3 panel fits 1070px at 440 / 544 / 600 / 900 with the 리소스 sec
     assert.ok(c.vh - c.summary.bottom <= UNDER_HEADING, `${w}: ${c.vh - c.summary.bottom}px blank under the closed 리소스 line`);
     const underLast = Math.round(o.vh - (o.lastLine as number));
     assert.ok(underLast <= UNDER_LAST_LINE, `${w}: ${underLast}px blank under the open section's last line`);
+  }
+});
+
+test("decision 250: with the 24-hour card open the panel still fits 1070px at every width, the card at most 150px", { skip: noBrowser }, async (t) => {
+  const open = renderResources(await withCard(), true, Date.parse(NOW), 24);
+  const pages = Object.fromEntries(WIDTHS.map((w) => [`card-${w}`, panelPage(renderStage(VIEW), open)]));
+  const got = measure(pages, (name) => Number(name.split("-")[1]));
+  t.diagnostic(Object.entries(got).map(([k, m]) => `${k} content ${m?.contentH} docH ${m?.docH} card ${m?.card ? `${Math.round(m.card.width)}x${Math.round(m.card.height)}` : "-"} hscroll ${m?.hscroll}`).join("; "));
+  for (const [name, m] of Object.entries(got)) {
+    assert.ok(m?.card, `${name}: the card is drawn`);
+    assert.ok(m.card.height <= CARD_MAX, `${name}: the card is ${m.card.height}px tall`);
+    assert.ok(m.card.right <= (m.res.right ?? 0), `${name}: the card ends inside the section`);
+    assert.ok(m.docH <= m.vh, `${name}: the document is ${m.docH - m.vh}px taller than the panel`);
+    assert.ok(m.hscroll <= 0, `${name}: ${m.hscroll}px of horizontal scroll`);
+    assert.deepEqual(m.scrollers, [], `${name}: nothing scrolls inside the page`);
   }
 });
 
