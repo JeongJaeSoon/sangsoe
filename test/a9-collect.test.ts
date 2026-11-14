@@ -116,6 +116,16 @@ test("limits: exactly the maximum passes, one second over is slow (idle and mid-
   });
 });
 
+test("a slash command line never opens a turn, so a send long after it is idle", () => {
+  const slash = { type: "user", timestamp: iso(1), message: { role: "user", content: "<command-name>/reload-plugins</command-name>" } };
+  withFiles([[slash, wake(3601), tool(3604), result(3605, "msg_m1"), done(3606)]], (p) => {
+    const r = one(collect([sent("msg_m1", 3600)], p));
+    assert.equal(r.kind, "idle");
+    assert.equal(r.outcome, "woken");
+    assert.equal(r.latencyS, 4);
+  });
+});
+
 test("verdict passes only when every send is woken", () => {
   const ok = { id: "a", createdAt: 0, kind: "idle" as const, outcome: "woken" as const, latencyS: 3 };
   assert.equal(verdict([ok, ok]).pass, true);

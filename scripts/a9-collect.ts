@@ -70,7 +70,10 @@ function turns(lines: Line[]): { start: number; end: number }[] {
   const out: { start: number; end: number }[] = [];
   let start: number | null = null;
   for (const l of lines) {
-    if (l.role === "user" && !l.toolResult && start === null) start = l.ts;
+    // A slash command the owner ran in the session (/reload-plugins) is a user line but starts no model turn.
+    if (l.role === "user" && !l.toolResult && start === null) {
+      if (!l.text.includes("<local-command") && !l.text.includes("<command-name>")) start = l.ts;
+    }
     else if (l.role === "assistant" && l.endTurn && start !== null) {
       out.push({ start, end: l.ts });
       start = null;
