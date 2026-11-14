@@ -7,6 +7,7 @@ Decision numbers refer to `docs/decisions.md`.
 ### Changes
 
 - **The resource round keeps the last 24 hours of machine load (241).** Every 5-minute resource round now stores one sample (load average, CPU count, free memory, free disk) in a new `load_sample` table and drops samples 24 hours old in the same write, so at the round's 5-minute spacing about 288 rows are kept (an extra `sangsoe monitor run resource` adds one more). Nothing reads them yet; they are for the panel's load trend. The samples are not in the facts file and come back on their own within a day after a lost database. A dry run stores nothing. The database moves to schema 3, which an older build refuses to open.
+- **The 리소스 section draws the last 24 hours of load (250).** Under the gauges in PC 부하, a card shows one sparkline each for CPU load per core, used memory and free disk, across the full 24 hours, with the 24-hour low and high and a dashed warn line at the machine's own threshold. A stretch of more than 15 minutes without a sample breaks the line; with no samples yet the card is one line saying so. The samples come from the store in the load part's new `history` field and the panel keeps no copy. Docker CPU is not drawn yet: the samples have no column for it.
 
 ## 0.1.6-rc.4 (pre-release)
 
