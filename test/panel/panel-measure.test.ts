@@ -27,17 +27,22 @@ function transpile(dir: string): void {
   }
 }
 
-/** Orca's bridge object is frozen down to plugin.request, so the script cannot wrap it either. */
-const bridge = (open: boolean) => `<script>
+/**
+ * Orca's bridge object is frozen down to plugin.request, so the script cannot wrap it either. With
+ * `hold`, the 정리 후보 answer waits for releaseHeld(), so a read stays running however slow the runner.
+ */
+const bridge = (open: boolean, hold = false) => `<script>
 const view = ${JSON.stringify(VIEW)};
 const parts = ${JSON.stringify(PARTS_GOT)};
 const delay = ${JSON.stringify(DELAY)};
 const store = new Map([[${JSON.stringify(RES_OPEN_KEY)}, ${open}]]);
 const later = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
+const held = new Promise((r) => { window.releaseHeld = r; });
+const answer = (part) => ${hold} && part === "candidates" ? held.then(() => later(delay[part], parts[part])) : later(delay[part], parts[part]);
 Object.defineProperty(window, "orca", { value: Object.freeze({
   plugin: Object.freeze({
     request: (name, input) => name === "panel.brief" ? later(10, { ok: true, value: view })
-      : name === "panel.resources" && input ? later(delay[input.part], parts[input.part])
+      : name === "panel.resources" && input ? answer(input.part)
       : later(10, { ok: false, refusal: { code: "x", reason: "x", fix: "x" } }),
     on: () => undefined,
   }),
@@ -57,6 +62,20 @@ addEventListener("load", () => {
 });
 </script>\n`;
 
+/** Paste the script once a reading row shows, then let the held part answer (CI run 43576209425 pasted after the read ended). */
+const runWhileReading = (after = 500) => `<script>
+addEventListener("load", () => {
+  const paste = () => {
+    if (!document.querySelector("#res .pending")) return setTimeout(paste, 20);
+    const s = document.createElement("script");
+    s.textContent = ${JSON.stringify(SCRIPT)};
+    document.body.append(s);
+    window.releaseHeld();
+  };
+  setTimeout(paste, ${after});
+});
+</script>\n`;
+
 type Out = {
   mode: string;
   error?: string;
@@ -71,7 +90,29 @@ type Out = {
   res_gap_to_page_end: number;
   stamp_on_heading: boolean;
   tail: string;
+} & Spacing & { folded?: Spacing };
+
+type Spacing = {
+  res_space_above: number;
+  res_space_below: number;
+  res_card_pad_top: number | null;
+  res_card_pad_bottom: number | null;
+  res_arrow_off: number;
 };
+
+/** U123 (decision 253): each pair the owner saw as uneven, within 2px; returns what is not. */
+function uneven(at: string, m: Spacing | undefined, open: boolean): string[] {
+  if (!m) return [`${at}: no spacing measured`];
+  const out: string[] = [];
+  const near = (a: number | null, b: number | null, what: string) => {
+    if (typeof a !== "number" || typeof b !== "number" || Math.abs(a - b) > 2) out.push(`${at}: ${what} ${a} vs ${b}`);
+  };
+  near(m.res_space_above, m.res_space_below, "space above the 리소스 title vs below the section");
+  near(m.res_arrow_off, 0, "arrow centre vs title centre");
+  if (open) near(m.res_card_pad_top, m.res_card_pad_bottom, "card padding top vs bottom");
+  else if (m.res_card_pad_top !== null) out.push(`${at}: a closed section has no card`);
+  return out;
+}
 
 test("the measurement script times the first open per part and the panel's layout, on the panel's own DOM", { skip: noBrowser }, (t) => {
   const dir = scratchDir("sangsoe-measure-");
@@ -82,8 +123,8 @@ test("the measurement script times the first open per part and the panel's layou
     open: orcaPage(bridge(true), entry + run()),
     // Read, then folded without reloading the frame: opening it again would only repaint that reading.
     reread: orcaPage(bridge(true), entry + run(1000, `document.querySelector("#res details.res-fold").open = false;`)),
-    // Pasted while the panel's own first read is still running.
-    busy: orcaPage(bridge(true), entry + run(100)),
+    // Pasted while the panel's own first read is still running, late enough that an unheld read has ended.
+    busy: orcaPage(bridge(true, true), entry + runWhileReading()),
   };
   for (const [name, html] of Object.entries(pages)) writeFileSync(join(dir, `${name}.html`), html);
   const frames = Object.keys(pages).map((n) => `<iframe name="${n}" src="${n}.html" style="display:block;border:0;width:544px;height:1070px"></iframe>`).join("\n");
@@ -131,4 +172,6 @@ addEventListener("load", () => setTimeout(read, 100));
     assert.equal(m.stamp_on_heading, true);
     assert.match(m.tail, /상세: sangsoe brief/);
   }
+  assert.equal(o.folded, undefined, "a refresh never sees the section closed");
+  assert.deepEqual([...uneven("closed", c.folded, false), ...uneven("first open", c, true), ...uneven("refresh", o, true)], []);
 });
