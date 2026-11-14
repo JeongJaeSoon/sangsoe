@@ -1,6 +1,6 @@
 {
   "name": "sangsoe",
-  "version": "0.1.6-rc.4",
+  "version": "0.1.6",
   "description": "Orchestration for Claude Code sessions on Orca",
   "private": true,
   "type": "module",

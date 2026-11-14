@@ -351,11 +351,14 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
     return rowHtml(m.inProgress, r, { cls: "item" });
   });
   const s = m.summary;
+  // Decision 249: the tabs and the two sections already show this line's counts, so it stays for a screen reader only.
+  const calm = m.decisions.rows.length === 0 && m.ownerTodo.rows.length === 0;
   return [
-    `<h1>현황 · 묶음 ${m.groups} · 내가 할 일 <span>${m.todo.total}</span> <span class="dim">(결정 ${m.todo.decisions} + 할 일 ${m.todo.other})</span></h1>`,
+    `<h1 class="sr">현황 · 묶음 ${m.groups} · 내가 할 일 ${m.todo.total} (결정 ${m.todo.decisions} + 할 일 ${m.todo.other})</h1>`,
     `<p class="sumline">✅ 완료 ${s.done}건 · 🔄 진행 중 ${s.doing}건 · 남은 것 ${s.left}건 · 🚧 막힌 것 ${s.blocked}건</p>`,
-    section("dec", m.decisions, decisions, true, "", "todo"),
-    section("me", m.ownerTodo, todoRows, true, "", "todo"),
+    calm
+      ? `<section aria-labelledby="h-owner" class="nil" data-tab="todo"><div class="sec-h"><h2 id="h-owner">${esc(m.decisions.title)} <span class="count">0</span> · ${esc(m.ownerTodo.title)} <span class="count">0</span></h2><span class="none">없음</span></div></section>`
+      : section("dec", m.decisions, decisions, true, "", "todo") + section("me", m.ownerTodo, todoRows, true, "", "todo"),
     section("prog", m.inProgress, progress, false, "우선순위, 오래된 🚧 순", "prog"),
     m.groups === 0 ? `<p class="hint0" data-tab="prog">${esc(NO_GROUP)}</p>` : "",
     m.onHold ? section("hold", m.onHold, m.onHold.rows.map((r) => rowHtml(m.onHold as Table, r, { nav: { item: r.id } })), false, "", "prog") : "",
@@ -368,6 +371,14 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
 const NO_GROUP =
   "묶음이 아직 없다. 묶음은 리드 하나의 일이라, 오케스트레이터가 리드를 띄우면 생기고 여기 열린 항목 절에 그 행이 나온다. 패널은 리드를 띄우지 않는다.";
 
+/**
+ * A fold's arrow (decision 253): its ink is centred in its square box, so the box centres it on the
+ * title line, and `rotate(90deg)` turns › into ⌄ about that centre. The text glyph it replaced hung
+ * off the baseline.
+ */
+export const CHEV =
+  '<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6 4.25 9.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 /** 완료 최근 N일 as one folded list (decision 199): the same rows as the ✅ count. */
 function doneFold(t: Table): string {
   const items = t.rows.map((r) => {
@@ -376,7 +387,7 @@ function doneFold(t: Table): string {
     return `<li><span>${what ? titleWithId(what) : ""}${link}</span><span class="when">${esc(when?.text ?? "")}</span></li>`;
   });
   const body = items.length === 0 ? '<p class="empty">없음</p>' : `<ul class="done">${items.join("")}</ul>`;
-  return `<details class="fold"><summary>${esc(t.title)} <span class="count">${t.count}</span></summary>${body}</details>`;
+  return `<details class="fold"><summary>${esc(t.title)} <span class="count">${t.count}</span>${CHEV}</summary>${body}</details>`;
 }
 
 // Edge kinds differ by dash pattern and by name (the name is canonical, decision 92②); the last two

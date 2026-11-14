@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { type OwnerReap, type OwnerReaped, panelCore, panelView, type ResourceView, Store } from "../../core/index.ts";
 import { STYLE } from "../../orca-plugin/panel/style.ts";
-import { type PanelView, renderStage } from "../../orca-plugin/panel/view.ts";
+import { CHEV, type PanelView, renderStage } from "../../orca-plugin/panel/view.ts";
 import { groupWorld } from "../brief/group-world.ts";
 import type { PanelCore } from "../../orca-plugin/core-link.ts";
 import { panelHandlers, parseReap } from "../../orca-plugin/panel/requests.ts";
@@ -69,7 +69,7 @@ test("preview pages for the screenshots (only with PANEL_PREVIEW_DIR)", { skip: 
 
 test("the fold is closed by default and reads nothing until opened", () => {
   const html = renderResources({ kind: "idle" }, false, NOW);
-  assert.match(html, /^<details class="fold res-fold"><summary>리소스<\/summary><div class="res-body"><\/div><\/details>$/);
+  assert.equal(html, `<details class="fold res-fold"><summary>리소스${CHEV}</summary><div class="res-body"></div></details>`);
   assert.match(renderResources({ kind: "shown", view: view() }, true, NOW), /<details class="fold res-fold" open>/);
 });
 
