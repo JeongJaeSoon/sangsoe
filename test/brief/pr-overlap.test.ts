@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type GhClient, type GhResponse, overlapLines, prOverlaps, Store } from "../../core/index.ts";
 import { readyText } from "../../claude-plugin/mcp/resources/ready.ts";
+import { type GhClient, type GhResponse, overlapLines, prOverlaps, Store } from "../../core/index.ts";
 
 // Decision 252 (B5): open PRs of a watched repository that change the same file are named on the
 // lead's ready read, computed when it is read from the PRs' file lists, so the land order is planned
@@ -83,6 +83,38 @@ test("an unread file list judges no pair of that PR and names it in unseen", asy
   assert.equal(r.unseen.length, 1);
   assert.match(r.unseen[0] ?? "", /acme\/api#2/);
   assert.ok(overlapLines(r).some((l) => l.includes("acme/api#2") && l.includes("판정하지 못")), overlapLines(r).join("\n"));
+});
+
+test("a rate limit or an unanswered GitHub stops the reads: the PRs after it are named, not asked", async () => {
+  for (const stop of [
+    { kind: "rate_limited", resource: "core", resetAt: 1_800_000_000 } as const,
+    { kind: "error", status: null, message: "timed out" } as const,
+  ]) {
+    const w = world();
+    for (const n of [1, 2, 3]) w.open(n, ["CHANGELOG.md"]);
+    w.routes.set(FILES(1), stop);
+    const r = await w.read();
+    assert.deepEqual(w.reads, [FILES(1)], stop.kind);
+    assert.deepEqual(r.overlaps, []);
+    assert.equal(r.unseen.length, 3);
+    if (stop.kind === "rate_limited") assert.ok(r.unseen.every((u) => u.includes("2027-01-15T08:00:00Z")), r.unseen.join("\n"));
+  }
+});
+
+test("a PR of a repository no longer in watch.repos is not read", async () => {
+  const w = world();
+  w.open(1, ["CHANGELOG.md"]);
+  w.open(2, ["CHANGELOG.md"]);
+  const r = await prOverlaps({ events: w.store.events(), gh: { get: async () => ({ kind: "error", status: 404, message: "" }) }, repos: ["acme/web"] });
+  assert.deepEqual(r, { overlaps: [], unseen: [] });
+});
+
+test("an unread list's line names the PR and GitHub's answer once", async () => {
+  const w = world();
+  w.open(1, ["CHANGELOG.md"]);
+  w.open(2, ["CHANGELOG.md"]);
+  w.routes.set(FILES(2), { kind: "error", status: 502, message: "Bad Gateway" });
+  assert.deepEqual((await w.read()).unseen, ["acme/api#2: PR files: 502 Bad Gateway"]);
 });
 
 test("one open PR or none: no GitHub file read", async () => {
