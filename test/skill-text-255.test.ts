@@ -43,7 +43,7 @@ test("the refusal paragraph forbids the same act another way, a split command in
 test("the refusal paragraph allows one text-only reword, never for a file the command opens", () => {
   const p = paragraph();
   has(p, "hook 이 명령의 글만 맞춰 막았고 그 글이 명령이 여는 파일을 가리키지 않으면", "거부 문단");
-  has(p, "그 글만 한 번 고쳐 쓴다", "거부 문단");
+  has(p, "그 글만 한 번 고쳐 쓰고 보고에 그렇게 했다고 적는다", "거부 문단");
   has(p, "스크립트나 다른 경로는 고쳐 쓰기가 아니다", "거부 문단");
 });
 
@@ -80,7 +80,7 @@ test("the refusal paragraph says a failing check is not a refusal", () => {
 test("each sangsoe gate the refusal paragraph names exists, with the step the paragraph says it names", () => {
   const p = paragraph();
   const named = [...p.matchAll(/\[gate:([a-z-]+)\]/g)].map((m) => m[1] ?? "");
-  assert.deepEqual([...new Set(named)].sort(), ["pressure", "self-land", "sleep-loop"]);
+  assert.deepEqual([...new Set(named)].sort(), ["delegate", "pressure", "self-land", "sleep-loop"]);
   const gates = readdirSync(join(ROOT, "core/gates")).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
   const source = gates.map((f) => read(`core/gates/${f}`)).join("\n");
   for (const g of named) assert.match(source, new RegExp(`["\`]\\[gate:${g}\\] `), `no gate reason starts [gate:${g}]`);
@@ -88,6 +88,38 @@ test("each sangsoe gate the refusal paragraph names exists, with the step the pa
   has(read("core/gates/sleep-loop.ts"), "Run the same command with run_in_background: true", "sleep-loop gate");
   has(p, "부하가 내려간 뒤 같은 호출", "거부 문단");
   has(p, "같은 명령을 `run_in_background: true` 로", "거부 문단");
+});
+
+test("the refusal paragraph allows one same-form retry, never on a human's refusal, and every other hook block is a refusal", () => {
+  const p = paragraph();
+  has(p, "(2) 같은 꼴로 한 번 더", "거부 문단");
+  has(p, "사람의 거부에는 증거로 다시 하지 않는다", "거부 문단");
+  has(p, "그 밖의 hook 거부는 다른 길을 일러 줘도 거부다", "거부 문단");
+});
+
+test("the refusal paragraph lets the orchestrator hand work down after [gate:delegate], as that gate asks", () => {
+  const p = paragraph();
+  has(p, "`[gate:delegate]` 에 막힌 오케스트레이터가 그 일을 워커나 서브에이전트에게 넘기는 것은 다른 길이 아니다", "거부 문단");
+  has(read("core/gates/delegate.ts"), "Hand it down", "delegate gate");
+  has(read("core/gates/self-land.ts"), "Send it as `--type worker_done`", "self-land gate");
+  has(p, "`merge_ready` 대신 worker_done", "거부 문단");
+});
+
+test("the refusal paragraph gives a session with no Dispatch its own report path", () => {
+  const p = paragraph();
+  has(p, "Task 없는 리드는 오케스트레이터의 Run 에 `send --type question` 으로", "거부 문단");
+  has(p, "오케스트레이터는 `decision_open` 으로 오너에게 올린다", "거부 문단");
+  has(p, "펼친 절대 경로", "거부 문단");
+});
+
+test("the refusal paragraph restarts a unit whose subagent's Edit or Write got no verdict", () => {
+  has(paragraph(), "시작한 세션이 그 단위를 처음부터 한 번 다시 한다", "거부 문단");
+});
+
+test("orchestrate's 거부 보고 row trashes the refusal file it read and grants no second retry", () => {
+  const r = row(skill("orchestrate"), "거부 보고");
+  has(r, "`orch-refusal/` 파일은 읽은 뒤 휴지통으로 옮긴다", "거부 보고 row");
+  has(r, "이미 \"재시도 1회\" 가 있거나 사람이 거부했으면 이 길은 없다", "거부 보고 row");
 });
 
 test("write-brief's subagent prompt section pastes the refusal paragraph", () => {
