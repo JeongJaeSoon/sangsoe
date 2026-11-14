@@ -118,7 +118,7 @@
 | doctor orca claude profile | README Claude profiles | implemented | `core/install/doctor.ts:96` | |
 | doctor land allow | README Install | changed (결정 228) | `core/install/doctor.ts:130`, `core/checks/land-allowed.ts:26` | 따로 행이 없다. `permissions` warn 행 끝에 land 가 다른 규칙으로 허락되는지 적는다. 설정은 쓰지 않는다. 줄 번호는 U95 기준 |
 | doctor permissions | README Install 2·5 | changed (결정 221·224·228) | `core/install/doctor.ts:129`, `core/install/permissions.ts:333` | N of M, 모자라면 warn. 고칠 말에 `!` 줄의 `--yes` 줄도 적는다(결정 224). 16 of 16 이면 land 도 덮는다(결정 228). 줄 번호는 U95 기준 |
-| install --auto-compact | README Install 4 | changed (결정 264) | `cli/commands/install.ts:35`, `core/install/auto-compact.ts:6`, `core/install/auto-compact.ts:51`, `core/install/settings-json.ts:202` | 옵트인. 상수 하나(`AUTO_COMPACT_WINDOW`), `--permissions` user 범위와 같은 두 프로필(`core/install/permissions.ts:175`), diff 와 이전→이후 줄, `--yes` 일 때만 쓰기, 백업, env 안의 키 하나만 바꾸고 더 큰 값은 낮추지 않는다 |
+| install --auto-compact | README Install 3 | changed (결정 264) | `cli/commands/install.ts:35`, `core/install/auto-compact.ts:6`, `core/install/auto-compact.ts:51`, `core/install/settings-json.ts:202` | 옵트인. 상수 하나(`AUTO_COMPACT_WINDOW`), `--permissions` user 범위와 같은 두 프로필(`core/install/permissions.ts:175`), diff 와 이전→이후 줄, `--yes` 일 때만 쓰기, 백업, env 안의 키 하나만 바꾸고 더 큰 값은 낮추지 않는다 |
 | doctor auto-compact window | README Install 5 | changed (결정 264) | `core/install/doctor.ts:136`, `core/install/auto-compact.ts:35` | 프로필마다 유효 값(없음·낮음·같음·큼), 없거나 낮으면 warn 과 고칠 말, 큰 값은 통과. 종료 코드는 그대로 |
 | doctor claude marketplace | README Install | implemented | `core/install/doctor.ts:156` | 경로가 트리와 다르면 FAIL |
 | doctor orca plugin | README Install | implemented | `core/install/doctor.ts:172`, `core/install/doctor.ts:182` | 승인 대기는 FAIL |

@@ -133,9 +133,10 @@ function settingsChecks(host: Host, current: ClaudeProfile): Check[] {
 }
 
 // Decision 264: one warn-only row over the same profiles install --auto-compact writes; a higher value passes.
-function autoCompactCheck(host: Host): Check {
+export function autoCompactCheck(host: Host): Check {
   const name = "auto-compact window";
-  const paths = userSettingsPaths(host, "auto-compact", []);
+  const notes: string[] = [];
+  const paths = userSettingsPaths(host, "auto-compact", notes);
   const rows = paths.map((path) => {
     let settings: unknown;
     try {
@@ -145,7 +146,7 @@ function autoCompactCheck(host: Host): Check {
     }
     return autoCompactRow(path, settings);
   });
-  const detail = rows.map((r) => r.detail).join("; ");
+  const detail = [...rows.map((r) => r.detail), ...(notes.length ? [`${UNREADABLE("orca account list --json")}: Orca's selected profile is unchecked`] : [])].join("; ");
   if (rows.every((r) => r.ok)) return { state: "ok", name, detail };
   return { state: "warn", name, detail: `${detail}: a long session compacts earlier than it should`, fix: AUTO_COMPACT_DOCTOR_FIX };
 }

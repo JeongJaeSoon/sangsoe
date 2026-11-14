@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, test } from "node:test";
 import { AUTO_COMPACT_ENV, AUTO_COMPACT_WINDOW, autoCompactRow, classifyWindow, installAutoCompact } from "./auto-compact.ts";
+import { autoCompactCheck } from "./doctor.ts";
 import type { Host } from "./host.ts";
 import { setEnvValue } from "./settings-json.ts";
 
@@ -95,6 +96,36 @@ test("autoCompactRow passes equal and higher, and names the value otherwise", ()
   assert.deepEqual(row("350000"), { ok: false, detail: `/p/settings.json: 350000, below ${AUTO_COMPACT_WINDOW}` });
   assert.equal(autoCompactRow("/p/settings.json", {}).ok, false);
   assert.match(autoCompactRow("/p/settings.json", undefined).detail, /\(missing or not JSON\)/);
+});
+
+test("decision 264: doctor warns when the window is missing or lower, passes equal or higher, one row over both profiles", () => {
+  const fix = "sangsoe install --auto-compact (from a Claude Code ! line: read the diff it prints, then run sangsoe install --auto-compact --yes)";
+  const t = tempHome({ orca: true });
+  const missing = autoCompactCheck(t.host);
+  assert.equal(missing.state, "warn");
+  assert.equal(missing.name, "auto-compact window");
+  assert.equal("fix" in missing && missing.fix, fix);
+  assert.ok(missing.detail.includes(`${t.current} (missing or not JSON): ${AUTO_COMPACT_ENV} is not set`), missing.detail);
+
+  writeFileSync(t.current, withWindow("900000"));
+  writeFileSync(t.orca, withWindow("350000"));
+  const mixed = autoCompactCheck(t.host);
+  assert.equal(mixed.state, "warn");
+  assert.ok(mixed.detail.includes(`${t.current}: 900000, above ${AUTO_COMPACT_WINDOW}, kept; ${t.orca}: 350000, below ${AUTO_COMPACT_WINDOW}`), mixed.detail);
+
+  writeFileSync(t.orca, withWindow(String(AUTO_COMPACT_WINDOW)));
+  const ok = autoCompactCheck(t.host);
+  assert.equal(ok.state, "ok");
+  assert.equal(ok.detail, `${t.current}: 900000, above ${AUTO_COMPACT_WINDOW}, kept; ${t.orca}: ${AUTO_COMPACT_WINDOW}`);
+});
+
+test("decision 264: when Orca's profile cannot be read the row says so", () => {
+  const t = tempHome();
+  writeFileSync(t.current, withWindow(String(AUTO_COMPACT_WINDOW)));
+  const host: Host = { ...t.host, run: () => ({ code: 1, stdout: "", stderr: "orca is not running" }) };
+  const c = autoCompactCheck(host);
+  assert.equal(c.state, "ok");
+  assert.match(c.detail, /Orca's selected profile is unchecked/);
 });
 
 test("decision 264: without --yes the diff is shown and a y writes, with a backup and every other key intact", async () => {
