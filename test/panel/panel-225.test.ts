@@ -84,11 +84,12 @@ test("(7) a who with no time ('워커 —') or no one ('— —', '—') draws n
   assert.match(item, /<p class="sumline">누가 — · <span class="pri">P2<\/span>/);
 });
 
-test("(3) the middle text takes the freed width, at most two lines then an ellipsis, its full text in the title", () => {
+test("(3) the middle text takes the freed width, one line then an ellipsis (decision 262 replaces the two), its full text in the title", () => {
   const html = renderStage(one);
   assert.match(rowOf(html, "i033"), /<td data-l="다음" class="mid" title="키 도착 확인">/);
   const mid = rule(NARROW, ".tbl:not(.gt) td.mid");
-  for (const d of ["flex: 1 1 0;", "-webkit-line-clamp: 2;", "overflow: hidden;"]) assert.ok(mid.includes(d), d);
+  for (const d of ["flex: 1 1 0;", "white-space: nowrap;", "text-overflow: ellipsis;", "word-break: keep-all;", "overflow: hidden;"]) assert.ok(mid.includes(d), d);
+  assert.ok(!mid.includes("line-clamp"));
   const pr = rule(NARROW, ".tbl:not(.gt) td.pr");
   for (const d of ["white-space: nowrap;", "text-overflow: ellipsis;"]) assert.ok(pr.includes(d), d);
 });

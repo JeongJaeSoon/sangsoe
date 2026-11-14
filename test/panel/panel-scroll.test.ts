@@ -42,6 +42,8 @@ box.innerHTML = ${JSON.stringify(res)};
 root.innerHTML = ${JSON.stringify(stage)};
 addEventListener("load", () => {
   const d = document.documentElement;
+  // The section is pinned to the panel's bottom (decision 262): its place in the page is read at the page's end.
+  scrollTo(0, d.scrollHeight);
   const rect = (q) => { const e = document.querySelector(q); return e ? e.getBoundingClientRect().toJSON() : null; };
   const scrollers = [...document.querySelectorAll("*")].filter((e) => {
     const s = getComputedStyle(e);
@@ -60,7 +62,7 @@ addEventListener("load", () => {
     stageEnd: stageEnd ? stageEnd.getBoundingClientRect().bottom : null,
     vh: innerHeight, docH: d.scrollHeight, contentH: Math.round(document.getElementById("root").getBoundingClientRect().height + document.getElementById("res").getBoundingClientRect().height), hscroll: d.scrollWidth - d.clientWidth, scrollers,
     res: rect("#res"), summary: rect("#res summary"), stamp: rect("#res .res-h"), card: rect("#res .spark"),
-    summaryWeight: Number(getComputedStyle(sum).fontWeight), bodyBorder: getComputedStyle(body).borderTopWidth,
+    summaryWeight: Number(getComputedStyle(sum).fontWeight), bodyBorder: getComputedStyle(document.querySelector("#res .res-fold")).borderTopWidth,
   };
 });`;
   return orcaPage("", `<script>${mount}</script>\n`);
