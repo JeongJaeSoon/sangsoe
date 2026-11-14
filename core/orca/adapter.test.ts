@@ -33,6 +33,8 @@ const DESIGN_TABLE = [
   "worktree create",
   "terminal list",
   "terminal close",
+  // Decision 246: the owner's `sangsoe recover auth --send` only (test/recover/auth-246.test.ts pins the caller).
+  "terminal send",
   "repo show",
   "reference add",
   "reference find",
@@ -245,6 +247,11 @@ test("inbox maps the --full record: read becomes handled, the handles from and t
   assert.deepEqual(done?.payload, { taskId: "task_000000000001", dispatchId: "ctx_000000000001" }, "the outcome stays in Orca");
   assert.equal(stop?.payload?.stopReason, "errored");
   assert.equal(status?.payload, undefined);
+  assert.equal(status?.createdAt, "2026-11-14T08:00:00Z", "created_at tells how long mail sat unread (decision 245)");
+  assert.equal(stop?.createdAt, undefined, "a row without created_at has no age");
+  assert.equal(status?.runId, "run_000000000001");
+  assert.equal(status?.senderPane, "00000000-0000-4000-8000-0000000000a1:00000000-0000-4000-8000-0000000000a2", "the ps paneKey of the sending terminal");
+  assert.equal(done?.senderPane, undefined);
 });
 
 test("gate-list reads options from the JSON text Orca returns; anything else leaves them unknown", async () => {
@@ -295,6 +302,13 @@ test("ports reads one worktree's listeners, and only from the local host", async
     const shape = await createOrcaAdapter(bad.exec).ports({ worktree: "id:x" });
     assert.equal(!shape.ok && shape.error.code, "unexpected_shape", JSON.stringify(row));
   }
+});
+
+test("terminal send passes the text as one argument, --enter bare and --wait-submit in seconds", async () => {
+  const fake = createFakeOrca();
+  const r = await createOrcaAdapter(fake.exec).terminalSend({ terminal: "term_1", text: "a b; c", enter: true, waitSubmit: 10 });
+  assert.ok(r.ok);
+  assert.deepEqual(fake.calls[0], ["orca", "terminal", "send", "--terminal", "term_1", "--text", "a b; c", "--enter", "--wait-submit", "10", "--json"]);
 });
 
 test("worker-start passes --keep-open bare and --repo with its selector", async () => {
