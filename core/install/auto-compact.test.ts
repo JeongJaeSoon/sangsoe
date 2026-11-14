@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, test } from "node:test";
@@ -175,6 +175,27 @@ test("a value already at or above the window is never rewritten", async () => {
     assert.equal(existsSync(`${t.current}.sangsoe-backup`), false);
     assert.match(r.lines.join("\n"), /nothing to write/);
   }
+});
+
+test("two profiles that reach one file write it once, with no false race", async () => {
+  const t = tempHome({ orca: true });
+  writeFileSync(t.current, BEFORE);
+  symlinkSync(t.current, t.orca);
+  const r = await installAutoCompact(t.host, { yes: true });
+  assert.equal(r.code, 0, r.lines.join("\n"));
+  assert.equal(readFileSync(t.current, "utf8"), BEFORE.replace('"350000"', '"600000"'));
+});
+
+test("a value that is not plain digits is replaced, and a higher profile is left while the lower one is written", async () => {
+  assert.equal(classifyWindow({ env: { [AUTO_COMPACT_ENV]: "1e6" } }).state, "invalid");
+  assert.equal(classifyWindow({ env: { [AUTO_COMPACT_ENV]: "0x100000" } }).state, "invalid");
+  const t = tempHome({ orca: true });
+  writeFileSync(t.current, withWindow("900000"));
+  writeFileSync(t.orca, withWindow("350000"));
+  const r = await installAutoCompact(t.host, { yes: true });
+  assert.equal(r.code, 0, r.lines.join("\n"));
+  assert.equal(readFileSync(t.current, "utf8"), withWindow("900000"));
+  assert.equal(readFileSync(t.orca, "utf8"), withWindow("600000"));
 });
 
 test("a settings file that is not valid JSON is refused and left alone", async () => {

@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import type { Host } from "./host.ts";
 import { type Files, realFiles, unifiedDiff, userSettingsPaths } from "./permissions.ts";
 import { parseSettings, setEnvValue } from "./settings-json.ts";
@@ -18,8 +19,8 @@ export function classifyWindow(settings: unknown): { state: WindowState; raw?: s
   const raw = (settings as { env?: Record<string, unknown> } | undefined)?.env?.[AUTO_COMPACT_ENV];
   if (raw === undefined) return { state: "missing" };
   const text = String(raw);
-  const n = typeof raw === "string" || typeof raw === "number" ? Number(text) : Number.NaN;
-  if (!Number.isFinite(n) || text.trim() === "") return { state: "invalid", raw: text };
+  if ((typeof raw !== "string" && typeof raw !== "number") || !/^\d+$/.test(text.trim())) return { state: "invalid", raw: text };
+  const n = Number(text);
   return { state: n < AUTO_COMPACT_WINDOW ? "lower" : n === AUTO_COMPACT_WINDOW ? "equal" : "higher", raw: text };
 }
 
@@ -47,12 +48,25 @@ export type AutoCompactOptions = {
 
 type Report = { code: number; lines: string[] };
 
+function realOrSelf(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
 /** `sangsoe install --auto-compact`: raises the window in each profile's settings.json after showing the diff and asking. Never lowers one. */
 export async function installAutoCompact(host: Host, opts: AutoCompactOptions): Promise<Report> {
   const files = opts.files ?? realFiles;
   const lines: string[] = [];
   const changes: { path: string; before: string | undefined; after: string }[] = [];
+  const seen = new Set<string>();
   for (const path of userSettingsPaths(host, "auto-compact", lines)) {
+    // Two profile paths can reach one file (a symlink); the second would see the first's write as a race.
+    const real = realOrSelf(path);
+    if (seen.has(real)) continue;
+    seen.add(real);
     let before: string | undefined;
     try {
       before = files.read(path);
