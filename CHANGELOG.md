@@ -4,7 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## 0.1.6-rc.4 (pre-release)
 
-Everything since `v0.1.6-rc.3`: decision 248 and a fix to the owner's answer to a wait. A pre-release for checking the 리소스 section on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
+Everything since `v0.1.6-rc.3`: decisions 248 and 249 and a fix to the owner's answer to a wait. A pre-release for checking the 리소스 section and 현황's top block on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
 
 ### Upgrading from 0.1.6-rc.3
 
@@ -14,6 +14,7 @@ Everything since `v0.1.6-rc.3`: decision 248 and a fix to the owner's answer to 
 ### Changes
 
 - **The 리소스 section fits the panel and reads apart when open (248).** The owner's rc.3 panel, 1070px tall, scrolled 25px with the section open. The section no longer carries space nothing used: its empty line kept the stage's 12px padding above and below, 36px sat under its last line (now 21) and 24px under the closed heading (now 8), and the stage's bottom space is 8px instead of 16. Open, its heading is in ink and its body sits in a 1px rounded frame; closed, the heading is muted. The reading time and 새로 고침 now end the 리소스 row, left of its chevron. The 'sangsoe 가 만든 것' counts are no longer drawn; `sangsoe reap plan` still prints them, and 기록됨·오너 손 stays. `scripts/panel-measure.devtools.js` measures the panel from its DevTools console: the first read of each part from opening the fold, scrolling, and where the section ends.
+- **현황's top block is shorter (249).** The `현황 · 묶음 N · 내가 할 일 N` line is no longer drawn (a screen reader still reads it as the stage's heading), and 결정 필요 and 지금 오너가 할 일 share one line when both are 0: 152px above 열린 항목 becomes 94px on the owner's 1070px panel.
 
 ### Fixes
 
