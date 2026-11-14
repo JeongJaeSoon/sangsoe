@@ -105,7 +105,7 @@ function uneven(at: string, m: Spacing | undefined, open: boolean): string[] {
   if (!m) return [`${at}: no spacing measured`];
   const out: string[] = [];
   const near = (a: number | null, b: number | null, what: string) => {
-    if (a === null || b === null || Math.abs(a - b) > 2) out.push(`${at}: ${what} ${a} vs ${b}`);
+    if (typeof a !== "number" || typeof b !== "number" || Math.abs(a - b) > 2) out.push(`${at}: ${what} ${a} vs ${b}`);
   };
   near(m.res_space_above, m.res_space_below, "space above the 리소스 title vs below the section");
   near(m.res_arrow_off, 0, "arrow centre vs title centre");
