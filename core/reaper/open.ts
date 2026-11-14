@@ -72,6 +72,7 @@ export function openResources(o: { dbPath?: string; home?: string } = {}) {
         orca: createOrcaAdapter(exec),
         events: (f) => store.events(f),
         sample: () => sampleLoad(),
+        samples: (since) => store.loadSamples(since),
         plan: (opts) => plan.run(opts),
       }).finally(() => store.close());
     });

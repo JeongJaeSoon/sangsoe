@@ -22,6 +22,7 @@ import {
   userPlugin,
 } from "./host.ts";
 import { type Files, realFiles, removePermissions } from "./permissions.ts";
+import { staleSessions } from "./stale-sessions.ts";
 
 export type Outcome = { code: number; lines: string[] };
 
@@ -128,7 +129,8 @@ export async function install(host: Host, root: string, ctx: CheckContext): Prom
   if (!orcaStep(host, root, lines)) return { code: 1, lines };
 
   const d = await doctor(host, root, { ctx });
-  return { code: d.code, lines: [...lines, "", "sangsoe doctor:", ...d.lines] };
+  // Decision 247: listed, never acted on, and never the exit code.
+  return { code: d.code, lines: [...lines, "", "sangsoe doctor:", ...d.lines, "", ...staleSessions(host)] };
 }
 
 export function uninstall(host: Host, files: Files = realFiles): Outcome {
