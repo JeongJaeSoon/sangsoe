@@ -82,6 +82,15 @@ type Out = {
   res_gap_to_page_end: number;
   stamp_on_heading: boolean;
   tail: string;
+  card_second_line_max: number;
+  card_second_line_pass: boolean;
+  drawer_open: boolean;
+  drawer_top?: number;
+  board_scroll_before?: number;
+  board_scroll_after?: number;
+  drawer_max_height?: number | null;
+  viewport_height?: number;
+  drawer_pass?: boolean;
   periodic_read_ms: number | null;
   periodic_parts?: string;
   periodic_paint?: string;
@@ -102,7 +111,8 @@ function uneven(at: string, m: Spacing | undefined, open: boolean): string[] {
   const near = (a: number | null, b: number | null, what: string) => {
     if (typeof a !== "number" || typeof b !== "number" || Math.abs(a - b) > 2) out.push(`${at}: ${what} ${a} vs ${b}`);
   };
-  near(m.res_space_above, m.res_space_below, "space above the 리소스 title vs below the section");
+  // Open, the section is a sheet that ends at the panel's bottom edge (decision 262): nothing is under it to match.
+  if (!open) near(m.res_space_above, m.res_space_below, "space above the 리소스 title vs below the section");
   near(m.res_arrow_off, 0, "arrow centre vs title centre");
   if (open) near(m.res_card_pad_top, m.res_card_pad_bottom, "card padding top vs bottom");
   else if (m.res_card_pad_top !== null) out.push(`${at}: a closed section has no card`);
@@ -168,6 +178,12 @@ addEventListener("load", () => setTimeout(read, 100));
     assert.equal(m.res_gap_to_page_end, 0);
     assert.equal(m.stamp_on_heading, true);
     assert.match(m.tail, /상세: sangsoe brief/);
+  }
+  for (const m of [c, o]) {
+    assert.equal(m.card_second_line_pass, true, `a card's status text takes ${m.card_second_line_max} lines`);
+    assert.equal(m.drawer_open, true);
+    assert.equal(m.drawer_pass, true, `the drawer passes its own rule: ${JSON.stringify([m.drawer_top, m.board_scroll_before, m.board_scroll_after, m.drawer_max_height, m.viewport_height])}`);
+    assert.ok((m.drawer_top ?? -1) >= 0 && (m.drawer_max_height ?? Infinity) < (m.viewport_height ?? 0));
   }
   assert.equal(o.folded, undefined, "a refresh never sees the section closed");
   assert.equal(o.periodic_read_ms, null, "no tick has read in a 30-second panel pasted at 1 s");
