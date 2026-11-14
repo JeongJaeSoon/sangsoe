@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { diskHash } from "../../test/dir-hash.ts";
@@ -74,6 +74,61 @@ test("a nested .orca/ is plugin content and still counts", async () => {
   const h = await inspectContentHash(dir, inspect);
   assert.notEqual(h, clean);
   assert.equal(h, withNested);
+});
+
+// Review round 1: a folder path that is itself a relative link must hash the bytes Orca runs.
+test("a folder reached through a relative link is hashed where the link leads, not where a copy of the link would", async () => {
+  const root = scratchDir("sangsoe-u128-");
+  const real = join(root, "real", "orca-plugin");
+  mkdirSync(real, { recursive: true });
+  writeFileSync(join(real, "orca-plugin.json"), '{"id":"sangsoe"}');
+  writeFileSync(join(real, "main.ts"), "export const edited = 1;");
+  orcaWrites(real);
+  mkdirSync(join(root, "via"));
+  symlinkSync("../real/orca-plugin", join(root, "via", "orca-plugin"));
+  const realWithout = join(scratchDir("sangsoe-u128-"), "orca-plugin");
+  mkdirSync(realWithout);
+  writeFileSync(join(realWithout, "orca-plugin.json"), '{"id":"sangsoe"}');
+  writeFileSync(join(realWithout, "main.ts"), "export const edited = 1;");
+  const { inspect } = recordingInspect();
+  assert.equal(await inspectContentHash(join(root, "via", "orca-plugin"), inspect), diskHash(realWithout));
+});
+
+test("a link inside a folder that needs a copy cannot be hashed, so the comparison fails closed", async () => {
+  const dir = pluginFolder();
+  orcaWrites(dir);
+  symlinkSync("../elsewhere/main.ts", join(dir, "panel", "linked.ts"));
+  const { seen, inspect } = recordingInspect();
+  assert.equal(await inspectContentHash(dir, inspect), null);
+  assert.deepEqual(seen, [], "nothing was inspected");
+});
+
+test("a folder that cannot be copied cannot be hashed", async (t) => {
+  if (process.getuid?.() === 0) return t.skip("root reads any file");
+  const dir = pluginFolder();
+  orcaWrites(dir);
+  const locked = join(dir, "panel", "view.ts");
+  chmodSync(locked, 0o000);
+  t.after(() => chmodSync(locked, 0o644));
+  const { seen, inspect } = recordingInspect();
+  assert.equal(await inspectContentHash(dir, inspect), null);
+  assert.deepEqual(seen, []);
+});
+
+// Decision 258 ③: leaving .orca/ out is safe only while no plugin code loads anything from it.
+test("no plugin source loads anything from .orca/", () => {
+  const plugin = new URL("../../orca-plugin/", import.meta.url).pathname;
+  const hits: string[] = [];
+  const walk = (d: string) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) {
+        if (e.name !== "vendor" && e.name !== ".orca" && e.name !== "node_modules") walk(p);
+      } else if (/\.(m?[jt]sx?|json)$/.test(e.name) && readFileSync(p, "utf8").includes(".orca/")) hits.push(p);
+    }
+  };
+  walk(plugin);
+  assert.deepEqual(hits, []);
 });
 
 test("the copy is removed when inspect fails or throws", async () => {
