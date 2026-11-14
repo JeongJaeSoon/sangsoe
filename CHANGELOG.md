@@ -4,7 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## 0.1.6-rc.4 (pre-release)
 
-Everything since `v0.1.6-rc.3`: decisions 248 and 249 and a fix to the owner's answer to a wait. A pre-release for checking the 리소스 section on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
+Everything since `v0.1.6-rc.3`: decisions 248 and 249 and a fix to the owner's answer to a wait. A pre-release for checking the 리소스 section and 현황's top block on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
 
 ### Upgrading from 0.1.6-rc.3
 
