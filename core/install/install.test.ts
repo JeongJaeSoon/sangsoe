@@ -4,7 +4,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { diskHash } from "../../test/dir-hash.ts";
 import { createFakeOrca, type FakeReply } from "../../test/fake-orca/index.ts";
+import { scratchDir } from "../../test/scratch.ts";
 import type { CheckContext, PluginBuild } from "../checks/index.ts";
 import { landAllowRules } from "../checks/land-allowed.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
@@ -557,6 +559,64 @@ test("an installed plugin folder equal to its build and reviewed head is green",
   const { ctx } = hashes({ installed: "sha256-same", built: "sha256-same" });
   const r = await doctor(host, ROOT, { ctx });
   assert.ok(r.lines.some((l) => /^ok +orca-plugin-content: /.test(l)), r.lines.join("\n"));
+});
+
+// Real folders and an inspect that hashes what is on disk, `.orca/` included, as Orca's does.
+function onDisk(edit?: (installed: string) => void) {
+  const root = scratchDir("sangsoe-u128-doctor-");
+  const built = join(root, "tree", "orca-plugin");
+  const installed = join(root, "libexec", "orca-plugin");
+  for (const d of [built, installed]) {
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, "orca-plugin.json"), '{"id":"sangsoe"}');
+    writeFileSync(join(d, "main.ts"), "export {};");
+  }
+  edit?.(installed);
+  const replies = {
+    "plugin-inspect": (args: readonly string[]): RunResult => {
+      const hash = diskHash(args[2] ?? "");
+      return hash
+        ? { code: 0, stdout: JSON.stringify({ ok: true, result: { contentHash: hash } }), stderr: "" }
+        : { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "invalid_plugin" } }), stderr: "" };
+    },
+  };
+  const pluginBuild: PluginBuild = {
+    dir: installed,
+    buildCommit: async () => BUILT,
+    reviewedHead: async () => BUILT,
+    fetchTree: async () => ({ dir: built, dispose: async () => {} }),
+  };
+  return { installed, ...orcaCtx({ replies, pluginBuild }) };
+}
+
+// What `orca plugin dev load` writes into the folder it loads (`orca plugin types --help`).
+function orcaWritesTypes(dir: string): void {
+  mkdirSync(join(dir, ".orca", "types", "orca"), { recursive: true });
+  writeFileSync(join(dir, ".orca", ".gitignore"), "*");
+  writeFileSync(join(dir, ".orca", "types", "orca", "index.d.ts"), "declare const orca: unknown;");
+}
+
+test("install, Orca's dev load writes .orca/ into the folder, install again: doctor stays green (U128)", async (t) => {
+  const { host } = fakeHost({ orcaManifest: true });
+  const { ctx, installed } = onDisk();
+  await install(host, ROOT, online().ctx);
+  const before = await doctor(host, ROOT, { ctx });
+  assert.ok(before.lines.some((l) => /^ok +orca-plugin-content: /.test(l)), before.lines.join("\n"));
+  orcaWritesTypes(installed);
+  await install(host, ROOT, online().ctx);
+  const r = await doctor(host, ROOT, { ctx });
+  show(t, r);
+  assert.ok(r.lines.some((l) => /^ok +orca-plugin-content: /.test(l)), r.lines.join("\n"));
+});
+
+test("an edit outside .orca/ still fails doctor when Orca's .orca/ is there too (U128)", async () => {
+  const { host } = fakeHost({ orcaManifest: true });
+  const { ctx } = onDisk((installed) => {
+    orcaWritesTypes(installed);
+    writeFileSync(join(installed, "main.ts"), "export const edited = 1;");
+  });
+  const r = await doctor(host, ROOT, { ctx });
+  assert.ok(r.lines.some((l) => /^FAIL +orca-plugin-content: .* — fix: sangsoe plugin approve$/.test(l)), r.lines.join("\n"));
 });
 
 test("an installed folder Orca cannot inspect, while its build has a plugin, fails", async () => {
