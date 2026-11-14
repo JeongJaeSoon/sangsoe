@@ -6,7 +6,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ### Changes
 
-- **The 리소스 section fits the panel and reads apart when open (248).** The owner's rc.3 panel, 1070px tall, scrolled 25px with the section open. The section no longer carries space nothing used: its empty line kept the stage's 12px padding above and below, and 8 + 16px sat under its last line and 16px under the stage. Open, its heading is in ink and its body sits in a 1px rounded frame; closed, the heading is muted. The reading time and 새로 고침 now end the 리소스 row, left of its chevron. The 'sangsoe 가 만든 것' counts are no longer drawn; `sangsoe reap plan` still prints them, and 기록됨·오너 손 stays. `scripts/panel-measure.devtools.js` measures the panel from its DevTools console: the first read of each part from opening the fold, scrolling, and where the section ends.
+- **The 리소스 section fits the panel and reads apart when open (248).** The owner's rc.3 panel, 1070px tall, scrolled 25px with the section open. The section no longer carries space nothing used: its empty line kept the stage's 12px padding above and below, 36px sat under its last line (now 21) and 24px under the closed heading (now 8), and the stage's bottom space is 8px instead of 16. Open, its heading is in ink and its body sits in a 1px rounded frame; closed, the heading is muted. The reading time and 새로 고침 now end the 리소스 row, left of its chevron. The 'sangsoe 가 만든 것' counts are no longer drawn; `sangsoe reap plan` still prints them, and 기록됨·오너 손 stays. `scripts/panel-measure.devtools.js` measures the panel from its DevTools console: the first read of each part from opening the fold, scrolling, and where the section ends.
 
 ### Fixes
 
