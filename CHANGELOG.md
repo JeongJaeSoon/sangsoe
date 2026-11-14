@@ -4,7 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## 0.1.6
 
-Everything since `v0.1.5`: decisions 230 to 240, 248 and 249, a fix to the owner's answer to a wait and two test fixes. The pre-releases checked them on an installed build as they came: `v0.1.6-rc.1` carried 230 to 234, `v0.1.6-rc.2` added 235 and 236, `v0.1.6-rc.3` added 237 to 240 and the 219 test fix, and `v0.1.6-rc.4` added 248, 249, the wait fix and the measurement test fix.
+Everything since `v0.1.5`: decisions 230 to 240, 248, 249 and 253, a fix to the owner's answer to a wait and two test fixes. The pre-releases checked them on an installed build as they came: `v0.1.6-rc.1` carried 230 to 234, `v0.1.6-rc.2` added 235 and 236, `v0.1.6-rc.3` added 237 to 240 and the 219 test fix, `v0.1.6-rc.4` added 248, 249, the wait fix and the measurement test fix, and `v0.1.6-rc.5` added 253.
 
 ### Upgrading from 0.1.5
 
@@ -31,6 +31,7 @@ Everything since `v0.1.5`: decisions 230 to 240, 248 and 249, a fix to the owner
 - **What only the owner clears is recorded and listed (240).** `resource_record` and `sangsoe resource record` also take a checkout, a registration, a branch, a file or a process. These are never cleared by REAPER; the 리소스 section lists them under 기록됨·오너 손 with no button, and the session that recorded them releases them once it has.
 - **The 리소스 section fits the panel and reads apart when open (248).** The owner's rc.3 panel, 1070px tall, scrolled 25px with the section open. The section no longer carries space nothing used: its empty line kept the stage's 12px padding above and below, 36px sat under its last line (now 21) and 24px under the closed heading (now 8), and the stage's bottom space is 8px instead of 16. Open, its heading is in ink and its body sits in a 1px rounded frame; closed, the heading is muted. The reading time and 새로 고침 now end the 리소스 row, left of its chevron. The 'sangsoe 가 만든 것' counts (234) are no longer drawn; `sangsoe reap plan` still prints them, and 기록됨·오너 손 stays. `scripts/panel-measure.devtools.js` measures the panel from its DevTools console: the first read of each part from opening the fold, scrolling, and where the section ends.
 - **현황's top block is shorter (249).** The `현황 · 묶음 N · 내가 할 일 N` line is no longer drawn (a screen reader still reads it as the stage's heading), and 결정 필요 and 지금 오너가 할 일 share one line when both are 0: 152px above 열린 항목 becomes 94px on the owner's 1070px panel.
+- **The 리소스 section is even above and below (253).** Closed, its title sits in the middle of its row (12px of space above the text and 13px below, from 12 and 21). Open, the frame ends 12px above the section's end, as far as the title sits below the rule (from 8), and the first and last lines of text inside it sit 20px and 21px from the frame (from 24 and 17). A fold's arrow is now a small drawn chevron centred on its title, turned down when open, instead of a › or ⌄ character hung on the baseline (it sat up to 4px low); a screen reader no longer reads that character after the title. `scripts/panel-measure.devtools.js` measures each pair, closed and open.
 
 ### Fixes
 
