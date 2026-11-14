@@ -15,6 +15,11 @@
 // It is done when 새로 고침 is enabled again and no part shows a reading row, or after 8 s
 // (timed_out). The panel's `orca` bridge is frozen, so nothing here wraps a request: every time is
 // read from the page, from the click to the paint.
+//
+// It also reads the section's spacing from the glyphs' ink (decision 253), each pair even within 2px:
+// res_space_above and res_space_below, res_card_pad_top and res_card_pad_bottom, and res_arrow_off
+// (the arrow's centre less the title's). They describe the open section; the closed one is read only
+// on a first read, before the click, and is the `folded` object.
 (() => {
   const PARTS = ["PC 부하", "정리 후보"];
   const LIMIT_MS = 8000;
@@ -44,16 +49,6 @@
     console.log("SANGSOE_MEASURE", JSON.stringify(window.sangsoeMeasure));
     return;
   }
-  const t0 = performance.now();
-  const ms = () => Math.round(performance.now() - t0);
-  const seen = () => {
-    if (mode !== "first_open") return;
-    for (const h of res.querySelectorAll(".res-body h3")) {
-      const name = PARTS.find((p) => h.textContent.trim().startsWith(p));
-      if (name && parts[name] === undefined && !h.nextElementSibling?.matches(".pending")) parts[name] = ms();
-    }
-  };
-
   // Spacing is read from ink, not boxes: a line box adds half-leading the eye does not see. A text
   // node's ink comes from its glyphs' canvas metrics on the baseline its line box holds.
   const pen = document.createElement("canvas").getContext("2d");
@@ -105,7 +100,10 @@
    */
   const spacing = () => {
     const sum = fold.querySelector("summary");
-    const t = ink([...sum.childNodes].find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim()));
+    const title = [...sum.childNodes].find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+    const t = title && ink(title);
+    // A spacing that cannot be read must not cost the times this script also logs.
+    if (!t) return { spacing_error: "no 리소스 title text to read" };
     const r = res.getBoundingClientRect();
     const card = fold.open ? fold.querySelector(".res-body") : null;
     const c = card?.getBoundingClientRect();
@@ -119,8 +117,18 @@
       res_arrow_off: px(arrowY(sum, t) - (t.top + t.bottom) / 2),
     };
   };
-  // A first open starts folded: that is the only time the closed section can be read.
+  // A first open starts folded: that is the only time the closed section can be read. Read before
+  // t0, so its layout work is in no time.
   const folded = mode === "first_open" ? spacing() : undefined;
+  const t0 = performance.now();
+  const ms = () => Math.round(performance.now() - t0);
+  const seen = () => {
+    if (mode !== "first_open") return;
+    for (const h of res.querySelectorAll(".res-body h3")) {
+      const name = PARTS.find((p) => h.textContent.trim().startsWith(p));
+      if (name && parts[name] === undefined && !h.nextElementSibling?.matches(".pending")) parts[name] = ms();
+    }
+  };
 
   const layout = () => {
     const d = document.documentElement;

@@ -373,7 +373,8 @@ const NO_GROUP =
 
 /**
  * A fold's arrow (decision 253): its ink is centred in its square box, so the box centres it on the
- * title line, and `rotate(90deg)` turns › into ⌄ about that centre. A text glyph hung off the baseline.
+ * title line, and `rotate(90deg)` turns › into ⌄ about that centre. The text glyph it replaced hung
+ * off the baseline.
  */
 export const CHEV =
   '<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6 4.25 9.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
