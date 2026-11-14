@@ -2,6 +2,12 @@
 
 Decision numbers refer to `docs/decisions.md`.
 
+## Unreleased
+
+### Changes
+
+- **The 리소스 section is even above and below (253).** Closed, its title sits in the middle of its row (12px of space above the text and 13px below, from 12 and 21). Open, the frame ends 12px above the section's end, as far as the title sits below the rule (from 8), and the first and last lines of text inside it sit 20px and 21px from the frame (from 24 and 17). A fold's arrow is now a small drawn chevron centred on its title, turned down when open, instead of a › or ⌄ character hung on the baseline (it sat up to 4px low); a screen reader no longer reads that character after the title. `scripts/panel-measure.devtools.js` measures each pair, closed and open.
+
 ## 0.1.6-rc.4 (pre-release)
 
 Everything since `v0.1.6-rc.3`: decisions 248 and 249 and a fix to the owner's answer to a wait. A pre-release for checking the 리소스 section and 현황's top block on the real Orca panel; it installs from the tap's `sangsoe-rc` formula and the stable `sangsoe` formula stays at 0.1.5.
