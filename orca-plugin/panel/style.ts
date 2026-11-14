@@ -315,7 +315,7 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
    open confirm list. One quiet fold; the gauges are the only drawing in it. */
 /* Decision 253: the closed row's text sits centred in its 36px; open, the frame ends as far above the
    section's end as the title's text sits below its rule. */
-#res { margin: auto 0 0; padding: 0 var(--gx); border-top: 1px solid var(--rule); }
+#res { --res-bar: 36px; position: sticky; bottom: 0; z-index: 3; height: calc(var(--res-bar) + 1px); margin: auto 0 0; padding: 0 var(--gx); border-top: 1px solid var(--rule); background: var(--paper); }
 /* Decision 248: closed, the heading is a quiet muted row; open, it is ink and the body sits in the
    panel's one emphasis, a 1px rule with rounded corners (decision 222), so the two read apart. */
 #res .res-fold { margin: 0; position: relative; }
@@ -323,7 +323,13 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 #res .res-fold[open] > summary { color: var(--ink); font-weight: 600; }
 /* Decision 253: the 6시간/24시간 box sits 12px in from the top and the right; 16px at the bottom puts the
    last line's text as far from the frame as the first line's, which the 26px switch centres lower. */
-#res .res-fold[open] > .res-body { margin: 0 0 var(--s3); padding: var(--s3) var(--s3) var(--s4); border: 1px solid var(--rule); border-radius: var(--r3); }
+#res .res-fold[open] > .res-body { margin: 0; padding: var(--s3) var(--s3) var(--s4); border: 0; max-height: calc(100dvh - var(--res-bar) - var(--s6)); overflow-y: auto; overscroll-behavior: contain; }
+/* Decision 262: the section stays pinned to the panel's bottom and its bar keeps its place in the page,
+   so opening it never moves the board. Open, the fold is a sheet over the board that rises from the
+   bar's place: its heading is the sheet's head and its body scrolls inside it when taller than the panel. */
+#res .res-fold[open] { position: absolute; left: var(--gx); right: var(--gx); bottom: 0; z-index: 1; background: var(--paper); border: 1px solid var(--rule); border-bottom: 0; border-radius: var(--r3) var(--r3) 0 0; box-shadow: 0 -4px 16px color-mix(in oklab, var(--ink) 12%, transparent); }
+#res .res-fold[open] > summary { padding-inline: var(--s3); }
+#res .res-fold[open] .res-h { right: calc(var(--s5) + var(--s3)); }
 #res .res-body > :first-child:not(.res-h), #res .res-body > .res-h + * { margin-top: 0; }
 #res .res-body > .res-h + .load-h { padding-top: 0; }
 #res h3 { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s3); }

@@ -198,12 +198,15 @@ const rule = (sel: string) => new RegExp(`(?:^|\\n)${sel.replace(/[.()[\]#>:]/g,
 test("F2 rules: the section is pushed to the panel's bottom when the stage is short, to the page's end when it is long", () => {
   assert.match(rule("body"), /display: flex; flex-direction: column; min-height: 100dvh;/);
   assert.match(rule("#res"), /margin: auto 0 0;/, "pushed down by the free space, nothing under it");
-  assert.doesNotMatch(rule("#res"), /position: (fixed|sticky)/, "an open section never gets a scroll of its own");
+  // Decision 262: the bar is pinned to the panel's bottom and the open section is a sheet over the board.
+  assert.match(rule("#res"), /position: sticky; bottom: 0;/);
+  assert.match(rule("#res .res-fold[open]"), /position: absolute;[^}]*bottom: 0;/);
 });
 
-test("F3 rules: the section adds no space of its own below it, and nothing in it scrolls by itself", () => {
+test("F3 rules: the section adds no space of its own below it, and only its open body scrolls inside the sheet", () => {
   const res = STYLE.slice(STYLE.indexOf("/* The 리소스 section"));
-  assert.doesNotMatch(res, /overflow(-y)?: (auto|scroll)/);
+  assert.equal(res.match(/overflow(-y)?: (auto|scroll)/g)?.length, 1, "one scroller: the open body");
+  assert.match(rule("#res .res-fold[open] > .res-body"), /max-height: calc\(100dvh - var\(--res-bar\) - var\(--s6\)\); overflow-y: auto;/);
   assert.doesNotMatch(rule("#res"), /margin: 0 0 var/, "the section rule's 24px never lands under it");
   assert.match(rule("#root"), /flex: none;/, "the stage keeps its own height above the section");
 });

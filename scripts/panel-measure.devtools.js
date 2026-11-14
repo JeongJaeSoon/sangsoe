@@ -16,6 +16,10 @@
 // (timed_out). The panel's `orca` bridge is frozen, so nothing here wraps a request: every time is
 // read from the page, from the click to the paint.
 //
+// With the fold open it also reads the drawer (decision 262): drawer_top and drawer_bottom, the board's
+// scrollTop and height before and after, drawer_max_height against viewport_height, and drawer_pass,
+// true when the board did not move or grow and the drawer lies inside the viewport.
+//
 // It also reads the section's spacing from the glyphs' ink (decision 253), each pair even within 2px:
 // res_space_above and res_space_below, res_card_pad_top and res_card_pad_bottom, and res_arrow_off
 // (the arrow's centre less the title's). They describe the open section; the closed one is read only
@@ -104,13 +108,14 @@
     const t = title && ink(title);
     // A spacing that cannot be read must not cost the times this script also logs.
     if (!t) return { spacing_error: "no 리소스 title text to read" };
-    const r = res.getBoundingClientRect();
+    // Open, the section is the sheet (decision 262), which ends at the panel's bottom edge: nothing under it.
+    const r = (fold.open ? fold : res).getBoundingClientRect();
     const card = fold.open ? fold.querySelector(".res-body") : null;
     const c = card?.getBoundingClientRect();
     const cs = card && getComputedStyle(card);
     const e = card && drawn(card);
     return {
-      res_space_above: px(t.top - r.top - parseFloat(getComputedStyle(res).borderTopWidth)),
+      res_space_above: px(t.top - r.top - parseFloat(getComputedStyle(fold.open ? fold : res).borderTopWidth)),
       res_space_below: px(r.bottom - (c ? c.bottom : t.bottom)),
       res_card_pad_top: e ? px(e.top - c.top - parseFloat(cs.borderTopWidth)) : null,
       res_card_pad_bottom: e ? px(c.bottom - parseFloat(cs.borderBottomWidth) - e.bottom) : null,
@@ -128,6 +133,31 @@
       const name = PARTS.find((p) => h.textContent.trim().startsWith(p));
       if (name && parts[name] === undefined && !h.nextElementSibling?.matches(".pending")) parts[name] = ms();
     }
+  };
+
+  // Decision 262: the open section is a sheet over the board, so opening it moves nothing under it.
+  // drawer_pass: the board's scrollTop is where it was, the page is no taller, and the sheet lies in the
+  // viewport with its body's max-height below the viewport's. Read before t0 when the fold opens now.
+  const board = document.scrollingElement ?? document.documentElement;
+  const scrollBefore = board.scrollTop;
+  const heightBefore = board.scrollHeight;
+  const drawer = () => {
+    if (!fold.open) return { drawer_open: false };
+    const s = fold.getBoundingClientRect();
+    const maxHeight = parseFloat(getComputedStyle(fold.querySelector(".res-body")).maxHeight);
+    const out = {
+      drawer_open: true,
+      drawer_top: Math.round(s.top),
+      drawer_bottom: Math.round(s.bottom),
+      board_scroll_before: Math.round(scrollBefore),
+      board_scroll_after: Math.round(board.scrollTop),
+      board_height_before: heightBefore,
+      board_height_after: board.scrollHeight,
+      drawer_max_height: Number.isNaN(maxHeight) ? null : Math.round(maxHeight),
+      viewport_height: innerHeight,
+    };
+    const pass = out.board_scroll_before === out.board_scroll_after && out.board_height_before === out.board_height_after && s.top >= 0 && s.bottom <= innerHeight && out.drawer_max_height !== null && out.drawer_max_height < innerHeight;
+    return { ...out, drawer_pass: pass };
   };
 
   const layout = () => {
@@ -153,6 +183,7 @@
       stamp_on_heading: !!stamp && stamp.top + stamp.height / 2 > sum.top && stamp.top + stamp.height / 2 < sum.bottom,
       tail: foot?.textContent.trim().slice(0, 80) ?? "",
       ...spacing(),
+      ...drawer(),
       folded,
     };
   };

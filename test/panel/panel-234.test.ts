@@ -118,6 +118,18 @@ test("reading, empty, failed, unread and stale each say so; an unread count is n
   assert.match(renderResBody({ kind: "shown", view: view() }, Date.parse(AT) + STALE_MS + 1), /읽음, 낡음/);
 });
 
+test("U133: a candidate read that failed is never summed up as nothing to clean", () => {
+  const ok = { ok: true as const, value: { rows: [], markOnly: false, unseen: [] } };
+  const none = { ok: true as const, value: { count: 0, kb: 0 } };
+  const wt = renderResBody({ kind: "shown", view: view({ worktrees: { ok: false, why: "open PRs of acme/api" }, tmp: none }) }, NOW);
+  assert.doesNotMatch(wt, /정리할 것 없음/);
+  assert.match(wt, /class="empty">[^<]*worktree 후보[^<]*알 수 없음/);
+  const tmp = renderResBody({ kind: "shown", view: view({ worktrees: ok, tmp: { ok: false, why: "/tmp: EACCES" } }) }, NOW);
+  assert.doesNotMatch(tmp, /정리할 것 없음/);
+  assert.match(tmp, /class="empty">[^<]*임시 폴더[^<]*알 수 없음/);
+  assert.match(renderResBody({ kind: "shown", view: view({ worktrees: ok, tmp: none }) }, NOW), /정리할 것 없음/, "all read, none found still says so");
+});
+
 test("a stale reading cannot be confirmed, and refresh waits while a 정리 runs", () => {
   const late = Date.parse(AT) + STALE_MS + 1;
   for (const confirm of [false, true]) {

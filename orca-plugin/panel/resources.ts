@@ -250,7 +250,11 @@ function candidates(v: Cands, s: { confirm?: boolean; running?: boolean } | null
   }
   const t = reapTargets(v);
   const total = t.worktrees.length + (t.tmp ? 1 : 0);
-  if (rows.length === 0) return `${head}<p class="empty">정리할 것 없음</p>${notes.map((x) => `<p class="foot">${x}</p>`).join("")}`;
+  if (rows.length === 0) {
+    const lost = [v.worktrees.ok ? "" : "worktree 후보", v.tmp.ok ? "" : "임시 폴더"].filter(Boolean);
+    const said = lost.length > 0 ? `${lost.join("·")}를 읽지 못해 정리할 것이 있는지 알 수 없음` : "정리할 것 없음";
+    return `${head}<p class="empty">${said}</p>${notes.map((x) => `<p class="foot">${x}</p>`).join("")}`;
+  }
   const table = `<table class="tbl res"><thead><tr><th>이름</th><th>왜</th><th class="num">크기</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
   const off = s?.running ? " disabled" : "";
   const act =
