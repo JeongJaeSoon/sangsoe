@@ -31,7 +31,7 @@ export async function waitForLoad(d: WaitDeps, o: typeof PRESSURE_WAIT = PRESSUR
     }
     if (streak >= o.okStreak) {
       const was = high ? ` (was ${said(high)})` : "";
-      return { cleared: true, lines: [`[pressure-wait] The load dropped${was}: run the same call again, once.`] };
+      return { cleared: true, lines: [`[pressure-wait] The load dropped${was}: run the same call again, once, unless you already ran it after the refusal.`] };
     }
     if (d.now() - start >= o.deadlineMs) {
       // The last high reading: one ok just before the deadline is not yet a drop.

@@ -35,7 +35,7 @@ test("refused, then the load reads ok twice in a row: one line that says to run 
   assert.equal(r.cleared, true);
   assert.equal(r.lines.length, 1);
   assert.match(r.lines[0] ?? "", /^\[pressure-wait\] The load dropped \(was warn: load\/CPU 1\.50 ≥ 경고 1\.3\)/);
-  assert.match(r.lines[0] ?? "", /run the same call again, once/);
+  assert.match(r.lines[0] ?? "", /run the same call again, once, unless you already ran it after the refusal\.$/);
   assert.equal(w.reads(), 4);
   assert.equal(w.sleeps(), 3, "one interval between readings, none after the last");
 });
