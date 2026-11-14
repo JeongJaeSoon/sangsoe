@@ -99,6 +99,7 @@ test("the refusal paragraph allows one same-form retry, never on a human's refus
 
 test("the refusal paragraph lets the orchestrator hand work down after [gate:delegate], as that gate asks", () => {
   const p = paragraph();
+  has(p, "(4) 사람이 거부하지 않은 행위를 브리프나 skill 이 그 일에 이미 정한 길", "거부 문단");
   has(p, "`[gate:delegate]` 에 막힌 오케스트레이터가 그 일을 워커나 서브에이전트에게 넘기는 것은 다른 길이 아니다", "거부 문단");
   has(read("core/gates/delegate.ts"), "Hand it down", "delegate gate");
   has(read("core/gates/self-land.ts"), "Send it as `--type worker_done`", "self-land gate");
@@ -107,18 +108,20 @@ test("the refusal paragraph lets the orchestrator hand work down after [gate:del
 
 test("the refusal paragraph gives a session with no Dispatch its own report path", () => {
   const p = paragraph();
-  has(p, "Task 없는 리드는 오케스트레이터의 Run 에 `send --type question` 으로", "거부 문단");
+  has(p, "Task 없는 리드는 브리프의 보고 칸이 적은 오케스트레이터의 Run 에 `send --type question` 으로", "거부 문단");
   has(p, "오케스트레이터는 `decision_open` 으로 오너에게 올린다", "거부 문단");
   has(p, "펼친 절대 경로", "거부 문단");
 });
 
 test("the refusal paragraph restarts a unit whose subagent's Edit or Write got no verdict", () => {
-  has(paragraph(), "시작한 세션이 그 단위를 처음부터 한 번 다시 한다", "거부 문단");
+  has(paragraph(), "시작한 세션이 그 단위를 처음부터 한 번 다시 한다. 거기서 다시 판정이 없으면 오너에게 간다", "거부 문단");
+  has(row(skill("orchestrate"), "거부 보고"), "너는 다시 시작하지 않는다", "거부 보고 row");
 });
 
 test("orchestrate's 거부 보고 row trashes the refusal file it read and grants no second retry", () => {
   const r = row(skill("orchestrate"), "거부 보고");
-  has(r, "`orch-refusal/` 파일은 읽은 뒤 휴지통으로 옮긴다", "거부 보고 row");
+  has(r, "`orch-refusal/` 파일은 코어가 그 메시지의 `refusal_report` 를 남긴 뒤", "거부 보고 row");
+  has(r, "먼저 옮기면 코어가 읽지 못해 거부가 보이지 않는다", "거부 보고 row");
   has(r, "이미 \"재시도 1회\" 가 있거나 사람이 거부했으면 이 길은 없다", "거부 보고 row");
 });
 
@@ -145,7 +148,7 @@ test("orchestrate's 거부 보고 row: no other session, no coached form, a rule
     "가장 작은 규칙을 오너 몫으로",
     "'확인 못 함(거부)'",
     "land 하지 않고 되돌린다",
-    "단위를 시작한 세션이 단위째 한 번",
+    "그 서브에이전트를 띄운 세션(워커가 띄웠으면 그 워커)이 단위째 한 번",
     "`decision_open`",
   ]) {
     has(r, want, "거부 보고 row");
