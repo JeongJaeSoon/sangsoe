@@ -90,7 +90,7 @@ test("the refusal names the wait command, run_in_background, one retry, and one 
   const reason = pressureGate(startUnit, facts("lead", HIGH))?.reason ?? "";
   assert.match(reason, /Nothing was queued: run the same call again once the load drops\./);
   assert.match(reason, /start `sangsoe pressure wait` with run_in_background: true/);
-  assert.match(reason, /when it finishes, run the same call once/);
+  assert.match(reason, /when it finishes with "The load dropped", run the same call once/);
   assert.match(reason, /If a `sangsoe pressure wait` is already running in this session, do not start another/);
   assert.match(reason, /If you run the call again before it finishes, stop that wait/);
 });

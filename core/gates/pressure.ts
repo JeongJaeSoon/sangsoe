@@ -29,7 +29,7 @@ export const pressureGate: Gate = (call, facts) => {
     reason:
       `[gate:pressure] The machine is at ${load.level}${why}, so ${what} waits. ` +
       "Nothing was queued: run the same call again once the load drops. To be woken then, start `sangsoe pressure wait` " +
-      "with run_in_background: true; when it finishes, run the same call once. If a `sangsoe pressure wait` is already " +
+      "with run_in_background: true; when it finishes with \"The load dropped\", run the same call once. If a `sangsoe pressure wait` is already " +
       "running in this session, do not start another. If you run the call again before it finishes, stop that wait. " +
       "Do other work meanwhile.",
   };
