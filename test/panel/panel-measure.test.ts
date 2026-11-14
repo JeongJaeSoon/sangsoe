@@ -27,17 +27,22 @@ function transpile(dir: string): void {
   }
 }
 
-/** Orca's bridge object is frozen down to plugin.request, so the script cannot wrap it either. */
-const bridge = (open: boolean) => `<script>
+/**
+ * Orca's bridge object is frozen down to plugin.request, so the script cannot wrap it either. With
+ * `hold`, the 정리 후보 answer waits for releaseHeld(), so a read stays running however slow the runner.
+ */
+const bridge = (open: boolean, hold = false) => `<script>
 const view = ${JSON.stringify(VIEW)};
 const parts = ${JSON.stringify(PARTS_GOT)};
 const delay = ${JSON.stringify(DELAY)};
 const store = new Map([[${JSON.stringify(RES_OPEN_KEY)}, ${open}]]);
 const later = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
+const held = new Promise((r) => { window.releaseHeld = r; });
+const answer = (part) => ${hold} && part === "candidates" ? held.then(() => later(delay[part], parts[part])) : later(delay[part], parts[part]);
 Object.defineProperty(window, "orca", { value: Object.freeze({
   plugin: Object.freeze({
     request: (name, input) => name === "panel.brief" ? later(10, { ok: true, value: view })
-      : name === "panel.resources" && input ? later(delay[input.part], parts[input.part])
+      : name === "panel.resources" && input ? answer(input.part)
       : later(10, { ok: false, refusal: { code: "x", reason: "x", fix: "x" } }),
     on: () => undefined,
   }),
@@ -54,6 +59,20 @@ addEventListener("load", () => {
     s.textContent = ${JSON.stringify(SCRIPT)};
     document.body.append(s);
   }, ${at});
+});
+</script>\n`;
+
+/** Paste the script once a reading row shows, then let the held part answer (CI run 43576209425 pasted after the read ended). */
+const runWhileReading = (after = 500) => `<script>
+addEventListener("load", () => {
+  const paste = () => {
+    if (!document.querySelector("#res .pending")) return setTimeout(paste, 20);
+    const s = document.createElement("script");
+    s.textContent = ${JSON.stringify(SCRIPT)};
+    document.body.append(s);
+    window.releaseHeld();
+  };
+  setTimeout(paste, ${after});
 });
 </script>\n`;
 
@@ -82,8 +101,8 @@ test("the measurement script times the first open per part and the panel's layou
     open: orcaPage(bridge(true), entry + run()),
     // Read, then folded without reloading the frame: opening it again would only repaint that reading.
     reread: orcaPage(bridge(true), entry + run(1000, `document.querySelector("#res details.res-fold").open = false;`)),
-    // Pasted while the panel's own first read is still running.
-    busy: orcaPage(bridge(true), entry + run(100)),
+    // Pasted while the panel's own first read is still running, late enough that an unheld read has ended.
+    busy: orcaPage(bridge(true, true), entry + runWhileReading()),
   };
   for (const [name, html] of Object.entries(pages)) writeFileSync(join(dir, `${name}.html`), html);
   const frames = Object.keys(pages).map((n) => `<iframe name="${n}" src="${n}.html" style="display:block;border:0;width:544px;height:1070px"></iframe>`).join("\n");
