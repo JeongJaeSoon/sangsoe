@@ -37,7 +37,7 @@ test("0 groups: 현황 says how a group comes to be, under 진행 중; with grou
 test("완료 최근 7일 folds into a list on 현황 and on the group, one item per done row", () => {
   for (const v of [overview, group]) {
     const html = renderStage(v);
-    const fold = /<details class="fold"><summary>✅ 완료 최근 7일 <span class="count">2<\/span><\/summary>(.*?)<\/details>/s.exec(html)?.[1] ?? "";
+    const fold = /<details class="fold"><summary>✅ 완료 최근 7일 <span class="count">2<\/span><svg class="chev"[^>]*aria-hidden="true">.*?<\/svg><\/summary>(.*?)<\/details>/s.exec(html)?.[1] ?? "";
     assert.equal([...fold.matchAll(/<li>/g)].length, 2, "two rows");
     assert.match(fold, /<span class="id">i024<\/span>인덱스 추가 <a href="https:\/\/github.com\/acme\/api\/pull\/38"/);
   }

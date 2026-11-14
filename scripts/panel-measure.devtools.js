@@ -85,7 +85,8 @@
     return inside.length ? { top: Math.min(...inside), bottom: Math.max(...inside) } : null;
   };
   const arrowY = (sum, title) => {
-    const chev = sum.querySelector(".chev");
+    // The path's own box is its ink, turned with the svg when the fold is open.
+    const chev = sum.querySelector(".chev path") ?? sum.querySelector(".chev");
     if (chev) {
       const r = chev.getBoundingClientRect();
       return (r.top + r.bottom) / 2;
