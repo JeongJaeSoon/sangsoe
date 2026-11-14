@@ -65,6 +65,17 @@ test("a gap over 15 minutes breaks the line: no interpolation across a stretch n
   assert.equal((paths(svgs(short)[0]?.body ?? "")[0]?.match(/M/g) ?? []).length, 1, "15 minutes is still one line");
 });
 
+test("a lone sample between gaps gets a short stroke of its own; a run of two keeps its line", () => {
+  const h = loadHistory(NOW, 288, [100, 110]);
+  const lone = { ...h, points: h.points.filter((p) => p.at < Date.parse(NOW) - 192 * 5 * 60_000 || p.at >= Date.parse(NOW) - 188 * 5 * 60_000) };
+  const d = paths(svgs(historyCard(ok(lone)))[0]?.body ?? "")[0] ?? "";
+  const subs = d.split("M").filter(Boolean);
+  assert.equal(subs.length, 3, "the run before, the lone sample, the run after");
+  assert.match(subs[1] ?? "", /^[\d.]+ [\d.]+h3$/, "the lone sample is a point and a 3-unit stroke");
+  assert.doesNotMatch(subs[0] ?? "", /h3/);
+  assert.doesNotMatch(subs[2] ?? "", /h3/);
+});
+
 test("empty store: one quiet line and no drawing; a series never read: its row says so", () => {
   const empty = historyCard(ok({ ...loadHistory(NOW), points: [] }));
   assert.equal(empty, `<p class="empty sp-empty">부하 기록 없음. 감시가 5분마다 하나씩 남긴다.</p>`);
