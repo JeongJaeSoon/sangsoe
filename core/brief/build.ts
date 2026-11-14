@@ -552,8 +552,8 @@ function modelLine(input: BriefInput, task: string): string | undefined {
   // The budget the start recorded, counted over the same span: a day-budget row counts today.
   const daily = p.budget_per === "day";
   const used = spend(input.events.filter((e) => e.type === "advisor_used"), { task, ...(daily ? { day: localDay(new Date(input.now)) } : {}) });
-  // Decision 254: only this Task's rows, so the drift is its own newest session's.
-  const [drift] = modelDrift(input.events.filter((e) => e.entity_id === task));
+  // Decision 254: only this Task's rows from its last start on, so the drift is that start's session's.
+  const [drift] = modelDrift(input.events.slice(input.events.indexOf(last)).filter((e) => e.entity_id === task));
   const resolved = drift ? ` · 세션 ${drift.actual} (표 ${drift.expected})` : "";
   return `모델: ${POLICY[kind].label} · ${String(p.model)}${resolved} · effort ${String(p.effort)}${advisor} · 예산 ${Number(p.budget)}회/${daily ? "하루" : "단위"} · ${spendText(used)}`;
 }

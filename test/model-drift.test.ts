@@ -41,12 +41,12 @@ const unit = (task: string, model: string, minute: number): Ev => ({
   entity_id: task,
   payload: { kind: "worker", picked_by: "role", model, effort: "medium", route: "none", budget: 0, budget_per: "unit", used: 0 },
 });
-const session = (task: string | null, model: string, minute: number): Ev => ({
+const session = (task: string | null, model: string, minute: number, id?: string, ts = at(minute)): Ev => ({
   seq: ++seq,
-  ts: at(minute),
+  ts,
   type: "session_started",
   entity_id: task,
-  payload: { session: `s-${seq}`, role: "worker", model },
+  payload: { session: id ?? `s-${seq}`, role: "worker", model },
 });
 
 test("an alias that moved gives one drift naming the alias, the table's model and the resolved one", () => {
@@ -97,6 +97,14 @@ test("sessions with no unit_started, an unknown model or a session before its st
   assert.deepEqual(modelDrift([session("t1", MOVED, 0), unit("t1", everyday.alias, 1)]), [], "a session pairs only with an earlier start");
 });
 
+test("a resumed session counts once, and a session from before the table was checked is not compared", () => {
+  const resumed = modelDrift([unit("t1", everyday.alias, 0), session("t1", MOVED, 1, "same"), session("t1", MOVED, 2, "same")]);
+  assert.equal(resumed[0]?.sessions, 1);
+  // After a table update moves currentId, sessions that ran under the old one are not drift.
+  const before = new Date(Date.parse(`${everyday.verified}T00:00:00Z`) - 86_400_000).toISOString();
+  assert.deepEqual(modelDrift([unit("t1", everyday.alias, 0), session("t1", MOVED, 1, undefined, before)]), []);
+});
+
 function ctx(home: string, env: Record<string, string> = {}) {
   return {
     orca: { worktreeList: async () => ({ ok: true, value: { rows: [], nonLocal: { rows: 0, hostIds: [] }, omittedHostIds: [], truncated: false } }) } as never,
@@ -135,6 +143,16 @@ test("doctor's model-table row: a notice naming the drift, and ok without one", 
   assert.match(moved.fix ?? "", /re-read the pages/);
 });
 
+test("doctor's model-table row does not fail on an unreadable store; the spend line names it", async (t) => {
+  const home = mkdtempSync(join(tmpdir(), "sangsoe-drift-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  // A directory where the database file should be: opening it fails.
+  mkdirSync(defaultDbPath(home), { recursive: true });
+  const r = await modelTable.run(ctx(home));
+  assert.equal(r.status, "ok", r.summary);
+  assert.match(r.summary, /advisor 사용을 읽지 못함/);
+});
+
 test("the item detail's model line names the resolved model only when it drifted", () => {
   const FIX = new URL("fixtures/brief/", import.meta.url);
   const base = readFileSync(new URL("sample.events.jsonl", FIX), "utf8");
@@ -145,4 +163,8 @@ test("the item detail's model line names the resolved model only when it drifted
   assert.doesNotMatch(same?.model ?? "", /세션/);
   const drifted = buildItem(input(unit("task_26", everyday.alias, 0), session("task_26", MOVED, 1)), "i026");
   assert.ok(drifted?.model?.includes(`세션 ${MOVED} (표 ${everyday.currentId})`), drifted?.model);
+  // A restart under another alias shows only its own start's session, not the earlier start's drift.
+  const restarted = buildItem(input(unit("task_26", everyday.alias, 0), session("task_26", MOVED, 1), unit("task_26", primary.alias, 2)), "i026");
+  assert.ok(restarted?.model?.includes(primary.alias), restarted?.model);
+  assert.doesNotMatch(restarted?.model ?? "", /세션/);
 });

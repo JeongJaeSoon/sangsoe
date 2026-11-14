@@ -1,4 +1,4 @@
-import { CATALOG } from "./table.ts";
+import { CATALOG, type CatalogRow } from "./table.ts";
 
 // Decision 254: what a started session resolved to (`session_started.model`, from Claude Code's
 // SessionStart input) against what start_unit passed (`unit_started.model`) and the table expects
@@ -29,23 +29,23 @@ const bare = (model: string) => model.replace(/\[[^\]]*\]$/, "");
 
 /** `events` in store order; `pins` as doctor's activePins prints them (`KEY=value`). */
 export function modelDrift(events: readonly Ev[], pins: readonly string[] = []): Drift[] {
-  const passed = new Map<string, string>();
-  const pairs: { passed: string; actual: string; task: string; at: string }[] = [];
+  const passed = new Map<string, CatalogRow | undefined>();
+  const pairs: { row: CatalogRow; actual: string; session: string; task: string; at: string }[] = [];
   for (const e of events) {
     if (!e.entity_id) continue;
     const model = typeof e.payload.model === "string" ? e.payload.model : "";
-    if (e.type === "unit_started") passed.set(e.entity_id, model);
+    if (e.type === "unit_started") passed.set(e.entity_id, CATALOG.find((r) => r.alias === model || r.pin?.id === model));
     else if (e.type === "session_started" && model !== "" && model !== "unknown") {
-      const p = passed.get(e.entity_id);
-      if (p) pairs.push({ passed: p, actual: bare(model), task: e.entity_id, at: e.ts });
+      const row = passed.get(e.entity_id);
+      // A session from before the row was last checked (or pinned) is one the table's update already saw.
+      if (row && e.ts >= since(row)) pairs.push({ row, actual: bare(model), session: String(e.payload.session ?? e.ts), task: e.entity_id, at: e.ts });
     }
   }
-  const newest = new Map<string, (typeof pairs)[number]>();
-  for (const p of pairs) newest.set(p.passed, p);
+  // Keyed by the catalog row, so starts under the alias and under its pinned id are one line.
+  const newest = new Map<CatalogRow, (typeof pairs)[number]>();
+  for (const p of pairs) newest.set(p.row, p);
   const out: Drift[] = [];
-  for (const last of newest.values()) {
-    const row = CATALOG.find((r) => r.alias === last.passed || r.pin?.id === last.passed);
-    if (!row) continue;
+  for (const [row, last] of newest) {
     const expected = row.pin?.id ?? row.currentId;
     if (last.actual === expected) continue;
     const key = `ANTHROPIC_DEFAULT_${row.alias.toUpperCase()}_MODEL`;
@@ -59,11 +59,17 @@ export function modelDrift(events: readonly Ev[], pins: readonly string[] = []):
       ...(pinned ? { pin: key } : {}),
       task: last.task,
       at: last.at,
-      sessions: pairs.filter((p) => p.passed === last.passed && p.actual === last.actual).length,
+      // A resumed or compacted session writes another session_started under the same id.
+      sessions: new Set(pairs.filter((p) => p.row === row && p.actual === last.actual).map((p) => p.session)).size,
     });
   }
   return out;
 }
+
+const since = (row: CatalogRow) => {
+  const day = row.pin && row.pin.since > row.verified ? row.pin.since : row.verified;
+  return `${day}T00:00:00.000Z`;
+};
 
 const CAUSE: Record<DriftCause, string> = {
   alias_moved: "alias 가 옮겨 갔다",
