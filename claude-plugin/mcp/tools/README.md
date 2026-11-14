@@ -30,7 +30,7 @@ export default {
 - 설명은 한두 문장(도구당 4,096자 상한, 부록 `#mcp`). 판단 기준은 skill 에 쓰고 여기에는 모양만 둔다.
 - 읽기는 tool 로 만들지 않는다: `resources/<name>.ts` 에 `ResourceDef` 를 두면 서버가 같은 방식으로 모은다(현황 `brief` 는 U9).
 
-## tool 16개 (부록 `#mcp`: 행동 9 + land 1 + 기록 6, 결정 160·162·171·195·223)
+## tool 17개 (부록 `#mcp`: 행동 9 + land 1 + 기록 6 + 결정 263 의 `unit_close` 1, 결정 160·162·171·195·223·263)
 
 이 표가 tool 이름의 목록이고 `test/spec-names.test.ts` 가 `tools/*.ts` 와 같은지 본다. tool 을 더하거나 빼면 이 표의 행도 같은 PR 에서 고친다.
 
@@ -52,6 +52,7 @@ export default {
 | `review_record` | 독립 리뷰 판정 한 건을 `review_verdict` 로(결정 111). land 의 판정 경로가 읽는다(결정 158). 리뷰어가 작성자이거나, 부른 세션의 checkout 이 그 PR 의 head(브랜치나 커밋)를 쥐었거나 읽히지 않으면 거부(결정 162). CLI `sangsoe review record` 와 같은 Outcome | `{pr, head_sha, act_on, reviewer, repo?}` | U31 |
 | `evidence_record` | 검증 실행 한 건을 PR 의 현재 head 에 `evidence` 로(결정 171). land 의 `evidence_missing` 이 읽는다. `kind` 는 `test`·`run`·`ui`·`dev`, `not_verified` 는 하나 이상. 기록자가 작성자이거나, head 가 현재 head 가 아니거나, 부른 세션의 checkout 이 그 PR 을 쥐었으면 거부. CLI `sangsoe evidence record` 와 같은 Outcome | `{pr, head_sha, kind, exit_code, not_verified, recorder, repo?, path?, sha256?}` | U36 |
 | `stage_record` | 머지된 PR 이 닿은 단계(`merge`·`dev`·`prod`)를 `stage_recorded` 로(결정 171). `deploys_after` 간선과 흐름 틀의 배포 단계가 기다린다. 머지 전이거나 기록자가 작성자이거나 부른 세션이 그 PR 의 브랜치에 있으면 거부. CLI `sangsoe stage record` 와 같은 Outcome | `{pr, stage, sha, recorder, repo?}` | U36 |
+| `unit_close` | 끝난 단위의 에이전트 터미널 하나를 handle 로 닫는다(결정 263). Orca 를 읽어 Dispatch 가 `succeeded`·`failed`·`cancelled`, 그 터미널이 아직 agent 와 함께 보이고 agent 가 `done`·`idle` 에 `agentWait` 가 `null`, 호출자의 터미널이 아닐 때만 닫고(`unit_closed` 한 줄), 아니면 틀린 조건을 한 줄로 거부한다. 탭·worktree 는 닫지 않는다. CLI 입구는 없다 | `{dispatch}` | U134 |
 
 설계가 셌던 `item_transition` · `priority_set` · `notify` tool 은 만들지 않았다. 상태 전환은 Orca `task-update` 를 그대로 쓰고, 세션에 알리는 것은 Orca `send` 이고, 감지층의 깨움은 코어 `notify` 를 부르는 함수가 보낸다. 다시 볼 조건은 결정 160·162 에 있다.
 

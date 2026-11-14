@@ -697,7 +697,7 @@ store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (1
 
 설치: 버전 PR #107(머지 5a70af24) 에 서명 태그 `v0.1.4-rc.4`, release run 의 smoke 가 `ok tree: … (sangsoe 0.1.4-rc.4)`, pre-release. tap PR 40 은 CodeRabbit 이 상태를 하나도 올리지 않아 `sangsoe land` 가 `checks_missing` 으로 거부했고, 오케스트레이터가 diff 와 asset sha256 을 확인하고 일반 머지했다(65d0a167). `brew upgrade sangsoe-rc` → `sangsoe 0.1.4-rc.4`, `sangsoe install` → `approval waits — fingerprint ap1-9d194835…`, `plugin approve --dry-run` 세 점검 ok, 내용 `75881722…`. 오너가 approve, `sangsoe doctor` 종료 코드 0 과 `orca plugin: local.sangsoe 0.1.4-rc.4, running`.
 
-`install --permissions`: 터미널 없이 부르면 diff(allow 16줄 추가, 지우는 줄 없음)만 보이고 `no terminal to ask on; nothing written` 으로 끝난다. 그 diff 를 오케스트레이터에게 보냈고, 오너가 나중에 직접 돌렸다(백업 `settings.json.sangsoe-backup`). 뒤의 doctor 는 `permissions: 16 of 16`. `land allow` 행은 사라지지 않고 `permissions.allow 2` 로 남는다(이전 규칙과 새 규칙 둘).
+`install --permissions`: 터미널 없이 부르면 diff(allow 16줄 추가, 지우는 줄 없음. 결정 263 뒤로는 17줄)만 보이고 `no terminal to ask on; nothing written` 으로 끝난다. 그 diff 를 오케스트레이터에게 보냈고, 오너가 나중에 직접 돌렸다(백업 `settings.json.sangsoe-backup`). 뒤의 doctor 는 `permissions: 16 of 16`(결정 263 뒤로는 `17 of 17`). `land allow` 행은 사라지지 않고 `permissions.allow 2` 로 남는다(이전 규칙과 새 규칙 둘).
 
 고정물(새로, 둘): A #14 `s6r3/a` → `main`, B #15 `s6r3/b` → `s6r3/a`. 오케스트레이터 Run `run_a86f175dd77a`(리드 항목 i026), 리드 Run `run_60651478dbb8`(i027 · i028, `lead: lead:s6r3`). 리드는 queue 라운드도 `graph sync` 도 돌리지 않았다.
 
