@@ -24,6 +24,7 @@ export { type Host, realHost, treeRoot } from "./install/host.ts";
 export { install, type Outcome, uninstall } from "./install/install.ts";
 export { installPermissions, type Scope, SCOPES } from "./install/permissions.ts";
 export { stageCore, unstageCore } from "./install/stage.ts";
+export { installedTree, SERVER_ENTRY, staleSessions } from "./install/stale-sessions.ts";
 export { VERSION } from "./version.ts";
 export {
   type Exec as ApproveExec,

@@ -18,7 +18,8 @@ import {
 } from "../contract/index.ts";
 import { appendLines, backupPath, isOwnRow, type Line, lastRowSeq, OWN_ROW_SQL, readBackup } from "./backup.ts";
 import { checkLocalFs, checkSqliteVersion, type FsProbe, type StartCheck } from "./checks.ts";
-import { DDL, EDGE_TRIGGERS, SCHEMA_V } from "./schema.ts";
+import { type SampleReads, writeSample } from "./samples.ts";
+import { DDL, EDGE_TRIGGERS, LOAD_SAMPLE_DDL, SCHEMA_V } from "./schema.ts";
 
 export type NewEvent<T extends EventType = EventType> = {
   [K in T]: {
@@ -322,6 +323,10 @@ export class Store {
         this.#db.exec(EDGE_TRIGGERS);
         mark(2, "edge triggers: edge_source_graph, edge_no_cycle");
       }
+      if (v < 3) {
+        this.#db.exec(LOAD_SAMPLE_DDL);
+        mark(3, "load_sample: 24h of resource-round samples");
+      }
     });
   }
 
@@ -462,6 +467,11 @@ export class Store {
       if (this.#backup) appendLines(this.#backup, [{ counter: kind, last: Number(row.last) }]);
       return `${kind}${String(row.last).padStart(3, "0")}`;
     });
+  }
+
+  /** The resource round's load sample at the store clock, older ones pruned in the same transaction (decision 241). */
+  recordLoadSample(s: SampleReads): void {
+    this.#tx(() => writeSample(this.#db, Date.parse(this.#now()), s));
   }
 
   close(): void {

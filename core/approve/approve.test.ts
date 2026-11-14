@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
+import { diskHash } from "../../test/dir-hash.ts";
+import { scratchDir } from "../../test/scratch.ts";
 import { type ApprovePorts, approvePlugin, type ExecResult, type PluginApproved, type ReviewEvidence } from "./approve.ts";
 
 // TODO(U2): swap this hand fake for the shared fake Orca once it lands.
@@ -259,4 +263,50 @@ test("a folder reached through a symlink matches Orca's real-path identity and i
     assert.equal(other.r.checks.find((c) => c.name === "target_is_sangsoe")?.ok, false, identity);
     assert.deepEqual(other.enables(), [], identity);
   }
+});
+
+// Real folders and an inspect that hashes what is on disk, `.orca/` included, as Orca's does.
+function onDisk(edit?: (installed: string) => void) {
+  const root = scratchDir("sangsoe-u128-approve-");
+  const reviewed = join(root, "reviewed", "orca-plugin");
+  const installed = join(root, "installed", "orca-plugin");
+  for (const d of [reviewed, installed]) {
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, "orca-plugin.json"), '{"id":"sangsoe"}');
+    writeFileSync(join(d, "main.ts"), "export {};");
+  }
+  // What `orca plugin dev load` writes into the installed folder after install.
+  mkdirSync(join(installed, ".orca", "types", "orca"), { recursive: true });
+  writeFileSync(join(installed, ".orca", ".gitignore"), "*");
+  writeFileSync(join(installed, ".orca", "types", "orca", "index.d.ts"), "declare const orca: unknown;");
+  edit?.(installed);
+  const f = fake(world({ reload: needsApproval({ contentIdentity: `dev:${installed}` }) }));
+  const ports: ApprovePorts = {
+    ...f.ports,
+    async exec(cmd, args) {
+      if (cmd === "orca" && args[1] === "inspect") {
+        const h = diskHash(args[2] ?? "");
+        return h ? json({ ok: true, result: { contentHash: h } }) : json({ ok: false }, 1);
+      }
+      return f.ports.exec(cmd, args);
+    },
+    fetchPluginTree: async () => ({ dir: reviewed, dispose: async () => {} }),
+  };
+  return { ...f, run: () => approvePlugin({ dir: installed, commit: SHA, staged: false, dryRun: false }, ports) };
+}
+
+test("Orca's own .orca/ in the installed folder is not plugin content: approve enables (U128)", async () => {
+  const w = onDisk();
+  const r = await w.run();
+  assert.equal(r.ok, true, `${r.note} ${JSON.stringify(r.checks)}`);
+  assert.equal(r.enabled, true);
+  assert.equal(w.enables().length, 1);
+});
+
+test("an edit outside .orca/ is still refused when .orca/ is there too (U128)", async () => {
+  const w = onDisk((installed) => writeFileSync(join(installed, "main.ts"), "export const edited = 1;"));
+  const r = await w.run();
+  assert.equal(r.ok, false);
+  assert.equal(r.checks.find((c) => c.name === "folder_is_reviewed_build")?.ok, false, JSON.stringify(r.checks));
+  assert.deepEqual(w.enables(), []);
 });

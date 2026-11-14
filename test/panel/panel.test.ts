@@ -136,7 +136,7 @@ test("PN3: status bar B reads the same numbers as sangsoe todo and the brief's t
   const md = renderMarkdown(m, { maxWidth: 78 });
   assert.ok(md.includes(`🚧 막힌 것 ${m.summary.blocked}건`) && md.includes(`🔄 진행 중 ${m.summary.doing}건`));
   assert.ok(renderTodo(m).includes(`결정 ${m.todo.decisions}`));
-  assert.ok(renderStage(view({})).includes(`내가 할 일 <span>${m.todo.total}</span>`));
+  assert.ok(renderStage(view({})).includes(`내가 할 일 ${m.todo.total} (결정 ${m.todo.decisions} + 할 일 ${m.todo.other})</h1>`));
 
   const huge = statusBarItem({ ...m, summary: { ...m.summary, blocked: 99999, doing: 99999 }, todo: { ...m.todo, decisions: 99999 } });
   assert.ok(huge.text.length <= STATUS_TEXT_MAX, huge.text);
