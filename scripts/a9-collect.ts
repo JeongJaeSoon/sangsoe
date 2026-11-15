@@ -117,6 +117,12 @@ export function collect(sent: Send[], probeFiles: string[]): Row[] {
       rows.push({ ...base, outcome: "duplicate", latencyS: null });
       continue;
     }
+    // Sent while the session was mid-`check`: one batch carried both messages, so the id was read inside the open turn.
+    const readAt = hits[0]?.ts ?? s.sentAt;
+    if (turn && readAt <= turn.end) {
+      rows.push({ ...base, outcome: "woken", latencyS: (readAt - s.sentAt) / 1000 });
+      continue;
+    }
     const from = kind === "mid-turn" && turn ? turn.end : s.sentAt;
     const act = lines.find((l) => l.role === "assistant" && l.toolUse && l.ts >= from);
     if (!act) {

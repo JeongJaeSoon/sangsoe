@@ -87,6 +87,15 @@ test("send inside an open turn is mid-turn and is timed from the turn end", () =
   });
 });
 
+test("a mid-turn send read in the same batch as the turn's own message is woken at the read, not at a later call", () => {
+  withFiles([[prompt(0), tool(3), result(6, "msg_m1 msg_m2"), done(12), tool(2400)]], (p) => {
+    const r = one(collect([sent("msg_m2", 5)], p));
+    assert.equal(r.kind, "mid-turn");
+    assert.equal(r.outcome, "woken");
+    assert.equal(r.latencyS, 1);
+  });
+});
+
 test("two transcript files (a compaction split) are joined in time order", () => {
   withFiles([[wake(5), done(6)], [tool(9), result(10, "msg_m1"), done(11)]], (p) => {
     const r = one(collect([sent("msg_m1", 4)], p));
