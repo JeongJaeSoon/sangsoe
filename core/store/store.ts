@@ -211,6 +211,8 @@ export class Store {
 
   /** Runs the start checks, then opens (creating if needed) the database. Refuses with StartRefused. */
   static open(opts: OpenOptions = {}): Store {
+    // A bare path has no `path` property: it would read as "no options" and open the real store.
+    if (typeof opts !== "object" || opts === null) throw new TypeError("Store.open takes options ({ path } or { home }), not a bare path");
     const path = opts.path ?? defaultDbPath(opts.home);
     const clock = opts.clock ?? systemClock;
     const checks: StartCheck[] = [];
