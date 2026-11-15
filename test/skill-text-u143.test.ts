@@ -25,12 +25,14 @@ test("orchestrator.md has a start step that makes the session hold its own Run: 
   }
   // The SessionStart hook tells any non-worker whose binding is gone to `run-use <earlier Run>`; creating a new Run strands the leads.
   has(s, "run-use <id>", "orchestrator.md 시작할 때");
+  has(s, "run-use` 가 실패하면", "orchestrator.md 시작할 때");
   assert.ok(s.indexOf("run-use <id>") < s.indexOf("run-create"), "the restore case comes before run-create");
 });
 
 test("lead.md's first-wake Run step re-holds the Run SessionStart names before it creates one", () => {
   const s = section(read("claude-plugin/agents/lead.md"), "첫 깨움");
   has(s, "run-use <id>", "lead.md 첫 깨움");
+  has(s, "run-use` 가 실패하면", "lead.md 첫 깨움");
   assert.ok(s.indexOf("run-use <id>") < s.indexOf("run-create"), "the restore case comes before run-create");
 });
 
