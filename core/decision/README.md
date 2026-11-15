@@ -9,5 +9,5 @@
 - `moot.ts` — `decisionMoot`: 원인이 사라진 결정을 닫는다(대기자 Task 가 모두 닫힘·취소, 또는 PR 닫힘). 운반 Task 까지 대기자가 하나도 없는 깨진 기록(결정 219)은 Orca 를 부르지 않고 `decision_closed` 한 줄로 닫는다(결정 231). 부르는 쪽은 queue-monitor 이고 MCP tool 은 없다. `sangsoe decision moot` 가 입구이고, 다른 Run 은 넘겨받은 게이트를 이것으로 푼다.
 - `release.ts` — 답·`moot` 가 같이 쓰는 풀기: 부른 쪽 Run 의 열린 게이트를 풀고 대기자마다 `notify` 한 번. 닫힌 Task 의 게이트는 부르지 않고 그 Run 에 알리며(91④(ii)), 워커가 아직 없는 Task 는 시작 절차가 첫 프롬프트에 싣는다(91④(i)).
 - `held.ts` — `waiterReading`: 결정 84③. 게이트가 풀린 Task 를 워커가 쥐고 있으면 🔄 로 읽는다. `item_status` 뷰(U9)가 이 함수를 부른다.
-- `waiters.ts` — 결정 하나의 대기자(Task · 게이트 · Run · 결정 운반 여부)를 event 에서 읽는다.
+- `waiters.ts` — 결정 하나의 대기자(Task · 게이트 · Run · 결정 운반 여부)를 event 에서 읽는다. `owed` 는 닫힌 결정이 대기자 하나에게 아직 빚진 것(풀 게이트, 알릴 워커나 Run)을 읽는 한 함수이고, `release` 와 Run 을 쥔 세션의 hook(`core/detect/queue/own-run.ts`, 결정 274)이 같이 쓴다.
 - `deps.ts` — CLI·MCP 가 쓰는 기본 의존(sqlite store + Orca 어댑터).

@@ -1,7 +1,7 @@
 import type { NotifiedKey } from "../contract/index.ts";
 import { notify } from "../notify/notify.ts";
 import { type CoreDeps, done, type Result, refuse } from "../notify/result.ts";
-import { type DecisionState, isClosedTask, isOpenGate, orcaReads, type Waiter } from "./waiters.ts";
+import { type DecisionState, isOpenGate, orcaReads, owed, type Waiter } from "./waiters.ts";
 
 export interface Released {
   readonly resolved: readonly string[];
@@ -76,8 +76,8 @@ async function releaseOne(
   if (!task.ok) return task;
   const gate = w.gate ? await reads.gate(w.run, w.gate) : done(undefined);
   if (!gate.ok) return gate;
-  const closed = task.value !== undefined && isClosedTask(task.value);
-  const open = !closed && w.gate && gate.value !== undefined && isOpenGate(gate.value) ? w.gate : null;
+  const due = owed(w, task.value, gate.value !== undefined && isOpenGate(gate.value));
+  const open = due.gate;
 
   if (open && w.run !== input.callerRun) {
     const key = input.keyFor(w.task);
@@ -98,13 +98,12 @@ async function releaseOne(
     out.resolved.push(open);
   }
 
-  if (w.carrier || !task.value) return done(null);
-  const dispatch = task.value.dispatchId;
-  if (!closed && !dispatch) return done(null);
+  if (!due.tell) return done(null);
+  const dispatch = task.value?.dispatchId;
   const r = await notify(deps, {
     key: input.keyFor(w.task),
-    to: closed ? "lead" : "worker",
-    chain: closed || !dispatch ? { leadRun: w.run } : { dispatch, leadRun: w.run },
+    to: due.tell === "run" ? "lead" : "worker",
+    chain: due.tell === "worker" && dispatch ? { dispatch, leadRun: w.run } : { leadRun: w.run },
     subject: input.subject,
     body: input.resolution,
     // Not decision_gate: Orca takes that type (and escalation) only from the Dispatch's own process (decision 197).
