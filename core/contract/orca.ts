@@ -172,6 +172,9 @@ export type TaskRow = {
   result?: string;
 };
 
+/** A cancellation's `result`: `cancelled`, alone or with a reason after it (`cancelled: superseded by #12`). */
+export const isCancelledResult = (result: unknown): boolean => typeof result === "string" && /^cancelled\b/.test(result);
+
 export type GateRow = {
   id: string;
   taskId?: string;

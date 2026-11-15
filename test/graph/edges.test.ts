@@ -42,6 +42,9 @@ test("snapshot rows: deps as Orca prints them (a JSON string), run_id, a cancel 
       { id: "t1", status: "pending", title: "a", deps: '["t0"]', run_id: "run_x" },
       { id: "t2", status: "failed", title: "b", deps: [], result: "cancelled" },
       { id: "t3", status: "paused", title: "c" },
+      // Decision 288: a reason after the word is still a cancellation; a longer word is not.
+      { id: "t4", status: "failed", title: "d", result: "cancelled: superseded by acme/api#12" },
+      { id: "t5", status: "failed", title: "e", result: "cancelledish" },
     ],
     "run_y",
   );
@@ -49,6 +52,8 @@ test("snapshot rows: deps as Orca prints them (a JSON string), run_id, a cancel 
     { id: "t1", runId: "run_x", status: "pending", deps: ["t0"] },
     { id: "t2", runId: "run_y", status: "failed", deps: [], result: "cancelled" },
     { id: "t3", runId: "run_y", status: "blocked", deps: [] },
+    { id: "t4", runId: "run_y", status: "failed", deps: [], result: "cancelled" },
+    { id: "t5", runId: "run_y", status: "failed", deps: [], result: "cancelledish" },
   ]);
   assert.throws(() => snapshotTasks([{ id: "t", status: "pending", title: "x", deps: '{"a":1}' }], "r"), /string array/);
 });

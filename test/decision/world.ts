@@ -121,6 +121,9 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
       if (g?.status !== "pending") return err("gate_not_pending");
       g.status = "resolved";
       g.resolution = flag(args, "resolution") ?? "";
+      // The Task a gate blocked reads ready again once its last gate is resolved (0.1.10 release smoke, Orca 1.4.259).
+      const t = taskMap.get(g.taskId);
+      if (t?.status === "blocked" && ![...gates.values()].some((x) => x.taskId === g.taskId && x.status === "pending")) t.status = "pending";
       return ok({ gate: { id: g.id, status: g.status } });
     },
     "orchestration-gate-list": (args: readonly string[]) => {

@@ -767,3 +767,42 @@ store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (1
 ### 릴리스 smoke 가 다시 잴 것
 
 3번(처음부터 `watch.repos` 에 넣고 `pr_opened` → `pr_merged` → Run 을 쥔 세션의 hook 이 닫음, 결정 275), 6번과 8번(결정 274: 패널의 답이 pending 으로 남고 Run 을 쥔 세션의 다음 프롬프트에서 풀림, 준비됨 한 줄), 5번의 한 줄(결정 280: `orca terminal send` 로 넣은 줄에 `owner_action` 이 없음). P3 의 항목은 아니지만 결정 281 ⑦ 이 넘긴 것도 같은 때 본다: 실제 패널의 PC 부하 줄(실제 store 의 표본).
+
+## 릴리스 smoke (2026-11-16 JST, 설치본 0.1.10, 결정 287)
+
+결정 272 ③ 대로, 태그 뒤에 설치한 0.1.10 에서 P3 가 넘긴 넷(3 · 6 · 8번과 5번의 한 줄)과 실제 패널의 PC 부하 줄을 쟀다. 고정물은 같은 smoke 저장소다. 시각은 UTC 다(2026-11-15 19시대).
+
+### 환경
+
+- sangsoe 0.1.10(brew), `sangsoe doctor` 종료 코드 0 · ok 22행 · notice 1(model-table), Orca 1.4.259, Claude Code 2.1.325. plugin 은 설치 뒤에 다시 승인했다(manifest 에 hook 한 줄, 결정 280).
+- 네 칸(전환 조건 I2): 코어 0.1.10(`sangsoe --version`) · Claude Code plugin 0.1.10 · Orca plugin 0.1.10(`orca plugin list` 의 running) · MCP server 는 설치된 트리의 것. 설치 전에 뜬 세션은 다시 시작할 때까지 옛 server 를 쓴다.
+- smoke 저장소는 처음부터 `watch.repos` 에 GitHub 표기 그대로 있었다(`doctor` 의 `watch-repos` ok).
+- smoke 오케스트레이터는 smoke 저장소의 worktree 에서 `--agent sangsoe:orchestrator` 로 새로 뜬 세션이다. 프롬프트는 다른 세션이 `orca terminal send` 로 넣었다: 5번의 한 줄이 재는 길이다. 패널을 누르는 걸음은 좌표 클릭으로 했다.
+
+### 항목별 결과
+
+| # | 항목 | 결과 | 잰 것 |
+|---|---|---|---|
+| 3 | 실제 PR 에 land, pr-monitor 실제 라운드 | 일부 FAIL → 결정 283 | 감지기 쪽은 됐다: 19:31:42 `pr_opened`, 19:33:42 Task 가 적힌 `pr_opened`, 19:34:25 오케스트레이터가 head 를 맞춰 머지(smoke 저장소 #17, 결정 226), 19:35:41 `pr_merged`. 항목 쪽은 안 됐다: 워커의 `land` 가 `evidence_missing` 뒤에 `checks_missing` 으로 거부됐고, 워커가 worker_done 을 failed 로 보내 Task 가 failed 로 닫혔다. 머지 뒤의 프롬프트에 줄이 없었고, 브리프의 그 줄은 🚧 에 PR · 까닭 · 기다리는 쪽이 비어 있었다. 같은 날 plugin 의 pr 라운드는 머지된 다른 PR 둘의 Task 를, 살아 있는 Dispatch 가 쥐고 있어 "left open" 으로 두었다(결정 275) |
+| 5 | 밀어 넣은 줄(한 줄만) | 일부 FAIL → 결정 282 | 짧은 줄은 `prompt_driven{driving}` 만 있고 `owner_action` 이 없었다. 긴 프롬프트 둘은 `prompt_driven{driving}` 뒤에 `owner_action{origin chat}` 이 적혔고(적힌 글이 `<pasted_content id="…">` 로 시작한다), 하나는 `waiting_released{by owner}` 를 냈다 |
+| 6 | queue 라운드 non-dry | PASS | 19:07:19 plugin 타이머의 queue 라운드: planned 0 · written 0 · acts 0 · failed 0(P3 은 acts 113 · failed 113). 19:22 Run 을 쥔 세션의 프롬프트에 한 줄: `sangsoe: Run … — 🟢 준비됨 1 · 📅 기한 0 · ⚠️ trigger 불명 0 (새로 1건). 목록은 resource ready 와 brief 로 읽는다. 닫힌 결정 d003 의 게이트 1개를 풀었다.` hook 이 `item_ready` 와 `notified` 를 썼다 |
+| 8 | 패널 버튼의 답 | PASS | 19:21:05 "추천대로 답": `owner_action{origin button}` → `decision_answered{linked_by button}` → `decision_closed`. 붉은 띠는 없었고 패널은 "답을 기록했다. 그 Run 의 세션이 다음에 깰 때 전달한다" 를 보였다. 19:22 그 Run 의 세션의 다음 프롬프트가 게이트를 풀었고(`gate-list` 에서 resolved), 오너 할 일의 그 줄이 사라졌다 |
+| — | 실제 패널의 PC 부하 줄(결정 281 ⑦) | PASS | 세 줄(CPU · 메모리 사용 · 디스크 여유)에 선과 값(`0.77 / 코어` · `29%` · `107 GB`). `6시간`/`24시간` 스위치가 선을 바꿨다. 잘림 · 겹침 · 가로 스크롤 없음 |
+
+### 이 실행이 낸 것
+
+| 본 것 | 어디로 갔나 |
+|---|---|
+| 밀어 넣은 긴 글은 Claude Code 가 붙여 넣기 틀에 싸서 hook 에 넘긴다 | 결정 282 |
+| 워커 세션에서 서브에이전트가 넘긴 결과가 `owner_action` 으로 적혔다 | 결정 282 |
+| CI 없는 저장소의 `checks_missing` 뒤에 워커가 failed 로 보고했고, 머지가 그 Task 를 닫지 못했다 | 결정 283 |
+| 게이트를 푼 프롬프트의 수가 풀기 전의 것이었다: 막혀 있던 항목이 한 프롬프트 늦게 세어졌다 | 결정 284 |
+| 24시간 폭에서 `HH:MM부터` 가 선의 시작과 떨어져 있었다 | 결정 285 |
+| 패널의 버튼과 접기가 접근성 누르기에 답하지 않았다(좌표 클릭은 됐다) | 적기만 했다(결정 285 ⑤). 누르는 걸음은 좌표 클릭이다 |
+| `[gate:delegate]` 가 smoke 오케스트레이터를 네 번 막았다: 읽기 전용 조회 둘, 파일 본문 보내기, 셸 heredoc 으로 파일 쓰기 | 결정 286(마지막 것은 막는 것이 맞다) |
+| 쉬는 세션의 Notification 이 `waiting_human` 을 세 번 열었다 | 0.1.11 의 다음 PR |
+| resource `ready` 는 Run 에 묶이지 않는다: 수 한 줄만 그 Run 의 것이다 | 남김(결정 287 ④) |
+
+### 0.1.11 의 릴리스 smoke 가 다시 잴 것
+
+3번: 워커가 `READY-WAIT: checks_missing` 줄로 끝내는지. 실패로 끝냈다면 머지 뒤에 그 Task 가 닫히는지, 실제 Orca 가 failed 인 Task 의 `task-update --status completed` 를 받는지(결정 283 ⑥). 5번의 한 줄: 여러 문단의 긴 프롬프트를 밀어 넣고 `owner_action` 이 없는지(결정 282). 게이트를 푼 프롬프트의 수에 그 항목이 드는지(결정 284). 패널의 시작 시각이 선의 시작에 있는지(결정 285). 패널을 누르는 걸음은 좌표 클릭으로 한다.

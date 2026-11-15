@@ -77,6 +77,13 @@ for (const [name, where] of [
   });
 }
 
+test("283: a worker whose land is refused for want of any check on a repository without CI ends with the wait line, not with failed", () => {
+  const land = section(skill("deliver-ticket"), "6. land 와 머지 대기 보고");
+  for (const want of ["`READY-WAIT: checks_missing`", "실패로도 보고하지 않는다", "결정 226", "`[gate:self-land]`"]) {
+    assert.ok(land.includes(want), `deliver-ticket's land section lacks: ${want}`);
+  }
+});
+
 test("orchestrate's judge subagent line points at write-brief's subagent prompt rules", () => {
   const line = skill("orchestrate").split("\n").find((l) => l.includes("subagents.judge"));
   assert.ok(line?.includes("서브에이전트 지시문"), "the subagents.judge line does not point at the subagent prompt rules");

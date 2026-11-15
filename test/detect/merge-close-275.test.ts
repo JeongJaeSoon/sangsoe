@@ -96,6 +96,19 @@ test("275: a Task a live Dispatch holds is left open; it is closed on the first 
   assert.deepEqual(ended.lines, [`${COUNTS} 머지된 PR 의 Task 를 닫았다: ${REF}.`]);
 });
 
+test("283: the same prompt closes a Task its worker reported failed, and leaves one that was cancelled with a reason", async () => {
+  const w = world({ run: RUN, status: "failed" });
+  const first = await w.prompt();
+  assert.deepEqual(first.calls, ["task-list", `task-update ${T} completed`, "task-list", "gate-list"]);
+  assert.deepEqual(first.lines, [`${COUNTS} 머지된 PR 의 Task 를 닫았다: ${REF}.`]);
+  assert.deepEqual([w.tasks[0]?.status, w.tasks[0]?.result], ["completed", `merged ${REF} as ${SHA}`]);
+
+  const gone = world({ run: RUN, status: "failed", result: "cancelled: superseded by another item" });
+  const p = await gone.prompt();
+  assert.deepEqual([p.calls, p.lines], [["task-list", "gate-list"], []]);
+  assert.equal(gone.tasks[0]?.status, "failed");
+});
+
 test("275: a merged PR whose Task is another Run's is that Run's to close", async () => {
   const w = world({ run: OTHER, status: "blocked" });
   const p = await w.prompt();

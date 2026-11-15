@@ -96,6 +96,12 @@
 {"expect":"deny","gate":"delegate","note":"orchestrator runs tests","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"npm test"}}
 {"expect":"deny","gate":"delegate","note":"orchestrator chains coordination with work","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca worktree list && docker compose up -d"}}
 {"expect":"deny","gate":"delegate","note":"orchestrator reads another server's resource","agent_type":"sangsoe:orchestrator","tool_name":"ReadMcpResourceTool","tool_input":{"server":"plugin:other:docs","uri":"docs://handbook"}}
+{"expect":"deny","gate":"delegate","note":"286: orchestrator writes a brief with a shell heredoc","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"mkdir -p /tmp/s && cat > /tmp/s/brief.md <<'EOF'\nBrief for the worker\nEOF"}}
+{"expect":"deny","gate":"delegate","note":"286: cat with no file argument","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"cat > /tmp/s/brief.md <<'EOF'\nBrief for the worker\nEOF"}}
+{"expect":"deny","gate":"delegate","note":"286: --help under an Orca team shim is passed on, not printed","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca claude-teams run --help"}}
+{"expect":"deny","gate":"delegate","note":"286: orchestrator cats a source file","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"cat /work/acme/src/app.ts"}}
+{"expect":"deny","gate":"delegate","note":"286: a body substitution that reads a source file","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to run:run_1 --type status --subject s --body \"$(cat /work/acme/src/app.ts)\""}}
+{"expect":"deny","gate":"delegate","note":"286: an orca command that changes a repo","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca repo add --path /work/acme"}}
 {"expect":"pass","note":"orchestrator reads the brief resource (decision 89)","agent_type":"sangsoe:orchestrator","tool_name":"ReadMcpResourceTool","tool_input":{"server":"plugin:sangsoe:sangsoe","uri":"sangsoe://brief"}}
 {"expect":"pass","note":"orchestrator lists sangsoe's resources","agent_type":"sangsoe:orchestrator","tool_name":"ListMcpResourcesTool","tool_input":{"server":"plugin:sangsoe:sangsoe"}}
 {"expect":"pass","note":"orchestrator lists resources to learn sangsoe's server name","agent_type":"sangsoe:orchestrator","tool_name":"ListMcpResourcesTool","tool_input":{}}
@@ -132,6 +138,13 @@
 {"expect":"pass","note":"orchestrator checks its inbox","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca orchestration check --wait --timeout-ms 600000"}}
 {"expect":"pass","note":"orchestrator writes a message body","agent_type":"sangsoe:orchestrator","tool_name":"Write","tool_input":{"file_path":"/work/state/body.md","content":"hello"}}
 {"expect":"pass","note":"orchestrator sends the body file","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to run:run_1 --type status --subject s --body-file /work/state/body.md"}}
+{"expect":"pass","note":"286: orchestrator sends a body file through cat","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca orchestration send --to dispatch:ctx_1 --run run_1 --type status --subject \"Brief for i179\" --body \"$(cat /work/state/brief-A.md)\""}}
+{"expect":"pass","note":"286: a redirection is not read, for cat as for head before it (a stated limit)","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"cat /work/state/brief-A.md > /work/state/brief-B.md"}}
+{"expect":"pass","note":"286: orchestrator lists repos through head","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca repo list 2>&1 | head -20"}}
+{"expect":"pass","note":"286: orchestrator greps a skill guide","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca skills get orchestration 2>&1 | grep -iE -A3 'send|reply|--to' | head -60"}}
+{"expect":"pass","note":"286: orchestrator reads a command's help","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca repo add --help"}}
+{"expect":"pass","note":"286: orchestrator reads its own worktree","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca worktree current --json"}}
+{"expect":"pass","note":"286: orchestrator reads the Orca version","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca --version"}}
 {"expect":"pass","note":"orchestrator starts a lead","agent_type":"sangsoe:orchestrator","tool_name":"mcp__plugin_sangsoe_sangsoe__start_unit","tool_input":{"role":"orchestrator","worktreeId":"wt0","runId":"run_0","childRole":"lead","spec":"/goal run the program"}}
 {"expect":"pass","note":"orchestrator delegates","agent_type":"sangsoe:orchestrator","tool_name":"Agent","tool_input":{"prompt":"look into it"}}
 {"expect":"pass","note":"orchestrator's subagent edits","agent_type":"sangsoe:orchestrator","agent_id":"sub1","tool_name":"Edit","tool_input":{"file_path":"/work/acme/src/app.ts","old_string":"a","new_string":"b"}}

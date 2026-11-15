@@ -386,8 +386,9 @@ button.link:disabled { color: var(--muted); cursor: default; }
 /* Decisions 250 · 281: a row's line is a quiet stroke that stays inside the row's height. */
 .sp { display: block; width: 100%; height: 16px; }
 .sp-line { fill: none; stroke: var(--ink-2); stroke-width: 1.25px; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.sp-none, .sp-from span { color: var(--muted); font-size: var(--text-xs); }
-.sp-from { height: 16px; }
+.sp-none, .sp-at { color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
+/* The note sits under the point where the lines begin, and keeps a gap from the load line below it. */
+.sp-from { height: 16px; margin-bottom: var(--s2); }
 .ep.t-bad { color: var(--bad); }
 .unread { color: var(--bad); }
 /* One line per row at every width: a long name or reason is cut, its whole text in the cell's title. */

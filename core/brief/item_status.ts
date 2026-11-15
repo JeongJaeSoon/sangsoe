@@ -1,5 +1,6 @@
 import type { ItemReading, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, WaitsOn } from "../contract/index.ts";
 import { type Facts, foldFacts } from "../graph/facts.ts";
+import { doneBlockers } from "../graph/flow.ts";
 import { itemRef, prNode } from "../graph/nodes.ts";
 import { mergedItemMark } from "../verify/evidence.ts";
 import { type Hold, holdOf, retiredOf } from "../graph/ready.ts";
@@ -91,6 +92,18 @@ function stateOf(t: BriefTask, hold: Hold | null, held: ReturnType<typeof waiter
   return ready ? "ready" : "planned";
 }
 
+/**
+ * The 🚧 row of a failed Task: the first line of the report its worker left. Once its PR has merged
+ * the row says what `closeMerged` will do with it: `blockers` is the list that close reads. Whether
+ * the Task's worker still runs is not in this reading, so the line names that condition.
+ */
+function failedReason(t: BriefTask, merged: boolean, blockers: readonly string[]): string {
+  if (merged && blockers.length > 0) return `PR 은 머지됨, Task 는 남는다: ${blockers[0]}`;
+  if (merged) return "PR 은 머지됨: 워커가 끝나 있으면 이 Run 을 쥔 세션의 다음 프롬프트가 Task 를 닫는다";
+  const line = (t.report ?? "").split("\n")[0]?.trim() ?? "";
+  return line ? `실패로 닫힘: ${line}` : "실패로 닫힘";
+}
+
 /** Items are Orca Tasks with an item_created row; a row whose Task Orca no longer lists is left out. */
 export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemFacts[] {
   const extra = new Map<string, Record<string, unknown>>();
@@ -98,6 +111,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
   const transition = new Map<string, StoredEvent>();
   const closedAt = new Map<string, string>();
   const mergedAt = new Map<string, string>();
+  const mergedPr = new Map<string, string>();
   const prio = new Map<string, Priority>();
   const prTask = new Map<string, string>();
   const prOpen = new Map<string, string>();
@@ -137,7 +151,10 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     } else if (e.type === "pr_merged" || e.type === "pr_closed") {
       const t = prTask.get(String(p.pr));
       if (t && prOpen.get(t) === p.pr) prOpen.delete(t);
-      if (t && e.type === "pr_merged") mergedAt.set(t, e.ts);
+      if (t && e.type === "pr_merged") {
+        mergedAt.set(t, e.ts);
+        mergedPr.set(t, String(p.pr));
+      }
     } else if (countsAsEvidence(e) && e.entity === "task" && e.entity_id) evidence.add(e.entity_id);
     // Decision 236: `evidence record` names the PR in `subject` and no entity; the PR's item reads it.
     else if (countsAsEvidence(e) && e.subject && p.exit_code === 0) prEvidence.add(e.subject.toLowerCase());
@@ -187,6 +204,9 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
     const state: ItemReading = prRead === "done" && verifiedAt === null ? "pending_verify" : prRead;
     const p = hold?.by === "pr" ? hold : null;
     const prWait = p !== null;
+    // Decision 283: a Task closed as failed (not a cancellation) says why and keeps its merged PR in the row.
+    const failed = t.status === "failed" && state === "blocked";
+    const landed = failed ? (mergedPr.get(t.id) ?? null) : null;
     const last = moved.get(t.id) ?? 0;
     // Decision 201: review comments are answered when the author's reply is newer, by GitHub's time,
     // than every comment since the last move; a comment without that time is never taken as answered.
@@ -211,7 +231,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
         ? "lead"
         : prWait
           ? "reviewer"
-          : ((openDecisions.length > 0 || undelivered.length > 0 ? "owner" : (str(x.waits_on) as WaitsOn | null)) ?? null);
+          : ((openDecisions.length > 0 || undelivered.length > 0 ? "owner" : (str(x.waits_on) as WaitsOn | null)) ?? (failed ? "lead" : null));
     out.push({
       task: t.id,
       alias: String(c.payload.alias),
@@ -226,9 +246,9 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       whyOwner: str(x.why_owner),
       cmdHint: str(x.cmd_hint),
       reviewTrigger: str(x.review_trigger),
-      lastReason: str(transition.get(t.id)?.payload.reason),
+      lastReason: failed ? failedReason(t, landed !== null, landed !== null ? doneBlockers(input, t.id) : []) : str(transition.get(t.id)?.payload.reason),
       assignee: t.assignee ?? null,
-      pr: prOpen.get(t.id) ?? (prWait ? (p?.prs[0] ?? null) : null),
+      pr: prOpen.get(t.id) ?? (prWait ? (p?.prs[0] ?? null) : null) ?? landed,
       openDecisions,
       undelivered,
       alarms: state === "done" || state === "cancelled" ? [] : standing,

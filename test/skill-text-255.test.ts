@@ -102,6 +102,8 @@ test("the refusal paragraph lets the orchestrator hand work down after [gate:del
   has(p, "(4) 사람이 거부하지 않은 행위를 브리프나 skill 이 그 일에 이미 정한 길", "거부 문단");
   has(p, "`[gate:delegate]` 에 막힌 오케스트레이터가 그 일을 워커나 서브에이전트에게 넘기는 것은 다른 길이 아니다", "거부 문단");
   has(read("core/gates/delegate.ts"), "Hand it down", "delegate gate");
+  // Decision 286: the hint named `--body-file`, which Orca's send does not take.
+  has(read("core/gates/delegate.ts"), 'sent as --body "$(cat <file>.md)"', "delegate gate");
   has(read("core/gates/self-land.ts"), "Send it as `--type worker_done`", "self-land gate");
   has(p, "`merge_ready` 대신 worker_done", "거부 문단");
 });

@@ -2,8 +2,8 @@ import { option, parse, unwrap } from "./shell.ts";
 import type { Gate, ToolCall } from "./types.ts";
 
 // Appendix #gates [gate:delegate]: the orchestrator's own turn holds only coordination. Its subagents and
-// the workers it starts are not this gate's business. Writing a long message body to a file and sending
-// it is a normal path and stays open (PR #135).
+// the workers it starts are not this gate's business. Writing a long message body to a file with the
+// Write tool and sending it is a normal path and stays open (PR #135, decision 286).
 
 const TOOLS = new Set([
   "Agent",
@@ -26,18 +26,29 @@ const READABLE = /\.(md|txt|json|jsonl|log)$/;
 const WRITABLE = /\.(md|txt)$/;
 
 const SUB: Record<string, RegExp> = {
-  orca: /^(orchestration|worktree (list|show|ps)|terminal (list|read|show)|skills (get|list))\b/,
+  orca: /^(orchestration|worktree (list|show|ps|current)|terminal (list|read|show)|skills (get|list)|repo (list|show)|status)\b/,
   gh: /^(pr (view|list|checks|diff|status)|run (view|list)|issue (view|list)|search|api)\b/,
   git: /^(status|log|show|diff|rev-parse|branch|worktree list|ls-remote)\b/,
   // Decision 256: the wait a [gate:pressure] refusal names; the orchestrator is the one calling start_unit.
   sangsoe: /^pressure wait$/,
 };
-const PLAIN = new Set(["cd", "pwd", "jq", "head", "tail", "wc", "sort", "uniq", "date", "true"]);
+const PLAIN = new Set(["cd", "pwd", "jq", "head", "tail", "wc", "sort", "uniq", "grep", "date", "true"]);
+const SHIMS = new Set(["claude-teams", "agent-teams-tmux"]);
 
 function coordination(argv: readonly string[]): boolean {
   const [head, ...rest] = argv;
   if (!head) return true;
   if (PLAIN.has(head)) return true;
+  // Decision 286: `cat` of files the Read tool would also give it, which is how a body file is sent
+  // (`--body "$(cat brief.md)"`). With no file it only copies stdin somewhere. Where the output goes
+  // is not read here: the parser drops redirections, for `cat` as for `head` and the rest of PLAIN.
+  if (head === "cat") {
+    const files = rest.filter((a) => !a.startsWith("-"));
+    return files.length > 0 && files.every((f) => READABLE.test(f));
+  }
+  // Help and version print and act on nothing, except under Orca's two team shims, which hand
+  // their arguments on to another program (read from the 1.4.259 CLI).
+  if (head === "orca" && !SHIMS.has(rest[0] ?? "") && rest.some((a) => a === "--help" || a === "--version")) return true;
   const sub = SUB[head];
   if (!sub) return false;
   const words = rest.filter((a) => !a.startsWith("-")).join(" ");
@@ -76,6 +87,6 @@ export const delegateGate: Gate = (call, facts) => {
     reason:
       `[gate:delegate] The orchestrator coordinates and does not do the work itself: this ${call.tool} call is outside ` +
       "coordination. Hand it down: start a worker with the MCP tool start_unit, or give it to a subagent (Agent). " +
-      "A long message goes in a .md file sent with --body-file.",
+      'A long message goes in a .md file written with the Write tool and sent as --body "$(cat <file>.md)".',
   };
 };
