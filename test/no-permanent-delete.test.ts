@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 // The scan finds four spellings: a node:fs delete, a `rm` word handed to an exec (docker's), a call
 // of Orca's `worktree rm`, and an SQL `DELETE FROM`. A new removal in one of those spellings fails
 // this test until it is moved to the trash or listed with its reason. Another spelling (a shell
-// string, another CLI's delete command) is not seen: add its pattern here with it.
+// string, another CLI's delete command, an SQL UPDATE that blanks a value as the owner's redaction
+// in core/store/store.ts does) is not seen: add its pattern here with it.
 // Not counted, because they delete no data: closing a terminal, and unregistering a plugin at
 // uninstall (the files it registered are a copy of the release).
 const ROOT = fileURLToPath(new URL("..", import.meta.url));

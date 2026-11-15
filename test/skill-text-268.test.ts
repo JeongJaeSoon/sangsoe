@@ -19,15 +19,15 @@ function row(cell: string): string {
 
 test("R-20: write-brief has a 사전 확인 field: a read-only precheck item that blocks the unit", () => {
   const precheck = row("사전 확인");
-  // `deps` first: only an Orca dep keeps the Task from starting; an edge_add edge holds it in the ready view alone.
+  // Only an Orca dep keeps the Task from starting, and a made Task's brief cannot gain the wait line: the field is set at creation.
   // The brief is written before the precheck ends, so it names the precheck item and cannot carry what it found.
   for (const want of [
     "남이 가진 스택·서비스",
     "읽기 전용 사전 확인 항목",
     "`item_create` 가 돌려준 그 항목의 `task` id 를 `deps` 에 넣어 선행(`blocks`)으로 건다(같은 Run 의 Task 여야 한다)",
     "Orca 가 이 항목의 Task 를 시작하지 못하게 잡는다",
-    "`edge_add`",
-    "`start_unit` 을 부르지 않는다",
+    "이미 만든 항목에는 이 칸을 뒤늦게 달지 못한다",
+    "이 칸과 `deps` 를 넣은 항목을 새로 만들어 그것을 시작하고, 옛 항목은 시작하지 않는다",
     "리드의 사전 확인 메시지를 받기 전에는 그 스택·서비스를 바꾸지 않는다고 적는다",
     "거기서 본 것은 싣지 못한다",
     "리드가 이 항목을 시작한 뒤 Orca 메시지로 보낸다",
