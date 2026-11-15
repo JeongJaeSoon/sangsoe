@@ -48,6 +48,15 @@ test("worker.md says a worker reports to the Run its Dispatch is on, and that Ru
   has(w, "그 Run 의 코디네이터가 위로 전한다", "worker.md");
 });
 
+test("the orchestrate wake table says what the Run's count line is and what each mark asks for (274, 275)", () => {
+  const s = section(read("claude-plugin/skills/orchestrate/SKILL.md"), "깨움 처리");
+  const row = s.split("\n").find((l) => l.startsWith("| 프롬프트에 붙은 한 줄"));
+  assert.ok(row, "no row for the count line");
+  for (const want of ["🟢 준비됨 N · 📅 기한 N · ⚠️ trigger 불명 N (새로 M건)", "Orca 메시지가 아니라서", "오너에게 가져가고", "네가 판단한다", "머지된 PR 의 Task 를 닫았다", "hook 이 이미 한 일이다"]) {
+    has(row, want, "orchestrate 깨움 처리 표의 줄 행");
+  }
+});
+
 test("no skill or agent text a worker follows tells it to send into a Run by address", () => {
   const files = [
     "claude-plugin/agents/worker.md",
