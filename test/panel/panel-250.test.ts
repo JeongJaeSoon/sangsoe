@@ -70,12 +70,12 @@ test("partial (fresh install): x spans the whole window, the line starts where t
   const x0 = Number(/^M([\d.]+)/.exec(d)?.[1]);
   assert.ok(Math.abs(x0 - (1000 * (1440 - 55)) / 1440) < 1, `first point at ${x0}`);
   // 0.1.10 release smoke: the note stood at the column's left edge, far from a line that began near the right.
-  assert.match(html, /<div class="lrow sp-from"><span><\/span><span style="width:96\.2%;text-align:right">\d\d:\d\d부터 기록<\/span><\/div><\/div>$/, "under the rows, ending where the lines begin");
+  assert.match(html, /<div class="lrow sp-from"><span><\/span><span class="sp-at" style="width:96\.2%;text-align:right">\d\d:\d\d부터 기록<\/span><span class="g-v"><\/span><\/div><\/div>$/, "under the rows, ending where the lines begin; the empty value cell keeps its column the lines' width");
   const six = loadRows(ok(h), LIVE, 6);
   assert.ok(Math.abs(Number(/^M([\d.]+)/.exec(paths(svgs(six)[0]?.body ?? "")[0] ?? "")?.[1]) - (1000 * (360 - 55)) / 360) < 1);
-  assert.match(six, /<span style="width:84\.7%;text-align:right">\d\d:\d\d부터 기록</);
+  assert.match(six, /<span class="sp-at" style="width:84\.7%;text-align:right">\d\d:\d\d부터 기록</);
   // A line that begins in the left half: the note starts at its first point (20 of 360 minutes in).
-  assert.match(loadRows(ok(loadHistory(NOW, 69)), LIVE, 6), /<span style="padding-left:5\.6%">\d\d:\d\d부터 기록</);
+  assert.match(loadRows(ok(loadHistory(NOW, 69)), LIVE, 6), /<span class="sp-at" style="padding-left:5\.6%">\d\d:\d\d부터 기록</);
 });
 
 test("a gap over 15 minutes breaks the line: no interpolation across a stretch nobody sampled", () => {
