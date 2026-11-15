@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { type BriefInput, type BriefSnapshot, buildBrief, localShort, localStamp, panelView, renderMarkdown, replayJsonl, statusBarItem } from "../../core/index.ts";
-import { autoRefresh, ERROR_LINE, errorLine, type PanelView, prunePending, renderError, renderStage } from "../../orca-plugin/panel/view.ts";
+import { autoRefresh, ERROR_LINE, errorLine, errorNote, type PanelView, prunePending, renderError, renderStage } from "../../orca-plugin/panel/view.ts";
 
 const FIX = new URL("../fixtures/brief/", import.meta.url);
 const NOW = "2026-11-10T12:00:00.000Z";
@@ -70,6 +70,11 @@ test("a refusal is one short Korean line with the raw text in its title; the hea
   }
   const raw = { code: "selector_not_found", reason: '{"selector":"active"}', fix: "run sangsoe brief in a terminal" };
   assert.equal(errorLine(raw), "sangsoe 가 요청을 처리하지 못했다.", "an unlisted code is the generic line, never the raw text");
+  // The note a refused act leaves: the Korean line as text, the raw refusal escaped into the title only.
+  assert.equal(
+    errorNote(raw),
+    '<p class="msg bad" role="status" title="selector_not_found · {&quot;selector&quot;:&quot;active&quot;} · run sangsoe brief in a terminal">sangsoe 가 요청을 처리하지 못했다.</p>',
+  );
 
   const nf = { code: "not_found", reason: "no open group api-migration", fix: "go back to 현황" };
   const html = renderError(nf, ["현황", "api-migration"]);

@@ -38,10 +38,13 @@ export function modelDrift(events: readonly Ev[], pins: readonly string[] = []):
     if (!e.entity_id) continue;
     const model = typeof e.payload.model === "string" ? e.payload.model : "";
     if (e.type === "unit_started") passed.set(e.entity_id, CATALOG.find((r) => r.alias === model || r.pin?.id === model));
-    else if (e.type === "session_started" && model !== "" && model !== "unknown") {
+    else if (e.type === "session_started") {
+      // Pinned at the session's first row, whether or not that row names a model, and only once the
+      // Task has a start: a session seen before any start pairs with the start that follows it.
       const id = typeof e.payload.session === "string" ? `${e.entity_id}\n${e.payload.session}` : undefined;
-      if (id && !startOf.has(id)) startOf.set(id, passed.get(e.entity_id));
-      const row = id ? startOf.get(id) : passed.get(e.entity_id);
+      if (id && !startOf.has(id) && passed.has(e.entity_id)) startOf.set(id, passed.get(e.entity_id));
+      if (model === "" || model === "unknown") continue;
+      const row = id && startOf.has(id) ? startOf.get(id) : passed.get(e.entity_id);
       // A session from before the row was last checked (or pinned) is one the table's update already saw.
       if (row && e.ts >= since(row)) pairs.push({ row, actual: bare(model), session: String(e.payload.session ?? e.ts), task: e.entity_id, at: e.ts });
     }

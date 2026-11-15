@@ -165,7 +165,7 @@ export type Refusal = { code: string; reason: string; fix: string };
 export const errorLine = (r: Refusal): string => ERROR_LINE[r.code] ?? ERROR_OTHER;
 const errorTitle = (r: Refusal): string => [r.code, r.reason, r.fix].filter(Boolean).join(" · ");
 
-/** The one-line note a refusal leaves (an act or an open): Korean text, the raw refusal as its title. */
+/** The one-line note a refused act leaves: Korean text, the raw refusal as its title. */
 export function errorNote(r: Refusal): string {
   return `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorLine(r))}</p>`;
 }

@@ -114,6 +114,13 @@ test("292: a session's later row pairs with the start that session began under, 
   // The second start's own session is still judged against the second start.
   const [d] = modelDrift([...events, session("t1", everyday.currentId, 4, "second")]);
   assert.deepEqual([d?.alias, d?.cause, d?.sessions], [primary.alias, "other_tier", 1]);
+
+  // The session's first row may name no model yet: the start is pinned at that row all the same.
+  const late = [unit("t1", everyday.alias, 0), session("t1", "unknown", 1, "first"), unit("t1", primary.alias, 2), session("t1", everyday.currentId, 3, "first")];
+  assert.deepEqual(modelDrift(late), []);
+  // A session seen before the Task has any start pairs with the start that follows, as before.
+  const early = [session("t1", "unknown", 0, "first"), unit("t1", primary.alias, 1), session("t1", everyday.currentId, 2, "first")];
+  assert.deepEqual(modelDrift(early).map((x) => [x.alias, x.cause]), [[primary.alias, "other_tier"]]);
 });
 
 function ctx(home: string, env: Record<string, string> = {}) {
