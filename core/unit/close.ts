@@ -1,5 +1,5 @@
 import { dedupeKey, EVENTS } from "../contract/index.ts";
-import type { OrcaAdapter } from "../contract/orca.ts";
+import type { OrcaAdapter, TerminalRow } from "../contract/orca.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
 import type { Store } from "../store/store.ts";
 
@@ -53,7 +53,14 @@ export async function closeUnit(ports: { readonly orca: OrcaAdapter; readonly st
   if (!ps.ok) return refuse("agent_not_idle", `worktree ps: ${ps.error.code}`, "retry once Orca answers");
   // Rows of other hosts do not matter: the target's row is looked up by worktree id among the local rows below.
   if (ps.value.truncated || ps.value.omittedHostIds.includes("local")) return refuse("agent_not_idle", "worktree ps is partial", "retry once Orca answers in full");
-  const paneKey = `${row.tabId}:${row.leafId}`;
+  // An orphaned row's tabId and leafId are placeholders; Orca files its agent under recordedPaneKey (decision 263 ⑩).
+  const paneKeyOf = (t: TerminalRow) => (t.orphaned === true ? t.recordedPaneKey : t.tabId && t.leafId ? `${t.tabId}:${t.leafId}` : undefined);
+  const paneKey = paneKeyOf(row);
+  if (!paneKey) return refuse("agent_not_idle", `Orca gives no pane key for ${terminal}${row.orphaned === true ? " (orphaned, no recordedPaneKey)" : ""}`, "Orca does not show which pane held its agent, so it is not shown idle");
+  // Another terminal on the same pane (attached, or an orphan recording it) means the ps row is not this one's alone.
+  if (list.value.rows.some((t) => t.handle !== terminal && paneKeyOf(t) === paneKey)) {
+    return refuse("agent_not_idle", `the pane recorded for ${terminal} is attached to another terminal`, "its worktree ps row describes that terminal, not this one");
+  }
   const agent = ps.value.rows.find((r) => r.worktreeId === w.workspace)?.agents.find((x) => x.paneKey === paneKey);
   if (!agent) return refuse("agent_not_idle", `no agent row for ${terminal} in worktree ps`, "Orca does not show its agent, so it is not shown idle");
   if (!AT_REST.has(agent.state)) return refuse("agent_not_idle", `the agent in ${terminal} is ${agent.state}`, "wait until it is at rest");

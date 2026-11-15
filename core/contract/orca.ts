@@ -91,6 +91,10 @@ export type TerminalRow = {
   /** `<tabId>:<leafId>` is the `paneKey` of this terminal's agent in `worktree ps` (measured 2026-11-14). */
   tabId?: string;
   leafId?: string;
+  /** True after an Orca restart left the terminal without its pane (measured 2026-11-15): `tabId` and `leafId` are then `pty:` placeholders. */
+  orphaned?: boolean;
+  /** An orphaned terminal's real `<tabId>:<leafId>`, the `paneKey` of its agent in `worktree ps` (measured 2026-11-15). */
+  recordedPaneKey?: string;
 };
 
 export type WorktreePsRow = {
@@ -347,6 +351,8 @@ export interface OrcaAdapter {
 
   // Worktree (cards)
   worktreeList(a: { repo?: string; limit?: number }): Promise<OrcaResult<LocalRows<WorktreeRow>>>;
+  /** One worktree by selector, read from `result.worktree`. `worktree list` can omit a live worktree that this finds (measured 2026-11-15). */
+  worktreeShow(a: { worktree: string }): Promise<OrcaResult<WorktreeRow>>;
   worktreePs(a: { limit?: number; agentWait?: boolean }): Promise<OrcaResult<LocalRows<WorktreePsRow>>>;
   /** Always `--run-hooks --delete-branch`, never `--force` (decision 86). */
   worktreeRm(a: { worktree: string }): Promise<OrcaResult<Receipt>>;

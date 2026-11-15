@@ -136,3 +136,57 @@ test("an empty Dispatch id is invalid input and reads nothing", async () => {
   assert.equal(code(await w.run(ME, " ")), "invalid_input");
   assert.equal(w.calls.length, 0);
 });
+
+// Decision 263 ⑩: after an Orca restart a retained terminal is listed `orphaned`, with placeholder
+// tabId and leafId; the pane key `worktree ps` files its agent under is `recordedPaneKey`.
+const PLACEHOLDER = `pty:${WS}@@x`;
+const orphan = (extra: Record<string, unknown> = {}) => ({
+  handle: TERM,
+  worktreeId: WS,
+  executionHostId: "local",
+  agentIdentity: "claude",
+  orphaned: true,
+  recordedPaneKey: "tab1:leaf1",
+  tabId: PLACEHOLDER,
+  leafId: PLACEHOLDER,
+  ...extra,
+});
+
+test("an orphaned terminal whose agent ps files under recordedPaneKey, at rest and without a wait, is closed", async () => {
+  const w = world({ terminals: [orphan()] });
+  const r = await w.run();
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(w.closes(), [["terminal", "close", "--terminal", TERM, "--json"]]);
+});
+
+const ORPHAN_REFUSED: [string, Scene][] = [
+  ["no ps row for the recorded pane", { terminals: [orphan()], agents: [{ paneKey: "other:pane", state: "done", agentType: "claude", agentWait: null }] }],
+  ["a ps row at the placeholder key only", { terminals: [orphan()], agents: [{ paneKey: `${PLACEHOLDER}:${PLACEHOLDER}`, state: "done", agentType: "claude", agentWait: null }] }],
+  ["a working agent", { terminals: [orphan()], agents: [{ paneKey: "tab1:leaf1", state: "working", agentType: "claude", agentWait: null }] }],
+  ["an agent holding a wait", { terminals: [orphan()], agents: [{ paneKey: "tab1:leaf1", state: "idle", agentType: "claude", agentWait: { state: "waiting" } }] }],
+  ["an agent whose wait was never checked", { terminals: [orphan()], agents: [{ paneKey: "tab1:leaf1", state: "idle", agentType: "claude" }] }],
+  [
+    "another orphaned terminal recording the same pane",
+    { terminals: [orphan(), orphan({ handle: "term_other", tabId: `${PLACEHOLDER}2`, leafId: `${PLACEHOLDER}2` })] },
+  ],
+  ["its recorded pane key only in another worktree's ps row", { terminals: [orphan()], agentsIn: "wt-2::/work/acme/web" }],
+  [
+    "a live terminal whose pane an orphan also records",
+    { terminals: [{ handle: TERM, worktreeId: WS, executionHostId: "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" }, orphan({ handle: "term_other" })] },
+  ],
+  ["no recordedPaneKey", { terminals: [orphan({ recordedPaneKey: undefined })] }],
+  ["an empty recordedPaneKey", { terminals: [orphan({ recordedPaneKey: "" })] }],
+  [
+    "the recorded pane now attached to another terminal",
+    { terminals: [orphan(), { handle: "term_other", worktreeId: WS, executionHostId: "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" }] },
+  ],
+];
+
+for (const [name, scene] of ORPHAN_REFUSED) {
+  test(`refuses an orphaned terminal with ${name}`, async () => {
+    const w = world(scene);
+    const r = await w.run();
+    assert.equal(code(r), "agent_not_idle", JSON.stringify(r));
+    assert.equal(w.closes().length, 0);
+  });
+}

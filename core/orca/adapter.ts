@@ -11,6 +11,7 @@ import type {
   PortRow,
   TaskRow,
   WorkerPlacement,
+  WorktreeRow,
   WriteOptions,
 } from "../contract/orca.ts";
 import { type CommandName, ORCA_COMMANDS } from "./commands.ts";
@@ -317,6 +318,13 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
 
     worktreeList: (a) =>
       local("worktreeList", "worktrees", "hostId", "id", { flags: { repo: a.repo, limit: a.limit } }, (row) => row.instanceId),
+    worktreeShow: async (a) => {
+      const r = await shaped<Json>("worktreeShow", has("worktree", isObject), { flags: { worktree: a.worktree } });
+      if (!r.ok) return r;
+      const w = r.value.worktree as Json;
+      if (typeof w.id !== "string" || typeof w.path !== "string") return unexpected("orca worktree show: no worktree id and path", r.value);
+      return { ok: true, value: w as unknown as WorktreeRow };
+    },
     worktreePs: (a) =>
       local("worktreePs", "worktrees", "hostId", "worktreeId", { flags: { limit: a.limit, "agent-wait": a.agentWait } }),
     worktreeRm: (a) => run("worktreeRm", { flags: { worktree: a.worktree, "run-hooks": true, "delete-branch": true } }),

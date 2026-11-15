@@ -73,6 +73,7 @@ export const ORCA_COMMANDS = {
   requestShow: { path: ["orchestration", "request-show"], flags: ["json", "request"] },
 
   worktreeList: { path: ["worktree", "list"], flags: ["json", "repo", "limit"] },
+  worktreeShow: { path: ["worktree", "show"], flags: ["json", "worktree"] },
   worktreePs: { path: ["worktree", "ps"], flags: ["json", "limit", "agent-wait"] },
   worktreeRm: { path: ["worktree", "rm"], flags: ["json", "worktree", "run-hooks", "delete-branch"] },
   worktreeCreate: { path: ["worktree", "create"], flags: ["json", "name", "no-parent", "parent-worktree", "repo", "setup"] },
