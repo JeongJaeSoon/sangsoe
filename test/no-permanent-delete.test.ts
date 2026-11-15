@@ -36,7 +36,7 @@ const LISTED: Readonly<Record<string, Partial<Record<Kind, number>> & { why: str
   "core/install/stage.ts": { fs: 2, why: "orca-plugin/vendor, the staged copy of core it builds" },
   "core/reaper/docker.ts": { argv: 1, why: "a container, volume, network or image whose id a session recorded with resource_record (R-12), after the in-use checks; a volume's data goes with it" },
   "core/orca/commands.ts": { argv: 1, why: "the one place Orca's `worktree rm` is spelled; its callers are the two worktree rows below" },
-  "core/reaper/round.ts": { worktree: 1, why: "a finished unit's worktree after every REAPER check passed (clean tree; work merged or closed, or the owner confirmed a card with no trace); its branch and the files git ignores go with it, and the repository's archive hook runs" },
+  "core/reaper/round.ts": { worktree: 1, why: "a finished unit's worktree after every REAPER check passed (clean tree; its PR merged or closed, or no PR and its last Dispatch succeeded or was cancelled with HEAD pushed, or the owner confirmed a card with no trace); its branch and the files git ignores go with it, and the repository's archive hook runs" },
   "core/start/start.ts": { worktree: 1, why: "the worktree a failed start made a moment ago, with its branch, only when its one terminal is the shell the start recorded or it has no terminal at all" },
   "core/store/samples.ts": { sql: 1, why: "sangsoe's own load samples older than 24 hours (decision 241); the event table itself refuses a delete" },
 };

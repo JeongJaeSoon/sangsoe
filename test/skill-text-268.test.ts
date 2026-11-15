@@ -28,7 +28,9 @@ test("R-20: write-brief has a 사전 확인 field: a read-only precheck item tha
     "Orca 가 이 항목의 Task 를 시작하지 못하게 잡는다",
     "`edge_add`",
     "`start_unit` 을 부르지 않는다",
+    "리드의 사전 확인 메시지를 받기 전에는 그 스택·서비스를 바꾸지 않는다고 적는다",
     "거기서 본 것은 싣지 못한다",
+    "리드가 이 항목을 시작한 뒤 Orca 메시지로 보낸다",
   ]) {
     assert.ok(precheck.includes(want), `사전 확인 row lacks ${want}`);
   }

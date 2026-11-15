@@ -468,7 +468,7 @@ test("R-06: a refused PR, a held PR and a refused merge hold nothing: the next P
   const failed = await land({ repo: REPO, pr: 11 }, { ...unmerged.deps, openStore: refusedOrHeld.deps.openStore });
   assert.equal(failed.ok ? "" : failed.refusal.code, "merge_refused");
 
-  // The same store, with the repository now asking for a review and CI: nothing of #12 or #13 is in the way.
+  // The same store, with the repository now asking for a review and CI: nothing of #11, #12 or #13 is in the way.
   const next = harness(forPr(14, STRICT));
   const deps = { ...next.deps, openStore: refusedOrHeld.deps.openStore };
   const landed = await land({ repo: REPO, pr: 14 }, deps);
