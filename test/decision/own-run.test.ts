@@ -4,10 +4,12 @@ import {
   ACTED_LABEL,
   ANSWER_PENDING_LABEL,
   DEFAULT_MONITOR_CONFIG,
+  dedupeKey,
   decisionAnswer,
   decisionMoot,
   decisionOpen,
   deliverOwnRun,
+  EVENTS,
   type MonitorDeps,
   noSender,
   nullChatProvider,
@@ -35,14 +37,14 @@ async function opened(w: World): Promise<string> {
   return r.value.decision;
 }
 
-const item = (w: World, task: string, extra: Record<string, unknown> = {}) => {
+const item = (w: World, task: string, extra: Record<string, unknown> = {}, run = RUN) => {
   const said = ownerSays(w.store, `make ${task}`);
   w.store.append({
     type: "item_created",
     source: "core:item",
     entity: "task",
     entity_id: task,
-    payload: { task, run: RUN, alias: `i${task.slice(-3)}`, who: "worker", done_when: "the check passes", owner_action: said },
+    payload: { task, run, alias: `i${task.slice(-3)}`, who: "worker", done_when: "the check passes", owner_action: said },
   });
   if (Object.keys(extra).length > 0) w.store.append({ type: "item_extra_set", source: "test", payload: { task, ...extra } });
 };
@@ -114,6 +116,40 @@ test("274: ready, due and unclear items of the Run are one count line, once per 
   const again = await deliverOwnRun(w, RUN, NOW);
   assert.ok("run" in again);
   assert.deepEqual(again.lines, [], "the same items a second time print nothing");
+
+  // A queue round from a process that can send finds each of them told already and mails nothing.
+  w.as({ run: null, terminal: true });
+  const round = await runMonitor("queue", timer(w));
+  assert.ok(round.calls.includes("notifyReady i001: already"), round.calls.join("\n"));
+  assert.deepEqual(round.acts, []);
+  assert.deepEqual(w.sends, []);
+});
+
+test("274: an item whose predecessor sits in another Run is told ready once that Run's Task is done", async () => {
+  const OTHER = "run_000000000002";
+  const w = createWorld([
+    { id: T1, run: RUN, status: "pending" },
+    { id: T2, run: OTHER, status: "pending" },
+  ]);
+  w.as({ run: RUN, terminal: true });
+  item(w, T1);
+  item(w, T2, {}, OTHER);
+  const [pred, succ] = [`item:${T2}`, `item:${T1}`];
+  w.store.append({ type: "edge_added", source: "GRAPH", dedupe_key: dedupeKey(EVENTS.edge_added, pred, succ, "blocks"), payload: { pred, succ, kind: "blocks" } });
+
+  const waiting = await deliverOwnRun(w, RUN, NOW);
+  assert.ok("run" in waiting, JSON.stringify(waiting));
+  assert.deepEqual(waiting.lines, [], "the predecessor is open: nothing is ready");
+  const read = w.calls("orchestration task-list").map((argv) => argv.find((a) => a.startsWith("run_")));
+  assert.deepEqual(read, [RUN, OTHER], "its own Run, then the one Run that holds a predecessor");
+
+  const t2 = w.tasks.get(T2);
+  assert.ok(t2);
+  t2.status = "completed";
+  const out = await deliverOwnRun(w, RUN, NOW);
+  assert.ok("run" in out, JSON.stringify(out));
+  assert.deepEqual(out.lines, [`sangsoe: Run ${RUN} — 🟢 준비됨 1 · 📅 기한 0 · ⚠️ trigger 불명 0 (새로 1건). 목록은 resource ready 와 brief 로 읽는다.`]);
+  assert.deepEqual(w.store.events({ type: "item_ready" }).map((e) => e.entity_id), [T1], "only this Run's item is told");
 });
 
 // The plugin worker's queue round over the same world: it has no terminal, so it writes rows and sends nothing.
@@ -183,6 +219,28 @@ test("274: a decision the timer closed as moot keeps its gate until the Run's se
   assert.deepEqual([quiet.resolved, quiet.lines], [[], []]);
 });
 
+test("274: a moot decision whose waiter Task is closed is left alone: its gate stays open on purpose", async () => {
+  const w = createWorld([{ id: T1, run: RUN, status: "pending" }]);
+  const d = await opened(w);
+  const t1 = w.tasks.get(T1);
+  assert.ok(t1);
+  t1.status = "completed";
+  w.strict();
+  w.as(TIMER);
+  const r = await decisionMoot(w, { decision: d, evidence: { kind: "pr_closed", pr: "acme/api#4" }, callerRun: QUEUE_CALLER });
+  assert.ok(r.ok && r.value.status === "moot", JSON.stringify(r));
+
+  w.as({ run: RUN, terminal: true });
+  for (const round of [1, 2]) {
+    const before = w.calls().length;
+    const out = await deliverOwnRun(w, RUN, NOW);
+    assert.ok("run" in out, JSON.stringify(out));
+    assert.deepEqual([out.resolved, out.lines], [[], []]);
+    assert.deepEqual(w.calls().slice(before).map((c) => c[1]), ["task-list", "gate-list"], `prompt ${round}: only the two reads`);
+  }
+  assert.deepEqual(w.sends, []);
+});
+
 test("274: a lead's prompt hook prints the line; a worker's makes no Orca call; Stop prints nothing", async () => {
   const w = createWorld([{ id: T1, run: RUN, status: "pending" }]);
   w.as({ run: RUN, terminal: true });
@@ -202,6 +260,12 @@ test("274: a lead's prompt hook prints the line; a worker's makes no Orca call; 
   assert.equal(lines.length, 1);
   assert.match(lines[0] ?? "", /^sangsoe: Run run_000000000001 — 🟢 준비됨 1 /);
   assert.deepEqual(w.calls().slice(before).map((c) => c[1]), ["run-current", "task-list", "gate-list"]);
+
+  // A lead that holds no Run yet: one read, no line.
+  w.as({ run: null, terminal: true });
+  const idle = w.calls().length;
+  assert.deepEqual(await recordHook("user-prompt-submit", { store: w.store, orca: w.orca }, { session_id: "cc-lead", prompt: "hello" }), []);
+  assert.deepEqual(w.calls().slice(idle).map((c) => c[1]), ["run-current"]);
 });
 
 test("274: the panel button answers with a label that says the Run delivers, not a refusal", async () => {

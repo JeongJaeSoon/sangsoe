@@ -23,7 +23,9 @@ import { judgeStall } from "./stall.ts";
 /**
  * The Run the queue-monitor passes as its caller: none. The plugin worker holds no Run, and
  * gate-resolve works only inside the gate's own Run (decision 77 라), so `release` hands every open
- * gate to the session holding its Run, which resolves it with the same call (decision 0148).
+ * gate to the session holding its Run, which resolves it with the same call (decision 0148). From a
+ * process with no terminal the handoff cannot be sent either: the waiter comes back as `pending`
+ * and that session finds the open gate itself (decision 274, own-run.ts).
  */
 export const QUEUE_CALLER = "monitor:queue";
 
@@ -170,11 +172,14 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   const acts: Act[] = [];
   // A row already written whose notice never went (a failed send) is offered again; notify keeps it to one.
   let muted = 0;
+  let unsent = 0;
   for (const e of planned) {
     const n = leadNotice(e);
     if (!n || have.has(n.key)) continue;
     if (mute) {
-      muted += 1;
+      // The Run's session tells its due and unclear items (own-run.ts); nothing tells verify_unconfirmed.
+      if (e.type === "escalation_stale") unsent += 1;
+      else muted += 1;
       continue;
     }
     const lead = runOf.get(n.task);
@@ -199,6 +204,7 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
     });
   }
   if (muted > 0) calls.push(`notices: ${muted} left to their Runs' own sessions (no sender terminal)`);
+  if (unsent > 0) calls.push(`notices: ${unsent} verify_unconfirmed not sent (no sender terminal); the rows are written`);
   // Decision 219: Orca fences this worker out of a lead's Run and refuses its sends (no terminal), so a
   // fenced re-review item is left to that Run's own session, whose Stop and UserPromptSubmit hooks make it.
   for (const f of fenced) calls.push(`re-review item of ${f.pr}: left to run:${f.run}'s own hook (consumer_fenced)`);
@@ -211,8 +217,9 @@ type LeadNotice = { task: string; key: string; subject: string; body: string; ms
 /**
  * The rows whose notice goes to the item's owning lead (decision 154): todo_due and trigger_unclear
  * (appendix queue-monitor card), escalation_stale{verify_unconfirmed} (decision 91② row 11). One
- * notice per row: the key carries the row's own condition. The Run's own session tells the same rows
- * under the same key when this process cannot send (decision 274).
+ * notice per row: the key carries the row's own condition. When this process cannot send, the Run's
+ * own session tells its todo_due and trigger_unclear rows under the same key (decision 274);
+ * verify_unconfirmed then reaches nobody.
  */
 export function leadNotice(e: Planned): LeadNotice | undefined {
   const p = e.payload as Record<string, unknown>;

@@ -284,7 +284,7 @@
 | hook SessionStart | design-appendix 역할 카드 | implemented | `claude-plugin/hooks/hooks.json:16`, `core/session/session-start.ts:47` | |
 | SessionStart 인계·늦은 답 주입 | design-appendix 역할 카드 | implemented | `core/session/session-start.ts:99`, `core/session/session-start.ts:118` | |
 | SessionStart 역할 줄 없음 | design-appendix 역할 카드 | changed (결정 192) | `core/session/session-start.ts:32` | sangsoe 가 만든 Task 에만 |
-| hook UserPromptSubmit | design-appendix 역할 카드 | changed (결정 173) | `claude-plugin/hooks/hooks.json:19`, `core/session/record.ts:103` | Orca 알림은 제외(결정 206) |
+| hook UserPromptSubmit | design-appendix 역할 카드 | changed (결정 173·274) | `claude-plugin/hooks/hooks.json:19`, `core/session/record.ts:111` `ownerSaid`, `core/session/record.ts:84` `ownRun` | Orca 알림은 제외(결정 206). Run 을 쥔 세션이면 그 Run 의 게이트를 풀고 수 한 줄을 낸다(결정 274) |
 | hook Stop | design-appendix 역할 카드 | implemented | `claude-plugin/hooks/hooks.json:22`, `core/session/record.ts:40` | |
 | hook Notification | design-appendix 역할 카드 | changed (결정 196) | `claude-plugin/hooks/hooks.json:25`, `core/session/record.ts:183` | |
 | hook PostToolUse | design-appendix 역할 카드 | implemented | `claude-plugin/hooks/hooks.json:28`, `core/session/record.ts:50` | |
@@ -332,7 +332,7 @@
 | CLI recover·verify-tier·monitor run·migrate | design.html 배치표 | implemented | `cli/commands/recover.ts:15`, `cli/commands/monitor.ts:29` | |
 | CLI decision·item new | design-appendix 결정 루프 | implemented | `cli/commands/decision.ts:26`, `cli/commands/item-new.ts:70` | |
 | CLI graph add·remove·ready·why·expand·critical·impact | design-appendix GRAPH: 모듈과 CLI | implemented | `cli/commands/graph-add.ts:11`, `cli/commands/graph-why.ts:15` | |
-| CLI graph sync | design-appendix GRAPH: 모듈과 CLI | changed (결정 215·217·219) | `cli/commands/graph-sync.ts:19`, `core/graph/sync.ts:58`, `core/graph/own-run.ts:39`, `core/session/record.ts:40`, `test/land/retarget-rereview.test.ts:212`, `test/detect/lead-run-s6.test.ts:99` | G22 닫힘 — queue-monitor 는 `pr_opened` 의 head·base 로 `stacked_on` 을 스스로 더하고(결정 212 ③), base 가 선행 PR 의 head 를 떠난 PR 에서는 그 간선을 뺀다. land 재요청 event 대신 재리뷰(결정 215 ②)가 문이고, 재리뷰 항목 spec 이 land 를 다시 부르라고 한다. 결정 217: CLI 도 재리뷰 항목을 만든다. 결정 219: 타이머는 그 Run 을 깨우지 않는다(실제 Orca 가 보내기를 거부한다). 그 Run 에 묶인 세션의 `UserPromptSubmit`·`Stop` hook 이 같은 호출(`syncOwnRun`)을 한다 |
+| CLI graph sync | design-appendix GRAPH: 모듈과 CLI | changed (결정 215·217·219) | `cli/commands/graph-sync.ts:19`, `core/graph/sync.ts:58`, `core/graph/own-run.ts:39`, `core/session/record.ts:89`, `test/land/retarget-rereview.test.ts:212`, `test/detect/lead-run-s6.test.ts:99` | G22 닫힘 — queue-monitor 는 `pr_opened` 의 head·base 로 `stacked_on` 을 스스로 더하고(결정 212 ③), base 가 선행 PR 의 head 를 떠난 PR 에서는 그 간선을 뺀다. land 재요청 event 대신 재리뷰(결정 215 ②)가 문이고, 재리뷰 항목 spec 이 land 를 다시 부르라고 한다. 결정 217: CLI 도 재리뷰 항목을 만든다. 결정 219: 타이머는 그 Run 을 깨우지 않는다(실제 Orca 가 보내기를 거부한다). 그 Run 에 묶인 세션의 `UserPromptSubmit`·`Stop` hook 이 같은 호출(`syncOwnRun`)을 한다 |
 | CLI graph skip | design-appendix 신호 흐름 | changed (결정 195) | `cli/commands/graph-skip.ts:11` | |
 | CLI graph(인자 없음)·priority set·owner-text redact | design.html 의존 관리, design-appendix sqlite 스키마 | cut (결정 160) | `core/store/store.ts:425` | LATER — 오너가 우선순위나 원문 지우기를 요청한 첫 경우 |
 | CLI hook·reap run·resource record·models·version | design-appendix 신호 흐름 | implemented | `cli/commands/hook.ts:29`, `cli/commands/reap.ts:27` | 설계 본문에 이름이 없는 셸 입구 |
