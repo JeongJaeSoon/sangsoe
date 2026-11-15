@@ -12,7 +12,9 @@ import { addRules, allowList, type Created, parseSettings, removeRules } from ".
  * runs with: a session's own `~` may be another directory, so no `~` is written.
  */
 export function sangsoeRules(homeDir: string): string[] {
-  return GENERATED_RULES.map((r) => r.rule.replace("{HOME}", homeDir.replace(/^\//, "")));
+  const home = homeDir.replace(/^\//, "");
+  // A replacement function, not a string: a home containing `$&` or `$1` must go in as written.
+  return GENERATED_RULES.map((r) => r.rule.replace("{HOME}", () => home));
 }
 
 export const PERMISSIONS_FIX = "sangsoe install --permissions";

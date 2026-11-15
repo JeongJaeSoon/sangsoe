@@ -1195,6 +1195,22 @@ test("the parent worktree missing from `worktree list` is read with `worktree sh
   assert.equal(flag(h.named("worktree create")[0] ?? [], "parent-worktree"), `id:${PARENT_TREE}`);
 });
 
+test("a parent that only `worktree show` returns passes its repo to create, which Orca refuses without one", async () => {
+  const { parent, list, show } = listOmittingParent();
+  const create = (args: readonly string[]) =>
+    args.includes("--repo")
+      ? ok({ worktree: { id: CHILD_TREE, path: CHILD_PATH, repoId: "repo-0001" } })
+      : fail("invalid_argument", "Missing repo selector. Pass --repo or run from inside an Orca-managed worktree.");
+  const h = harness({ replies: { "worktree-list": list, "worktree-show": show(parent), "worktree-create": create } });
+  const out = await start(h);
+  assert.equal(out.kind, "started", JSON.stringify(out));
+  assert.equal(flag(h.named("worktree create")[0] ?? [], "repo"), `id:${parent.repoId}`);
+
+  const given = harness({ replies: { "worktree-list": list, "worktree-show": show(parent), "worktree-create": create } });
+  await start(given, request({ repo: TARGET }));
+  assert.equal(flag(given.named("worktree create")[0] ?? [], "repo"), TARGET, "a named repo wins");
+});
+
 test("a parent that only `worktree show` returns is refused when it is archived, on another host, another worktree, or unreadable", async () => {
   const { parent, list, show } = listOmittingParent();
   const cases: [string, () => ExecResult][] = [
