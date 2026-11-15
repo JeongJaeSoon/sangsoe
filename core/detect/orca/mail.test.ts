@@ -8,7 +8,7 @@ import type { InboxMessage, LocalRows, WorkerRow, WorktreePsRow } from "../../co
 import { inboxRow } from "../../orca/adapter.ts";
 import { DEFAULT_MONITOR_CONFIG as C } from "../monitor.ts";
 import { judgeOrca, keepLastRead, type Observed, type OrcaReads, observe } from "./judge.ts";
-import { readRefusalHead, refusalHeader, refusalPath, refusalRoots } from "./mail.ts";
+import { NO_HEADER, readRefusalHead, refusalHeader, refusalPath, refusalRoots } from "./mail.ts";
 
 const NOW = Date.parse("2026-11-11T12:00:00Z");
 const FIXTURE = new URL("../../../test/fixtures/orca-mail.json", import.meta.url);
@@ -149,13 +149,41 @@ test("refusal_report reads the Act:/Category: header of the file the escalation 
   assert.equal(await read(join(root, "feature-f")), null, "a directory is not read");
 });
 
-test("a refusal file without the header is reported unseen, not guessed", () => {
+test("278: a refusal file without the header is still a row that says so and points at the file; nothing is guessed from its text", () => {
   assert.equal(refusalHeader("U52 worker: three greps refused.\n1. Act: grep. Category: hook. Command: x"), undefined);
   assert.deepEqual(refusalHeader("Act: merge\nCategory: no verdict\n"), { act: "merge", category: "no verdict" });
   const file = "/nowhere/orch-refusal/feature-f/20261111-1.txt";
-  const r = judgeOrca(reads({ refusals: new Map([[file, "free text only"]]) }), NOW, C);
+  const r = judgeOrca(reads({ refusals: new Map([[file, "U52 worker: three greps refused.\nCommand: grep -rn x core"]]) }), NOW, C);
+  assert.deepEqual(
+    r.planned.filter((e) => e.type === "refusal_report").map((e) => [e.entity_id, e.target, e.payload]),
+    [["ctx_f", "task_f", { ...NO_HEADER, command_file: file }]],
+  );
+  assert.ok(!r.unseen.some((u) => u.includes("refusal")), "a row, so nothing is left unseen round after round");
+});
+
+test("278: a file that cannot be read stays unseen: it may be readable on a later round", () => {
+  const file = "/nowhere/orch-refusal/feature-f/20261111-1.txt";
+  const r = judgeOrca(reads({ refusals: new Map([[file, null]]) }), NOW, C);
   assert.ok(!r.planned.some((e) => e.type === "refusal_report"));
-  assert.ok(r.unseen.some((u) => u.includes("no Act:/Category: header")));
+  assert.ok(r.unseen.some((u) => u.includes("msg_00000000000f: not readable")));
+});
+
+test("278: a refusal from a Dispatch the worker pages do not list is a row on the Task its mail names; other mail of such a Dispatch is not read", () => {
+  const file = "/nowhere/orch-refusal/feature-f/20261111-1.txt";
+  const listed = ["a", "b", "c", "d"].map((n) => worker(n));
+  const unlisted = reads({ workers: rows(listed), refusals: new Map([[file, "Act: find callers\nCategory: hook\n"]]) });
+  const out = judgeOrca(unlisted, NOW, C).planned;
+  assert.deepEqual(
+    out.filter((e) => e.type === "refusal_report").map((e) => [e.entity_id, e.target, e.payload]),
+    [["ctx_f", "task_f", { act: "find callers", category: "hook", command_file: file }]],
+  );
+  assert.ok(!out.some((e) => e.entity_id === "ctx_e"), "the unlisted Dispatch's worker_done is still not a row");
+
+  // With no Task in the mail there is nothing to put the row on.
+  const bare = mail().map((m) => (m.id === "msg_00000000000f" ? { ...m, payload: { dispatchId: "ctx_f" } } : m));
+  const r = judgeOrca({ ...unlisted, inbox: bare }, NOW, C);
+  assert.ok(!r.planned.some((e) => e.type === "refusal_report"));
+  assert.ok(r.unseen.some((u) => u.includes("Dispatch ctx_f is not listed and the mail names no Task")));
 });
 
 test("observed_change: only on a workspace with two live terminals, field names only, from the second round", () => {

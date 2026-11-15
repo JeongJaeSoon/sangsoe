@@ -284,7 +284,7 @@
 | | 열린 같은 결정 키에 대기자가 합류함 | `decision_joined` | — |
 | | 결정에 답이 달림. 답을 잇는 쪽을 `linked_by`(hook·button·orchestrator·observed)에 적는다(게이트를 푸는 대상) | `decision_answered` | — |
 | | 한 단계 위로 올림 | `escalation` | 에스컬레이션 보고(오너에게 간 것을 가리킬 때) |
-| | 거부 보고: 세션의 escalation 이 가리키는 `orch-refusal/` 아래 파일의 `Act:`·`Category:` 머리 줄을 orca-monitor 가 읽어 쓴다(결정 196) | `refusal_report` | — |
+| | 거부 보고: 세션의 escalation 이 가리키는 `orch-refusal/` 아래 파일의 `Act:`·`Category:` 머리 줄을 orca-monitor 가 읽어 쓴다(결정 196). 머리 줄이 없는 파일도 "헤더 없는 거부 파일" 로 쓰고, 워커 목록에 없는 Dispatch 의 것은 메일이 Task 를 적었으면 쓴다(결정 278) | `refusal_report` | — |
 | | 증거·배포 확인. `evidence` 줄은 칸 `kind`(증거 종류: 테스트 출력 · 실행 출력 · 화면 · dev 확인 등) · `head_sha`(증거가 가리키는 머지할 head) · `exit_code`(명령의 종료 코드) · `not_verified`(확인하지 못한 것을 적는 칸)을 싣는다. 큰 파일은 증거 폴더에 두고 event 에는 경로와 sha256 만 둔다. head 가 바뀌면 이전 증거는 그 head 에 대해 무효다 | `evidence` · `kind` · `head_sha` · `exit_code` · `not_verified` · `stage_recorded` | — |
 | | 검증 등급이 정해지거나 바뀜(pr-monitor 가 쓰는 하나뿐인 쪽) | `verify_tier_set` | — |
 | | 워커 완료 보고. PR 이 걸린 일은 그 본문이 머지 대기 보고다(결정 175). 실제 보고는 Orca 메시지이고, 이 이름의 event 줄은 orca-monitor 가 그 메시지를 본 표지(id 만, `outcome`·본문 없음)다(결정 196) | `worker_done` | — |
