@@ -18,6 +18,7 @@
       { "on": "workspace.changed" },
       { "on": "agent.status.changed" }
     ],
+    "hooks": [{ "event": "agent.prompt.before" }],
     "statusBarItems": [
       { "id": "summary", "text": "✨ SANGSOE", "tone": "neutral", "tooltip": "sangsoe", "command": "sangsoe.open" }
     ]

@@ -20,10 +20,12 @@ export type RecorderCheck = {
 /**
  * Decision 227: the folder whose checkout names the calling agent session, or null for the
  * owner's shell. Claude Code sets CLAUDECODE in every process its sessions start; the MCP server
- * is always a session's and passes its own cwd instead.
+ * is always a session's and passes its own cwd instead. Decision 280: a process in an Orca terminal
+ * (ORCA_TERMINAL_HANDLE) is checked the same way, since an agent that is not Claude Code runs there
+ * with no CLAUDECODE and was read as the owner. The owner's shell outside Orca stays unchecked.
  */
 export function agentCheckout(env: Readonly<Record<string, string | undefined>> = process.env, cwd: string = process.cwd()): string | null {
-  return env.CLAUDECODE ? cwd : null;
+  return env.CLAUDECODE || env.ORCA_TERMINAL_HANDLE ? cwd : null;
 }
 
 // Decision 162: the session that records is the recorder. A session whose checkout holds the PR's

@@ -70,6 +70,7 @@ export const OWN_TYPES = [
   "plugin_approved",
   "pressure_high",
   "priority_set",
+  "prompt_driven",
   "reap_blocked",
   "reap_candidate",
   "reap_done",

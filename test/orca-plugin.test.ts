@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { coreUrl, type PanelCore } from "../orca-plugin/core-link.ts";
-import activate, { deactivate, EVENTS, type OrcaWorker } from "../orca-plugin/main.ts";
+import activate, { deactivate, EVENTS, type OrcaWorker, PROMPT_HOOK } from "../orca-plugin/main.ts";
 import { type ExecProbe, meetsSqliteFloor, ownKey, probeExec, probeSqlite } from "../orca-plugin/probe.ts";
 import { REAPER_INTERVAL_MS } from "../orca-plugin/reaper/round.ts";
 import { type Clock, startRounds } from "../orca-plugin/timer.ts";
@@ -295,15 +295,78 @@ function fakeWorker() {
   const commands = new Map<string, () => unknown>();
   const subscribed: string[] = [];
   const hostCalls: [string, unknown][] = [];
+  const hooks = new Map<string, (event: Record<string, unknown>, next: (e?: unknown) => unknown) => unknown>();
   const orca: OrcaWorker = {
     log: () => {},
     host: { call: async (m, p) => void hostCalls.push([m, p]) },
     events: { on: (e) => void subscribed.push(e) },
+    hooks: { on: (h, fn) => void hooks.set(h, fn) },
     commands: { register: (id, fn) => void commands.set(id, fn) },
     panels: { handle: (n, fn) => void handlers.set(n, fn) } as OrcaWorker["panels"],
   };
-  return { orca, handlers, commands, subscribed, hostCalls };
+  return { orca, handlers, commands, subscribed, hostCalls, hooks };
 }
+
+test("280: the manifest declares the one prompt hook and no capability to type into a terminal", () => {
+  assert.deepEqual(manifest.contributes.hooks, [{ event: PROMPT_HOOK }]);
+  assert.deepEqual(manifest.capabilities.map((c: { kind: string }) => c.kind).sort(), ["agent:read", "storage:own", "workspace:read"]);
+});
+
+test("280: the prompt hook hands the core each driven prompt and always passes the event on unchanged", async () => {
+  const w = fakeWorker();
+  const { clock } = fakeClock();
+  const driven: unknown[] = [];
+  let fail = false;
+  activate(w.orca, {
+    clock,
+    exec: async (cmd) => ok(cmd, ""),
+    panel: fakePanel().load,
+    runners: async () => ({
+      monitors: {
+        run: async () => ({ planned: [], written: [], unseen: [], aborted: false }),
+        driven: async (e) => {
+          if (fail) throw new Error("store busy");
+          driven.push(e);
+        },
+        close: () => {},
+      },
+      reaper: { run: async () => ({ round: 1, roots_ok: true, candidates: [], reaped: [] }), close: () => {} },
+    }),
+  });
+  try {
+    assert.deepEqual([...w.hooks.keys()], [PROMPT_HOOK]);
+    const hook = w.hooks.get(PROMPT_HOOK);
+    assert.ok(hook);
+    const passed: unknown[] = [];
+    const next = (e?: unknown) => {
+      passed.push(e);
+      return "from-next";
+    };
+    const early = { terminalId: "term_1", prompt: "before the core opened", inputKind: "driving" };
+    assert.equal(hook(early, next), "from-next", "the core is not open yet: the event still goes on");
+    await settle();
+    const event = { terminalId: "term_1", prompt: "d012 yes", inputKind: "driving", agent: "claude" };
+    assert.equal(hook(event, next), "from-next");
+    const odd = { terminalId: 7, prompt: null };
+    assert.equal(hook(odd, next), "from-next", "an event of another shape goes on and is not recorded");
+    fail = true;
+    assert.equal(hook(event, next), "from-next", "a failed write does not hold the prompt");
+    await settle();
+    assert.deepEqual(passed, [early, event, odd, event], "the same objects, unchanged");
+    assert.deepEqual(driven, [{ terminal: "term_1", prompt: "d012 yes", inputKind: "driving", agent: "claude" }]);
+  } finally {
+    deactivate();
+  }
+});
+
+test("280: on an Orca without hooks the worker starts as before", () => {
+  const w = fakeWorker();
+  const { clock } = fakeClock();
+  const { hooks: _none, ...bare } = w.orca;
+  activate(bare, { clock, exec: async (cmd) => ok(cmd, ""), panel: fakePanel().load });
+  deactivate();
+  assert.equal(w.hooks.size, 0);
+});
 
 const ok = (cmd: string, out: string, err = ""): ExecProbe => ({ cmd, ok: true, code: 0, out, err, ms: 1 });
 

@@ -6,4 +6,6 @@ export default defineEvent("session_started", {
   tier: opt(str),
   model: str,
   effort: opt(str),
+  /** Orca's path-free id of the worktree a session with no Task runs in (decision 273). */
+  worktree: opt(str),
 });

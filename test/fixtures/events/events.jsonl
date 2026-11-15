@@ -44,6 +44,7 @@
 {"type":"pr_review_requested","source":"pr-monitor","payload":{"pr":"acme/api#12","reviewer":"octocat"}}
 {"type":"pressure_high","source":"resource-monitor","payload":{"reason":"load 12 on 8 cores"}}
 {"type":"priority_set","source":"owner","payload":{"subject":"lead:api","value":"P0"}}
+{"type":"prompt_driven","source":"orca-plugin:hook","payload":{"terminal":"term_1","hash":"0f3a","input_kind":"driving","agent":"claude"}}
 {"type":"rate_limited","source":"pr-monitor","payload":{"kind":"core","reset_at":"2026-11-10T01:00:00Z"}}
 {"type":"reap_blocked","source":"REAPER","payload":{"kind":"worktree","ref":"wt_7","reason":"unpushed"}}
 {"type":"reap_candidate","source":"REAPER","payload":{"kind":"worktree","ref":"wt_7","round":4,"state":"seen"}}

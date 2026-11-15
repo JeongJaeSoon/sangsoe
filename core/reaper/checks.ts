@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, join, resolve, sep } from "node:path";
 import type { StoredEvent } from "../contract/index.ts";
-import type { Exec, OrcaAdapter, TaskRow, WorkerRow, WorktreeRow } from "../contract/orca.ts";
+import { ENDED_LIVENESS, type Exec, type OrcaAdapter, type TaskRow, type WorkerRow, type WorktreeRow } from "../contract/orca.ts";
 import { isClosedTask } from "../detect/pr/judge.ts";
 import type { GhClient } from "../gh/client.ts";
 import { branchOf, type Finished, repoOf } from "./finished.ts";
@@ -19,7 +19,6 @@ export type BlockReason =
 export type Check = { ok: true } | { ok: false; blocked: BlockReason } | { ok: false; unknown: string };
 
 const OK: Check = { ok: true };
-const ENDED = new Set(["gone", "exited"]);
 
 /** Whether `path` is `root` or under it; `/a/u5` is not under `/a/u53`. */
 export function inside(root: string, path: string): boolean {
@@ -47,7 +46,7 @@ export async function openWork(
     if (!show.ok) return { ok: false, unknown: `worker-show ${w.dispatchId}: ${show.error.code}` };
     if (show.value.liveness === "live") return { ok: false, blocked: "session_alive" };
     // `unverifiable` or no answer is Orca not knowing; only a session it calls ended lets the card go.
-    if (!ENDED.has(show.value.liveness ?? "")) {
+    if (!ENDED_LIVENESS.has(show.value.liveness ?? "")) {
       return { ok: false, unknown: `worker-show ${w.dispatchId}: liveness ${show.value.liveness ?? "missing"}` };
     }
     const { taskId, runId } = show.value;

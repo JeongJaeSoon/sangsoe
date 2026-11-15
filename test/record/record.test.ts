@@ -28,7 +28,8 @@ import { exec, HEAD, openStore, PR_BRANCH, REPO, reset, rows, world } from "./wo
 after(() => rmSync(world.dir, { recursive: true, force: true }));
 
 // Decision 227: the CLI is an agent session when Claude Code set CLAUDECODE; this suite runs the
-// owner's shell unless a test says otherwise, whatever shell started it.
+// owner's shell unless a test says otherwise, whatever shell started it (the Orca terminal handle,
+// which counts the same way since decision 280, is cleared for every test by test/setup-home.ts).
 delete process.env.CLAUDECODE;
 async function asAgent<T>(f: () => Promise<T>): Promise<T> {
   process.env.CLAUDECODE = "1";
@@ -184,6 +185,21 @@ test("decision 227: the owner's shell (no CLAUDECODE) records through the CLI fr
   assert.ok(r.ok, JSON.stringify(r));
   assert.deepEqual(gitCalls(), []);
   assert.deepEqual(rows("evidence").map((e) => e.actor), ["owner"]);
+});
+
+test("280: an agent in an Orca terminal with no CLAUDECODE (not Claude Code) is checked like any agent session", async () => {
+  reset();
+  world.session = AUTHOR_BRANCH;
+  process.env.ORCA_TERMINAL_HANDLE = "term_00000000-0000-4000-8000-000000000001";
+  try {
+    const author = await viaCli(evidenceArgv("codex"), dirs);
+    assert.equal(author.ok ? "" : author.refusal.code, "recorder_is_author");
+    assert.deepEqual(rows("evidence"), []);
+    world.session = LEAD;
+    assert.equal((await viaCli(evidenceArgv("codex"), dirs)).ok, true, "from a checkout that is not the PR's it records");
+  } finally {
+    delete process.env.ORCA_TERMINAL_HANDLE;
+  }
 });
 
 test("decision 227: a `!` line in a session folder that is no checkout records through the CLI; the tool still refuses there", async () => {

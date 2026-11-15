@@ -22,6 +22,8 @@ export type OrcaWorker = {
   log(message: string): void;
   host: { call(method: string, params?: unknown): Promise<unknown> };
   events: { on(event: string, handler: (payload: unknown) => void): void };
+  /** A hook sees an event before Orca acts on it and passes it on with `next`; absent on an Orca without hooks. */
+  hooks?: { on(hook: string, handler: (event: Record<string, unknown>, next: (e?: unknown) => unknown) => unknown): void };
   commands: { register(id: string, handler: () => unknown): void };
   /** `post` reaches every open panel as `orca.plugin.on(event)`; absent on an Orca without it. */
   panels: { handle(name: string, handler: (input: unknown) => unknown): void; post?(event: string, payload: unknown): void };
@@ -36,6 +38,8 @@ export type WorkerDeps = {
 };
 
 export const EVENTS = ["workspace.created", "workspace.removed", "workspace.changed", "agent.status.changed"] as const;
+/** The one hook the manifest declares (`contributes.hooks`). */
+export const PROMPT_HOOK = "agent.prompt.before";
 export const MONITORS = [orcaMonitor, resourceMonitor, chatMonitor, prMonitor, queueMonitor];
 // Which Orca event asks which monitor for an early round (a hint; decision 83).
 const HINTS: Partial<Record<(typeof EVENTS)[number], string>> = { "agent.status.changed": orcaMonitor.name };
@@ -72,6 +76,22 @@ export default function activate(
       stall?.poke();
     });
   }
+
+  // Decision 280: Orca calls this hook for a prompt it submits itself (its `inputKind` says how), not
+  // for what a person types into the session. The worker only observes: the event goes on unchanged
+  // whatever happens here, and the core keeps the kind and a hash of the text, never the text.
+  orca.hooks?.on(PROMPT_HOOK, (event, next) => {
+    try {
+      const { terminalId, prompt, inputKind, agent } = event;
+      if (typeof terminalId === "string" && typeof prompt === "string") {
+        const row = { terminal: terminalId, prompt, ...(typeof inputKind === "string" ? { inputKind } : {}), ...(typeof agent === "string" ? { agent } : {}) };
+        void runner?.monitors.driven?.(row).catch((e) => orca.log(`${PROMPT_HOOK}: ${e}`));
+      }
+    } catch (e) {
+      orca.log(`${PROMPT_HOOK}: ${e}`);
+    }
+    return next(event);
+  });
 
   // Panel readings now come every few seconds (decision 205): an unchanged item is not pushed again,
   // except by the 30-second round, which also repairs an item Orca reset while this worker ran.

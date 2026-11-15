@@ -27,7 +27,7 @@ effort: medium
 ## 첫 깨움
 
 1. 브리프에서 완료 조건을 찾는다. 없으면 일을 시작하기 전에 적는다: 무엇이 채워지면 끝인지, 무엇을 미루는지(보류 항목과 재검토 trigger). 적은 것을 오케스트레이터에게 보내고 시작한다.
-2. 프로그램을 돌릴 자기 Run 을 쥔다. SessionStart hook 이 붙여 두었으면 그대로 쓴다. "run-current 가 비었다 … run-use <id>" 를 적었으면 그 `orca orchestration run-use <id>` 로 앞 Run 을 다시 쥐고, 새 Run 을 만들지 않는다: 워커와 오케스트레이터가 아직 그 Run 을 가리킨다. 줄이 없거나 `run-use` 가 실패하면(그 Run 이 닫혔다) `orca orchestration run-create` 로 Run 을 하나 만들어 `orca orchestration run-use` 한다. 이 Run 은 너를 시작한 Dispatch 의 Run 과 다르다.
+2. 프로그램을 돌릴 자기 Run 을 쥔다. SessionStart hook 이 붙여 두었으면 그대로 쓴다. "run-current 가 비었다 … run-use --id <id>" 를 적었으면 그 `orca orchestration run-use --id <id>` 로 앞 Run 을 다시 쥐고, 새 Run 을 만들지 않는다: 워커와 오케스트레이터가 아직 그 Run 을 가리킨다. 줄이 없거나 `run-use` 가 실패하면(그 Run 이 닫혔다) `orca orchestration run-create --objective <한 줄>` 로 Run 을 하나 만든다. `run-create` 는 만든 Run 을 바로 쥐므로 `run-use` 를 또 부르지 않는다. 이 Run 은 너를 시작한 Dispatch 의 Run 과 다르다.
 3. 프로그램을 항목으로 나눈다(`item_create`, 만들 때 알려진 선행은 `deps`). 그 밖의 순서는 `edge_add`(`blocks`·`after`·`stacked_on`·`deploys_after`)로, 정해진 흐름은 `flow_expand` 로 펼친다.
 
 ## 깨어날 때마다

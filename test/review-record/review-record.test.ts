@@ -81,7 +81,8 @@ test("the session whose checkout holds the PR is refused before GitHub's author 
 });
 
 // Decision 227: the CLI is an agent session when Claude Code set CLAUDECODE; this suite runs the
-// owner's shell unless a test says otherwise, whatever shell started it.
+// owner's shell unless a test says otherwise, whatever shell started it (the Orca terminal handle,
+// which counts the same way since decision 280, is cleared for every test by test/setup-home.ts).
 delete process.env.CLAUDECODE;
 async function asAgent<T>(f: () => Promise<T>): Promise<T> {
   process.env.CLAUDECODE = "1";

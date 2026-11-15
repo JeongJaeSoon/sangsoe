@@ -10,6 +10,7 @@ import { readyKeys } from "../../graph/notify-ready.ts";
 import { type FullTaskRow, readSnapshot, snapshotTasks } from "../../graph/snapshot.ts";
 import type { CoreDeps } from "../../notify/result.ts";
 import { DEFAULT_MONITOR_CONFIG, type Planned } from "../monitor.ts";
+import { closeMerged, mergedItemTasks } from "../pr/merge-close.ts";
 import { judgeQueue } from "./judge.ts";
 import { leadNotice } from "./round.ts";
 
@@ -55,6 +56,8 @@ function predecessorRuns(events: readonly StoredEvent[], mine: ReadonlyMap<strin
  *   the key the mail would have used. An open gate to resolve or a running worker to tell is one
  *   re-call of decision_answer or decision_moot with this Run as caller (Orca lets only the Run's
  *   session resolve its gates). Nothing owed is no call. Waiters of other Runs are theirs;
+ * - a merged PR whose item Task is this Run's and still open is closed here (decision 275: `closeMerged`,
+ *   the same function pr-monitor's round calls and Orca refuses there), unless a live Dispatch holds it;
  * - the Run's ready, due and unclear items are told in one count line. "Told" is the `notified` row
  *   under the key the timer's mail would have used, so the timer may have written the item's row
  *   first, and a round that can send does not mail it again.
@@ -64,8 +67,21 @@ function predecessorRuns(events: readonly StoredEvent[], mine: ReadonlyMap<strin
  * (a worker that cannot be reached) is made again on each prompt and prints nothing.
  */
 export async function deliverOwnRun(deps: CoreDeps, run: string, now: string): Promise<OwnRunDelivery> {
-  const listedTasks = await deps.orca.taskList({ run, full: true });
+  let listedTasks = await deps.orca.taskList({ run, full: true });
   if (!listedTasks.ok) return { skipped: `task-list ${run}` };
+  // Decision 275: the merge close of this Run's Tasks, before the rest so the count line reads the rows after it.
+  const merged: string[] = [];
+  for (const m of mergedItemTasks(deps.store.events())) {
+    if (!listedTasks.value.some((t) => t.id === m.task)) continue;
+    // A Task already closed costs no Orca call: the rows read above answer it.
+    const c = await closeMerged({ orca: deps.orca, events: () => deps.store.events(), now: () => Date.parse(now) }, { ...m, run, source: SOURCE, rows: listedTasks.value });
+    for (const p of c.planned) deps.store.append(p);
+    if (c.closed) merged.push(m.ref);
+  }
+  if (merged.length > 0) {
+    listedTasks = await deps.orca.taskList({ run, full: true });
+    if (!listedTasks.ok) return { skipped: `task-list ${run}` };
+  }
   const listed = await deps.orca.gateList({ run });
   if (!listed.ok) return { skipped: `gate-list ${run}` };
   const events = deps.store.events();
@@ -136,11 +152,12 @@ export async function deliverOwnRun(deps: CoreDeps, run: string, now: string): P
     }),
   ];
   const fresh = items.filter((i) => !told.has(i.key.dedupe_key));
-  if (fresh.length + resolved.length + late.length === 0) return { run, resolved, lines: [] };
+  if (fresh.length + resolved.length + late.length + merged.length === 0) return { run, resolved, lines: [] };
   for (const i of items) deps.store.append({ ...i.event, source: SOURCE });
   for (const i of fresh) inject(i.key);
   const parts = (Object.keys(LABEL) as Told[]).map((type) => `${LABEL[type]} ${items.filter((i) => i.type === type).length}`);
   const gone = freed.length > 0 ? ` 닫힌 결정 ${freed.join(" · ")} 의 게이트 ${resolved.length}개를 풀었다.` : "";
   const heard = late.length > 0 ? ` 닫힌 Task 가 기다리던 결정: ${late.join(" · ")}.` : "";
-  return { run, resolved, lines: [`sangsoe: Run ${run} — ${parts.join(" · ")} (새로 ${fresh.length}건). 목록은 resource ready 와 brief 로 읽는다.${gone}${heard}`] };
+  const landed = merged.length > 0 ? ` 머지된 PR 의 Task 를 닫았다: ${merged.join(" · ")}.` : "";
+  return { run, resolved, lines: [`sangsoe: Run ${run} — ${parts.join(" · ")} (새로 ${fresh.length}건). 목록은 resource ready 와 brief 로 읽는다.${gone}${heard}${landed}`] };
 }

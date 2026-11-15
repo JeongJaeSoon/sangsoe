@@ -47,6 +47,7 @@ import plugin_approved from "./events/plugin_approved.ts";
 import pr_review_requested from "./events/pr_review_requested.ts";
 import pressure_high from "./events/pressure_high.ts";
 import priority_set from "./events/priority_set.ts";
+import prompt_driven from "./events/prompt_driven.ts";
 import rate_limited from "./events/rate_limited.ts";
 import reap_blocked from "./events/reap_blocked.ts";
 import reap_candidate from "./events/reap_candidate.ts";
@@ -139,6 +140,7 @@ export const EVENTS = {
   pr_review_requested,
   pressure_high,
   priority_set,
+  prompt_driven,
   rate_limited,
   reap_blocked,
   reap_candidate,
