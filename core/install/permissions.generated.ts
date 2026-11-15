@@ -42,7 +42,7 @@ export const GENERATED_RULES: readonly { readonly rule: string; readonly source:
   { rule: "Bash(orca worktree show:*)", source: "claude-plugin/skills/deliver-ticket/SKILL.md" },
   { rule: "Bash(sangsoe brief:*)", source: "claude-plugin/skills/brief/SKILL.md" },
   { rule: "Bash(sangsoe doctor:*)", source: "claude-plugin/skills/brief/SKILL.md" },
-  { rule: "Bash(sangsoe pressure wait:*)", source: "claude-plugin/agents/lead.md" },
+  { rule: "Bash(sangsoe pressure wait:*)", source: "claude-plugin/skills/write-brief/SKILL.md" },
   { rule: "Bash(sangsoe todo:*)", source: "claude-plugin/skills/todo/SKILL.md" },
   { rule: "Read(//{HOME}/.config/sangsoe/**)", source: "core/capacity/capacity.ts" },
   { rule: "Read(//{HOME}/.local/share/sangsoe/**)", source: "core/install/install.ts" },

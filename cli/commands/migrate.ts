@@ -56,7 +56,7 @@ export async function migrate(values: CommandArgs["values"], ports: { orca?: Orc
 
 export default {
   name: "migrate",
-  summary: "import agent-skills' open items and open decisions once, read-only on the old store (dry run unless --apply)",
+  summary: "import agent-skills' open items and open decisions once, read-only on the old store (dry run unless --apply; --apply works only from the terminal that holds the --run Run)",
   usage: "[--from <agent-skills.db>] [--dry-run | --apply --run <run id>]",
   options: {
     from: { type: "string" },

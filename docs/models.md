@@ -1,7 +1,7 @@
 <!-- Generated from core/models/table.ts by `sangsoe models --markdown`. Do not edit; test/models-view.test.ts fails when it drifts. -->
 # 모델 표
 
-원본은 `core/models/table.ts` 하나다. Claude Code 2.1.322 기준으로 확인했다.
+원본은 `core/models/table.ts` 하나다. Claude Code 2.1.325 기준으로 확인했다.
 
 ## 카탈로그
 
