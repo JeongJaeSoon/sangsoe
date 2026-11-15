@@ -99,11 +99,31 @@ test("B4: the scan reads the real tracked tree: it finds this file's own fixture
   assert.equal(scan("("), null);
 });
 
+/**
+ * Why the real scan is skipped, or null when it must run. On a push to main in CI an empty pattern
+ * is no reason to skip: the repository secret must be there, so the scan runs and fails on the
+ * unusable pattern (decision 271). Elsewhere (a fork's pull request, a local run) nothing has it.
+ */
+function skipReason(pattern: string, env: { GITHUB_EVENT_NAME?: string | undefined; GITHUB_REF?: string | undefined }): string | null {
+  if (pattern.trim() !== "") return null;
+  if (env.GITHUB_EVENT_NAME === "push" && env.GITHUB_REF === "refs/heads/main") return null;
+  return `${ENV} is empty or unset: the pattern lives outside this public repository (CI gets it from a secret)`;
+}
+
+test("B4: an empty pattern is a skip everywhere but a push to main, where the scan runs and fails", () => {
+  assert.match(skipReason("", {}) ?? "", /empty or unset/);
+  assert.match(skipReason(" \n", { GITHUB_EVENT_NAME: "pull_request", GITHUB_REF: "refs/pull/1/merge" }) ?? "", /empty or unset/);
+  assert.match(skipReason("", { GITHUB_EVENT_NAME: "push", GITHUB_REF: "refs/heads/topic" }) ?? "", /empty or unset/);
+  assert.equal(skipReason("", { GITHUB_EVENT_NAME: "push", GITHUB_REF: "refs/heads/main" }), null);
+  assert.equal(skipReason("x", {}), null);
+  assert.equal(scan(""), null, "the scan refuses an empty pattern, so the run that must have one fails");
+});
+
 const source = process.env[ENV] ?? "";
 
 test(
   "B4: no tracked file matches the internal-name pattern",
-  { skip: source.trim() === "" ? `${ENV} is empty or unset: the pattern lives outside this public repository (CI gets it from a secret)` : false },
+  { skip: skipReason(source, process.env) ?? false },
   () => {
     const found = scan(source);
     // assert.ok with a fixed message: a thrown RegExp error or a diff would print the pattern.

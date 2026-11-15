@@ -118,7 +118,7 @@ export const ORCA_LAUNCH_CATALOG = {
 } as const;
 
 /** The Claude Code release the catalog was checked against; doctor notices a newer one. */
-export const VERIFIED_WITH_CLAUDE_CODE = "2.1.322";
+export const VERIFIED_WITH_CLAUDE_CODE = "2.1.325";
 
 /**
  * What a session's work is. `orchestrator`, `lead` and `worker` are the roles' defaults; the rest

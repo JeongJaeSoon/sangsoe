@@ -36,8 +36,9 @@ transcript 경로는 프로필의 `projects/<작업 폴더 slug>/<세션 id>.jso
 ## 준비 순서
 
 1. 버리는 저장소를 scratch 에 clone 하고 `orca repo add` 로 Orca 에 올린다. Orca CLI 에 저장소를 내리는 명령이 없어 등록은 남고, 보고에 적는다.
-2. 그 저장소의 Orca worktree 하나에 터미널을 열고 `claude --settings <scratch>/smoke-settings.json --agent sangsoe:orchestrator` 를 띄운다. 이 터미널의 handle 과 PID 를 적는다.
-3. 오케스트레이터는 `orca orchestration run-create` 로 자기 Run 을 쥐고 `item_create` → `start_unit`(리드)을 부른다. 그 아래는 위 실행 계획대로다.
+2. 그 저장소를 `~/.config/sangsoe/config.json` 의 `watch.repos` 에 GitHub 표기 그대로(대소문자까지) 넣고, 바로 머지하는 길을 잴 때는 `verdict_merge_repos` 에도 넣는다. `sangsoe doctor` 의 `watch-repos` 행이 ok 인지 본다. P3 은 이것이 빠져 3번을 재지 못했다. 설정 파일은 오너가 고친다.
+3. 그 저장소의 Orca worktree 하나에 터미널을 열고 `claude --settings <scratch>/smoke-settings.json --agent sangsoe:orchestrator` 를 띄운다. 이 터미널의 handle 과 PID 를 적는다.
+4. 오케스트레이터는 `orca orchestration run-create` 로 자기 Run 을 쥐고 `item_create` → `start_unit`(리드)을 부른다. 그 아래는 위 실행 계획대로다.
 
 ## 리허설 1회차 (2026-11-10, 설치본 rc.4)
 
@@ -722,3 +723,47 @@ store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (1
 작은 것(LATER): 넓은 표에서 묶음 이름이 토큰 안에서 줄바꿈된다(`lead:s6r` / `3`). i026 의 누가 칸이 터미널 handle 원문이다. 처음 찍은 720 샷이 빈 화면이었고 다시 찍으니 그려졌다. 리드가 대기 턴을 끝낼 때마다 HIGH stop 에스컬레이션이 났다(네 번). 리드의 guard hook 이 foreground `orca orchestration check --wait` 를 막는다.
 
 닫기: #14 · #15 머지, 원격 `s6r3/*` 삭제, 열린 PR 0. 리드 Run 의 Task 셋(재리뷰 항목 포함) completed, 워커 둘 `released`, 리드 worker_done 뒤 `released`. `sangsoe doctor` 종료 코드 0, notice 둘(reaper-config, model-table) 말고 모두 ok.
+
+## P3 (2026-11-15 JST, 설치본 0.1.9, 결정 270)
+
+전환을 앞두고 설치본으로 한 번 더 돌았다. 고정물은 S6 과 같은 smoke 저장소다. 시각은 UTC 다.
+
+### 환경
+
+- sangsoe 0.1.9(brew), `sangsoe doctor` ok 22행 · notice 1(model-table), Orca 1.4.259, Claude Code 2.1.325.
+- smoke 오케스트레이터는 smoke 저장소의 worktree 에서 `--agent sangsoe:orchestrator` 로 뜬 세션이다. 프로필의 `CLAUDE_CODE_PLUGIN_DIRS` 는 비웠다. 세션의 자기 보고: 옛 plugin 의 skill 0, sangsoe 의 skill 23, 역할 줄 `sangsoe-role: orchestrator`.
+- 사용자 설정의 hook 은 smoke 세션에도 걸렸다(워커가 "PR 뒤의 hook 이 다른 일을 시켰으나 따르지 않았다" 고 적었다).
+
+### 항목별 결과
+
+| # | 항목 | 결과 | 잰 것 |
+|---|---|---|---|
+| 1 | 리드의 Run 과 `start_unit`(unit_lineage_complete) | PASS | 11:48:59 오케스트레이터의 `start_unit`(lead) → `unit_started` · `session_started{role lead}`. 11:53:06 리드의 `start_unit`(worker) → `unit_started{model sonnet, advisor opus}`. 12:09:38 `test/lineage/real-orca.test.ts`: 두 Run 각각 units 1 · complete 1 · removed 0 · broken 0 |
+| 2 | raw_start_refused | PASS | 11:50:21 리드의 `orca agent launch` → `[gate:start]` 거부, `gate_denied` 와 `refusal_report` 한 줄씩 |
+| 3 | 실제 PR 에 land, pr-monitor 실제 라운드 | 일부(못 잼) | land 는 `merge_on_approval` 로 예약됐다(smoke 저장소에 CI check 가 없다). `pr_opened` → `pr_merged` → 항목 닫힘은 재지 못했다: smoke 저장소가 `watch.repos` 에 없었고, 뒤에 넣은 이름은 대소문자가 GitHub 과 달라 읽히지 않았다. 코드 결함이 아니라 준비 누락이다. 릴리스 smoke 가 저장소를 처음부터 `watch.repos`(GitHub 표기 그대로)에 넣고 다시 잰다 |
+| 4 | 실제 Orca 의 알림 | PASS | 워커의 handoff 가 자기 Dispatch 의 Run 으로 갔고(`dispatch_run_mismatch` 없음), 리드의 질문이 오케스트레이터 Run 으로 올라갔다 |
+| 5 | 실제 transcript 의 hook | FAIL → 결정 280 | `orca terminal send` 로 넣은 줄이 `owner_action{origin chat}` 으로 적히고 대기를 `waiting_released{by owner}` 로 풀었다(4번). Orca 가 넣은 "You have 1 orchestration message" 줄은 `owner_action` 이 없었다(3번, `waiting_released{by unknown}`) |
+| 6 | queue 라운드 non-dry | FAIL → 결정 274 | 12:00:54 plugin 타이머의 라운드: planned 0 · written 0 · acts 113 · failed 113, 모두 `no_active_sender_terminal`. 같은 때 터미널에서 돈 dry run 은 planned 5 였다 |
+| 7 | 패널 · 상태 표시줄 · `sangsoe todo` 숫자 | PASS | 11:47:26 상태 표시줄 `🚧 1 · 결정 1 · 🔄 2`, `sangsoe todo` "내가 할 일 2 (결정 1 + 할 일 1)", 패널 할 일 2 · 결정 필요 1 · 진행 중 2 · 막힌 것 1 |
+| 8 | 패널 버튼의 답 | FAIL → 결정 274 | 11:50:14 "추천대로 답": `owner_action{origin button}` → `decision_answered{linked_by button}` → `decision_closed` 는 쓰였으나 Orca 게이트는 pending 그대로였고 패널에 "요청을 처리하지 못했다" 띠가 떴다. 12:09:15 Run 을 쥔 오케스트레이터의 `decision_answer` 가 같은 게이트를 풀었다 |
+| 9 | 쓰는 migrate import | PASS | `sangsoe migrate --apply`(가져오기용 Run 을 쥔 터미널에서): 항목 114 · 결정 0 · 간선 0. 뒤의 dry run: 열린 것 114 · 만들 것 0 · 이미 있음 114. 옛 저장소 사본을 먼저 남겼다(결정 271) |
+| 10 | 닫기 | PASS | 12:07:24 워커 worker_done(merge_ready) → 리드의 `worker-release` · `unit_close` → 리드 worker_done 12:09:50 → 오케스트레이터의 `worker-release`: state released · liveness exited. 리드가 턴을 끝내기 전의 `unit_close` 는 `agent_not_idle` 로 거부됐다(규칙대로다) |
+
+### 이 실행이 낸 것
+
+| 본 것 | 어디로 갔나 |
+|---|---|
+| SessionStart 줄의 `run-use <id>` 가 Orca 에서 "Unknown command" 였다(`run-use --id <id>` 가 맞다). 줄이 이름 댄 Run 은 다른 worktree 의 옛 세션 것이었다 | 결정 273 |
+| plugin worker 의 orchestration 쓰기(send · task-update)는 모두 `no_active_sender_terminal` 이다. 읽기는 된다 | 결정 274 · 275 |
+| 여러 PR 을 내는 Task 는 첫 PR 의 머지에서 닫힐 뻔했다(그때는 거부 덕에 닫히지 않았다) | 결정 275(d149) |
+| `watch.repos` 의 대소문자가 GitHub 과 다르면 표시 없이 읽지 못한다 | 결정 275 의 doctor 점검. 준비 순서에도 한 줄 더한다: smoke 저장소를 `watch.repos` 에 GitHub 표기 그대로 먼저 넣는다 |
+| 가져온 항목 113개가 글 trigger 라 `trigger_unclear` 113행이 한 Run 에 몰렸다 | 결정 274 ⑤(한 줄로 모음), 정리는 결정 271 |
+| `[gate:delegate]` 가 오케스트레이터의 읽기 전용 `orca … --help` · `orca --version` 을 막았다 | 남김(결정 269) |
+| `sangsoe migrate --apply --run` 은 그 Run 을 쥔 터미널에서만 된다(`consumer_fenced`). help 에 없었다 | help 한 줄(결정 271) |
+| `item_create` 는 리드 항목에 `class` 를 받지 않고, `start_unit` 의 `repo` 는 `id:` · `name:` · `path:` 선택자만 받는다 | 남김(결정 269): 거부 문구가 고칠 곳을 말한다 |
+| CI check 가 없는 저장소의 land 는 `merge_on_approval` 로 예약되고, 머지는 오케스트레이터가 head 를 맞춰서 했다(결정 226) | 남김(결정 269) |
+| html 패널의 첫 `plugin shot` 은 빈 화면이었다(첫 데이터가 그려지기 전) | 남김(결정 269): 두 번째 캡처를 쓴다 |
+
+### 릴리스 smoke 가 다시 잴 것
+
+3번(처음부터 `watch.repos` 에 넣고 `pr_opened` → `pr_merged` → Run 을 쥔 세션의 hook 이 닫음, 결정 275), 6번과 8번(결정 274: 패널의 답이 pending 으로 남고 Run 을 쥔 세션의 다음 프롬프트에서 풀림, 준비됨 한 줄), 5번의 한 줄(결정 280: `orca terminal send` 로 넣은 줄에 `owner_action` 이 없음).
