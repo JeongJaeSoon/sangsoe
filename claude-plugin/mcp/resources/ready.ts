@@ -23,6 +23,13 @@ export function readyText(input: BriefInput, overlaps: Overlaps = { overlaps: []
   return [lines.join("\n"), ...waiting.map(renderWhy), ...(overlap.length > 0 ? [overlap.join("\n")] : [])].join("\n\n");
 }
 
+/**
+ * The repositories the overlap read is limited to (decision 291): `watch.repos` as written, and none
+ * when there is no watch config to read. pr-monitor reads nothing then either, so the PR rows left
+ * in the store are ones nothing closes any more.
+ */
+export const watchedRepos = (config: { readonly repos: readonly string[] } | null): readonly string[] => config?.repos ?? [];
+
 export default {
   name: "ready",
   uri: "sangsoe://ready",
@@ -33,7 +40,7 @@ export default {
     const input = await loadBriefInput({ now: new Date().toISOString() });
     if (!input.ok) throw new Error(`${input.refusal.code}: ${input.refusal.reason}`);
     const gh = createGhClient({ exec: nodeExec(), cache: memoryGhCache(), now: () => Date.now() });
-    const overlaps = await prOverlaps({ events: input.value.events, gh, repos: readWatchConfig()?.repos ?? [] });
+    const overlaps = await prOverlaps({ events: input.value.events, gh, repos: watchedRepos(readWatchConfig()) });
     return readyText(input.value, overlaps);
   },
 } satisfies ResourceDef;
