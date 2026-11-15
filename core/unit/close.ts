@@ -53,7 +53,13 @@ export async function closeUnit(ports: { readonly orca: OrcaAdapter; readonly st
   if (!ps.ok) return refuse("agent_not_idle", `worktree ps: ${ps.error.code}`, "retry once Orca answers");
   // Rows of other hosts do not matter: the target's row is looked up by worktree id among the local rows below.
   if (ps.value.truncated || ps.value.omittedHostIds.includes("local")) return refuse("agent_not_idle", "worktree ps is partial", "retry once Orca answers in full");
-  const paneKey = `${row.tabId}:${row.leafId}`;
+  // An orphaned row's tabId and leafId are placeholders; Orca files its agent under recordedPaneKey (decision 263 ⑩).
+  const paneKey = row.orphaned === true ? row.recordedPaneKey : `${row.tabId}:${row.leafId}`;
+  if (!paneKey) return refuse("agent_not_idle", `${terminal} is orphaned and Orca gives no recordedPaneKey for it`, "Orca does not show which pane held its agent, so it is not shown idle");
+  // The recorded pane may have been attached to another terminal since; then its ps row is that terminal's.
+  if (row.orphaned === true && list.value.rows.some((t) => t.handle !== terminal && t.orphaned !== true && `${t.tabId}:${t.leafId}` === paneKey)) {
+    return refuse("agent_not_idle", `the pane recorded for ${terminal} is attached to another terminal`, "its worktree ps row describes that terminal, not this one");
+  }
   const agent = ps.value.rows.find((r) => r.worktreeId === w.workspace)?.agents.find((x) => x.paneKey === paneKey);
   if (!agent) return refuse("agent_not_idle", `no agent row for ${terminal} in worktree ps`, "Orca does not show its agent, so it is not shown idle");
   if (!AT_REST.has(agent.state)) return refuse("agent_not_idle", `the agent in ${terminal} is ${agent.state}`, "wait until it is at rest");

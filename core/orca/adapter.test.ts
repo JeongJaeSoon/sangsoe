@@ -27,6 +27,7 @@ const DESIGN_TABLE = [
   "orchestration dispatch-show",
   "worktree ps",
   "worktree list",
+  "worktree show",
   "worktree rm",
   // Decision 202: start_unit makes the worktree first so its local settings exist before the session,
   // records the setup shell (and whether a setup script may run in it), and closes only that shell.

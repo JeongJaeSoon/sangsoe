@@ -1174,6 +1174,48 @@ test("S6 re-run NOW-B (decision 217): an orchestrator inside a worktree may leav
   assert.match(r.kind === "refused" ? r.detail : "", /ctx_lead/);
 });
 
+// Measured 2026-11-15: `worktree list` left a live worktree out while `worktree show --worktree id:<id>` found it.
+function listOmittingParent() {
+  const doc = JSON.parse(readFileSync(new URL("../fake-orca/scenarios/local/worktree-list.json", import.meta.url), "utf8"));
+  const parent = doc.result.worktrees.find((w: { id: string }) => w.id === PARENT_TREE);
+  doc.result.worktrees = doc.result.worktrees.filter((w: { id: string }) => w.id !== PARENT_TREE);
+  const list = () => ({ code: 0, stdout: JSON.stringify(doc), stderr: "" });
+  const show = (row: unknown) => () => ok({ worktree: row });
+  return { parent, list, show };
+}
+
+test("the parent worktree missing from `worktree list` is read with `worktree show`", async () => {
+  const { parent, list, show } = listOmittingParent();
+  const h = harness({ replies: { "worktree-list": list, "worktree-show": show(parent) } });
+  const out = await start(h);
+  assert.equal(out.kind, "started", JSON.stringify(out));
+  const shown = h.named("worktree show");
+  assert.equal(shown.length, 1);
+  assert.equal(flag(shown[0] ?? [], "worktree"), `id:${PARENT_TREE}`);
+  assert.equal(flag(h.named("worktree create")[0] ?? [], "parent-worktree"), `id:${PARENT_TREE}`);
+});
+
+test("a parent that only `worktree show` returns is refused when it is archived, on another host, another worktree, or unreadable", async () => {
+  const { parent, list, show } = listOmittingParent();
+  const cases: [string, () => ExecResult][] = [
+    ["archived", show({ ...parent, isArchived: true })],
+    ["on another host", show({ ...parent, hostId: "remote-1" })],
+    ["another worktree", show({ ...parent, id: "repo-0001::/home/dev/src/other" })],
+    ["unreadable", () => fail("selector_not_found")],
+  ];
+  for (const [name, reply] of cases) {
+    const h = harness({ replies: { "worktree-list": list, "worktree-show": reply } });
+    assertRefused(h, await start(h), "lineage_invalid");
+    assert.equal(h.named("worktree create").length, 0, name);
+  }
+  // `worktree show` is asked only after the list was read whole: a partial list still refuses first.
+  const partial = JSON.parse(list().stdout);
+  partial.result.truncated = true;
+  const h = harness({ replies: { "worktree-list": () => ({ code: 0, stdout: JSON.stringify(partial), stderr: "" }), "worktree-show": show(parent) } });
+  assertRefused(h, await start(h), "lineage_invalid");
+  assert.equal(h.named("worktree show").length, 0);
+});
+
 test("decision 197: a target repo rides on the parent's child worktree, so the parent worktree is kept; an item's recorded repo is used by id", async () => {
   const h = harness();
   assert.equal((await start(h, request({ repo: TARGET }))).kind, "started");

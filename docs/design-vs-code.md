@@ -143,7 +143,7 @@
 | 기능표 agent hooks status | design-appendix Orca 기능 활용 표 | implemented | `core/checks/orca-hooks.ts:6` | |
 | 기능표 terminal list·show·read | design-appendix Orca 기능 활용 표 | partial | `core/orca/commands.ts:79`, `core/detect/queue/round.ts:97` | G6 — list 는 있다(REAPER·시작이 부른다). show·read 행이 없어 queue-monitor 가 대기 발췌를 못 싣는다고 스스로 적는다 |
 | 기능표 skills get | design-appendix Orca 기능 활용 표 | missing | `core/orca/commands.ts:22` | G6 — agent·sangsoe skill 본문에도 없다 |
-| 기능표 worktree list·show·current | design-appendix Orca 기능 활용 표 | partial | `core/orca/commands.ts:75` | G6 — show·current 행 없음 |
+| 기능표 worktree list·show·current | design-appendix Orca 기능 활용 표 | partial | `core/orca/commands.ts:75` | G6 — current 행 없음. show 는 `worktreeShow`(`core/orca/commands.ts:76`)가 `start_unit` 의 부모 worktree 읽기에만 쓰인다(`core/start/start.ts:278`, 결정 263 ⑩) |
 | 기능표 worktree create·terminal·repo show | design-appendix Orca 기능 활용 표 | implemented | `core/start/start.ts:381`, `core/reaper/round.ts:148` | |
 | 기능표 repo list·project list | design-appendix Orca 기능 활용 표 | missing | `core/orca/commands.ts:81` | G6 — repo show 만 있다 |
 | 기능표 plugin | design-appendix Orca 기능 활용 표 | implemented | `orca-plugin/main.ts:83`, `orca-plugin/main.ts:114` | 저장소 칸은 G3 |
@@ -499,7 +499,7 @@
 | 언제나 --effort | decisions.md 결정 172 | changed (결정 209) | `core/start/start.ts:435` | |
 | 디스크 문턱 기본값 | decisions.md 결정 115 | changed (결정 210) | `core/capacity/capacity.ts:27` | |
 | 돌던 세션 재시작 안내 | decisions.md 결정 208 | changed (결정 211) | `claude-plugin/mcp/tools/start_unit.ts:168` | server_stale |
-| 끝난 단위의 에이전트 터미널 닫기 | decisions.md 결정 62·197·202 "`terminal close` 는 부르지 않는다" | changed (결정 263) | `core/unit/close.ts:28`, `claude-plugin/mcp/tools/unit_close.ts:9`, `core/install/permissions.ts:29` | `worker-release` 가 먼저, `retained` 로 남은 것만 `unit_close`. 규칙은 `--tab` 을 가르지 못해(결정 263 ⑦) 안전은 tool 이 지킨다. design.html·부록은 아직 이 tool 을 세지 않는다(`TOOLS_NOT_IN_DESIGN`) |
+| 끝난 단위의 에이전트 터미널 닫기 | decisions.md 결정 62·197·202 "`terminal close` 는 부르지 않는다" | changed (결정 263) | `core/unit/close.ts:28`, `claude-plugin/mcp/tools/unit_close.ts:9`, `core/install/permissions.ts:29` | `worker-release` 가 먼저, `retained` 로 남은 것만 `unit_close`. `orphaned` 행은 agent 를 `recordedPaneKey` 로 찾는다(`core/unit/close.ts:57`, 결정 263 ⑩). 규칙은 `--tab` 을 가르지 못해(결정 263 ⑦) 안전은 tool 이 지킨다. design.html·부록은 아직 이 tool 을 세지 않는다(`TOOLS_NOT_IN_DESIGN`) |
 
 ## 6. 이 대조가 읽지 않은 것
 

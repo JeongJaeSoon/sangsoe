@@ -4,6 +4,9 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+- **`unit_close` closes a finished unit's terminal that Orca lists as orphaned (263 ⑩).** After an Orca restart a retained terminal is listed `orphaned: true` with placeholder `tabId` and `leafId`, so `unit_close` looked its agent up under a pane key `worktree ps` never has and refused every one with `agent_not_idle`. For an orphaned terminal it now looks the agent up by `recordedPaneKey`, the key Orca files it under. Every other condition is unchanged, an orphaned row with no `recordedPaneKey`, or whose pane another terminal now holds, is refused, and a missing `ps` row is still not "idle".
+- **`start_unit` reads its parent worktree with `orca worktree show` when `worktree list` omits it.** `worktree list` can leave a live worktree out (a lead's own was); `start_unit` refused with "부모 worktree 를 읽지 못했다". It now asks `worktree show --worktree id:<id>` for that one worktree and accepts it only when the id matches, it is not archived and it is on the local host. A truncated list still refuses first.
+
 ## 0.1.7
 
 Everything since `v0.1.6`: decisions 241, 245, 246, 250, 251, 257, 259, 260, 262, 263 and 264. `v0.1.7-rc.1` carried all of them and was checked on an installed build and the real Orca panel with no failing item; 0.1.7 is the same code.
