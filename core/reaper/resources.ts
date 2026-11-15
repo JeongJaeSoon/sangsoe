@@ -191,7 +191,7 @@ export type ResourcePartView =
 
 const why = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** One sample as the panel's card draws it: the same figures the gauges show. */
+/** One sample as the panel's load rows draw it: the same figures as the values they show. */
 export type LoadPoint = { at: number; loadPerCpu?: number; memUsedPct?: number; diskFreeGb?: number };
 /** Decision 250: the last 24 hours of decision 241's samples, with the thresholds the lines mark. */
 export type LoadHistory = { from: string; to: string; stepMs: number; thresholds: LoadThresholds; points: LoadPoint[] };

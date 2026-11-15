@@ -227,8 +227,9 @@ function spark(s: Series, h: LoadHistory, from: number, hours: 6 | 24): { svg: s
     d += `${prev === null || p.at - prev > GAP_STEPS * h.stepMs ? "M" : "L"}${x(p.at)} ${y(p.v)}`;
     prev = p.at;
   }
-  // A lone sample between two gaps gets a short stroke of its own so it shows.
-  d = d.replace(/M([\d.]+ [\d.]+)(?=M|$)/g, "M$1h3");
+  // A lone sample between two gaps gets a short stroke of its own so it shows; at the right edge
+  // (a new install's first sample) the stroke runs back into the row.
+  d = d.replace(/M([\d.]+) ([\d.]+)(?=M|$)/g, (_, px: string, py: string) => `M${px} ${py}h${Number(px) > 997 ? -3 : 3}`);
   const range = `최근 ${hours}시간 ${s.num(lo) === s.num(hi) ? "" : `${s.num(lo)}–`}${s.num(hi)}${s.unit}`;
   const said = `${s.label} ${range}, 표본 ${pts.length}개`;
   return { svg: `<svg class="sp" viewBox="0 0 1000 24" preserveAspectRatio="none" role="img" aria-label="${esc(said)}"><path class="sp-line" d="${d}"/></svg>`, range };
@@ -247,7 +248,7 @@ export function loadRows(h: Reading<LoadHistory> | null | undefined, l: Load | n
     const { svg, range } = v ? spark(s, v, from, hours) : { svg: "<span></span>", range: "" };
     return `<div class="gauge"${range ? ` title="${esc(range)}"` : ""}><span class="g-l">${s.label}</span>${svg}<span class="g-v ${l ? toneOf(l.reasons, s.reason) : ""}">${now === undefined ? "모름" : esc(`${s.num(now)}${s.unit}`)}</span></div>`;
   });
-  // The window's left edge is `hours` ago; samples that begin later say when, under where the line would start.
+  // The window's left edge is `hours` ago; samples that begin later say when, under that edge.
   const first = v?.points.find((p) => p.at >= from);
   const late = v && first && first.at - from > GAP_STEPS * v.stepMs ? `<div class="gauge sp-from"><span></span><span>${hhmm(new Date(first.at).toISOString())}부터</span></div>` : "";
   return `<div class="lrows" role="group" aria-label="${v ? `PC 부하: 지금 값과 최근 ${hours}시간` : "PC 부하: 지금 값"}">${rows.join("")}${late}</div>${h && !h.ok ? `<p class="ep">부하 기록을 ${unread(h.why)}</p>` : ""}`;

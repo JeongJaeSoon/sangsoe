@@ -93,6 +93,32 @@ test("a lone sample between gaps gets a short stroke of its own; a run of two ke
   assert.doesNotMatch(subs[2] ?? "", /h3/);
 });
 
+test("a first sample at the right edge draws its stroke back into the row; the late note starts past three periods", () => {
+  const one = loadRows(ok(loadHistory(NOW, 1)), LIVE, 6);
+  assert.match(paths(svgs(one)[0]?.body ?? "")[0] ?? "", /^M1000\.0 [\d.]+h-3$/);
+  assert.equal(rows(one)[1]?.title, "최근 6시간 62%", "one value is not written as a range");
+  // 6 hours hold 72 periods: 70 samples begin 15 minutes after the window's start, 69 begin 20 minutes after.
+  assert.doesNotMatch(loadRows(ok(loadHistory(NOW, 70)), LIVE, 6), /sp-from/, "three periods late is not late");
+  assert.match(loadRows(ok(loadHistory(NOW, 69)), LIVE, 6), /sp-from/);
+});
+
+test("the value takes the tone of the load judgment's reason for its metric", () => {
+  const reasons = ["load/CPU 2.10 ≥ 위험 2", "메모리 여유 18% ≤ 경고 20%", "디스크 여유 8 GB ≤ 위험 10 GB"];
+  const html = loadRows(null, { level: "danger", reasons, loadPerCpu: 2.1, memFreePct: 18, diskFreeGb: 8 }, 6);
+  assert.deepEqual(rows(html).map((x) => [x.label, x.tone, x.value]), [["CPU", "t-bad", "2.10 / 코어"], ["메모리 사용", "t-warn", "82%"], ["디스크 여유", "t-bad", "8 GB"]]);
+  assert.match(STYLE, /\.g-v\.t-warn \{ color: var\(--accent\); \}/);
+  assert.match(STYLE, /\.g-v\.t-bad \{ color: var\(--bad\); \}/);
+});
+
+test("an unread load keeps the rows under its notice, each value 모름", async () => {
+  assert.ok(PARTS_GOT.load.ok);
+  const got = { ...PARTS_GOT, load: { ok: true as const, value: { ...PARTS_GOT.load.value, load: { ok: false as const, why: "sysctl failed" }, history: ok(loadHistory(NOW)) } } } as typeof PARTS_GOT;
+  const html = renderResBody(await readParts(async (input) => got[input?.part ?? "load"], () => undefined), Date.parse(NOW), 6);
+  assert.match(html, /<h3>PC 부하<\/h3>.*<p class="ep"><span class="unread" title="sysctl failed">읽지 못함<\/span><\/p><div class="lrows"/);
+  assert.deepEqual(rows(html).map((x) => x.value), ["모름", "모름", "모름"]);
+  assert.equal(svgs(html).length, 3);
+});
+
 test("no sample in the window: each row says so in its line's place and still shows the value read now", () => {
   const empty = loadRows(ok({ ...loadHistory(NOW), points: [] }), LIVE, 24);
   assert.equal(svgs(empty).length, 0);
