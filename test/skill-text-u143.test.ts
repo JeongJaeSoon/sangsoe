@@ -30,7 +30,7 @@ test("orchestrator.md has a start step that makes the session hold its own Run: 
 
 test("the orchestrate skill's orchestrator section points at the same start step", () => {
   const s = section(read("claude-plugin/skills/orchestrate/SKILL.md"), "오케스트레이터: 프로그램 사이");
-  for (const want of ["자기 Run", "run-create", "run-use"]) has(s, want, "orchestrate 오케스트레이터 절");
+  for (const want of ["자기 Run", "run-create", "run-use <id>"]) has(s, want, "orchestrate 오케스트레이터 절");
 });
 
 test("worker.md says a worker reports to the Run its Dispatch is on, and that Run's coordinator relays", () => {
