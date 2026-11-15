@@ -13,8 +13,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Each job has a time limit (decision 266): GitHub's default is 360 minutes, and these end in under two.
   typecheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,6 +28,7 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,6 +40,7 @@ jobs:
 
   unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,7 +49,14 @@ jobs:
           node-version: 24.15.0
           cache: npm
       - run: npm ci
-      - run: npm test
+      # `shell: bash` runs with pipefail, so a failing test still fails the step through tee.
+      - name: npm test
+        shell: bash
+        run: npm test 2>&1 | tee "$RUNNER_TEMP/test-output.log"
+      # Skipped tests and a rerun attempt go to the job summary, also when a test failed.
+      - name: Skipped tests and reruns
+        if: ${{ !cancelled() }}
+        run: node scripts/ci-test-summary.ts "$RUNNER_TEMP/test-output.log"
       - run: npm run build
       - name: sangsoe --version from the build
         run: |

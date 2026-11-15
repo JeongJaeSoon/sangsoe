@@ -4,7 +4,7 @@
 
 | id | 갈래 | 검증(센 숫자로 끝난다) | 주인 | 증거 |
 |---|---|---|---|---|
-| B1 | 기반 | CI `typecheck`·`lint`·`unit` 녹색, 시간 상한·병렬, 건너뛴 시험과 재실행 flake 수를 숨기지 않음(R-11) | U0·U5 | 미달 1/3: `.github/workflows/ci.yml` 의 세 job 이 병렬로 돌고 PR 마다 녹색이다. job 에 `timeout-minutes` 가 없고(GitHub 기본 360 분), 건너뛴 시험 수는 `node --test` 요약 줄(`skipped`)에만 있고 재실행 flake 를 세는 단계는 없다. 스모크 전에 둘을 더하거나 이 행을 연기로 고친다 |
+| B1 | 기반 | CI `typecheck`·`lint`·`unit` 녹색, 시간 상한·병렬, 건너뛴 시험과 재실행 flake 수를 숨기지 않음(R-11) | U0·U5 | `test/ci-workflow.test.ts` 4건(결정 266): job 3개가 서로 기다리지 않고(`needs` 0) 상한 5 · 5 · 15분, `npm test` 는 pipefail 로 로그에 남고 실패해도 요약 단계가 돈다, 요약은 건너뛴 수와 이름(2/2)과 재실행 회차를 적는다, 집계 줄 없는 출력은 요약 실패 1 |
 | B2 | 기반 | 시작 점검이 필요한 Orca 기능이 없으면 거부, 호환 경로 없음(R-17) | U2 | `core/checks/checks.test.ts` "a missing capability refuses the start" · "a command or flag missing from agent-context refuses the start" · "Orca not running refuses the start"(거부 3 경로, 호환 경로 0) |
 | B3 | 기반 | SQLite 하한 미달·네트워크 위 DB 거부 | U1 | `core/store/checks.test.ts`(통과 8 · 거부 9 버전, 네트워크 12종·모름·탐침 실패 거부), `core/store/store.test.ts` "refuses a database on a network filesystem" |
 | B4 | 기반 | 공개 위생 검사가 실제로 실패할 수 있음 · 등록된 hook 경로 존재 · 실행 비트(R-01) | U5(+U12) | 미달 2/3: `test/hooks-registered.test.ts` "every path a hook command names exists in the plugin, and one run directly is executable"(경로 · 실행 비트). 공개 위생(내부 이름) 검사는 저장소 안에 시험이 없고 PR 마다 사람이 grep 한다. 스모크 전에 실패할 수 있는 시험으로 만들거나 이 행을 연기로 고친다 |
