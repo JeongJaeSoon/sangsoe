@@ -5,6 +5,7 @@ import { advisorCalls } from "../models/spend.ts";
 import { readDecision } from "../decision/waiters.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { deliverOwnRun } from "../detect/queue/own-run.ts";
+import { wasDriven } from "../owner/driven.ts";
 import { classifyPrompt } from "../owner/prompt.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
 import type { Store } from "../store/store.ts";
@@ -40,9 +41,9 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
   switch (event) {
     case "user-prompt-submit": {
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
-      await ownerSaid(deps, row, input);
+      await ownerSaid(deps, row, input, opts.terminal);
       // Decision 274: this prompt's context gets the Run's one count line; Claude Code injects the stdout.
-      return ownRun(deps, row);
+      return ownRun(deps, row, input);
     }
     case "stop": {
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
@@ -81,15 +82,48 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
  * and the deliveries the plugin cannot make. A worker holds no Run and makes no Orca call; anyone
  * else reads run-current once, then its Run's Tasks and gates.
  */
-async function ownRun(deps: CoreDeps, row: SessionRow): Promise<string[]> {
+async function ownRun(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<string[]> {
   if (row.role === "worker") return [];
   const now = new Date().toISOString();
   const current = await deps.orca.runCurrent();
   const run = current.ok && typeof current.value.runId === "string" && current.value.runId !== "" ? current.value.runId : null;
   await syncOwnRun(deps, row.role, now, run);
   if (!run) return [];
+  await holds(deps, row, input, run);
   const own = await deliverOwnRun(deps, run, now);
   return "lines" in own ? [...own.lines] : [];
+}
+
+/**
+ * Decision 273: a session takes its Run after it starts (run-create, run-use), so the row SessionStart
+ * wrote names none. The first prompt that finds a Run held, or another Run than the row names, writes
+ * the session's row again with that Run, so the next start in this place can be told to take it back.
+ * A session with no Task also gets the worktree it runs in, read now: a row from before this decision
+ * has none, and a copy of it would never match. One worktree-ps read, only while something is missing.
+ */
+async function holds(deps: CoreDeps, row: SessionRow, input: SessionHookInput, run: string): Promise<void> {
+  const placed = row.task !== undefined || row.worktree !== undefined;
+  if (run === row.heldRun && placed) return;
+  const worktree = placed ? row.worktree : await liveWorktree(deps.orca, input.cwd);
+  if (run === row.heldRun && !worktree) return;
+  const last = deps.store.events({ type: "session_started" }).findLast((e) => e.payload.session === input.session_id);
+  if (!last) return;
+  deps.store.append({
+    type: "session_started",
+    source: "UserPromptSubmit",
+    ...(last.entity && last.entity_id ? { entity: last.entity, entity_id: last.entity_id } : {}),
+    ...(last.subject ? { subject: last.subject } : {}),
+    target: `run:${run}`,
+    dedupe_key: dedupeKey(EVENTS.session_started, input.session_id, "held", String(last.seq)),
+    payload: {
+      session: input.session_id,
+      role: row.role,
+      model: String(last.payload.model ?? "unknown"),
+      ...(typeof last.payload.tier === "string" ? { tier: last.payload.tier } : {}),
+      ...(typeof last.payload.effort === "string" ? { effort: last.payload.effort } : {}),
+      ...(worktree ? { worktree } : {}),
+    },
+  });
 }
 
 /** Decision 91①: the session moving again, or ending, releases its waits; core/owner decides which. */
@@ -108,9 +142,12 @@ const ANSWER_SHAPE = /^\s*(d\d{3,})\b/;
  * decision; it links through U8's decision_answer (linked_by=hook). A dispatched session's prompt can
  * be another session's message, so it never answers.
  */
-async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
+async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInput, terminal: string | undefined): Promise<void> {
   const text = input.prompt ?? "";
   if (classifyPrompt(text) !== "owner") return;
+  // Decision 280: text Orca reported as driven into this terminal was typed by no person. No row: it
+  // answers no decision, marks no wait as the owner's, and is no owner_action a tool could cite.
+  if (wasDriven(deps.store.events({ type: "prompt_driven" }), terminal, text, Date.now())) return;
   const masked = mask(text);
   const key = dedupeKey(EVENTS.owner_action, input.session_id, input.prompt_id ?? hashOf(`${masked}\n${tail(input.transcript_path).length}`));
   const action = deps.store.appendOwnerAction(

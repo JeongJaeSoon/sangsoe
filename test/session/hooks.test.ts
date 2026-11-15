@@ -9,12 +9,14 @@ import {
   mask,
   modelRowLines,
   ownerMarks,
+  recordDriven,
   recordHook,
   restart_due,
   reviewAskRecord,
   type SessionHook,
   type SessionHookInput,
   VERSION,
+  wasDriven,
 } from "../../core/index.ts";
 import { bang, createSessionWorld, DISPATCH, type SessionWorld, TASK, TASK_RUN, transcript } from "./world.ts";
 
@@ -95,7 +97,69 @@ test("a lead whose Run binding is gone is told to run-use the Run its earlier se
   await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
   w.heldRun = null;
   const lines = await hook(w, "session-start", { session_id: "s2", source: "clear" }, VERSION);
-  assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use run_lead");
+  assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_lead");
+});
+
+const psRow = (path: string, instance: string) => ({
+  worktreeId: `repo_1::${path}`,
+  worktreeInstanceId: instance,
+  hostId: "local",
+  repo: "api",
+  path,
+  branch: "b",
+  isMainWorktree: false,
+  isArchived: false,
+  liveTerminalCount: 1,
+  unverifiableTerminalCount: 0,
+  status: "idle",
+  agents: [],
+});
+const orchestratorStart = (w: SessionWorld, session: string) => hook(w, "session-start", { session_id: session, source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+const heldRows = (w: SessionWorld) => w.store.events({ type: "session_started" }).map((e) => [e.payload.session, e.source, e.target ?? null, e.payload.worktree ?? null]);
+
+test("273: a session records the Run it takes after it starts, once, at the first prompt that finds it held", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: null });
+  w.psRows = [psRow(w.dir, "inst_a")];
+  await orchestratorStart(w, "o1");
+  assert.deepEqual(heldRows(w), [["o1", "SessionStart", null, "inst_a"]], "nothing is held at start");
+
+  await hook(w, "user-prompt-submit", { session_id: "o1", prompt_id: "p1", prompt: "go" });
+  assert.equal(heldRows(w).length, 1, "still no Run: no row");
+  w.heldRun = "run_orch";
+  await hook(w, "user-prompt-submit", { session_id: "o1", prompt_id: "p2", prompt: "go" });
+  await hook(w, "user-prompt-submit", { session_id: "o1", prompt_id: "p3", prompt: "go" });
+  assert.deepEqual(heldRows(w).slice(1), [["o1", "UserPromptSubmit", "run:run_orch", "inst_a"]], "one row for the Run, not one per prompt");
+
+  // The next session in the same worktree starts unbound and is told to take that Run back.
+  w.heldRun = null;
+  const lines = await orchestratorStart(w, "o2");
+  assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_orch");
+});
+
+test("273: an orchestrator in another worktree, or one whose worktree cannot be read, is not handed that Run", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  w.psRows = [psRow(w.dir, "inst_a")];
+  await orchestratorStart(w, "o1");
+  w.heldRun = null;
+
+  w.psRows = [psRow(w.dir, "inst_b")];
+  assert.deepEqual((await orchestratorStart(w, "o2")).slice(1), [], "another worktree: another orchestrator");
+  w.psRows = null;
+  assert.deepEqual((await orchestratorStart(w, "o3")).slice(1), [], "unread: unknown is not the same place");
+  w.psRows = [psRow(w.dir, "inst_a")];
+  assert.equal((await orchestratorStart(w, "o4"))[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_orch");
+});
+
+test("273: a session whose row predates the worktree column gets the worktree stamped when its Run is recorded", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  // As an earlier release wrote it: the Run held at start, no worktree.
+  w.store.append({ type: "session_started", source: "SessionStart", target: "run:run_orch", dedupe_key: "session_started:old:startup", payload: { session: "old", role: "orchestrator", model: "m" } });
+  w.psRows = [psRow(w.dir, "inst_a")];
+  await hook(w, "user-prompt-submit", { session_id: "old", prompt_id: "p1", prompt: "go" });
+  await hook(w, "user-prompt-submit", { session_id: "old", prompt_id: "p2", prompt: "go" });
+  assert.deepEqual(heldRows(w).slice(1), [["old", "UserPromptSubmit", "run:run_orch", "inst_a"]]);
+  w.heldRun = null;
+  assert.equal((await orchestratorStart(w, "o2"))[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_orch");
 });
 
 /** The row item_create leaves for a Task sangsoe made (core/start/item.ts). */
@@ -161,6 +225,53 @@ test("the owner's chat line is stored masked; one dNNN links through decision_an
   const ans = o.store.events({ type: "decision_answered" });
   assert.deepEqual(ans.map((e) => [e.payload.decision, e.payload.linked_by]), [["d001", "hook"]]);
   assert.equal(o.store.events({ type: "owner_action" }).length, 1, "a repeated hook call writes nothing twice");
+});
+
+test("280: a prompt Orca reported as driven into the session's terminal is not the owner's: no owner_action, no answer", async () => {
+  const TERM = "term_00000000-0000-4000-8000-000000000001";
+  const said = "d001: Path versioning";
+  const start = async () => {
+    const o = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+    await hook(o, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+    o.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });
+    return o;
+  };
+  const prompt = (o: SessionWorld, terminal: string | undefined, text = said) =>
+    recordHook("user-prompt-submit", o, { cwd: o.dir, session_id: "o1", prompt_id: "p1", prompt: text }, { terminal });
+  const counts = (o: SessionWorld) => [o.store.events({ type: "owner_action" }).length, o.store.events({ type: "decision_answered" }).length];
+
+  // Orca hands the hook the text as it was sent; the session reads it trimmed and masked the same way.
+  const driven = await start();
+  recordDriven(driven.store, { terminal: TERM, prompt: `${said}\n`, inputKind: "driving" });
+  const row = driven.store.events({ type: "prompt_driven" })[0];
+  assert.deepEqual(Object.keys(row?.payload ?? {}).sort(), ["hash", "input_kind", "terminal"], "the text is not kept");
+  await prompt(driven, TERM);
+  assert.deepEqual(counts(driven), [0, 0]);
+  await prompt(driven, TERM, "d001: another answer the owner typed");
+  assert.deepEqual(counts(driven), [1, 1], "other text in the same terminal is still the owner's");
+
+  const elsewhere = await start();
+  recordDriven(elsewhere.store, { terminal: "term_other", prompt: said, inputKind: "driving" });
+  await prompt(elsewhere, TERM);
+  assert.deepEqual(counts(elsewhere), [1, 1], "the same text driven into another terminal says nothing about this one");
+
+  // A launch prompt can be the owner's own words typed into Orca; only the measured kind is taken as not the owner's.
+  for (const inputKind of ["launch", "orchestration", undefined]) {
+    const other = await start();
+    recordDriven(other.store, { terminal: TERM, prompt: said, inputKind });
+    await prompt(other, TERM);
+    assert.deepEqual(counts(other), [1, 1], `a row of kind ${inputKind} leaves the prompt to be read by its shape`);
+    assert.equal(other.store.events({ type: "prompt_driven" }).length, 1, "the row itself is kept");
+  }
+
+  const unknown = await start();
+  recordDriven(unknown.store, { terminal: TERM, prompt: said, inputKind: "driving" });
+  await prompt(unknown, undefined);
+  assert.deepEqual(counts(unknown), [1, 1], "a session whose terminal handle is not known is read by shape alone, as before");
+
+  const events = [{ type: "prompt_driven", ts: "2026-11-15T10:00:00.000Z", payload: row?.payload }] as never;
+  assert.equal(wasDriven(events, TERM, said, Date.parse("2026-11-15T10:59:00.000Z")), true);
+  assert.equal(wasDriven(events, TERM, said, Date.parse("2026-11-15T11:01:00.000Z")), false, "past the window the row no longer matches");
 });
 
 test("only an undispatched session's line that starts with the number answers a decision (M2)", async () => {

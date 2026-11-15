@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { dedupeKey, EVENTS } from "../../contract/index.ts";
-import type { OrcaAdapter, TaskRow } from "../../contract/orca.ts";
+import { NO_SENDER_TERMINAL, type OrcaAdapter, type TaskRow } from "../../contract/orca.ts";
 import type { GhClient, GhResponse, RateBudget } from "../../gh/client.ts";
 import { Store } from "../../store/store.ts";
 import type { TierConfig } from "../../verify/verify-tier.ts";
@@ -42,6 +42,7 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
   const tasks = new Map<string, Task>();
   const worktrees: { id: string; projectId?: string; branch: string; isArchived: boolean; displayName: string }[] = [];
   const calls: string[] = [];
+  let writesRefused = false;
   const workerRows: { dispatchId: string; taskId: string; state: string; workspace: string }[] = [];
   const gh: GhClient = { get: async <T>(path: string) => (routes[path] ?? { kind: "error", status: 404, message: "Not Found" }) as GhResponse<T> };
   const orca = {
@@ -52,6 +53,7 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
     },
     taskList: async ({ run }: { run: string }) => ({ ok: true, value: [...tasks.values()].filter((t) => t.run === run) }),
     taskUpdate: async (a: { id: string; status: string; run?: string }) => {
+      if (writesRefused) return { ok: false, error: { code: NO_SENDER_TERMINAL, message: "no terminal" } };
       calls.push(`task-update ${a.id} ${a.status} run=${a.run}`);
       const t = tasks.get(a.id);
       if (t) t.status = a.status;
@@ -96,7 +98,8 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
   const link = (n: number, task: string, status: string, run = "run_lead", released = false, liveness?: string) => {
     const dispatch = `ctx_${task}`;
     dispatches[dispatch] = { taskId: task, runId: run, ...(liveness ? { liveness } : {}) };
-    tasks.set(task, { id: task, status, title: "t", run });
+    // Orca names a Task's Dispatch on its row while one holds it.
+    tasks.set(task, { id: task, status, title: "t", run, ...(liveness ? { dispatchId: dispatch } : {}) });
     workerRows.push({ dispatchId: dispatch, taskId: task, state: "succeeded", workspace: `ws_${task}` });
     const agents = released ? [] : [{ mailbox: `dispatch:${dispatch}`, linked: true }];
     const match = { workspace: { id: `ws_${task}`, hostId: "local", archived: false }, agents };
@@ -114,7 +117,17 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
     return runMonitor("pr", used as MonitorDeps);
   };
   const rows = (type?: string) => store.events(type ? { type } : {}).filter((e) => e.source === "pr-monitor" || e.type === "notified");
-  return { store, routes, tasks, worktrees, calls, messages, link, merged, round, rows, deps };
+  /** What worker-show says of a Task's Dispatch now; null: Orca no longer shows it. */
+  const dispatch = (task: string, liveness: string | null) => {
+    const d = dispatches[`ctx_${task}`];
+    if (liveness === null) delete dispatches[`ctx_${task}`];
+    else dispatches[`ctx_${task}`] = { taskId: task, runId: d?.runId ?? "run_lead", liveness };
+  };
+  /** The plugin worker as Orca treats it: no terminal, so every orchestration write is refused (decision 274). */
+  const refuseWrites = () => {
+    writesRefused = true;
+  };
+  return { store, routes, tasks, worktrees, calls, messages, link, merged, round, rows, deps, dispatch, refuseWrites };
 }
 
 test("merge_suggests_close (§9 X4): merge confirmed → pr_merged, the PR item's Task completed in the same round, other open Tasks only suggested", async () => {
@@ -506,8 +519,56 @@ test("the first recorded Task stays the item Task when another workspace becomes
   w.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
   w.merged(7, SHA);
   const r = await w.round();
-  assert.deepEqual(w.calls, ["task-update task_item completed run=undefined"], "only the item Task is closed");
+  // Orca's link no longer names the item Task and no item_created row names its Run: nothing is closed blind (decision 275).
+  assert.deepEqual(r.acts.map((a) => [a.ok, a.detail]), [[false, "Run of task_item unread"]]);
+  assert.deepEqual(w.calls, []);
   assert.deepEqual(r.written.map((x) => x.type), ["pr_merged", "close_suggested"]);
+
+  // The item's own row names its Run (decision 216): the next round reads that Run and closes only the item Task.
+  w.tasks.set("task_item", { id: "task_item", status: "ready", title: "t", run: "run_made" });
+  w.store.append({ type: "item_created", source: "item_create", payload: { task: "task_item", alias: "i007", who: "worker", done_when: "PR merged", owner_action: 1, run: "run_made" } });
+  await w.round();
+  assert.deepEqual(w.calls, ["task-update task_item completed run=run_made"], "only the item Task is closed");
+});
+
+test("275: a merged PR's Task is left open while its Dispatch is live, and closed once it is not; an unread Dispatch closes nothing", async () => {
+  const w = world();
+  w.link(7, "task_item", "dispatched", "run_lead", false, "live");
+  w.store.append({ type: "item_created", source: "item_create", payload: { task: "task_item", alias: "i007", who: "worker", done_when: "PR merged", owner_action: 1, run: "run_lead" } });
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
+  w.merged(7, SHA);
+  const live = await w.round();
+  assert.deepEqual(live.acts.map((a) => [a.ok, a.detail]), [[true, "left open: Dispatch ctx_task_item is live"]]);
+  assert.deepEqual(w.calls, [], "no task-update under a running worker");
+
+  w.dispatch("task_item", null);
+  const unread = await w.round();
+  assert.deepEqual(unread.acts.map((a) => [a.ok, a.detail]), [[false, "worker-show ctx_task_item: not_found"]]);
+  assert.deepEqual(w.calls, []);
+
+  w.dispatch("task_item", "unverifiable");
+  const unknown = await w.round();
+  assert.deepEqual(unknown.acts.map((a) => [a.ok, a.detail]), [[false, "worker-show ctx_task_item: liveness unverifiable"]]);
+  assert.deepEqual(w.calls, []);
+
+  w.dispatch("task_item", "exited");
+  const ended = await w.round();
+  assert.deepEqual(ended.acts.map((a) => [a.ok, a.detail]), [[true, "in_progress → done"]]);
+  assert.deepEqual(w.calls, ["task-update task_item completed run=run_lead"]);
+});
+
+test("275: a round whose process Orca takes no write from leaves the close to the session that holds the Run", async () => {
+  const w = world();
+  w.link(7, "task_item", "blocked");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
+  w.merged(7, SHA);
+  w.refuseWrites();
+  const first = await w.round();
+  assert.deepEqual(first.acts.map((a) => [a.ok, a.detail]), [[false, "left to the session that holds the Run: this process has no terminal"]]);
+  assert.equal(w.tasks.get("task_item")?.status, "blocked");
+  assert.deepEqual(first.written.map((x) => x.type), ["pr_merged"], "no item_transition for a close that did not happen");
 });
 
 test("an owner's merge whose link could not be read is not called unlinked", async () => {

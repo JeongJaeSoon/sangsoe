@@ -46,8 +46,10 @@ export interface SessionRow {
   readonly task: string | undefined;
   /** The Run the Task lives in (its owning lead's); the Run told about a wait. */
   readonly taskRun: string | undefined;
-  /** The Run this session held at start (`run-current`). */
+  /** The Run this session held when the row was written: at start, or at the prompt that first found it held (decision 273). */
   readonly heldRun: string | undefined;
+  /** Orca's path-free id of the worktree a session with no Task runs in. */
+  readonly worktree: string | undefined;
 }
 
 const runOf = (col: string | null) => (col?.startsWith("run:") ? col.slice(4) : undefined);
@@ -59,6 +61,7 @@ export function toSessionRow(e: StoredEvent): SessionRow {
     task: e.entity === "task" && e.entity_id ? e.entity_id : undefined,
     taskRun: runOf(e.subject),
     heldRun: runOf(e.target),
+    worktree: typeof e.payload.worktree === "string" ? e.payload.worktree : undefined,
   };
 }
 

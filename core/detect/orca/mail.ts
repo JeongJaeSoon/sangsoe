@@ -118,6 +118,9 @@ export function refusalHeader(head: string): { act: string; category: string } |
   return act && category ? { act, category } : undefined;
 }
 
+/** What the row carries for a refusal file that lacks its header (the brief prints both). */
+export const NO_HEADER = { act: "헤더 없는 거부 파일", category: "Act: · Category: 줄 없음" } as const;
+
 const waiting = (row: WorktreePsRow | undefined) => (row?.agents ?? []).some((a) => a.agentWait !== null && a.agentWait !== undefined);
 
 /**
@@ -134,9 +137,17 @@ export function judgeMail(r: MailReads, planned: Planned[], unseen: string[]): v
   };
   for (const m of r.inbox) {
     const dispatch = m.payload?.dispatchId;
-    const w = dispatch ? r.known.get(dispatch) : undefined;
-    if (!dispatch || !w) continue;
-    const task = m.payload?.taskId ?? w.taskId;
+    if (!dispatch) continue;
+    const w = r.known.get(dispatch);
+    const task = m.payload?.taskId ?? w?.taskId;
+    const path = refusalPath(m);
+    // Decision 278: a refusal from a Dispatch the round's worker pages no longer list is still a row
+    // when its mail names the Task. Every other kind of mail needs the listed Dispatch.
+    if (!w && !path) continue;
+    if (!task) {
+      unseen.push(`refusal of ${m.id}: Dispatch ${dispatch} is not listed and the mail names no Task`);
+      continue;
+    }
     const on = { entity: "dispatch", entity_id: dispatch, target: task } as const;
 
     if (m.type === "worker_done") {
@@ -153,7 +164,7 @@ export function judgeMail(r: MailReads, planned: Planned[], unseen: string[]): v
       } else if (stop === "needs-input") {
         if (!r.ps) continue;
         // Written only while ps still shows the wait, so a prompt answered before this round is no row.
-        if (!waiting(w.workspace ? r.ps.get(w.workspace) : undefined)) continue;
+        if (!waiting(w?.workspace ? r.ps.get(w.workspace) : undefined)) continue;
         plan({
           type: "waiting_human",
           source: SOURCE,
@@ -166,17 +177,18 @@ export function judgeMail(r: MailReads, planned: Planned[], unseen: string[]): v
       // `finished` is a turn the worker ended on purpose (waiting on an answer): no row.
       continue;
     }
-    const path = refusalPath(m);
     if (!path) continue;
     const k = key("refusal_report", dispatch, m.id);
     if (recorded.has(k)) continue;
     const head = r.refusals.get(path);
     if (head === undefined) continue;
-    const h = head === null ? undefined : refusalHeader(head);
-    if (!h) {
-      unseen.push(`refusal file of ${m.id}: ${head === null ? "not readable" : "no Act:/Category: header"}`);
+    if (head === null) {
+      unseen.push(`refusal file of ${m.id}: not readable`);
       continue;
     }
+    // Decision 278: a file without the two header lines is still a refusal someone reported. The row
+    // says the header is missing and points at the file; nothing is guessed from its text.
+    const h = refusalHeader(head) ?? NO_HEADER;
     plan({ type: "refusal_report", source: SOURCE, payload: { ...h, command_file: path }, ...on, dedupe_key: k });
   }
   releaseDispatchWaits(r, plan);

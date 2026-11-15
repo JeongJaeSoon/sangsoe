@@ -64,6 +64,7 @@ async function record(event: SessionHook, host: Host): Promise<Report> {
     store = Store.open({ home: host.env.HOME ?? homedir() });
     const lines = await recordHook(event, { store, orca: createOrcaAdapter(nodeExec(HOOK_ORCA_MS)) }, input, {
       pluginVersion: pluginVersion(host),
+      terminal: host.env.ORCA_TERMINAL_HANDLE,
     });
     return { code: 0, lines };
   } catch (e) {

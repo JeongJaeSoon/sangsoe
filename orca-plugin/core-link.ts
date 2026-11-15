@@ -18,6 +18,8 @@ export type MonitorRunner = {
   ): Promise<{ planned: unknown[]; written: unknown[]; unseen: string[]; aborted: boolean; acts?: RoundAct[] }>;
   /** The timer-stall check; absent in a core older than the queue-monitor. */
   stall?(): Promise<unknown>;
+  /** One row for a prompt Orca's `agent.prompt.before` hook reported; absent in a core older than decision 280. */
+  driven?(e: { terminal: string; prompt: string; inputKind?: string; agent?: string }): Promise<void>;
   close(): void;
 };
 

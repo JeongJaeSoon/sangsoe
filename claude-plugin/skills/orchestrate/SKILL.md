@@ -37,6 +37,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 | escalation | 네 단위 안에서 풀 수 있나. 아니면 선택지·추천·기다리는 것을 붙여 위로 | `decision_open`, 또는 리드는 Orca `send --type escalation`(Dispatch 가 없는 오케스트레이터와 Task 없는 리드는 status·question 형, 결정 197·243) |
 | 거부 보고 | 범주와 막은 층(권한 규칙·분류기·hook·사람)을 읽는다. 어느 세션도, 너도, 그 행위를 다른 길로 하지 않고, 통과할 꼴(stdin·래퍼·다른 세션·다른 도구·다른 확인)을 일러 주지 않는다. 이유를 밝힌 분류기·hook 거부면 거부된 세션이 그 이유가 요구한 증거를 더해 같은 꼴로 한 번 한다. 보고에 이미 "재시도 1회" 가 있거나 사람이 거부했으면 이 길은 없다. 규칙이 있어야 하면 가장 작은 규칙을 오너 몫으로 올리고, 오너가 규칙을 더했거나 그 세션의 대화에서 허용하면 그 세션이 한 번 더 한다. 거부된 확인은 '확인 못 함(거부)' 으로 남기고 일은 계속한다. 거부를 돌아 만든 변경은 land 하지 않고 되돌린다. 서브에이전트의 Edit·Write 가 판정 없이(no verdict) 거부되면 그 서브에이전트를 띄운 세션(워커가 띄웠으면 그 워커)이 단위째 한 번 다시 하고, 너는 다시 시작하지 않는다. 거기서 또 판정이 없으면 오너 몫이다. 같은 거부의 되풀이 보고에는 이미 닫힌 결정을 다시 준다. 보고가 가리킨 `orch-refusal/` 파일은 코어가 그 메시지의 `refusal_report` 를 남긴 뒤(resource `brief` 에 그 거부가 보인 뒤)에, Dispatch 없는 길로 온 보고면 읽은 뒤에 휴지통으로 옮긴다. 먼저 옮기면 코어가 읽지 못해 거부가 보이지 않는다(결정 255) | `decision_open` |
 | `item_ready`·`capacity_free` | 시작할 항목이 생겼다 | `start_unit`(`start` skill) |
+| 프롬프트에 붙은 한 줄 `sangsoe: Run <id> — 🟢 준비됨 N · 📅 기한 N · ⚠️ trigger 불명 N (새로 M건)` | 네 Run 을 쥔 세션의 hook 이 붙인 줄이다(결정 274). Orca 메시지가 아니라서 `check` 로 읽을 것이 없다. 🟢 는 시작할 항목, 📅 는 날짜가 된 오너 항목이라 오너에게 가져가고, ⚠️ 는 스크립트가 읽지 못한 trigger 라 그 조건이 왔는지 네가 판단한다. 줄 끝의 "게이트 N개를 풀었다" · "닫힌 Task 가 기다리던 결정" · "머지된 PR 의 Task 를 닫았다" 는 hook 이 이미 한 일이다(결정 275). 목록은 resource `ready` 와 `brief` 로 읽는다 | `start_unit`(`start` skill) |
 | `close_suggested` | 증거가 그 오너 항목의 완료를 보이나. 보이면 오너에게 완료 버튼을 누를 항목이라고 알린다. 오너 항목은 오너가 닫는다. 오너가 먼저 누른 항목은 ⏳ 검증 대기라 이 제안이 오지 않고 probe 가 통과하면 저절로 ✅ 로 읽힌다(결정 181) | — |
 | `main_red` | 머지한 PR 의 당사자에게 원인 좁히기를 맡긴다. 동결 중에는 `main_fix` 만 land 된다 | `start_unit` 또는 Orca `send` |
 | `worker_dead`·`worker_stuck` | 같은 Task 를 다시 시작할지(`start_unit` 의 `task`), 멈출지 | `start_unit` |
@@ -52,7 +53,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 ## 오케스트레이터: 프로그램 사이
 
-- 시작하면 자기 Run 을 쥔다(`orchestrator.md` 의 "시작할 때"): SessionStart 줄이 `run-use <id>` 를 일렀으면 그 Run 을 다시 쥐고, 줄이 없으면 `run-current`, 비었으면 `run-create` 뒤 `run-use`.
+- 시작하면 자기 Run 을 쥔다(`orchestrator.md` 의 "시작할 때"): SessionStart 줄이 `run-use --id <id>` 를 일렀으면 그 Run 을 다시 쥐고, 줄이 없으면 `run-current`, 비었으면 `run-create`(만든 Run 을 바로 쥔다).
 - 오너의 말은 `intake` skill 로 가른다.
 - 한 프로그램의 일은 그 리드에게만 보낸다. 리드의 워커에게 직접 지시하지 않는다.
 - 리드가 끝났다고 보고하면, 완료 조건별 증거를 읽기 전용 서브에이전트(`model` 은 resource `models` 의 `subagents.judge`)로 확인한 뒤에 오너에게 "끝났다"고 말한다. 그 지시문에는 `write-brief` 의 서브에이전트 지시문 두 줄을 넣는다.

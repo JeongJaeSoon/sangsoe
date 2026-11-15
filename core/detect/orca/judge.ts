@@ -1,5 +1,5 @@
 import { dedupeKey, eventDef, type StoredEvent } from "../../contract/index.ts";
-import type { GateRow, InboxMessage, LocalRows, WorkerRow, WorkerShow, WorktreePsRow } from "../../contract/orca.ts";
+import { ENDED_LIVENESS, type GateRow, type InboxMessage, type LocalRows, type WorkerRow, type WorkerShow, type WorktreePsRow } from "../../contract/orca.ts";
 import { isOpenGate } from "../../decision/waiters.ts";
 import { orphanedWaits } from "../../owner/release.ts";
 import { settled } from "../../recover/recover.ts";
@@ -44,9 +44,6 @@ export const ORCA_EVENT_TYPES = [
 ];
 
 export const isUnfinished = (w: WorkerRow) => !settled(w);
-
-// Orca reports a lost terminal as `gone`; anything but live or gone (`unverifiable`, missing) is not seen.
-const DEAD = new Set(["gone", "exited"]);
 
 const key = (type: Parameters<typeof eventDef>[0], target: string, ...cond: string[]) => {
   const def = eventDef(type);
@@ -97,7 +94,7 @@ function judgeWorkers(r: OrcaReads, now: number, c: MonitorConfig, planned: Plan
   }
   // A stop_failure is one stop of a session that may go on; it does not stand for the terminal's death.
   const recordedDead = new Set(r.events.filter((e) => e.type === "worker_dead" && e.payload.reason !== "stop_failure").map((e) => e.entity_id));
-  const isDead = (w: WorkerRow) => w.liveness !== undefined && DEAD.has(w.liveness);
+  const isDead = (w: WorkerRow) => ENDED_LIVENESS.has(w.liveness ?? "");
   // "Many at once" counts only deaths first seen in this round.
   const fresh = [...all.values()].filter((w) => isDead(w) && !recordedDead.has(w.dispatchId));
   const reason = fresh.length >= c.hostRestartMin ? "host_restart" : "terminal_gone";

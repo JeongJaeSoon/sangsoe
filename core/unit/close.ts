@@ -57,9 +57,13 @@ export async function closeUnit(ports: { readonly orca: OrcaAdapter; readonly st
   const paneKeyOf = (t: TerminalRow) => (t.orphaned === true ? t.recordedPaneKey : t.tabId && t.leafId ? `${t.tabId}:${t.leafId}` : undefined);
   const paneKey = paneKeyOf(row);
   if (!paneKey) return refuse("agent_not_idle", `Orca gives no pane key for ${terminal}${row.orphaned === true ? " (orphaned, no recordedPaneKey)" : ""}`, "Orca does not show which pane held its agent, so it is not shown idle");
-  // Another terminal on the same pane (attached, or an orphan recording it) means the ps row is not this one's alone.
-  if (list.value.rows.some((t) => t.handle !== terminal && paneKeyOf(t) === paneKey)) {
-    return refuse("agent_not_idle", `the pane recorded for ${terminal} is attached to another terminal`, "its worktree ps row describes that terminal, not this one");
+  // The pane's ps row is the attached terminal's (decision 263 ⑩). So an orphan sharing the pane with any
+  // other terminal is refused, and so is an attached terminal sharing it with another attached one. An
+  // attached terminal whose pane only orphans record is judged by its own row (decision 277): refusing
+  // both sides left a finished unit and the orphan before it on the same pane with no way to close either.
+  const sharing = list.value.rows.filter((t) => t.handle !== terminal && paneKeyOf(t) === paneKey);
+  if (sharing.some((t) => row.orphaned === true || t.orphaned !== true)) {
+    return refuse("agent_not_idle", `the pane recorded for ${terminal} is attached to another terminal`, "its worktree ps row describes that terminal, not this one; close that one first");
   }
   const agent = ps.value.rows.find((r) => r.worktreeId === w.workspace)?.agents.find((x) => x.paneKey === paneKey);
   if (!agent) return refuse("agent_not_idle", `no agent row for ${terminal} in worktree ps`, "Orca does not show its agent, so it is not shown idle");

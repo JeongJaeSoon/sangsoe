@@ -6,7 +6,7 @@ import { roleLine } from "../start/start.ts";
 import type { Role } from "../start/types.ts";
 import { VERSION } from "../version.ts";
 import { handoffSubject } from "./handoff.ts";
-import { agentRole, type Located, locate, readRoleLine } from "./locate.ts";
+import { agentRole, type Located, liveWorktree, locate, readRoleLine } from "./locate.ts";
 import { type SessionHookInput, toSessionRow } from "./session.ts";
 
 const SOURCE = "SessionStart";
@@ -14,6 +14,8 @@ const SOURCE = "SessionStart";
 export interface SessionStartOptions {
   /** The version in this plugin's plugin.json; undefined when it could not be read. */
   readonly pluginVersion?: string | undefined;
+  /** The session's own Orca terminal handle (`ORCA_TERMINAL_HANDLE`), read by UserPromptSubmit (decision 280). */
+  readonly terminal?: string | undefined;
 }
 
 /**
@@ -43,21 +45,23 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
 
   const current = await orca.runCurrent();
   const held = current.ok && typeof current.value.runId === "string" && current.value.runId !== "" ? current.value.runId : undefined;
-  const before = previous(deps, role, loc);
+  // A session with no Task is told apart from another of its role by where it runs (decision 273).
+  const here = !loc && role !== "worker" ? await liveWorktree(orca, input.cwd) : undefined;
+  const before = previous(deps, role, loc, here);
   store.append({
     type: "session_started",
     source: SOURCE,
     ...(loc ? { entity: "task", entity_id: loc.task, subject: `run:${loc.run}` } : {}),
     ...(held ? { target: `run:${held}` } : {}),
     dedupe_key: dedupeKey(EVENTS.session_started, input.session_id, input.source ?? "startup"),
-    payload: { session: input.session_id, role, model: input.model ?? "unknown" },
+    payload: { session: input.session_id, role, model: input.model ?? "unknown", ...(here ? { worktree: here } : {}) },
   });
 
   const lines = [`${roleLine(role)}${loc ? ` · Task ${loc.task} · Dispatch ${loc.dispatch} · Run ${loc.run}` : ""}`];
   if (loc) lines.push(...unitRowLines(store, loc.task));
   const run = held ?? before;
   if (held) lines.push(`Run ${held} 을 쥐고 있다(run-current).`);
-  else if (before && role !== "worker") lines.push(`run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use ${before}`);
+  else if (before && role !== "worker") lines.push(`run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id ${before}`);
   // Every read comes before the first `notified` row, so a failure while reading marks nothing delivered.
   // A session with a Dispatch saved its handoff in that Dispatch's Run under its Task (handoff_save).
   const handoff = loc
@@ -89,10 +93,14 @@ function unitRowLines(store: CoreDeps["store"], task: string): string[] {
 /** A line to inject, written as `notified` only when it is taken; empty when it already rode once. */
 type Delivery = () => string[];
 
-/** The Run an earlier session of the same Task (or, without a Task, the same role) held. */
-function previous(deps: CoreDeps, role: Role, loc: Located | undefined): string | undefined {
+/**
+ * The Run an earlier session of the same Task held. Without a Task: the Run an earlier session of the
+ * same role held in the same Orca worktree (decision 273). The role alone would hand a new
+ * orchestrator in another worktree someone else's Run; a worktree that cannot be read names none.
+ */
+function previous(deps: CoreDeps, role: Role, loc: Located | undefined, here: string | undefined): string | undefined {
   const rows = deps.store.events({ type: "session_started" }).map(toSessionRow);
-  const same = rows.filter((r) => (loc ? r.task === loc.task : r.task === undefined && r.role === role));
+  const same = rows.filter((r) => (loc ? r.task === loc.task : r.task === undefined && r.role === role && here !== undefined && r.worktree === here));
   return same.reverse().find((r) => r.heldRun)?.heldRun;
 }
 

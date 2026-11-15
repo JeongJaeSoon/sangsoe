@@ -5,4 +5,6 @@
 
 닫는 조건(하나라도 아니면 한 줄로 거부하고 어디서도 다시 시도하지 않는다): Dispatch 가 `succeeded`·`failed`·`cancelled` · 그 Dispatch 가 터미널을 이름 지었고 `released`·`release_pending` 이 아님 · 호출자의 터미널이 아님(`ORCA_TERMINAL_HANDLE` 이 없으면 거부) · `terminal list` 가 그 handle 을 agent 가 있는 터미널로 보임 · `worktree ps` 의 그 agent 행 상태가 `done`·`idle` 이고 `agentWait` 가 정확히 `null`(없는 값은 Orca 가 보지 않았다는 뜻이라 거부).
 
+같은 pane 을 나눠 가진 터미널(결정 263 ⑩ · 277): `ps` 의 그 pane 행은 붙어 있는 터미널의 것이다. orphan 은 그 pane 이 다른 터미널에 붙어 있는 동안 거부하고, 붙어 있는 터미널은 orphan 만 같은 pane 을 적었으면 제 행으로 판정한다. 붙어 있는 터미널 둘이 같은 키면 둘 다 거부한다.
+
 남기는 것: `unit_closed{dispatch, terminal}` 한 줄(Dispatch 로 dedupe). Orca 의 상태는 복사하지 않는다(결정 74).

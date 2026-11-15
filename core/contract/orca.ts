@@ -211,6 +211,9 @@ export type InboxMessage = {
   senderPane?: string;
 };
 
+/** The `liveness` Orca gives a worker whose terminal has ended. Anything else but `live` (`unverifiable`, missing) is unknown. */
+export const ENDED_LIVENESS: ReadonlySet<string> = new Set(["gone", "exited"]);
+
 export type WorkerRow = {
   dispatchId: string;
   taskId: string;

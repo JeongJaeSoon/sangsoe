@@ -12,6 +12,7 @@ test("sangsoe monitor run <name> runs one round of the named monitor, dry run pa
     return {
       run: async (name) => ({ monitor: name, planned: [], written: [], unseen: [], calls: [], aborted: false, acts: [] }),
       stall: async () => ({ planned: [], written: [], calls: [] }),
+      driven: async () => undefined,
       close: () => void closed++,
     };
   };
