@@ -22,15 +22,16 @@ export function chrome(): string | null {
 /** A test that needs a browser runs wherever one is found, and always on CI. */
 export const noBrowser = !chrome() && !process.env.CI ? "no Chrome on this machine (CI requires one)" : false;
 
+// The test HOME is a temp dir (decision 263 ⑨), so macOS would show "Keychain Not Found" for Chrome's own store.
+export const KEYCHAIN_FLAGS = ["--use-mock-keychain", "--password-store=basic"];
+
 export function chromeArgs(dir: string, budgetMs: number): string[] {
   return [
     "--headless=new",
     "--disable-gpu",
     "--allow-file-access-from-files",
     `--user-data-dir=${join(dir, "profile")}`,
-    // The test HOME is a temp dir (decision 263 ⑨), so macOS would show "Keychain Not Found" for Chrome's own store.
-    "--use-mock-keychain",
-    "--password-store=basic",
+    ...KEYCHAIN_FLAGS,
     "--window-size=1000,1200",
     `--virtual-time-budget=${budgetMs}`,
     ...(process.platform === "linux" ? ["--no-sandbox"] : []),

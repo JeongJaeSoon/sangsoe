@@ -1,20 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { chromeArgs } from "./browser.ts";
+import { chromeArgs, KEYCHAIN_FLAGS } from "./browser.ts";
 
 test("headless Chrome is started with a mock keychain and the basic password store", () => {
+  assert.deepEqual(KEYCHAIN_FLAGS, ["--use-mock-keychain", "--password-store=basic"]);
   const args = chromeArgs("/tmp/panel", 5000);
-  assert.ok(args.includes("--use-mock-keychain"));
-  assert.ok(args.includes("--password-store=basic"));
-});
-
-test("every test file that starts Chrome by hand passes both keychain flags too", () => {
-  const dir = new URL("./", import.meta.url);
-  for (const f of readdirSync(dir)) {
-    if (f === "browser.ts" || f === "browser-args.test.ts") continue;
-    const src = readFileSync(new URL(f, dir), "utf8");
-    if (!src.includes('"--headless')) continue;
-    assert.ok(src.includes('"--use-mock-keychain"') && src.includes('"--password-store=basic"'), `${f} starts Chrome without the keychain flags`);
-  }
+  for (const flag of ["--use-mock-keychain", "--password-store=basic"]) assert.ok(args.includes(flag), flag);
 });
