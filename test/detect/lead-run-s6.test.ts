@@ -154,7 +154,7 @@ test("decisions 219, 274: the timer's first wake is refused once by Orca, and th
   const act = round.acts.find((a) => a.what.startsWith(`notify run:${LEAD_RUN}`));
   assert.ok(act, JSON.stringify(round.acts));
   assert.equal(act.ok, false);
-  assert.match(act.detail, /^no_sender: .*this process has no terminal/);
+  assert.match(act.detail, /^no_sender: .*no_active_sender_terminal: this process has no terminal/, "Orca's code stays in the reason (decision 219)");
   assert.equal(x.w.calls("orchestration send").length, 1, "Orca was asked once");
 
   // The process has no terminal for as long as it lives: the next round does not queue the notice again.

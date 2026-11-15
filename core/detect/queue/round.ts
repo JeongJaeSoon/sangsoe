@@ -118,7 +118,7 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
       continue;
     }
     const r = await decisionMoot(core, { decision: m.decision, evidence: m.evidence, callerRun: QUEUE_CALLER });
-    calls.push(`decision_moot ${m.decision} (${ev}): ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}` : r.refusal.code}`);
+    calls.push(`decision_moot ${m.decision} (${ev}): ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}, left to the Run ${r.value.pending.length}` : r.refusal.code}`);
   }
 
   for (const a of j.reanswer) {
@@ -128,7 +128,7 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
       continue;
     }
     const r = await decisionAnswer(core, { ...a, callerRun: QUEUE_CALLER });
-    calls.push(`decision_answer ${a.decision} again: ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}, told ${r.value.notified.length}` : r.refusal.code}`);
+    calls.push(`decision_answer ${a.decision} again: ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}, told ${r.value.notified.length}, left to the Run ${r.value.pending.length}` : r.refusal.code}`);
   }
 
   const above = runAbove(d.orca);
@@ -211,9 +211,10 @@ type LeadNotice = { task: string; key: string; subject: string; body: string; ms
 /**
  * The rows whose notice goes to the item's owning lead (decision 154): todo_due and trigger_unclear
  * (appendix queue-monitor card), escalation_stale{verify_unconfirmed} (decision 91② row 11). One
- * notice per row: the key carries the row's own condition.
+ * notice per row: the key carries the row's own condition. The Run's own session tells the same rows
+ * under the same key when this process cannot send (decision 274).
  */
-function leadNotice(e: Planned): LeadNotice | undefined {
+export function leadNotice(e: Planned): LeadNotice | undefined {
   const p = e.payload as Record<string, unknown>;
   const seg = dedupeSegment;
   if (e.type === "todo_due" || e.type === "trigger_unclear") {

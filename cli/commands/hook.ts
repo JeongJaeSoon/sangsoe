@@ -48,8 +48,9 @@ export default {
   },
 } satisfies CommandDef;
 
-// A recording hook never blocks: whatever fails, it exits 0. Only SessionStart prints (its stdout is the
-// injected context); a failure there prints nothing rather than a half injection.
+// A recording hook never blocks: whatever fails, it exits 0. SessionStart and UserPromptSubmit print
+// (their stdout is injected context; the latter at most its Run's one count line, decision 274); a
+// failure there prints nothing rather than a half injection.
 async function record(event: SessionHook, host: Host): Promise<Report> {
   let input: ReturnType<typeof parseSessionInput>;
   try {
