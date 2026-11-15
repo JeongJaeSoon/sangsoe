@@ -106,15 +106,23 @@ test("planImport: each open item becomes one Task with extras; text stays out of
     skipped: { closedItems: 2, closedDecisions: 1, boardRows: 1, leads: 1 },
   });
   const by = new Map(plan.items.map((p) => [p.id, p]));
-  assert.deepEqual(by.get("b1")?.extra, { links: ["request:agent-skills/item/b1", "agent-skills-program:acme"] });
+  // Decision 279: an old `who` of `lead:<name>` is the item's lead group, so the brief lists it under that lead.
+  assert.deepEqual(by.get("b1")?.extra, { lead: "api", links: ["request:agent-skills/item/b1", "agent-skills-program:acme"] });
   assert.match(by.get("b1")?.create.spec ?? "", /^title b1\nnext b1\nnote b1\n/);
-  assert.deepEqual(by.get("b3")?.extra, { hold: true, trigger: "when acme ships", links: ["request:agent-skills/item/b3"] });
-  assert.deepEqual(by.get("b4")?.extra, { exec_by: "owner", trigger: "due 2026-11-20T00:00:00+09:00", links: ["request:agent-skills/item/b4"] });
+  assert.deepEqual(by.get("b3")?.extra, { hold: true, trigger: "when acme ships", lead: "api", links: ["request:agent-skills/item/b3"] });
+  assert.deepEqual(by.get("b4")?.extra, { exec_by: "owner", trigger: "due 2026-11-20T00:00:00+09:00", links: ["request:agent-skills/item/b4"] }, "an item with no lead in its who gets none");
   assert.equal(by.get("b4")?.create.who, "owner");
-  assert.deepEqual(by.get("b5")?.extra, { trigger: "after first report arrives", links: ["request:agent-skills/item/b5"] });
+  assert.deepEqual(by.get("b5")?.extra, { trigger: "after first report arrives", lead: "api", links: ["request:agent-skills/item/b5"] });
   assert.deepEqual(plan.edges, [{ pred: "b1", succ: "b4", kind: "after", action: "create" }]);
   assert.equal(plan.decisions[0]?.subject, "scope:agent-skills-d1");
   assert.match(plan.decisions[0]?.question ?? "", /pick a store/);
+});
+
+test("planImport: the lead group is the name after `lead:`, with or without a space after the colon; a bare `lead:` or another who gives none", () => {
+  const r = readOldState(oldDb({ items: [item("c1", { who: "lead: api " }), item("c2", { who: "lead:" }), item("c3", { who: "owner" })] }));
+  assert.ok(r.ok);
+  const by = new Map(planImport(r.value, importedFrom(Store.open({ path: ":memory:" }))).items.map((p) => [p.id, p.extra.lead]));
+  assert.deepEqual([by.get("c1"), by.get("c2"), by.get("c3")], ["api", undefined, undefined]);
 });
 
 test("applyImport: Tasks, extras, the edge through GRAPH; a second run creates nothing", async () => {

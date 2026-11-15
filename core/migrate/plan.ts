@@ -10,6 +10,8 @@ export interface ImportExtra {
   hold?: true;
   exec_by?: "owner";
   trigger?: string;
+  /** The lead group, from an old `who` of the form `lead:<name>` (decision 279). */
+  lead?: string;
   links: string[];
 }
 
@@ -86,10 +88,13 @@ export const NOTHING_IMPORTED: Imported = { items: new Map(), edges: new Set(), 
 
 function planItem(it: OldItem, edgeTo: boolean, imported: Imported): PlannedItem {
   const trigger = [it.trig, it.due ? `due ${it.due}` : null, it.afterRef && !edgeTo ? `after ${it.afterRef}` : null].filter(Boolean).join(" · ");
+  // The brief groups by the item's lead, which only item_extra_set carries: `who` alone leaves the item under "others".
+  const lead = /^lead:\s*(\S.*)$/.exec(it.who ?? "")?.[1]?.trim();
   const extra: ImportExtra = {
     ...(it.status === "held" ? { hold: true as const } : {}),
     ...(it.lane === "owner_todo" ? { exec_by: "owner" as const } : {}),
     ...(trigger ? { trigger } : {}),
+    ...(lead ? { lead } : {}),
     links: [`${REQUEST}${it.id}`, ...(it.program ? [`agent-skills-program:${it.program}`] : [])],
   };
   const task = imported.items.get(it.id);

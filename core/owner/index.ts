@@ -1,6 +1,6 @@
 export { ownerDone, type OwnerDone } from "./done.ts";
 export { DRIVEN_WINDOW_MS, recordDriven, wasDriven } from "./driven.ts";
-export { type OwnerExtra, parseOwnerExtra, recordOwnerExtra } from "./extra.ts";
+export { type ItemSet, type ItemSetDone, type OwnerExtra, parseOwnerExtra, recordOwnerExtra, setItemExtra } from "./extra.ts";
 export { type ChatLink, hintMatches, linkChat, linkedActs, linkShell, recordProposal, recordShellLink, type ShellLine, type ShellLink } from "./link.ts";
 export { countsAsEvidence, DONE_EVIDENCE, MARK_LABEL, type OwnerItemMarks, type OwnerMark, ownerMarks, UNMARK_CLASSES } from "./marks.ts";
 export { ownerVerify } from "./pending.ts";

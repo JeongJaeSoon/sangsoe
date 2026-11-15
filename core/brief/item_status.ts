@@ -3,7 +3,7 @@ import { type Facts, foldFacts } from "../graph/facts.ts";
 import { doneBlockers } from "../graph/flow.ts";
 import { itemRef, prNode } from "../graph/nodes.ts";
 import { mergedItemMark } from "../verify/evidence.ts";
-import { type Hold, holdOf, retiredOf } from "../graph/ready.ts";
+import { type Hold, holdOf, retiredOf, triggerKind } from "../graph/ready.ts";
 import { waiterReading } from "../decision/held.ts";
 import { countsAsEvidence } from "../owner/marks.ts";
 import { decision } from "../store/views/decision.ts";
@@ -30,6 +30,8 @@ export interface ItemFacts {
   readonly whyOwner: string | null;
   readonly cmdHint: string | null;
   readonly reviewTrigger: string | null;
+  /** What keeps a 📅 item from being ready besides a predecessor: its own hold, or a trigger no script reads (decision 279). */
+  readonly plannedBy: "hold" | "trigger" | null;
   readonly lastReason: string | null;
   readonly assignee: string | null;
   readonly pr: string | null;
@@ -61,6 +63,12 @@ const ALARMS = new Set([
 // The author's session is gone while the item waits on the merge: only the PR's own alarms still apply.
 const PR_ALARMS = new Set(["ci_failed", "land_failed", "pr_changes_requested", "review_commented"]);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+
+function plannedBy(x: Record<string, unknown>): ItemFacts["plannedBy"] {
+  if (x.hold === true) return "hold";
+  const trigger = str(x.trigger);
+  return trigger && triggerKind(trigger) === "text" ? "trigger" : null;
+}
 const latest = (a: string | null, b: string | null): string | null => (a === null ? b : b === null || Date.parse(a) >= Date.parse(b) ? a : b);
 
 const RANK: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
@@ -246,6 +254,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       whyOwner: str(x.why_owner),
       cmdHint: str(x.cmd_hint),
       reviewTrigger: str(x.review_trigger),
+      plannedBy: plannedBy(x),
       lastReason: failed ? failedReason(t, landed !== null, landed !== null ? doneBlockers(input, t.id) : []) : str(transition.get(t.id)?.payload.reason),
       assignee: t.assignee ?? null,
       pr: prOpen.get(t.id) ?? (prWait ? (p?.prs[0] ?? null) : null) ?? landed,

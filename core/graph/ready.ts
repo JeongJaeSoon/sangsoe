@@ -226,7 +226,8 @@ export function inEdges(task: string, facts: Facts, tasks: ReadonlyMap<string, V
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z)?$/;
-const PR_REF = /^[a-z0-9_.-]+\/[a-z0-9_.-]+#[1-9][0-9]*$/;
+// Any case: GitHub's own spelling of a repository has capitals, and the store keys a PR in lower case (decision 279).
+const PR_REF = /^[a-z0-9_.-]+\/[a-z0-9_.-]+#[1-9][0-9]*$/i;
 
 /** Decision 32: a trigger is a date or a PR merge; anything else is text no script reads (⚠️). */
 export function triggerKind(trigger: string): "date" | "pr" | "text" {
@@ -243,7 +244,7 @@ export function triggerOk(trigger: string | undefined, facts: Facts, now: string
       : { ok: 0, predState: `${trigger} 전`, dangling: false, todo: "그 날짜를 기다린다" };
   }
   if (kind === "pr") {
-    const s = prState(trigger, facts);
+    const s = prState(trigger.toLowerCase(), facts);
     if (s.merged) return { ok: 1, predState: "머지됨", dangling: false, todo: "" };
     if (!s.known) return { ok: null, predState: "모름: PR 상태를 읽지 못했다", dangling: false, todo: "PR 상태를 다시 읽는다" };
     return s.closed
