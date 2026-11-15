@@ -12,7 +12,7 @@ const hashOfPrompt = (prompt: string) => hashOf(mask(prompt.trim()));
 
 /**
  * Decision 280: one row per prompt Orca's `agent.prompt.before` hook reports. Orca calls that hook
- * for a prompt it submits itself (input driven into a terminal, an orchestration dispatch, a launch
+ * for a prompt it submits itself (input driven into a terminal, a dispatched Task's prompt, a launch
  * prompt), not for what a person types into the session. Called from the plugin worker; the text
  * is not stored.
  */

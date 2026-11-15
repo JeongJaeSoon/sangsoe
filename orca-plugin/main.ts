@@ -77,9 +77,9 @@ export default function activate(
     });
   }
 
-  // Decision 280: Orca calls this hook for input driven into an agent's terminal (sent there through
-  // Orca's CLI), not for what a person types. The worker only observes: the event goes on unchanged whatever happens
-  // here, and the core keeps a hash of the text, never the text.
+  // Decision 280: Orca calls this hook for a prompt it submits itself (its `inputKind` says how), not
+  // for what a person types into the session. The worker only observes: the event goes on unchanged
+  // whatever happens here, and the core keeps the kind and a hash of the text, never the text.
   orca.hooks?.on(PROMPT_HOOK, (event, next) => {
     try {
       const { terminalId, prompt, inputKind, agent } = event;
