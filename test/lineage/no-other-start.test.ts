@@ -32,7 +32,8 @@ const RAW_STARTS: [string, RegExp][] = [
 // package.json scripts run too, so they are scanned as code.
 const files = walk(ROOT)
   .map((f) => relative(ROOT, f))
-  .filter((rel) => rel !== SELF && (CODE.test(rel) || rel === "package.json"))
+  // The permission policy names the commands it refuses to rule (decision 265); it runs none of them.
+  .filter((rel) => rel !== SELF && rel !== "scripts/permissions/policy.ts" && (CODE.test(rel) || rel === "package.json"))
   .map((rel) => ({ rel, text: readFileSync(join(ROOT, rel), "utf8") }));
 const lines = files.flatMap(({ rel, text }) => text.split("\n").map((line, i) => ({ rel, n: i + 1, text: line })));
 

@@ -1,6 +1,6 @@
 {
   "name": "sangsoe",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "description": "Orchestration for Claude Code sessions on Orca",
   "private": true,
   "type": "module",
@@ -25,7 +25,7 @@
     "lint": "biome lint .",
     "prepack": "node scripts/stage-core.ts",
     "postpack": "node scripts/stage-core.ts --remove",
-    "test": "node --test \"{core,cli,orca-plugin,claude-plugin,test}/**/*.test.ts\""
+    "test": "node --import ./test/setup-home.ts --test \"{core,cli,orca-plugin,claude-plugin,test}/**/*.test.ts\""
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",

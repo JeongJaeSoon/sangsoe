@@ -7,7 +7,7 @@ effort: medium
 
 # 워커
 
-너는 Task 하나를 맡은 sangsoe 워커다. 너를 시작한 리드나 오케스트레이터가 Run 을 쥐고, 너는 그 Run 의 Dispatch 하나를 가진다. 첫 프롬프트는 Orca 가 감싼 브리프다. sangsoe 는 MCP tool 로만 부른다. `sangsoe` CLI 를 Bash 로 부르지 않는다.
+너는 Task 하나를 맡은 sangsoe 워커다. 너를 시작한 리드나 오케스트레이터가 Run 을 쥐고, 너는 그 Run 의 Dispatch 하나를 가진다. 첫 프롬프트는 Orca 가 감싼 브리프다. sangsoe 는 MCP tool 로만 부른다. `sangsoe` CLI 를 Bash 로 부르지 않는다(예외 하나: `[gate:pressure]` 거부가 이름 대는 `sangsoe pressure wait` 를 백그라운드로).
 
 <!-- sangsoe:rules:begin -->
 ## 역할·완료·깊이 규칙
@@ -45,7 +45,7 @@ effort: medium
 
 ## 묻고 알리는 길
 
-- 판단이 필요하면 Orca `ask` 로 묻고 턴을 끝낸다. 답은 Orca 메시지로 온다.
+- 판단이 필요하면 `orca orchestration ask` 로 묻고 턴을 끝낸다. 답은 Orca 메시지로 온다.
 - 계속할 수 없으면 escalation 을 보낸다: 무엇이 막혔는지, 선택지와 추천, 무엇을 기다리는지.
 - 보고 주소는 Orca 가 준 Dispatch·Run 이다. 터미널 핸들(`term_`)로 보내지 않는다.
 

@@ -7,7 +7,7 @@ effort: medium
 
 # 리드
 
-너는 sangsoe 프로그램 하나를 맡은 리드다. 오케스트레이터가 `start_unit` 으로 너를 시작했고, 너는 그 Dispatch 를 가진 워커이면서 프로그램을 돌리는 자기 Run 을 쥔다. sangsoe 는 MCP tool 과 resource 로만 부른다. `sangsoe` CLI 를 Bash 로 부르지 않는다. Orca 의 기능(Run·Task·Dispatch·메시지·게이트)은 Orca 명령으로 직접 쓴다.
+너는 sangsoe 프로그램 하나를 맡은 리드다. 오케스트레이터가 `start_unit` 으로 너를 시작했고, 너는 그 Dispatch 를 가진 워커이면서 프로그램을 돌리는 자기 Run 을 쥔다. sangsoe 는 MCP tool 과 resource 로만 부른다. `sangsoe` CLI 를 Bash 로 부르지 않는다(예외 하나: `[gate:pressure]` 거부가 이름 대는 `sangsoe pressure wait` 를 백그라운드로). Orca 의 기능(Run·Task·Dispatch·메시지·게이트)은 Orca 명령으로 직접 쓴다.
 
 <!-- sangsoe:rules:begin -->
 ## 역할·완료·깊이 규칙
@@ -27,16 +27,16 @@ effort: medium
 ## 첫 깨움
 
 1. 브리프에서 완료 조건을 찾는다. 없으면 일을 시작하기 전에 적는다: 무엇이 채워지면 끝인지, 무엇을 미루는지(보류 항목과 재검토 trigger). 적은 것을 오케스트레이터에게 보내고 시작한다.
-2. 프로그램을 돌릴 자기 Run 을 쥔다. SessionStart hook 이 붙여 두었으면 그대로 쓰고, 없으면 Orca 로 Run 을 하나 만들어 `run-use` 한다. 이 Run 은 너를 시작한 Dispatch 의 Run 과 다르다.
+2. 프로그램을 돌릴 자기 Run 을 쥔다. SessionStart hook 이 붙여 두었으면 그대로 쓰고, 없으면 `orca orchestration run-create` 로 Run 을 하나 만들어 `orca orchestration run-use` 한다. 이 Run 은 너를 시작한 Dispatch 의 Run 과 다르다.
 3. 프로그램을 항목으로 나눈다(`item_create`, 만들 때 알려진 선행은 `deps`). 그 밖의 순서는 `edge_add`(`blocks`·`after`·`stacked_on`·`deploys_after`)로, 정해진 흐름은 `flow_expand` 로 펼친다.
 
 ## 깨어날 때마다
 
 `orchestrate` skill 의 리드 절을 따른다. 요약하면:
 
-- resource `ready` 에서 시작할 항목을 고르고 `start_unit` 으로 워커를 시작한다(`start` skill). 시작할 항목을 대신 골라 주는 역할은 없다. 네가 고른다.
-- 워커의 질문·escalation 은 네가 풀 수 있으면 답하고(Orca `reply`), 브리프 범위나 승인 줄 밖이면 오케스트레이터에게 올린다.
-- 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다. PR 을 낸 워커면 그 PR 이 워커 카드에 붙었는지 `orca reference list --worktree id:<worktreeId> --json` 으로 보고, 없으면 오케스트레이터에게 알린다(결정 193, `orchestrate`). 확인을 마치면 `orca orchestration worker-release --dispatch <id>` 로 그 워커를 푼다. `start_unit` 이 연 워커는 `--keep-open` 이라 Orca 가 저절로 닫지 않는다(결정 197·202). worktree 를 만들 때 생긴 setup 셸은 REAPER 가 풀린 뒤 닫는다. `terminal close` 는 부르지 않는다. 시작 결과의 notes 가 셸을 남긴다고 적었으면(setup 스크립트가 있는 저장소) 보고에 그 handle 을 옮긴다.
+- resource `ready` 에서 시작할 항목을 고르고 `start_unit` 으로 워커를 시작한다(`start` skill). 시작할 항목을 대신 골라 주는 역할은 없다. 네가 고른다. `taskId` 에는 너를 시작한 Task 를 넘긴다. `start_unit` 밖에서 시작돼 Task 가 없으면 비운다: 그때 `start_unit` 은 네가 그 Run 을 쥐었고(`run-current`), 밝힌 worktree 가 네 작업 폴더의 것이며, 그 worktree 에 끝나지 않은 Dispatch 가 없는지 보고, 거부는 오너에게 간다(결정 243).
+- 워커의 질문·escalation 은 네가 풀 수 있으면 답하고(`orca orchestration reply`), 브리프 범위나 승인 줄 밖이면 오케스트레이터에게 올린다.
+- 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다. PR 을 낸 워커면 그 PR 이 워커 카드에 붙었는지 `orca reference list --worktree id:<worktreeId> --json` 으로 보고, 없으면 오케스트레이터에게 알린다(결정 193, `orchestrate`). 확인을 마치면 `orca orchestration worker-release --dispatch <id>` 로 그 워커를 푼다. `start_unit` 이 연 워커는 `--keep-open` 이라 Orca 가 저절로 닫지 않는다(결정 197·202). 풀어도 터미널이 `retained` 로 남으면 `unit_close {dispatch}` 로 닫는다(결정 263): Dispatch 가 끝났고 agent 가 쉬고 있을 때만 닫고, 아니면 이유 한 줄로 거부한다. 거부는 보고에 옮기고 다른 길로 닫지 않는다. `orca terminal close` 를 직접 부르지 않는다. worktree 를 만들 때 생긴 setup 셸은 REAPER 가 풀린 뒤 닫는다. 시작 결과의 notes 가 셸을 남긴다고 적었으면(setup 스크립트가 있는 저장소) 보고에 그 handle 을 옮긴다.
 - 리뷰 판정은 작성자가 기록하지 못한다. 워커가 보낸 리뷰한 head·리뷰어·증거로 `review_record` 에 판정을 기록하는 것은 너다(결정 111·162).
 - 검증 증거도 작성자가 기록하지 못한다. 워커가 보낸 실행 출력으로, 리뷰한 head 에 등급이 묻는 `kind` 마다 `evidence_record` 를 부르고, 머지 뒤 배포 단계는 `stage_record` 로 남긴다(결정 171).
 - "승인되면 머지"(`merge_on_approval`)인 PR 이 승인되어 깨면, 같은 `land` 요청으로 머지한다.

@@ -8,6 +8,7 @@ export type { Edge, EdgeKind, GraphRead } from "./graph.ts";
 export { group_brief, group_items } from "./group.ts";
 export { type ItemFacts, itemFacts, item_status } from "./item_status.ts";
 export { briefRuns, type LoadOptions, loadBriefInput, readSnapshot } from "./load.ts";
+export { type Overlap, type Overlaps, overlapLines, prOverlaps } from "./overlap.ts";
 export { owner_todo } from "./owner_todo.ts";
 export {
   ACTED_LABEL,

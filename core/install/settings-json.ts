@@ -194,6 +194,32 @@ export function removeRules(
   return got.ok && isDeepStrictEqual(got.value, want) ? { text: out, removed } : undefined;
 }
 
+/**
+ * `text` with `env[key]` set to the string `value`: the value replaced in place, the member appended
+ * to env, or env created. Refuses (undefined) when env is not an object or the result would not
+ * parse to exactly the expected object; every byte outside the spliced span stays.
+ */
+export function setEnvValue(text: string, key: string, value: string): string | undefined {
+  const parsed = parseSettings(text);
+  if (!parsed.ok) return undefined;
+  const root = scan(text);
+  const env = member(root, "env");
+  const unit = indentUnit(text);
+  const entry = () => `${JSON.stringify(key)}: ${JSON.stringify(value)}`;
+  let out: string;
+  if (!env) out = appendTo(text, root, [(ind) => `"env": {\n${ind}${unit}${entry()}\n${ind}}`]);
+  else if (env.kind !== "object") return undefined;
+  else {
+    const old = member(env, key);
+    out = old ? text.slice(0, old.start) + JSON.stringify(value) + text.slice(old.end) : appendTo(text, env, [entry]);
+  }
+  const want = structuredClone(parsed.value) as { env?: Record<string, unknown> };
+  want.env ??= {};
+  want.env[key] = value;
+  const got = parseSettings(out);
+  return got.ok && isDeepStrictEqual(got.value, want) ? out : undefined;
+}
+
 /** The rules a settings object lists in permissions.allow. */
 export function allowList(settings: unknown): string[] {
   const allow = (settings as { permissions?: { allow?: unknown } } | undefined)?.permissions?.allow;

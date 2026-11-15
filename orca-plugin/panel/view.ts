@@ -172,9 +172,16 @@ export function errorNote(r: Refusal): string {
   return `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorLine(r))}</p>`;
 }
 
+/**
+ * Decision 259: the gap after an emoji is the `.em` class's, never a literal space. `html` is escaped
+ * text; an emoji with nothing after it (a flag at the end) has no label to set apart.
+ */
+export const emo = (html: string): string => html.replace(/(\p{Extended_Pictographic}️?) +(?=[^\s\p{Extended_Pictographic}])/gu, '<span class="em">$1<span class="sr"> </span></span>');
+const txt = (s: string): string => emo(esc(s));
+
 function cellHtml(c: Cell): string {
   if (c.text === "—" && !c.link) return DASH;
-  const body = esc(c.text) + (c.tail ? `<span class="pri">${esc(c.tail.trim())}</span>` : "");
+  const body = txt(c.text) +(c.tail ? `<span class="pri">${esc(c.tail.trim())}</span>` : "");
   return c.link ? `<a href="${esc(c.link)}" target="_blank" rel="noreferrer">${body}</a>` : body;
 }
 
@@ -194,7 +201,7 @@ export function stateBadge(text: string): string {
   const f = /(?:\s*\p{Extended_Pictographic}️?)+$/u.exec(rest);
   const word = (f ? rest.slice(0, f.index) : rest).trim();
   if (!word) return esc(text);
-  return badge(word, TONE[m?.[1] ?? ""] ?? "") + (f ? ` ${esc(f[0].trim())}` : "");
+  return badge(word, TONE[m?.[1] ?? ""] ?? "") + (f ? `<span class="sr"> </span><span class="fl">${esc(f[0].trim())}</span>` : "");
 }
 
 // The words of core/contract/transitions.ts STATE_LABEL and views.ts READING_LABEL, by their mark;
@@ -215,7 +222,7 @@ export const STATE_WORD: Readonly<Record<string, string>> = {
 function markHtml(c: Cell): string {
   const word = STATE_WORD[c.text];
   if (!word || c.link) return cellHtml(c);
-  return `<span class="mk" aria-hidden="true">${esc(c.text)}</span>${badge(word, TONE[c.text] ?? "", "st")}`;
+  return `<span class="mk em" aria-hidden="true">${esc(c.text)}</span>${badge(word, TONE[c.text] ?? "", "st")}`;
 }
 
 const COUNT = /^(\d+)건·막힘 (\d+)$/;
@@ -307,14 +314,14 @@ function tableHtml(t: Table, rows: string[], acts: boolean): string {
 // An empty section is its heading line alone, count 0 and "없음" on the same line (decision 169).
 function section(id: string, t: Table, rows: string[], acts = false, hint = "", tab = ""): string {
   const empty = t.rows.length === 0;
-  const h = empty ? '<span class="none">없음</span>' : hint ? `<span class="hint">${esc(hint)}</span>` : "";
+  const h = empty ? '<span class="none">없음</span>' : hint ? `<span class="hint">${txt(hint)}</span>` : "";
   const attrs = `${empty ? ' class="nil"' : ""}${tab ? ` data-tab="${tab}"` : ""}`;
   const body = empty ? "" : tableHtml(t, rows, acts);
-  return `<section aria-labelledby="h-${id}"${attrs}><div class="sec-h"><h2 id="h-${id}">${esc(t.title)} <span class="count">${t.count}</span></h2>${h}</div>${body}</section>`;
+  return `<section aria-labelledby="h-${id}"${attrs}><div class="sec-h"><h2 id="h-${id}">${txt(t.title)} <span class="count">${t.count}</span></h2>${h}</div>${body}</section>`;
 }
 
 const btn = (label: string, act: Act | null, primary = false) =>
-  `<button type="button" class="btn${primary ? " primary" : ""}"${act ? ` data-act="${attr(act)}"` : " disabled"}>${esc(label)}</button>`;
+  `<button type="button" class="btn${primary ? " primary" : ""}"${act ? ` data-act="${attr(act)}"` : " disabled"}>${txt(label)}</button>`;
 
 function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<string>): string {
   const kind = new Map(todo.map((r) => [r.ref, r.kind]));
@@ -355,7 +362,7 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
   const calm = m.decisions.rows.length === 0 && m.ownerTodo.rows.length === 0;
   return [
     `<h1 class="sr">현황 · 묶음 ${m.groups} · 내가 할 일 ${m.todo.total} (결정 ${m.todo.decisions} + 할 일 ${m.todo.other})</h1>`,
-    `<p class="sumline">✅ 완료 ${s.done}건 · 🔄 진행 중 ${s.doing}건 · 남은 것 ${s.left}건 · 🚧 막힌 것 ${s.blocked}건</p>`,
+    `<p class="sumline">${emo(`✅ 완료 ${s.done}건 · 🔄 진행 중 ${s.doing}건 · 남은 것 ${s.left}건 · 🚧 막힌 것 ${s.blocked}건`)}</p>`,
     calm
       ? `<section aria-labelledby="h-owner" class="nil" data-tab="todo"><div class="sec-h"><h2 id="h-owner">${esc(m.decisions.title)} <span class="count">0</span> · ${esc(m.ownerTodo.title)} <span class="count">0</span></h2><span class="none">없음</span></div></section>`
       : section("dec", m.decisions, decisions, true, "", "todo") + section("me", m.ownerTodo, todoRows, true, "", "todo"),
@@ -363,7 +370,7 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
     m.groups === 0 ? `<p class="hint0" data-tab="prog">${esc(NO_GROUP)}</p>` : "",
     m.onHold ? section("hold", m.onHold, m.onHold.rows.map((r) => rowHtml(m.onHold as Table, r, { nav: { item: r.id } })), false, "", "prog") : "",
     m.done ? doneFold(m.done) : "",
-    `<p class="foot">완료는 최근 ${m.doneDays}일 · 🔍 근거 부족 ${m.evidenceShort}${m.reviewOnly === undefined ? "" : ` · 👀 리뷰만 있음 ${m.reviewOnly}`} · 상세: <code>sangsoe brief &lt;묶음&gt;</code></p>`,
+    `<p class="foot">${emo(`완료는 최근 ${m.doneDays}일 · 🔍 근거 부족 ${m.evidenceShort}${m.reviewOnly === undefined ? "" : ` · 👀 리뷰만 있음 ${m.reviewOnly}`}`)} · 상세: <code>sangsoe brief &lt;묶음&gt;</code></p>`,
   ].join("");
 }
 
@@ -387,7 +394,7 @@ function doneFold(t: Table): string {
     return `<li><span>${what ? titleWithId(what) : ""}${link}</span><span class="when">${esc(when?.text ?? "")}</span></li>`;
   });
   const body = items.length === 0 ? '<p class="empty">없음</p>' : `<ul class="done">${items.join("")}</ul>`;
-  return `<details class="fold"><summary>${esc(t.title)} <span class="count">${t.count}</span>${CHEV}</summary>${body}</details>`;
+  return `<details class="fold"><summary><span>${txt(t.title)}</span> <span class="count">${t.count}</span>${CHEV}</summary>${body}</details>`;
 }
 
 // Edge kinds differ by dash pattern and by name (the name is canonical, decision 92②); the last two
@@ -716,18 +723,18 @@ function headState(text: string, r: Row, o: GtOpts): string {
 function gtSection(id: string, t: Table, body: string, hint = ""): string {
   const empty = t.rows.length === 0;
   const h = empty ? '<span class="none">없음</span>' : hint ? `<span class="hint">${hint}</span>` : "";
-  return `<section aria-labelledby="h-${id}"${empty ? ' class="nil"' : ""}><div class="sec-h"><h2 id="h-${id}">${esc(t.title)} <span class="count">${t.count}</span></h2>${h}</div>${empty ? "" : body}</section>`;
+  return `<section aria-labelledby="h-${id}"${empty ? ' class="nil"' : ""}><div class="sec-h"><h2 id="h-${id}">${txt(t.title)} <span class="count">${t.count}</span></h2>${h}</div>${empty ? "" : body}</section>`;
 }
 
 const sub = (t: Table, body: string, note = "") =>
   t.rows.length === 0 ? "" : `<div><h3>${esc(t.title)}${note ? ` <span class="note">${esc(note)}</span>` : ""}</h3>${body}</div>`;
 
 function figures(m: GroupDetail, f: GroupFigures): string {
-  const fig = (dt: string, dd: string, cls = "") => `<div${cls ? ` class="${cls}"` : ""}><dt>${esc(dt)}</dt><dd>${dd}</dd></div>`;
+  const fig = (dt: string, dd: string, cls = "") => `<div${cls ? ` class="${cls}"` : ""}><dt>${txt(dt)}</dt><dd>${dd}</dd></div>`;
   // Decision 218: the three cells that add up to the title's 열린 N건 come first; ✅ is set apart after them.
   return (
     `<dl class="figs" aria-label="묶음 요약">${fig("우선순위", esc(m.priority))}${fig("🔄 진행 중", String(f.doing))}${fig("🚧 막힘", String(f.blocked))}` +
-    `${fig("남은 것", `${f.left} <small>📅 ${f.planned}, 🟢 ${f.ready}, ⏸️ ${f.onHold}</small>`)}${fig(`✅ ${f.doneDays}일`, String(f.done), "aside")}` +
+    `${fig("남은 것", `${f.left} <small>${emo(`📅 ${f.planned}, 🟢 ${f.ready}, ⏸️ ${f.onHold}`)}</small>`)}${fig(`✅ ${f.doneDays}일`, String(f.done), "aside")}` +
     `${fig("🙋 오너", String(f.owner))}${fig("🚨 플래그", String(f.flags))}</dl>`
   );
 }
@@ -736,7 +743,7 @@ function legend(): string {
   const line = (cls: string) => `<svg viewBox="0 0 40 8" aria-hidden="true"><line class="${cls}" x1="0" y1="4" x2="40" y2="4"/></svg>`;
   const rows = [
     ...Object.entries(EDGE_KINDS).map(
-      ([k, v]) => `<tr><td data-l="선 모양" class="nw hd">${line(k)}</td><td data-l="간선" class="kind nw hd">${k}</td><td class="brk" aria-hidden="true"></td><td data-l="뜻" class="tx">${esc(v)}</td></tr>`,
+      ([k, v]) => `<tr><td data-l="선 모양" class="nw hd">${line(k)}</td><td data-l="간선" class="kind nw hd">${k}</td><td class="brk" aria-hidden="true"></td><td data-l="뜻" class="tx">${txt(v)}</td></tr>`,
     ),
     ...MARKS.map(
       ([cls, name, v]) => `<tr><td data-l="선 모양" class="nw hd">${line(cls)}</td><td data-l="간선" class="nw hd">${name}</td><td class="brk" aria-hidden="true"></td><td data-l="뜻" class="tx">${esc(v)}</td></tr>`,
@@ -789,7 +796,7 @@ function group(m: GroupDetail): string {
 function item(m: ItemDetail): string {
   const rows = m.chain.rows.map((r) => rowHtml(m.chain, r, { idCol: true }));
   return [
-    `<h1>${esc(m.state)} <span class="id">${esc(m.id)}</span> ${esc(m.title)} ${esc(m.flags)}</h1>`,
+    `<h1><span class="em">${esc(m.state)}<span class="sr"> </span></span><span class="id">${esc(m.id)}</span> ${esc(m.title)}${m.flags ? `<span class="sr"> </span><span class="fl">${esc(m.flags)}</span>` : ""}</h1>`,
     `<p class="sumline">누가 ${m.who === "—" ? "—" : badge(m.who)} · <span class="pri">${esc(m.priority)}</span></p>`,
     section("chain", m.chain, rows),
   ].join("");

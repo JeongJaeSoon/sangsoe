@@ -55,6 +55,7 @@ test("the core start checks say the same sentences", () => {
 });
 
 // The CLI's subcommands today and the ones the plan adds (brief, todo, land, recover, graph, ...).
+// `pressure` stays out: `sangsoe pressure wait` is the one call agent bodies name (decision 256).
 const CLI_CALL =
   /\bsangsoe\s+(install|uninstall|doctor|plugin|brief|todo|land|review|recover|item|graph|decision|verify|notify|owner|--)/;
 

@@ -34,7 +34,7 @@ test("237: an auth stop after an idle turn says 재로그인, not that the worke
   assert.ok(v.ok, JSON.stringify(v));
   const md = renderMarkdown(v.value.model);
   assert.match(md, /\| 🚨 재로그인 \|/);
-  assert.doesNotMatch(md, /🚨 워커가 다음 지시를 기다림/);
+  assert.doesNotMatch(md, /🚨 워커가 지시를 기다림/);
 });
 
 test("237: a finished turn after the auth stop means the session signed in again: 재로그인 is gone", () => {

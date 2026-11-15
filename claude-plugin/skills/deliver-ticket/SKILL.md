@@ -17,13 +17,15 @@ description: "Use when a sangsoe worker takes one Task from first edit to merge-
 - 로직을 바꾸면 그 변경을 확인하는 시험을 같이 쓰고 실제로 돌린다. 버그 수정은 실패하는 시험부터(`tdd`).
 - 확인한 증거만 남긴다. "도움이 될 것 같은" 변경은 가설이고, 증거가 아니라고 하면 되돌린다.
 - 브리프 밖에서 찾은 것은 고치지 않고 worker_done 에 NOW·LATER·DROP 제안으로 적는다.
+- 행위가 거부되면 `write-brief` 의 거부 문단대로 한다. 서브에이전트의 결과가 거부를 알리면 그 행위를 네가 대신하지 않고, 같은 턴에 네 escalation 으로 올린다.
 
 ## 3. 독립 리뷰
 
 - 리뷰어는 작성자가 아니다. 변경 파일과 관련 시험만 주고, 너의 설명·결론은 주지 않는다. 리뷰어의 모델과 effort 는 resource `models` 의 review 행이고, 안정 릴리스 앞 마지막 리뷰는 release-review 행이다.
+- 리뷰어 지시문에 두 줄을 넣는다. 하네스가 저장한 파일(tool-results, 백그라운드 task 출력)은 Read tool 로만 읽는다: 작업 폴더 밖이라 `sed`·`cat`·편집은 아무도 답하지 않는 권한 프롬프트에서 멈춘다. 보고에서 비밀처럼 생긴 값은 파일 경로나 변수 이름으로만 가리키고, `KEY=value`·`key: value` 꼴의 줄로 쓰지 않는다: 비밀 검사 hook 이 보고 전체를 막는다. 그리고 `write-brief` 의 거부 문단을 통째로 붙인다.
 - 찾은 것을 Act-on · Consider · Noted · Dismissed 로 가르고, Act-on 이 0 인 회차가 나올 때까지 고치고 다시 받는다.
 - **판정은 리뷰한 head 에 묶인다.** 리뷰 뒤에 커밋하거나 main 을 합치면 그 판정은 낡는다. 충돌을 풀며 main 을 합쳤으면 그 합침의 차이만 다시 리뷰받는다(delta 리뷰).
-- **작성자는 자기 판정을 기록하지 않는다.** 리뷰한 head sha, 리뷰어, 리뷰 원문(남은 Act-on 수가 적힌 것)의 위치를 리드에게 보낸다. 기록은 리드가 `review_record` 로 한다(결정 111). 네 세션에서 부르면 거부된다(결정 162). 요약은 근거가 아니다.
+- **작성자는 자기 판정을 기록하지 않는다.** 리뷰한 head sha, 리뷰어, 리뷰 원문(남은 Act-on 수가 적힌 것)의 위치를 리드에게 `ask` 로 보낸다: 기록을 기다리므로 status 가 아니라 question 이다. 기록은 리드가 `review_record` 로 한다(결정 111). 네 세션에서 부르면 거부된다(결정 162). 요약은 근거가 아니다.
 
 ## 4. 증거: 검증 등급
 
@@ -37,7 +39,7 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
 | V3 | 화면·외부 연동·의존성·CI·배포·인증·권한·마이그레이션·보호 경로 | V2 + 화면이면 스크린샷·GIF 와 리드 판정(호스트 앱 패널은 실제 패널·실제 데이터에서 잰다. 설정이 `ui` 증거의 surface·measures 를 정한 저장소는 `evidence_record` 의 `observed` 에 그 값을 적는다, 결정 238), 배포·연동이면 dev 반영 확인, 사람 승인 |
 
 - 등급을 낮추는 라벨은 설정의 owners 만 유효하다. 올리는 것은 누구나 한다.
-- 증거는 `evidence_record` tool 로 남긴다: 그 head 의 `kind`(`test`·`run`·`ui`·`dev`)마다 종료 코드와 "확인하지 못한 것" 목록. PR 을 쓴 세션은 기록하지 못한다(결정 171). 실행 출력과 확인 못 한 것을 리드에게 보내고, 리드가 기록한다. 판정과 같은 길이다.
+- 증거는 `evidence_record` tool 로 남긴다: 그 head 의 `kind`(`test`·`run`·`ui`·`dev`)마다 종료 코드와 "확인하지 못한 것" 목록. PR 을 쓴 세션은 기록하지 못한다(결정 171). 실행 출력과 확인 못 한 것을 리드에게 `ask` 로 보내고, 리드가 기록한다. 판정과 같은 길이다.
 - "확인하지 못한 것" 칸을 비우지 않는다. 비거나 기록이 없으면 `land` 가 `evidence_missing` 으로 거부한다.
 - 머지 뒤 배포 단계(`merge`·`dev`·`prod`)는 `stage_record` tool 로 남긴다. 흐름 틀의 배포 단계는 이 기록을 기다린다.
 - 검증하려고 띄운 compose·프로세스는 확인한 그 턴에 내린다.
@@ -58,7 +60,7 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
    - `auto_merge`: GitHub 이 필수 리뷰와 CI 가 찰 때 머지한다. `merge_approved`·`merge_verdict`: 승인이나 기록된 리뷰 판정으로 지금 머지했다(결정 158).
    - `merge_on_approval`: 승인이 찰 때 pr-monitor 가 리드를 깨우고, 리드가 같은 `land` 로 머지한다.
    - 거부 code(`evidence_missing`, `review_missing`, `review_stale`, `head_moved`, `stack_order`, `main_red` 등): `refusal.fix` 대로 원인을 고치고 다시 부른다. `review_stale`·`head_moved` 는 리뷰한 head 가 지금 head 가 아니라는 뜻이니, 새 head 를 다시 리뷰받는다. 브랜치 보호가 조건을 채우지 않으면(못 읽음·없음·요구하지 않음) land 가 그 조건을 스스로 확인한다(조건의 `source: own`, 결정 204): `checks_pending`·`checks_red`·`checks_missing` 은 head 의 모든 검사, `behind_base` 는 head 가 base 끝을 품지 않는다는 뜻이다. base 를 합쳐 push 하고(충돌을 풀었으면 `git show --remerge-diff` 로 delta 리뷰) 새 head 를 리뷰받는다. `main_red` 동안에는 `main_fix: true` 로 요청한 PR 만 들어간다.
-   - 거부(hook·권한): 다른 길로 머지하지 않는다. 일을 맡긴 쪽에 거부 보고로 알린다.
+   - 거부(권한·안전 검사·hook·사람): 멈추고, 다른 길로 머지하지 않는다. `write-brief` 의 거부 문단대로 명령을 파일에 쓰고 같은 턴에 escalation 한 번으로 알린다. `land` 의 `refusal.code` 는 이 거부가 아니다: 위 줄대로 고치고 다시 부른다.
 3. 머지했든 예약했든 "승인되면 머지"든, `merge_ready` 를 담은 worker_done 한 번으로 끝낸다: PR, head sha, 리뷰 판정과 리뷰어, 등급과 증거, 확인 못 한 것. `--type merge_ready` 메시지를 따로 보내지 않는다(결정 175, `[gate:self-land]` 가 막는다). Orca 는 worker_done 으로 Task 를 닫지만, 브리프는 PR 이 머지될 때까지 항목을 🚧 막힘(리뷰어)으로 읽는다. 네가 항목을 닫지 않는다.
 
 worker_done 전에 `end-session` skill 을 읽는다.

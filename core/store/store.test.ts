@@ -25,14 +25,14 @@ test("opens ~/.local/share/sangsoe/sangsoe.db under the given home and records s
   const path = defaultDbPath(home);
   assert.equal(path, join(home, ".local/share/sangsoe/sangsoe.db"));
   assert.ok(existsSync(path));
-  assert.equal(store.schemaVersion(), 2);
+  assert.equal(store.schemaVersion(), 3);
   store.close();
   const again = Store.open({ home, clock: fixedClock(T0), fsProbe: local });
-  assert.equal(again.schemaVersion(), 2, "reopening does not migrate twice");
+  assert.equal(again.schemaVersion(), 3, "reopening does not migrate twice");
   again.close();
   const raw = new DatabaseSync(path);
   assert.equal((raw.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode, "wal");
-  assert.equal((raw.prepare("SELECT count(*) AS n FROM migration").get() as { n: number }).n, 2);
+  assert.equal((raw.prepare("SELECT count(*) AS n FROM migration").get() as { n: number }).n, 3);
   raw.close();
 });
 
@@ -40,10 +40,10 @@ test("a schema-1 database gains the edge triggers on open (schema 2)", () => {
   const { path, store } = fileStore();
   store.close();
   const raw = new DatabaseSync(path);
-  raw.exec("DROP TRIGGER edge_no_cycle; DROP TRIGGER edge_source_graph; DELETE FROM migration WHERE version = 2;");
+  raw.exec("DROP TRIGGER edge_no_cycle; DROP TRIGGER edge_source_graph; DROP TABLE load_sample; DELETE FROM migration WHERE version >= 2;");
   raw.close();
   const again = Store.open({ path, clock: fixedClock(T0), fsProbe: local });
-  assert.equal(again.schemaVersion(), 2);
+  assert.equal(again.schemaVersion(), 3);
   const add = (pred: string, succ: string) =>
     again.append({ type: "edge_added", source: "GRAPH", dedupe_key: dedupeKey(EVENTS.edge_added, pred, succ, "blocks"), payload: { pred, succ, kind: "blocks" } });
   add("a", "b");

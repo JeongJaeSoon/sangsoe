@@ -69,7 +69,7 @@ test("preview pages for the screenshots (only with PANEL_PREVIEW_DIR)", { skip: 
 
 test("the fold is closed by default and reads nothing until opened", () => {
   const html = renderResources({ kind: "idle" }, false, NOW);
-  assert.equal(html, `<details class="fold res-fold"><summary>리소스${CHEV}</summary><div class="res-body"></div></details>`);
+  assert.equal(html, `<details class="fold res-fold"><summary>리소스${CHEV}</summary><div class="res-body" tabindex="0" role="region" aria-label="리소스"></div></details>`);
   assert.match(renderResources({ kind: "shown", view: view() }, true, NOW), /<details class="fold res-fold" open>/);
 });
 
@@ -116,6 +116,18 @@ test("reading, empty, failed, unread and stale each say so; an unread count is n
   assert.match(html, /하나라도 못 읽으면 worktree 는 정리하지 않는다/);
   assert.doesNotMatch(renderResBody({ kind: "shown", view: view() }, NOW), /낡음/);
   assert.match(renderResBody({ kind: "shown", view: view() }, Date.parse(AT) + STALE_MS + 1), /읽음, 낡음/);
+});
+
+test("U133: a candidate read that failed is never summed up as nothing to clean", () => {
+  const ok = { ok: true as const, value: { rows: [], markOnly: false, unseen: [] } };
+  const none = { ok: true as const, value: { count: 0, kb: 0 } };
+  const wt = renderResBody({ kind: "shown", view: view({ worktrees: { ok: false, why: "open PRs of acme/api" }, tmp: none }) }, NOW);
+  assert.doesNotMatch(wt, /정리할 것 없음/);
+  assert.match(wt, /class="empty">[^<]*worktree 후보[^<]*알 수 없음/);
+  const tmp = renderResBody({ kind: "shown", view: view({ worktrees: ok, tmp: { ok: false, why: "/tmp: EACCES" } }) }, NOW);
+  assert.doesNotMatch(tmp, /정리할 것 없음/);
+  assert.match(tmp, /class="empty">[^<]*임시 폴더[^<]*알 수 없음/);
+  assert.match(renderResBody({ kind: "shown", view: view({ worktrees: ok, tmp: none }) }, NOW), /정리할 것 없음/, "all read, none found still says so");
 });
 
 test("a stale reading cannot be confirmed, and refresh waits while a 정리 runs", () => {
