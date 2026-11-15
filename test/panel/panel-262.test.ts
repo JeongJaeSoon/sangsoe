@@ -8,14 +8,14 @@ import { renderStage } from "../../orca-plugin/panel/view.ts";
 import { NOW, PARTS_GOT, VIEW } from "../fixtures/panel/rc3-state.ts";
 import { scratchDir } from "../scratch.ts";
 import { spawnSync } from "node:child_process";
-import { chrome, dump, noBrowser, orcaPage } from "./browser.ts";
+import { chrome, dump, KEYCHAIN_FLAGS, noBrowser, orcaPage } from "./browser.ts";
 
 /** With SANGSOE_CAPTURE_DIR set, also saves a PNG of the page as drawn: the screen capture a UI review reads. */
 function capture(dir: string, page: string, name: string, width: number, height: number): void {
   const out = process.env.SANGSOE_CAPTURE_DIR;
   const bin = chrome();
   if (!out || !bin) return;
-  spawnSync(bin, ["--headless=new", "--disable-gpu", "--allow-file-access-from-files", `--user-data-dir=${join(dir, "shot")}`, `--window-size=${width},${height}`, "--virtual-time-budget=3000", "--run-all-compositor-stages-before-draw", "--hide-scrollbars", `--screenshot=${join(out, name)}`, `file://${join(dir, page)}`], { timeout: 60_000 });
+  spawnSync(bin, ["--headless=new", "--disable-gpu", "--allow-file-access-from-files", `--user-data-dir=${join(dir, "shot")}`, ...KEYCHAIN_FLAGS, `--window-size=${width},${height}`, "--virtual-time-budget=3000", "--run-all-compositor-stages-before-draw", "--hide-scrollbars", `--screenshot=${join(out, name)}`, `file://${join(dir, page)}`], { timeout: 60_000 });
 }
 
 // U133 (decision 262): the 리소스 section is pinned to the panel's bottom, so opening it is a sheet over
