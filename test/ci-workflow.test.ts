@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { render, summarize } from "../scripts/ci-test-summary.ts";
@@ -34,13 +34,21 @@ test("B1: the unit job logs npm test under pipefail and summarizes it even when 
   assert.match(summary, /"\$RUNNER_TEMP\/test-output\.log"/);
 });
 
-test("B4: npm test gets the hygiene pattern from a repository secret, and no workflow writes one", () => {
+test("B4: only ci.yml's npm test step gets the hygiene pattern, as a repository secret; no workflow writes one or hands out every secret", () => {
   const run = (jobs.get("unit") ?? "").split(/\n {6}- /).find((s) => s.includes("npm test"));
   assert.ok(run, "no npm test step");
-  const lines = yml.split("\n").filter((l) => l.includes("SANGSOE_HYGIENE_PATTERN"));
-  assert.equal(lines.length, 1, "the variable is named once, on one step");
-  assert.match((lines[0] ?? "").trim(), /^SANGSOE_HYGIENE_PATTERN: \$\{\{ secrets\.SANGSOE_HYGIENE_PATTERN \}\}$/, "its value is the secret, not text");
-  assert.ok(run.includes(lines[0] ?? "\0"), "the secret is passed to a step other than npm test");
+  const dir = join(ROOT, ".github/workflows");
+  const named: string[] = [];
+  for (const file of readdirSync(dir).filter((f) => /\.ya?ml$/.test(f))) {
+    const text = readFileSync(join(dir, file), "utf8");
+    assert.doesNotMatch(text, /toJSON\(\s*secrets\s*\)/i, `${file} hands every secret to a step`);
+    named.push(...text.split("\n").flatMap((l) => (l.includes("SANGSOE_HYGIENE_PATTERN") ? [`${file}|${l}`] : [])));
+  }
+  assert.equal(named.length, 1, "the variable is named once, on one step of one workflow");
+  const [file, line] = (named[0] ?? "|").split("|");
+  assert.equal(file, "ci.yml");
+  assert.match((line ?? "").trim(), /^SANGSOE_HYGIENE_PATTERN: \$\{\{ secrets\.SANGSOE_HYGIENE_PATTERN \}\}$/, "its value is the secret, not text");
+  assert.ok(run.includes(line ?? "\0"), "the secret is passed to a step other than npm test");
 });
 
 const OUTPUT = [
