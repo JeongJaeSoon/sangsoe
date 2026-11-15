@@ -27,7 +27,8 @@ import {
   UNREADABLE,
   userPlugin,
 } from "./host.ts";
-import { PERMISSIONS_DOCTOR_FIX, permissionsRow } from "./permissions.ts";
+import { AUTO_COMPACT_DOCTOR_FIX, autoCompactRow } from "./auto-compact.ts";
+import { PERMISSIONS_DOCTOR_FIX, permissionsRow, sangsoeRules, userSettingsPaths } from "./permissions.ts";
 import { stageCore } from "./stage.ts";
 
 // `warn` and `notice` print their fix but leave the exit code alone, as at the start.
@@ -125,10 +126,29 @@ function settingsChecks(host: Host, current: ClaudeProfile): Check[] {
   } catch {
     settings = undefined;
   }
-  const perms = permissionsRow(path, settings);
+  const perms = permissionsRow(path, settings, sangsoeRules(host.env.HOME ?? ""));
   if (perms.all) return [{ state: "ok", name: "permissions", detail: perms.detail }];
   const land = landAllowClause(settings === undefined ? undefined : landAllowRules(settings));
   return [{ state: "warn", name: "permissions", detail: `${perms.detail}: sangsoe's sessions may stop on permission prompts${land}`, fix: PERMISSIONS_DOCTOR_FIX }];
+}
+
+// Decision 264: one warn-only row over the same profiles install --auto-compact writes; a higher value passes.
+export function autoCompactCheck(host: Host): Check {
+  const name = "auto-compact window";
+  const notes: string[] = [];
+  const paths = userSettingsPaths(host, "auto-compact", notes);
+  const rows = paths.map((path) => {
+    let settings: unknown;
+    try {
+      settings = JSON.parse(host.readText(path));
+    } catch {
+      settings = undefined;
+    }
+    return autoCompactRow(path, settings);
+  });
+  const detail = [...rows.map((r) => r.detail), ...(notes.length ? [`${UNREADABLE("orca account list --json")}: Orca's selected profile is unchecked`] : [])].join("; ");
+  if (rows.every((r) => r.ok)) return { state: "ok", name, detail };
+  return { state: "warn", name, detail: `${detail}: a long session compacts earlier than it should`, fix: AUTO_COMPACT_DOCTOR_FIX };
 }
 
 // The plugin row itself is the start check `claude-plugin-version`.
@@ -147,6 +167,7 @@ function claudeChecks(host: Host, root: string): Check[] {
     },
     orcaProfileCheck(host, root, current),
     ...settingsChecks(host, current),
+    autoCompactCheck(host),
   ];
 
   const markets = listMarketplaces(host);

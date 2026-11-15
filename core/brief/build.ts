@@ -1,6 +1,6 @@
 import type { ItemReading, ItemState, OwnerTodoRow, RestartDueRow, WaitsOn } from "../contract/index.ts";
 import { ITEM_READINGS, READING_LABEL, STATE_LABEL } from "../contract/index.ts";
-import { isKind, localDay, POLICY, spend, spendText } from "../models/index.ts";
+import { isKind, localDay, modelDrift, POLICY, spend, spendText } from "../models/index.ts";
 import { linkedActs } from "../owner/link.ts";
 import { DEFAULT_RESTART_RULES, restart_due } from "../session/restart-due.ts";
 import { item_timeline } from "../store/views/item_timeline.ts";
@@ -95,7 +95,7 @@ function next(f: ItemFacts): string {
   else if (f.state === "blocked") base = f.lastReason ?? "—";
   else if (f.state === "ready") base = "시작";
   else if (f.state === "planned") base = "선행 대기";
-  else if (f.idle) base = "워커가 다음 지시를 기다림";
+  else if (f.idle) base = "워커가 지시를 기다림";
   // A session stopped on a lost login does nothing else until someone signs in (decision 237).
   if (f.alarms.includes("worker_dead:auth")) return `🚨 ${ALARM_NEXT["worker_dead:auth"]}`;
   const alarm = f.alarms[0];
@@ -552,7 +552,10 @@ function modelLine(input: BriefInput, task: string): string | undefined {
   // The budget the start recorded, counted over the same span: a day-budget row counts today.
   const daily = p.budget_per === "day";
   const used = spend(input.events.filter((e) => e.type === "advisor_used"), { task, ...(daily ? { day: localDay(new Date(input.now)) } : {}) });
-  return `모델: ${POLICY[kind].label} · ${String(p.model)} · effort ${String(p.effort)}${advisor} · 예산 ${Number(p.budget)}회/${daily ? "하루" : "단위"} · ${spendText(used)}`;
+  // Decision 254: only this Task's rows from its last start on, so the drift is that start's session's.
+  const [drift] = modelDrift(input.events.slice(input.events.indexOf(last)).filter((e) => e.entity_id === task));
+  const resolved = drift ? ` · 세션 ${drift.actual} (표 ${drift.expected})` : "";
+  return `모델: ${POLICY[kind].label} · ${String(p.model)}${resolved} · effort ${String(p.effort)}${advisor} · 예산 ${Number(p.budget)}회/${daily ? "하루" : "단위"} · ${spendText(used)}`;
 }
 
 const RESTART_RULE: Record<RestartDueRow["rule"], string> = {

@@ -61,14 +61,14 @@ test("the wide state column shows each reading's mark with its word, the narrow 
     const rows = ov().inProgress.rows.map((x) => (x.id === "i026" ? { ...x, cells: x.cells.map((c, i) => (i === 0 ? { text: mark } : c)) } : x));
     const cell = /^<tr[^>]*><td>(.*?)<\/td>/.exec(rowOf(renderStage(withRows(rows)), "i026"))?.[1] ?? "";
     // The word is read aloud once: the mark beside it is hidden from screen readers.
-    assert.match(cell, new RegExp(`^<span class="mk" aria-hidden="true">${mark}</span><span class="badge[^"]* st">[^<]+</span>$`, "u"), `${r}: ${cell}`);
+    assert.match(cell, new RegExp(`^<span class="mk em" aria-hidden="true">${mark}</span><span class="badge[^"]* st">[^<]+</span>$`, "u"), `${r}: ${cell}`);
   }
   // The on-hold table and a group's item tables draw the same cell.
   const holdCols = ["상태", "항목", "PR", "다시 볼 조건", "기간"].map((name) => ({ name, max: 4 }));
   const holdRow = { id: "i099", cells: [{ text: "⏸️" }, { text: "i099 x" }, { text: "—" }, { text: "—" }, { text: "1d" }] };
   const onHold = renderStage({ ...one, model: { ...ov(), onHold: { title: "보류", count: 1, columns: holdCols, rows: [holdRow] } } });
-  assert.match(rowOf(onHold, "i099"), /^<tr[^>]*><td><span class="mk" aria-hidden="true">⏸️<\/span><span class="badge st">보류<\/span><\/td>/);
-  const marks = renderStage(grp).match(/<td><span class="mk"[^>]*>[^<]+<\/span>(?:<span class="badge[^"]* st">[^<]+<\/span>)?<\/td>/g) ?? [];
+  assert.match(rowOf(onHold, "i099"), /^<tr[^>]*><td><span class="mk em" aria-hidden="true">⏸️<\/span><span class="badge st">보류<\/span><\/td>/);
+  const marks = renderStage(grp).match(/<td><span class="mk em"[^>]*>[^<]+<\/span>(?:<span class="badge[^"]* st">[^<]+<\/span>)?<\/td>/g) ?? [];
   assert.ok(marks.length > 0, "the group detail has state-led rows");
   for (const c of marks) assert.match(c, /class="badge[^"]* st">/, c);
   assert.doesNotMatch(rule(WIDE, ".tbl .st"), /display: none;/, "the word shows in the wide column too");
@@ -77,7 +77,7 @@ test("the wide state column shows each reading's mark with its word, the narrow 
 });
 
 test("a group row's state cell in the wide table says its word too; its narrow head keeps the mark", () => {
-  assert.match(rowOf(renderStage(one), "lead:api-migration"), /^<tr[^>]*><td><span class="mk" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
+  assert.match(rowOf(renderStage(one), "lead:api-migration"), /^<tr[^>]*><td><span class="mk em" aria-hidden="true">🚧<\/span><span class="badge t-bad st">막힘<\/span><\/td>/);
   assert.match(rule(NARROW, ".tbl tr.lead .mk"), /display: inline;/);
   // The mark is aria-hidden, so the word is clipped, not removed: a screen reader still reads the state.
   const word = rule(NARROW, ".tbl tr.lead .st");

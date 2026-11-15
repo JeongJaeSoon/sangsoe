@@ -1,10 +1,11 @@
 import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
-import { judgeLoad, type LoadLevel, type LoadSample } from "../capacity/capacity.ts";
+import { DEFAULT_THRESHOLDS, judgeLoad, type LoadLevel, type LoadSample, type LoadThresholds } from "../capacity/capacity.ts";
 import type { StoredEvent } from "../contract/index.ts";
 import type { Exec, OrcaAdapter, WorktreeRow } from "../contract/orca.ts";
 import { DEFAULT_MONITOR_CONFIG } from "../detect/monitor.ts";
 import { withDiagnostics } from "../detect/resource/judge.ts";
+import { SAMPLE_RETENTION_MS, SAMPLE_STEP_MS, type StoredSample } from "../store/samples.ts";
 import type { EventFilter } from "../store/store.ts";
 import { ownerHolds } from "./record.ts";
 import type { Blocked, Judged, ReapOptions, ReapReport } from "./round.ts";
@@ -58,6 +59,8 @@ export type ResourceDeps = {
   trashBin: string | null;
   /** The REAPER timer period the band judges a gap by; the default monitor config's when absent. */
   intervalMs?: number;
+  /** Decision 241's samples after `since`; absent, the load part carries no history. */
+  samples?(since: number): StoredSample[];
 };
 
 /** Leftover per-call directories under `root` this user owns that are older than the minimum age. */
@@ -182,16 +185,38 @@ export function loadBand(events: readonly StoredEvent[], now: number, intervalMs
 export type ResourcePart = "load" | "made" | "candidates";
 export const RESOURCE_PARTS: readonly ResourcePart[] = ["load", "made", "candidates"];
 export type ResourcePartView =
-  | { part: "load"; at: string; load: ResourceView["load"]; episode: ResourceView["episode"]; band: Band }
+  | { part: "load"; at: string; load: ResourceView["load"]; episode: ResourceView["episode"]; band: Band; history?: Reading<LoadHistory> }
   | { part: "made"; at: string; made: ResourceView["made"] }
   | { part: "candidates"; at: string; worktrees: ResourceView["worktrees"]; tmp: ResourceView["tmp"]; trash: boolean };
 
 const why = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/** One sample as the panel's card draws it: the same figures the gauges show. */
+export type LoadPoint = { at: number; loadPerCpu?: number; memUsedPct?: number; diskFreeGb?: number };
+/** Decision 250: the last 24 hours of decision 241's samples, with the thresholds the lines mark. */
+export type LoadHistory = { from: string; to: string; stepMs: number; thresholds: LoadThresholds; points: LoadPoint[] };
+
+function loadHistory(read: (since: number) => StoredSample[], now: number, thresholds: LoadThresholds): Reading<LoadHistory> {
+  const from = now - SAMPLE_RETENTION_MS;
+  let rows: StoredSample[];
+  try {
+    rows = read(from);
+  } catch (e) {
+    return { ok: false, why: why(e) };
+  }
+  const points = rows.map((s) => ({
+    at: s.at,
+    ...(s.load5 !== undefined && s.cpus ? { loadPerCpu: s.load5 / s.cpus } : {}),
+    ...(s.memFreePct !== undefined ? { memUsedPct: 100 - s.memFreePct } : {}),
+    ...(s.diskFreeGb !== undefined ? { diskFreeGb: s.diskFreeGb } : {}),
+  }));
+  return { ok: true, value: { from: new Date(from).toISOString(), to: new Date(now).toISOString(), stepMs: SAMPLE_STEP_MS, thresholds, points } };
+}
+
 /** One point read of the load: Orca's memory figures over the OS sample, judged once. */
-async function readLoad(d: ResourceDeps): Promise<ResourceView["load"]> {
+async function readLoad(d: ResourceDeps, raw: LoadSample): Promise<ResourceView["load"]> {
   const diag = await d.orca.diagnosticsMemory();
-  const sample = withDiagnostics(d.sample(), diag.ok ? diag.value : null);
+  const sample = withDiagnostics(raw, diag.ok ? diag.value : null);
   const verdict = judgeLoad(sample);
   return {
     ok: true,
@@ -269,7 +294,12 @@ async function readCandidates(d: ResourceDeps, now: number): Promise<Pick<Resour
 export async function readResourcePart(d: ResourceDeps, part: ResourcePart): Promise<ResourcePartView> {
   const now = d.now();
   const at = new Date(now).toISOString();
-  if (part === "load") return { part, at, load: await readLoad(d), episode: episodeOf(d.events), band: loadBand(["pressure_high", "capacity_free", "reap_round"].flatMap((type) => d.events({ type })), now, d.intervalMs ?? DEFAULT_MONITOR_CONFIG.reaperIntervalMinutes * 60_000) };
+  if (part === "load") {
+    const sample = d.sample();
+    const band = loadBand(["pressure_high", "capacity_free", "reap_round"].flatMap((type) => d.events({ type })), now, d.intervalMs ?? DEFAULT_MONITOR_CONFIG.reaperIntervalMinutes * 60_000);
+    const history = d.samples ? { history: loadHistory(d.samples, now, sample.thresholds ?? DEFAULT_THRESHOLDS) } : {};
+    return { part, at, load: await readLoad(d, sample), episode: episodeOf(d.events), band, ...history };
+  }
   if (part === "made") return { part, at, made: await readMade(d, now) };
   return { part, at, ...(await readCandidates(d, now)), trash: d.trashBin !== null };
 }

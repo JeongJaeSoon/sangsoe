@@ -11,6 +11,7 @@ import { whyFrom } from "../graph/ready.ts";
 import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import { type Choice, launch, localDay, POLICY, pairing, resolve, spend } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
+import { isLocalHost } from "../orca/host-filter.ts";
 import { settled } from "../recover/recover.ts";
 import { writeLocalSettings } from "./local-settings.ts";
 import { type NewTask, REPO_SELECTOR, type RefusalReason, type Role, type StartOutcome, type StartPorts, type StartRefusal, type StartRequest } from "./types.ts";
@@ -271,11 +272,19 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   // The declared worktree is the caller's own only if it is the innermost one the calling session
   // runs in: with worktrees nested under a checkout, the outer one also contains the cwd.
   const cwd = real((ports.cwd ?? (() => process.cwd()))());
-  const innermost = trees.value.rows
+  const rows = [...trees.value.rows];
+  if (requester.worktreeId && !rows.some((w) => w.id === requester.worktreeId)) {
+    // `worktree list` can leave a live worktree out (measured 2026-11-15: a lead's own); `worktree show` finds it.
+    const shown = await orca.worktreeShow({ worktree: `id:${requester.worktreeId}` });
+    if (shown.ok && shown.value.id === requester.worktreeId && shown.value.isArchived === false &&isLocalHost(shown.value.hostId)) {
+      rows.push(shown.value);
+    }
+  }
+  const innermost = rows
     .filter((w) => within(cwd, real(w.path)))
     .sort((a, b) => real(b.path).length - real(a.path).length)[0];
   if (requester.worktreeId) {
-    const tree = trees.value.rows.find((w) => w.id === requester.worktreeId);
+    const tree = rows.find((w) => w.id === requester.worktreeId);
     if (!tree) return refuse("lineage_invalid", "부모 worktree 를 읽지 못했다(로컬 worktree 목록에 없다)");
     if (innermost?.id !== tree.id) {
       return refuse("lineage_invalid", `밝힌 worktree(${tree.path})가 부르는 세션의 작업 폴더(${cwd})가 있는 worktree 가 아니다`);

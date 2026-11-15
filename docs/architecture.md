@@ -26,6 +26,7 @@
 | 실행 | `core/capacity/` | X | ④ 공유 코어 | 부하 판정 함수 하나(압박 게이트·resource-monitor·REAPER·`capacity` 공용, 결정 83) |
 | 실행 | `core/reaper/` | X | ④ 공유 코어 | REAPER 라운드(표시 → 정리): 루트 읽기 · 끝남 판정 · 삭제 전 검사 · `worktree rm --run-hooks` · 기록된 Docker id · `resource_record` 몸체(결정 82·83·86·88, 결정 144·145). 닫는 터미널은 `unit_started` 에 남은 setup 셸 하나뿐이고, 그 기록이 `setup: none` 이며 Dispatch 가 모두 풀렸을 때만 닫는다(결정 202). `reaper` 설정 파일을 읽지 못한 라운드는 셸도 닫지 않고 아무것도 지우지 않는다(결정 201) |
 | 실행 | `core/recover/` | X | ④ 공유 코어 | `sangsoe recover` 의 읽기 전용 표(결정 80 N4) |
+| 실행 | `core/unit/` | X | ④ 공유 코어 | 끝난 단위의 에이전트 터미널을 handle 로 닫는 `closeUnit`(MCP `unit_close`, 결정 263) |
 | 실행 | `core/decision/` | X | ④ 공유 코어 | 결정 루프: `decision_open`(재질문 게이트) · `decision_answer` · `moot` 닫기 · 결정 84③ 읽기 |
 | 실행 | `core/notify/` | X | ④ 공유 코어 | `notify`: Orca 메시지 한 번 + `notified`, 받는 순서 · `term_` 거부 |
 | 실행 | `core/owner/` | X | ④ 공유 코어 | 오너 큐: `owner_todo` 몸체 · `verify` probe 다섯 · 입력 연결 규칙 · 표지 · `waiting_released` · 완료 버튼(결정 89·91) |

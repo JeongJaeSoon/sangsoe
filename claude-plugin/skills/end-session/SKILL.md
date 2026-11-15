@@ -5,7 +5,7 @@ description: "Use before a sangsoe worker or lead sends worker_done, or when the
 
 # 세션 끝내기
 
-끝은 세 단계다: 내가 띄운 것을 내리고, 남길 것을 남기고, 한 번 보고한다. 터미널·worktree 를 닫는 것은 Orca 와 REAPER 의 일이다. 네가 하지 않는다.
+끝은 세 단계다: 내가 띄운 것을 내리고, 남길 것을 남기고, 한 번 보고한다. worktree 를 닫는 것은 REAPER 의 일이다. 터미널은 Orca 가 풀고(`worker-release`), 풀린 뒤에도 `retained` 로 남은 끝난 단위의 에이전트 터미널은 리드·오케스트레이터가 `unit_close` 로 닫는다(결정 263). 워커는 자기 터미널을 닫지 않는다: 자기 Dispatch 는 `worker_done` 전까지 끝나지 않았고 자기 터미널은 호출자의 것이라, `unit_close` 가 거부한다.
 
 ## 1. 끝내도 되나
 
@@ -23,6 +23,10 @@ description: "Use before a sangsoe worker or lead sends worker_done, or when the
 - 임시 파일은 브리프가 정한 임시 폴더째 휴지통으로 옮긴다. 변수로 만든 경로를 `rm` 하지 않는다.
 - 거부 보고 파일(`orch-refusal/` 아래)은 치우지 않는다. 보고를 받은 리드나 오케스트레이터가 코어의 기록 뒤에 휴지통으로 옮긴다(`orchestrate` 의 거부 보고 행).
 - worktree 는 지우지 않는다. worker_done 전에 지우면 보고할 곳이 사라진다.
+
+## 2.1 리드의 마무리: 끝난 단위의 터미널
+
+리드는 워커의 `worker_done` 을 읽고 확인을 마친 뒤 그 Dispatch 를 `worker-release` 로 푼다. 터미널이 그래도 `retained` 면 `unit_close {dispatch}` 를 부른다. 거부는 한 줄로 이유를 말한다(`not_final`, `agent_not_idle`, `caller_terminal` …): 그대로 보고에 옮기고, 다른 명령으로 닫지 않고, 같은 호출을 다시 시도하지 않는다.
 
 ## 3. 남길 것
 
