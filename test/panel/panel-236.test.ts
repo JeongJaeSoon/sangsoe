@@ -18,9 +18,9 @@ test("the footer shows 🔍 근거 부족 and 👀 리뷰만 있음 as two numbe
   const r = panelView(input, {});
   assert.ok(r.ok, JSON.stringify(r));
   const v = r.value as unknown as PanelView;
-  assert.match(foot(v), /🔍 근거 부족 1 · 👀 리뷰만 있음 0 · 상세/);
+  assert.match(foot(v), /<span class="em">🔍<span class="sr"> <\/span><\/span>근거 부족 1 · <span class="em">👀<span class="sr"> <\/span><\/span>리뷰만 있음 0 · 상세/);
 
   if (v.model.stage !== 1) throw new Error("stage");
   const { reviewOnly: _, ...older } = v.model;
-  assert.match(foot({ ...v, model: older }), /🔍 근거 부족 1 · 상세/, "an older core's model");
+  assert.match(foot({ ...v, model: older }), /<span class="em">🔍<span class="sr"> <\/span><\/span>근거 부족 1 · 상세/, "an older core's model");
 });

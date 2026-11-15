@@ -63,7 +63,7 @@ test("the events that ask for action or judgment raise 🚨 until the item moves
   assert.ok(idle);
   assert.equal(idle.state, "in_progress");
   assert.equal(idle.idle, true);
-  assert.match(buildBrief(withEvents(NINE[5] ?? "")).inProgress.rows.find((r) => r.id === "i026")?.cells[3]?.text ?? "", /워커가 다음 지시를 기다림$/);
+  assert.match(buildBrief(withEvents(NINE[5] ?? "")).inProgress.rows.find((r) => r.id === "i026")?.cells[3]?.text ?? "", /워커가 지시를 기다림$/, "the 다음 column's label is the word, so the text does not repeat it");
 
   const moved = facts(withEvents(...NINE, line("2026-11-10T11:30:00.000Z", "item_transition", { task: "task_26", from: "in_progress", to: "blocked", reason: "review" })));
   assert.deepEqual(moved?.alarms, [], "an alarm stands until the item moves again");
