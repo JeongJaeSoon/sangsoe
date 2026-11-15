@@ -1,4 +1,4 @@
-// Decision 250: the panel's load card reads decision 241's samples back; the read writes nothing.
+// Decision 250: the panel's load rows read decision 241's samples back; the read writes nothing.
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";

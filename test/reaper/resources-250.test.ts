@@ -1,5 +1,5 @@
 // Decision 250: the load part carries the last 24 hours of decision 241's samples for the panel's
-// card, derived the way the gauges are (load per core, used memory), with the machine's thresholds.
+// load rows, derived the way their values are (load per core, used memory), with the machine's thresholds.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULT_THRESHOLDS, type LoadThresholds, readResourcePart, type ResourceDeps, Store } from "../../core/index.ts";
@@ -66,11 +66,11 @@ test("the machine's own thresholds travel with the samples", async () => {
   assert.deepEqual(p.history.value.points, [], "an empty store is no samples, not a failure");
 });
 
-test("a store read that fails is this card's unread, and the point read still comes", async () => {
+test("a store read that fails is the history's unread, and the point read still comes", async () => {
   const { store } = storeAt();
   const p = await readResourcePart({ ...deps(store), samples: () => { throw new Error("database is locked"); } }, "load");
   assert.ok(p.part === "load");
-  assert.ok(p.load.ok, "the gauges are read");
+  assert.ok(p.load.ok, "the live load is read");
   assert.deepEqual(p.history, { ok: false, why: "database is locked" });
 });
 
