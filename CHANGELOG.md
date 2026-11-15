@@ -4,6 +4,8 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+- **Records: the release smoke on installed 0.1.11 has no failure (297).** `docs/smoke-run.md` has the run: item 3 with both worker endings, item 5's line with a long prompt, items 6 and 8, the count after a resolved gate (284), an idle session (293) and the real panel's header (294) and start note (285) all pass. It also measures what 283 left open: a real Orca (1.4.259) takes `task-update --status completed` on a failed Task, so a Task its worker reported failed is closed once its PR is merged. Switch condition I2 has the four version cells for 0.1.11, and M3's re-measurement is no longer deferred.
+
 ## 0.1.11
 
 Everything since `v0.1.10`: #179 (decisions 282 to 288), #180 (289 to 295) and #181 (279). It fixes the two partial failures of the release smoke on installed 0.1.10 (287) and what that run showed besides. No release candidate was cut, for the reason 272 gives (296). What tests and fixture screens could not show (a long prompt driven into a real terminal, a worker ending with the `READY-WAIT: checks_missing` line, a merged PR closing a Task its worker reported failed, the count after a resolved gate, the real panel's start note and header, and an idle session opening no wait) is measured on the installed 0.1.11, and a failure there is fixed in 0.1.12.
