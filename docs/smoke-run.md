@@ -766,4 +766,4 @@ store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (1
 
 ### 릴리스 smoke 가 다시 잴 것
 
-3번(처음부터 `watch.repos` 에 넣고 `pr_opened` → `pr_merged` → Run 을 쥔 세션의 hook 이 닫음, 결정 275), 6번과 8번(결정 274: 패널의 답이 pending 으로 남고 Run 을 쥔 세션의 다음 프롬프트에서 풀림, 준비됨 한 줄), 5번의 한 줄(결정 280: `orca terminal send` 로 넣은 줄에 `owner_action` 이 없음).
+3번(처음부터 `watch.repos` 에 넣고 `pr_opened` → `pr_merged` → Run 을 쥔 세션의 hook 이 닫음, 결정 275), 6번과 8번(결정 274: 패널의 답이 pending 으로 남고 Run 을 쥔 세션의 다음 프롬프트에서 풀림, 준비됨 한 줄), 5번의 한 줄(결정 280: `orca terminal send` 로 넣은 줄에 `owner_action` 이 없음). P3 의 항목은 아니지만 결정 281 ⑦ 이 넘긴 것도 같은 때 본다: 실제 패널의 PC 부하 줄(실제 store 의 표본).
