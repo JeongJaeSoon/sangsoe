@@ -11,7 +11,7 @@ const T0 = Date.parse("2026-11-15T01:00:00Z");
 const iso = (s: number) => new Date(T0 + s * 1000).toISOString();
 
 const prompt = (s: number) => ({ type: "user", timestamp: iso(s), message: { role: "user", content: "go" } });
-const wake = (s: number) => ({ type: "user", timestamp: iso(s), message: { role: "user", content: "You have 1 orchestration message. Run `orca orchestration check`." } });
+const wake = (s: number) => ({ type: "user", timestamp: iso(s), message: { role: "user", content: "You have 1 orchestration message. Read it." } });
 const tool = (s: number) => ({ type: "assistant", timestamp: iso(s), message: { content: [{ type: "tool_use", id: `u${s}`, name: "Bash", input: { command: "ls" } }], stop_reason: "tool_use" } });
 // A tool_result at `s` answers the tool call made at `call` (default: one second earlier).
 const result = (s: number, text: string, call = s - 1) => ({ type: "user", timestamp: iso(s), message: { content: [{ type: "tool_result", tool_use_id: `u${call}`, content: text }] } });

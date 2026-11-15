@@ -1,7 +1,7 @@
 // Probe A9 (decision 261): did Orca message delivery alone wake a top-level orchestrator session?
 // Token-free, read-only. Two records that already exist are joined by Orca's messageId; nothing is stored:
 //   sender side   the sender's own log, one line per send: <n> <condition> scheduled=<time> sent=<time> messageId=<id>
-//   receiver side the probe session's transcript(s): the tool_result that carries the id and the `check` call it answers
+//   receiver side the probe session's transcript(s): the tool_result that carries the id and the mail-read call it answers
 // The result is a table on stdout.
 //
 //   node scripts/a9-collect.ts <sends.log> <probe.jsonl>...
@@ -113,7 +113,7 @@ export function collect(sent: Send[], probeFiles: string[]): Row[] {
       rows.push({ ...base, outcome: "duplicate", latencyS: null });
       continue;
     }
-    // Sent while the session was mid-`check`: one batch carried both messages, so the id was read inside the open turn.
+    // Sent while the session was mid-read: one batch carried both messages, so the id was read inside the open turn.
     const hit = hits[0];
     if (turn && hit && hit.ts <= turn.end) {
       const inTurnS = (hit.ts - s.sentAt) / 1000;
