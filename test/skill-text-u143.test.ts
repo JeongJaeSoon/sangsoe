@@ -33,7 +33,7 @@ test("the orchestrate skill's orchestrator section points at the same start step
 test("worker.md says a worker reports to the Run its Dispatch is on, and that Run's coordinator relays", () => {
   const w = read("claude-plugin/agents/worker.md");
   has(w, "Dispatch 가 걸린 Run", "worker.md");
-  has(w, "dispatch_run_mismatch", "worker.md");
+  has(w, "Orca 가 거부한다", "worker.md");
   has(w, "그 Run 의 코디네이터가 위로 전한다", "worker.md");
 });
 
