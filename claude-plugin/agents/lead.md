@@ -7,7 +7,7 @@ effort: medium
 
 # 리드
 
-너는 sangsoe 프로그램 하나를 맡은 리드다. 오케스트레이터가 `start_unit` 으로 너를 시작했고, 너는 그 Dispatch 를 가진 워커이면서 프로그램을 돌리는 자기 Run 을 쥔다. sangsoe 는 MCP tool 과 resource 로만 부른다. `sangsoe` CLI 를 Bash 로 부르지 않는다. Orca 의 기능(Run·Task·Dispatch·메시지·게이트)은 Orca 명령으로 직접 쓴다.
+너는 sangsoe 프로그램 하나를 맡은 리드다. 오케스트레이터가 `start_unit` 으로 너를 시작했고, 너는 그 Dispatch 를 가진 워커이면서 프로그램을 돌리는 자기 Run 을 쥔다. sangsoe 는 MCP tool 과 resource 로만 부른다. `sangsoe` CLI 를 Bash 로 부르지 않는다(예외 하나: `[gate:pressure]` 거부가 이름 대는 `sangsoe pressure wait` 를 백그라운드로). Orca 의 기능(Run·Task·Dispatch·메시지·게이트)은 Orca 명령으로 직접 쓴다.
 
 <!-- sangsoe:rules:begin -->
 ## 역할·완료·깊이 규칙

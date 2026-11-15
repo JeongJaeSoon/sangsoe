@@ -14,6 +14,7 @@ export {
 } from "./gates/index.ts";
 export type { Facts as GateFacts, Gate, Verdict as GateVerdict, Role as SessionRole } from "./gates/types.ts";
 export { firstPrompt, hostFacts, openPrs } from "./gates/facts.ts";
+export { PRESSURE_WAIT, type WaitDeps, waitForLoad } from "./gates/pressure-wait.ts";
 export { deniedDir, recordDenial } from "./gates/record.ts";
 export { type ReplayCounts, type ReplayRow, replay } from "./gates/replay.ts";
 export * from "./store/store.ts";

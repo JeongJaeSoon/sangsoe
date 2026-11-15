@@ -6,6 +6,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ### Changes
 
+- **A session refused by `[gate:pressure]` is woken when the load drops (256).** The refusal now tells the session to start `sangsoe pressure wait` with `run_in_background: true`. The command reads the same load judgment the gate reads every 30 seconds and ends when it is ok twice in a row, or after 2 hours; Claude Code wakes the session when a background command ends, so the session runs the refused call again once. Nothing is queued or stored, and the wait calls neither Orca nor a model. The delegate gate lets the orchestrator run it.
 - **`install --permissions` writes a home path literally.** A home containing `$&`, `$1`, `$$`, `` $` `` or `$'` no longer rewrites the two `Read(//<home>/…)` rules.
 - **`sangsoe doctor` reports an unset HOME.** The permissions row warns that it cannot be checked instead of counting rules built from an empty home.
 - **`start_unit` passes the parent's repo to `worktree create` when the parent came from `worktree show` (263 ⑩).** Orca cannot infer the repo from a worktree its list omits and refused with "Missing repo selector"; a repo named in the request or recorded on the Task still wins.

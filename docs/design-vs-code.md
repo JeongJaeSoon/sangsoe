@@ -193,7 +193,7 @@
 | 감지 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `core/session/record.ts:180`, `core/owner/probe.ts:157` | 사실·표지·close_suggested 만 |
 | 실행 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `core/session/record.ts:103`, `core/owner/done.ts:22` | 결정 173·181 |
 | 판단 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `claude-plugin/mcp/tools/decision_answer.ts:14`, `claude-plugin/agents/orchestrator.md:49` | 결정 179 |
-| 에이전트는 MCP 만 | design.html §3 호출 경로 규칙 | implemented | `claude-plugin/mcp/server.ts:38`, `test/judgment-layer.test.ts:61` | |
+| 에이전트는 MCP 만 | design.html §3 호출 경로 규칙 | implemented | `claude-plugin/mcp/server.ts:38`, `test/judgment-layer.test.ts:62` | 예외 하나: `[gate:pressure]` 거부 뒤 백그라운드 `sangsoe pressure wait`(결정 256) |
 | plugin worker 의 코어 import | design.html §3 호출 경로 규칙 | implemented | `orca-plugin/core-link.ts:64` | 결정 132 |
 | SessionStart hook → CLI | design.html §3 호출 경로 규칙 | implemented | `claude-plugin/hooks/hooks.json:17`, `claude-plugin/hooks/record.sh:8` | |
 | 막는 hook → CLI | design.html §3 호출 경로 규칙 | implemented | `claude-plugin/hooks/hooks.json:11`, `claude-plugin/hooks/pre-tool-use.sh:21` | 결정 208 |
@@ -241,7 +241,7 @@
 | 독립 리뷰 | design-appendix 당사자 원칙 표 | implemented | `core/approve/review-verdict.ts:74`, `core/land/land.ts:190` | |
 | 당사자 게이트 수 | design-appendix 당사자 원칙 표 | changed (결정 94) | `core/gates/index.ts:14` | 막는 게이트는 넷이 아니라 여섯(시작 가드·보고 주소) |
 | Orca 메시지·plugin 타이머·패널 | design-appendix 당사자 원칙 표 | implemented | `orca-plugin/timer.ts:53`, `orca-plugin/main.ts:114` | |
-| 압박 게이트 | design-appendix 게이트와 원칙 | partial | `core/gates/pressure.ts:20` | G17 — 기다릴 순서를 알려 주지 않고, 무거운 작업은 start_unit·compose up·worktree create 만 맞춘다 |
+| 압박 게이트 | design-appendix 게이트와 원칙 | partial | `core/gates/pressure.ts:20` | G17 — 기다릴 순서를 알려 주지 않고(큐는 두지 않는다. 부하가 내려간 때는 `sangsoe pressure wait` 가 알린다, 결정 256), 무거운 작업은 start_unit·compose up·worktree create 만 맞춘다 |
 | 루프 게이트 | design-appendix 게이트와 원칙 | implemented | `core/gates/sleep-loop.ts:7` | |
 | 위임 게이트 | design-appendix 게이트와 원칙 | implemented | `core/gates/delegate.ts:55`, `core/gates/delegate.ts:69` | |
 | 자기 머지 게이트 | design-appendix 게이트와 원칙 | implemented | `core/gates/self-land.ts:60` | |
@@ -603,6 +603,7 @@
 | 253 | 결정 248 ② 의 리소스 절 여백과 그 시험의 "펼친 절 마지막 줄 아래 24px". 세 페이지에는 리소스 절이 아직 없다 | 메모: 결정 253 을 새로 적고 패널을 고쳤다(U123, v0.1.6). 접힘·펼침 위아래, 틀 안 위아래, 꺾쇠 가운데를 2px 안으로 맞추고 측정 스크립트가 잰다 | `orca-plugin/panel/style.ts`, `orca-plugin/panel/view.ts` `CHEV`, `scripts/panel-measure.devtools.js` |
 | 254 | 결정 165 "고정은 읽기만 하고 풀린 모델은 상태 줄로 확인": 풀린 모델과 표를 맞춰 보는 곳이 없었다. 세 페이지의 모델 표 설명은 doctor 의 낡음 notice 까지만 적는다 | 메모: 결정 254 를 새로 적고 코드를 더했다(U124, 0.1.8 B4). 저장 없이 읽을 때 비교, doctor notice 와 brief 모델 줄. 세 페이지는 이 단위의 범위 밖이다 | `core/models/drift.ts`, `core/checks/model-table.ts` `sessionDrifts`, `core/brief/build.ts` `modelLine` |
 | 255 | 결정 196 ⑤ "이 형식을 세션에게 알리는 글은 이 저장소 밖의 브리프 문단이다": 거부 규칙의 정본이 옛 플러그인에만 있었고, sangsoe 의 거부 문단(`claude-plugin/skills/write-brief/SKILL.md:49`, 고치기 전)은 원천·묶은 호출·고쳐 쓰기·파일 자리·서브에이전트의 길·정하는 쪽을 말하지 않았다 | 메모: 결정 255 를 새로 적고 skill 글을 고쳤다(U125). 거부 문단, write-brief 서브에이전트 지시문, deliver-ticket §2·§3·§6, orchestrate 거부 보고 행, end-session §2·§5. agent 정의 셋은 범위 밖 | `core/detect/orca/mail.ts:55`, `core/gates/pressure.ts:30`, `core/gates/sleep-loop.ts:15`, `core/gates/self-land.ts:9` |
+| 256 | 부록 게이트의 압박 게이트 문구 "Nothing was queued: run the same call again once the load drops" 와 결정 75 나 의 "에이전트는 CLI 를 부르지 않는다". 그 문구는 그때를 알리는 길을 말하지 않았다 | 메모: 결정 256 을 새로 적고 게이트 문구에 `sangsoe pressure wait`(백그라운드, 게이트 판정 ok 연속 2회 또는 2시간에 끝)를 더했다(U126, 0.1.8 B6). delegate 게이트가 오케스트레이터의 그 명령을 조율로 받는다. 큐·저장·Orca 호출 없음 | `core/gates/pressure.ts`, `core/gates/pressure-wait.ts`, `core/gates/delegate.ts` `SUB.sangsoe`, `cli/commands/pressure-wait.ts` |
 | 257 | 결정 234 ① "둘째 sampler 나 타이머는 없다" 와 ③ 의 읽는 때, 248 ⑦ "다시 펼치면 요청 없이 그리기만". 세 페이지에는 리소스 절이 아직 없다 | 메모: 결정 257 을 새로 적고 패널을 고쳤다(U127, v0.1.7). 펼쳐 보이는 동안 패널의 30초 tick 에 load·made, 낡기 전 tick 에 정리 후보, 보임·펼침에 셋 다; 한 번에 하나, 바뀐 조각만 다시 그림. 측정 스크립트가 tick 비용을 낸다 | `orca-plugin/panel/refresh.ts` `foldReads`·`tickParts`, `orca-plugin/panel/index.ts` `mountResources`, `orca-plugin/panel/resources.ts` `readParts`·`patchPieces`, `scripts/panel-measure.devtools.js` |
 | 258 | 결정 105·112 의 "설치된 폴더의 `contentHash` 가 빌드 커밋·리뷰된 head 트리와 같다". 세 페이지는 승인 조건 (2) 를 폴더 내용 해시로만 적고 무엇을 세는지는 적지 않아 고칠 대목이 없다 | 메모: 결정 258 을 새로 적고 코드를 고쳤다(U128, v0.1.6). 맨 위 `.orca/` 디렉터리는 Orca 가 쓰는 것이라 빼고 inspect 한다. 없는 폴더는 전과 같다 | `core/approve/content-hash.ts` `inspectContentHash`, `core/approve/approve.ts:67`, `core/checks/orca-plugin-content.ts:8` |
 | 259 | 결정 225 (11) 의 묶음 머리 "표식만" 과 결정 253 의 접기 제목. 세 페이지는 이모지와 글자 사이 간격을 정하지 않는다 | 메모: 결정 259 를 새로 적고 패널을 고쳤다(U129, v0.1.7). 이모지 뒤 간격은 `--emoji-gap` 하나와 `.em`·`.fl` 클래스이고, 측정 스크립트가 위치별 간격과 그 차(1px 이하)를 잰다 | `orca-plugin/panel/style.ts`, `orca-plugin/panel/view.ts` `emo()`, `scripts/panel-measure.devtools.js` |
