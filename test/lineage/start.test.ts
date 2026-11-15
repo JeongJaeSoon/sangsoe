@@ -1199,6 +1199,7 @@ test("a parent that only `worktree show` returns is refused when it is archived,
   const { parent, list, show } = listOmittingParent();
   const cases: [string, () => ExecResult][] = [
     ["archived", show({ ...parent, isArchived: true })],
+    ["no isArchived field", show({ ...parent, isArchived: undefined })],
     ["on another host", show({ ...parent, hostId: "remote-1" })],
     ["another worktree", show({ ...parent, id: "repo-0001::/home/dev/src/other" })],
     ["unreadable", () => fail("selector_not_found")],

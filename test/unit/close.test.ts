@@ -170,6 +170,10 @@ const ORPHAN_REFUSED: [string, Scene][] = [
     { terminals: [orphan(), orphan({ handle: "term_other", tabId: `${PLACEHOLDER}2`, leafId: `${PLACEHOLDER}2` })] },
   ],
   ["its recorded pane key only in another worktree's ps row", { terminals: [orphan()], agentsIn: "wt-2::/work/acme/web" }],
+  [
+    "a live terminal whose pane an orphan also records",
+    { terminals: [{ handle: TERM, worktreeId: WS, executionHostId: "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" }, orphan({ handle: "term_other" })] },
+  ],
   ["no recordedPaneKey", { terminals: [orphan({ recordedPaneKey: undefined })] }],
   ["an empty recordedPaneKey", { terminals: [orphan({ recordedPaneKey: "" })] }],
   [

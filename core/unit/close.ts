@@ -54,11 +54,11 @@ export async function closeUnit(ports: { readonly orca: OrcaAdapter; readonly st
   // Rows of other hosts do not matter: the target's row is looked up by worktree id among the local rows below.
   if (ps.value.truncated || ps.value.omittedHostIds.includes("local")) return refuse("agent_not_idle", "worktree ps is partial", "retry once Orca answers in full");
   // An orphaned row's tabId and leafId are placeholders; Orca files its agent under recordedPaneKey (decision 263 ⑩).
-  const paneKeyOf = (t: TerminalRow) => (t.orphaned === true ? t.recordedPaneKey : `${t.tabId}:${t.leafId}`);
+  const paneKeyOf = (t: TerminalRow) => (t.orphaned === true ? t.recordedPaneKey : t.tabId && t.leafId ? `${t.tabId}:${t.leafId}` : undefined);
   const paneKey = paneKeyOf(row);
-  if (!paneKey) return refuse("agent_not_idle", `${terminal} is orphaned and Orca gives no recordedPaneKey for it`, "Orca does not show which pane held its agent, so it is not shown idle");
-  // The recorded pane may have been attached to another terminal since, or recorded by another orphan; then its ps row is not this one's alone.
-  if (row.orphaned === true && list.value.rows.some((t) => t.handle !== terminal && paneKeyOf(t) === paneKey)) {
+  if (!paneKey) return refuse("agent_not_idle", `Orca gives no pane key for ${terminal}${row.orphaned === true ? " (orphaned, no recordedPaneKey)" : ""}`, "Orca does not show which pane held its agent, so it is not shown idle");
+  // Another terminal on the same pane (attached, or an orphan recording it) means the ps row is not this one's alone.
+  if (list.value.rows.some((t) => t.handle !== terminal && paneKeyOf(t) === paneKey)) {
     return refuse("agent_not_idle", `the pane recorded for ${terminal} is attached to another terminal`, "its worktree ps row describes that terminal, not this one");
   }
   const agent = ps.value.rows.find((r) => r.worktreeId === w.workspace)?.agents.find((x) => x.paneKey === paneKey);

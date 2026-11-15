@@ -276,7 +276,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   if (requester.worktreeId && !rows.some((w) => w.id === requester.worktreeId)) {
     // `worktree list` can leave a live worktree out (measured 2026-11-15: a lead's own); `worktree show` finds it.
     const shown = await orca.worktreeShow({ worktree: `id:${requester.worktreeId}` });
-    if (shown.ok && shown.value.id === requester.worktreeId && !shown.value.isArchived && isLocalHost(shown.value.hostId)) {
+    if (shown.ok && shown.value.id === requester.worktreeId && shown.value.isArchived === false &&isLocalHost(shown.value.hostId)) {
       rows.push(shown.value);
     }
   }
