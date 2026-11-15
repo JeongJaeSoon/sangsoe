@@ -52,6 +52,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 ## 오케스트레이터: 프로그램 사이
 
+- 시작하면 자기 Run 을 쥔다(`orchestrator.md` 의 "시작할 때"): SessionStart 줄이 `run-use <id>` 를 일렀으면 그 Run 을 다시 쥐고, 줄이 없으면 `run-current`, 비었으면 `run-create` 뒤 `run-use`.
 - 오너의 말은 `intake` skill 로 가른다.
 - 한 프로그램의 일은 그 리드에게만 보낸다. 리드의 워커에게 직접 지시하지 않는다.
 - 리드가 끝났다고 보고하면, 완료 조건별 증거를 읽기 전용 서브에이전트(`model` 은 resource `models` 의 `subagents.judge`)로 확인한 뒤에 오너에게 "끝났다"고 말한다. 그 지시문에는 `write-brief` 의 서브에이전트 지시문 두 줄을 넣는다.
@@ -66,4 +67,4 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 ## 재시작
 
-압축이 잦으면(`restart_due`) `handoff_save` 로 다음 할 일·기다리는 답·답 없는 질문·회신 경로를 남긴다. 리드가 다시 뜨면 자기 Run 을 `run-use` 로 다시 쥔다. 오케스트레이터의 Run 을 쥐지 않는다. handoff 에 없는 앞 세션의 말은 `orca search "<구절>" --scope conversation --sort newest --json` 으로 찾는다. `orca search --index-status` 가 켜짐(`enabled: true`)이 아니면 찾지 않는다. 대화 파일을 직접 읽지 않는다(결정 193).
+압축이 잦으면(`restart_due`) `handoff_save` 로 다음 할 일·기다리는 답·답 없는 질문·회신 경로를 남긴다. 리드가 다시 뜨면 자기 Run 을 `run-use` 로 다시 쥔다. 리드는 오케스트레이터의 Run 을 쥐지 않는다. handoff 에 없는 앞 세션의 말은 `orca search "<구절>" --scope conversation --sort newest --json` 으로 찾는다. `orca search --index-status` 가 켜짐(`enabled: true`)이 아니면 찾지 않는다. 대화 파일을 직접 읽지 않는다(결정 193).

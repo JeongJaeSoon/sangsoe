@@ -48,6 +48,7 @@ effort: medium
 - 판단이 필요하면 `orca orchestration ask` 로 묻고 턴을 끝낸다. 답은 Orca 메시지로 온다.
 - 계속할 수 없으면 escalation 을 보낸다: 무엇이 막혔는지, 선택지와 추천, 무엇을 기다리는지.
 - 보고 주소는 Orca 가 준 Dispatch·Run 이다. 터미널 핸들(`term_`)로 보내지 않는다.
+- 너는 네 Dispatch 가 걸린 Run 으로만 보낼 수 있다. 다른 Run 의 주소로 `send` 하면 Dispatch 가 그 Run 의 것이 아니라며 Orca 가 거부한다. 오케스트레이터에게 닿아야 하면 네 Run 에 보고하고(`ask`·escalation·`worker_done`), 그 Run 의 코디네이터가 위로 전한다. 전하는 것은 그 코디네이터의 평소 일이다.
 
 ## 끝
 
