@@ -52,6 +52,10 @@ jobs:
       # `shell: bash` runs with pipefail, so a failing test still fails the step through tee.
       - name: npm test
         shell: bash
+        env:
+          # The names this public tree must not carry are a repository secret, never written here
+          # (decision 267). A fork's PR gets no secrets: the check then skips and the summary says so.
+          SANGSOE_HYGIENE_PATTERN: ${{ secrets.SANGSOE_HYGIENE_PATTERN }}
         run: npm test 2>&1 | tee "$RUNNER_TEMP/test-output.log"
       # Skipped tests and a rerun attempt go to the job summary, also when a test failed.
       - name: Skipped tests and reruns
