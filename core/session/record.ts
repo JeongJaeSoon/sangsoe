@@ -5,6 +5,7 @@ import { advisorCalls } from "../models/spend.ts";
 import { readDecision } from "../decision/waiters.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { deliverOwnRun } from "../detect/queue/own-run.ts";
+import { wasDriven } from "../owner/driven.ts";
 import { classifyPrompt } from "../owner/prompt.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
 import type { Store } from "../store/store.ts";
@@ -40,7 +41,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
   switch (event) {
     case "user-prompt-submit": {
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
-      await ownerSaid(deps, row, input);
+      await ownerSaid(deps, row, input, opts.terminal);
       // Decision 274: this prompt's context gets the Run's one count line; Claude Code injects the stdout.
       return ownRun(deps, row, input);
     }
@@ -141,9 +142,12 @@ const ANSWER_SHAPE = /^\s*(d\d{3,})\b/;
  * decision; it links through U8's decision_answer (linked_by=hook). A dispatched session's prompt can
  * be another session's message, so it never answers.
  */
-async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
+async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInput, terminal: string | undefined): Promise<void> {
   const text = input.prompt ?? "";
   if (classifyPrompt(text) !== "owner") return;
+  // Decision 280: text Orca reported as driven into this terminal was typed by no person. No row: it
+  // answers no decision, marks no wait as the owner's, and is no owner_action a tool could cite.
+  if (wasDriven(deps.store.events({ type: "prompt_driven" }), terminal, text, Date.now())) return;
   const masked = mask(text);
   const key = dedupeKey(EVENTS.owner_action, input.session_id, input.prompt_id ?? hashOf(`${masked}\n${tail(input.transcript_path).length}`));
   const action = deps.store.appendOwnerAction(

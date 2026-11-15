@@ -3,6 +3,7 @@ import { createGhClient, memoryGhCache } from "../gh/client.ts";
 import { readLandConfig } from "../land/ports.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
+import { recordDriven } from "../owner/driven.ts";
 import { holdStore } from "../store/held.ts";
 import { Store } from "../store/store.ts";
 import { VERSION } from "../version.ts";
@@ -63,6 +64,8 @@ export type MonitorRunner = {
   run(name: MonitorName, signal?: AbortSignal): Promise<MonitorReport>;
   /** The timer-stall check; the worker calls it on Orca events and panel refreshes. */
   stall(): Promise<StallReport>;
+  /** Decision 280: a prompt Orca's `agent.prompt.before` hook reported; one row, never the text. A dry run writes none. */
+  driven(e: { terminal: string; prompt: string; inputKind?: string | undefined; agent?: string | undefined }): Promise<void>;
   close(): void;
 };
 
@@ -101,6 +104,10 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
   return {
     run: (name, signal) => held.use((b) => b.run(name, signal)),
     stall: () => held.use((b) => stallCheck(b.deps)),
+    driven: (e) =>
+      held.use(async (b) => {
+        if (b.deps.core) recordDriven(b.deps.core.store, e);
+      }),
     close: () => held.close(),
   };
 }

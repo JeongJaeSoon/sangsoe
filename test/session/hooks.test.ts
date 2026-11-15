@@ -9,12 +9,14 @@ import {
   mask,
   modelRowLines,
   ownerMarks,
+  recordDriven,
   recordHook,
   restart_due,
   reviewAskRecord,
   type SessionHook,
   type SessionHookInput,
   VERSION,
+  wasDriven,
 } from "../../core/index.ts";
 import { bang, createSessionWorld, DISPATCH, type SessionWorld, TASK, TASK_RUN, transcript } from "./world.ts";
 
@@ -223,6 +225,44 @@ test("the owner's chat line is stored masked; one dNNN links through decision_an
   const ans = o.store.events({ type: "decision_answered" });
   assert.deepEqual(ans.map((e) => [e.payload.decision, e.payload.linked_by]), [["d001", "hook"]]);
   assert.equal(o.store.events({ type: "owner_action" }).length, 1, "a repeated hook call writes nothing twice");
+});
+
+test("280: a prompt Orca reported as driven into the session's terminal is not the owner's: no owner_action, no answer", async () => {
+  const TERM = "term_00000000-0000-4000-8000-000000000001";
+  const said = "d001: Path versioning";
+  const start = async () => {
+    const o = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+    await hook(o, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+    o.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });
+    return o;
+  };
+  const prompt = (o: SessionWorld, terminal: string | undefined, text = said) =>
+    recordHook("user-prompt-submit", o, { cwd: o.dir, session_id: "o1", prompt_id: "p1", prompt: text }, { terminal });
+  const counts = (o: SessionWorld) => [o.store.events({ type: "owner_action" }).length, o.store.events({ type: "decision_answered" }).length];
+
+  // Orca hands the hook the text as it was sent; the session reads it trimmed and masked the same way.
+  const driven = await start();
+  recordDriven(driven.store, { terminal: TERM, prompt: `${said}\n`, inputKind: "driving" });
+  const row = driven.store.events({ type: "prompt_driven" })[0];
+  assert.deepEqual(Object.keys(row?.payload ?? {}).sort(), ["hash", "input_kind", "terminal"], "the text is not kept");
+  await prompt(driven, TERM);
+  assert.deepEqual(counts(driven), [0, 0]);
+  await prompt(driven, TERM, "d001: another answer the owner typed");
+  assert.deepEqual(counts(driven), [1, 1], "other text in the same terminal is still the owner's");
+
+  const elsewhere = await start();
+  recordDriven(elsewhere.store, { terminal: "term_other", prompt: said });
+  await prompt(elsewhere, TERM);
+  assert.deepEqual(counts(elsewhere), [1, 1], "the same text driven into another terminal says nothing about this one");
+
+  const unknown = await start();
+  recordDriven(unknown.store, { terminal: TERM, prompt: said });
+  await prompt(unknown, undefined);
+  assert.deepEqual(counts(unknown), [1, 1], "a session whose terminal handle is not known is read by shape alone, as before");
+
+  const events = [{ type: "prompt_driven", ts: "2026-11-15T10:00:00.000Z", payload: row?.payload }] as never;
+  assert.equal(wasDriven(events, TERM, said, Date.parse("2026-11-15T10:59:00.000Z")), true);
+  assert.equal(wasDriven(events, TERM, said, Date.parse("2026-11-15T11:01:00.000Z")), false, "past the window the row no longer matches");
 });
 
 test("only an undispatched session's line that starts with the number answers a decision (M2)", async () => {

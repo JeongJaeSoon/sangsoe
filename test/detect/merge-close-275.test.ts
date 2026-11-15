@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { OrcaAdapter } from "../../core/contract/orca.ts";
-import { deliverOwnRun } from "../../core/index.ts";
-import { Store } from "../../core/store/store.ts";
+import { deliverOwnRun, type OrcaAdapter, Store } from "../../core/index.ts";
 
 // Decision 275: pr-monitor's round runs in the plugin's process, and Orca takes no task-update from
 // it. The session that holds the Run makes the merge close from its prompt hook, with the same

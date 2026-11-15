@@ -16,6 +16,10 @@ if (!process.env.SANGSOE_TEST_REAL_HOME) {
   process.env.HOME = fake;
 }
 
+// A test run started from an Orca terminal behaves as one started anywhere else: the record CLIs read
+// this handle to tell an agent's terminal (decision 280). A test that needs it sets it.
+delete process.env.ORCA_TERMINAL_HANDLE;
+
 // A node process a test starts gets the same guard (decision 276): the pinned HOME alone does not
 // stop a child that is handed a path. The file URL has no space to quote.
 const preload = `--import ${import.meta.url}`;

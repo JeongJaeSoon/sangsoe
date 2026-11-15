@@ -168,6 +168,9 @@ const ALLOWED = new Map<string, string>([
   // Decision 263: unit_close and its row, built after design.html's last edit.
   ["event:unit_closed:code-only", "263"],
   ["event-glossary:unit_closed:code-only", "263"],
+  // Decision 280: the row Orca's prompt hook leaves, built after design.html's last edit.
+  ["event:prompt_driven:code-only", "280"],
+  ["event-glossary:prompt_driven:code-only", "280"],
 ]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };

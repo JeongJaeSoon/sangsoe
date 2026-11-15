@@ -14,6 +14,8 @@ const SOURCE = "SessionStart";
 export interface SessionStartOptions {
   /** The version in this plugin's plugin.json; undefined when it could not be read. */
   readonly pluginVersion?: string | undefined;
+  /** The session's own Orca terminal handle (`ORCA_TERMINAL_HANDLE`), read by UserPromptSubmit (decision 280). */
+  readonly terminal?: string | undefined;
 }
 
 /**
