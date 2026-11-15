@@ -60,6 +60,7 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
    - `auto_merge`: GitHub 이 필수 리뷰와 CI 가 찰 때 머지한다. `merge_approved`·`merge_verdict`: 승인이나 기록된 리뷰 판정으로 지금 머지했다(결정 158).
    - `merge_on_approval`: 승인이 찰 때 pr-monitor 가 리드를 깨우고, 리드가 같은 `land` 로 머지한다.
    - 거부 code(`evidence_missing`, `review_missing`, `review_stale`, `head_moved`, `stack_order`, `main_red` 등): `refusal.fix` 대로 원인을 고치고 다시 부른다. `review_stale`·`head_moved` 는 리뷰한 head 가 지금 head 가 아니라는 뜻이니, 새 head 를 다시 리뷰받는다. 브랜치 보호가 조건을 채우지 않으면(못 읽음·없음·요구하지 않음) land 가 그 조건을 스스로 확인한다(조건의 `source: own`, 결정 204): `checks_pending`·`checks_red`·`checks_missing` 은 head 의 모든 검사, `behind_base` 는 head 가 base 끝을 품지 않는다는 뜻이다. base 를 합쳐 push 하고(충돌을 풀었으면 `git show --remerge-diff` 로 delta 리뷰) 새 head 를 리뷰받는다. `main_red` 동안에는 `main_fix: true` 로 요청한 PR 만 들어간다.
+   - `checks_missing` 인데 그 저장소가 검사를 올리지 않으면(CI 가 없다: 기다려도 head 에 검사가 하나도 오지 않는다) 네가 고칠 것이 없다. 다시 부르지 않고, 실패로도 보고하지 않는다. 그 head 에 맞춘 머지는 오케스트레이터의 일이다(결정 226). 3번의 worker_done 본문에 `READY-WAIT: checks_missing` 줄과 PR·head sha 를 적어 끝낸다. 그 줄이 없으면 `[gate:self-land]` 가 land 요청이 없는 열린 PR 위의 worker_done 을 막는다.
    - 거부(권한·안전 검사·hook·사람): 멈추고, 다른 길로 머지하지 않는다. `write-brief` 의 거부 문단대로 명령을 파일에 쓰고 같은 턴에 escalation 한 번으로 알린다. `land` 의 `refusal.code` 는 이 거부가 아니다: 위 줄대로 고치고 다시 부른다.
 3. 머지했든 예약했든 "승인되면 머지"든, `merge_ready` 를 담은 worker_done 한 번으로 끝낸다: PR, head sha, 리뷰 판정과 리뷰어, 등급과 증거, 확인 못 한 것. `--type merge_ready` 메시지를 따로 보내지 않는다(결정 175, `[gate:self-land]` 가 막는다). Orca 는 worker_done 으로 Task 를 닫지만, 브리프는 PR 이 머지될 때까지 항목을 🚧 막힘(리뷰어)으로 읽는다. 네가 항목을 닫지 않는다.
 

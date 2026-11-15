@@ -151,7 +151,8 @@ export async function deliverOwnRun(deps: CoreDeps, run: string, now: string): P
       settled = { orca: { tasks: now2, gates: gates.map((g) => (freedGates.has(g.id) ? { ...g, open: false } : g)) }, events: deps.store.events(), now };
     }
   }
-  const j = judgeQueue(settled, DEFAULT_MONITOR_CONFIG);  const ready = readyKeys(settled);
+  const j = judgeQueue(settled, DEFAULT_MONITOR_CONFIG);
+  const ready = readyKeys(settled);
   const items: { type: Told; event: Planned; key: NotifiedKey }[] = [
     ...j.ready.flatMap((r) => {
       const key = ready.get(r.task);

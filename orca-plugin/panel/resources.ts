@@ -248,9 +248,12 @@ export function loadRows(h: Reading<LoadHistory> | null | undefined, l: Load | n
     const { svg, range } = v ? spark(s, v, from, hours) : { svg: "<span></span>", range: "" };
     return `<div class="lrow"${range ? ` title="${esc(range)}"` : ""}><span class="g-l">${s.label}</span>${svg}<span class="g-v ${l ? toneOf(l.reasons, s.reason) : ""}">${now === undefined ? "모름" : esc(`${s.num(now)}${s.unit}`)}</span></div>`;
   });
-  // The window's left edge is `hours` ago; samples that begin later say when, under that edge.
+  // The window's left edge is `hours` ago; samples that begin later say when, under the point where
+  // the lines begin: the note starts there, or ends there once that point is past the middle.
   const first = v?.points.find((p) => p.at >= from);
-  const late = v && first && first.at - from > GAP_STEPS * v.stepMs ? `<div class="lrow sp-from"><span></span><span>${hhmm(new Date(first.at).toISOString())}부터</span></div>` : "";
+  const at = first ? ((first.at - from) / (hours * HOUR)) * 100 : 0;
+  const place = at > 50 ? `width:${at.toFixed(1)}%;text-align:right` : `padding-left:${at.toFixed(1)}%`;
+  const late = v && first && first.at - from > GAP_STEPS * v.stepMs ? `<div class="lrow sp-from"><span></span><span style="${place}">${hhmm(new Date(first.at).toISOString())}부터 기록</span></div>` : "";
   return `<div class="lrows" role="group" aria-label="${v ? `PC 부하: 지금 값과 최근 ${hours}시간` : "PC 부하: 지금 값"}">${rows.join("")}${late}</div>${h && !h.ok ? `<p class="ep">부하 기록을 ${unread(h.why)}</p>` : ""}`;
 }
 
