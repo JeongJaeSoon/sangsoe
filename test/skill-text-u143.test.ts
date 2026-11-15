@@ -28,6 +28,12 @@ test("orchestrator.md has a start step that makes the session hold its own Run: 
   assert.ok(s.indexOf("run-use <id>") < s.indexOf("run-create"), "the restore case comes before run-create");
 });
 
+test("lead.md's first-wake Run step re-holds the Run SessionStart names before it creates one", () => {
+  const s = section(read("claude-plugin/agents/lead.md"), "첫 깨움");
+  has(s, "run-use <id>", "lead.md 첫 깨움");
+  assert.ok(s.indexOf("run-use <id>") < s.indexOf("run-create"), "the restore case comes before run-create");
+});
+
 test("the orchestrate skill's orchestrator section points at the same start step", () => {
   const s = section(read("claude-plugin/skills/orchestrate/SKILL.md"), "오케스트레이터: 프로그램 사이");
   for (const want of ["자기 Run", "run-create", "run-use <id>"]) has(s, want, "orchestrate 오케스트레이터 절");
