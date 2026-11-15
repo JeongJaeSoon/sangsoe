@@ -39,7 +39,7 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 | # | 옛 것 | sangsoe 의 자리 | 상태 |
 |---|---|---|---|
 | D-1 | 일반 스킬 14개 | `claude-plugin/skills/general/` | 🟢 결정 95: 별도 저장소가 아니라 plugin 안 |
-| D-2 | 노트·티켓 도구 | — | sangsoe 밖에서 다시 만든다. 본체는 이 저장소에 아무것도 두지 않는다(결정 93) |
+| D-2 | 노트·티켓 도구 | — | sangsoe 밖이다. 세션이 티켓과 노트의 MCP 서버를 직접 쓴다(오너 결정 2026-11-16, 결정 271 ①). 본체는 이 저장소에 아무것도 두지 않는다(결정 93) |
 | D-3 | 권한 규칙·비밀 입력 도구 | — | sangsoe 밖 |
 | D-4 | 공유·프리뷰 도구 | — | sangsoe 밖 |
 | D-5 | 역할·위임 게이트·`dispatch-card`·`end-session`·`reboot` | `claude-plugin/agents/`, `core/start/`, `core/gates/delegate.ts`, `claude-plugin/skills/start/SKILL.md`, `claude-plugin/skills/end-session/SKILL.md`, `core/recover/`, `core/session/` | 🟢 |
