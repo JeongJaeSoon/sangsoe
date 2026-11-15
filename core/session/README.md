@@ -26,7 +26,7 @@ Claude Code 의 기록 hook 일곱(`claude-plugin/hooks/record.sh` → `sangsoe 
 stdout 의 줄이 그대로 세션 컨텍스트에 들어간다. sangsoe 세션이 아니면 아무것도 출력하지 않는다.
 
 1. 역할 줄 `sangsoe-role: <role>` 과 Task · Dispatch · Run id 한 줄.
-2. Run: `run-current` 가 Run 을 주면 그 Run, 비었는데 리드·오케스트레이터면 이 Task(오케스트레이터는 이 역할)의 지난 `session_started` 가 쥐었던 Run 으로 `orca orchestration run-use <id>` 를 하라는 한 줄.
+2. Run: `run-current` 가 Run 을 주면 그 Run, 비었는데 리드·오케스트레이터면 이 Task 의 지난 `session_started` 가 쥐었던 Run 으로 `orca orchestration run-use --id <id>` 를 하라는 한 줄. Task 가 없는 세션은 같은 역할이 같은 Orca worktree 에서 쥐었던 Run 만 받는다(결정 273): worktree 를 읽지 못하면 줄이 없다. 세션이 시작한 뒤에 쥔 Run 은 그것을 처음 본 `UserPromptSubmit` 이 `session_started` 행을 한 번 더 써서 남긴다.
 3. 마지막 인계 본문, 한 번만(`notified`, `notify:<run>:handoff:<msg>`): Dispatch 를 쥔 세션은 그 Dispatch 의 Run 에서 제목 `handoff <task>` 인 것, 아니면 쥔 Run 에서 제목 `handoff` 인 것(결정 197).
 4. 버전 어긋남 한 줄: 이 plugin 의 `plugin.json` 버전 ≠ 코어 버전일 때만.
 5. 늦은 답: 이 Task 가 대기자인 답한 결정 중 `notify:<task>:dNNN`(U8 `answerNotifiedKey`)이 없는 것마다 `dNNN: <답>` 한 줄, 같은 키로 `notified`. 그래서 `/clear` 뒤 새 세션에는 다시 실리지 않는다.

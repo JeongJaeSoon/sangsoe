@@ -18,27 +18,27 @@ function section(text: string, heading: string): string {
 
 const has = (text: string, want: string, where: string) => assert.ok(text.includes(want), `${where} lacks: ${want}`);
 
-test("orchestrator.md has a start step that makes the session hold its own Run: run-current, else run-create then run-use", () => {
+test("orchestrator.md has a start step that makes the session hold its own Run: run-use --id for an earlier Run, else run-current, else run-create", () => {
   const s = section(read("claude-plugin/agents/orchestrator.md"), "시작할 때");
   for (const want of ["orca orchestration run-current", "orca orchestration run-create", "orca orchestration run-use", "Dispatch"]) {
     has(s, want, "orchestrator.md 시작할 때");
   }
   // The SessionStart hook tells any non-worker whose binding is gone to `run-use <earlier Run>`; creating a new Run strands the leads.
-  has(s, "run-use <id>", "orchestrator.md 시작할 때");
+  has(s, "run-use --id <id>", "orchestrator.md 시작할 때");
   has(s, "run-use` 가 실패하면", "orchestrator.md 시작할 때");
-  assert.ok(s.indexOf("run-use <id>") < s.indexOf("run-create"), "the restore case comes before run-create");
+  assert.ok(s.indexOf("run-use --id <id>") < s.indexOf("run-create"), "the restore case comes before run-create");
 });
 
 test("lead.md's first-wake Run step re-holds the Run SessionStart names before it creates one", () => {
   const s = section(read("claude-plugin/agents/lead.md"), "첫 깨움");
-  has(s, "run-use <id>", "lead.md 첫 깨움");
+  has(s, "run-use --id <id>", "lead.md 첫 깨움");
   has(s, "run-use` 가 실패하면", "lead.md 첫 깨움");
-  assert.ok(s.indexOf("run-use <id>") < s.indexOf("run-create"), "the restore case comes before run-create");
+  assert.ok(s.indexOf("run-use --id <id>") < s.indexOf("run-create"), "the restore case comes before run-create");
 });
 
 test("the orchestrate skill's orchestrator section points at the same start step", () => {
   const s = section(read("claude-plugin/skills/orchestrate/SKILL.md"), "오케스트레이터: 프로그램 사이");
-  for (const want of ["자기 Run", "run-create", "run-use <id>"]) has(s, want, "orchestrate 오케스트레이터 절");
+  for (const want of ["자기 Run", "run-create", "run-use --id <id>"]) has(s, want, "orchestrate 오케스트레이터 절");
 });
 
 test("worker.md says a worker reports to the Run its Dispatch is on, and that Run's coordinator relays", () => {

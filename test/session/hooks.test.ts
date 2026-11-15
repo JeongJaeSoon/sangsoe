@@ -95,7 +95,69 @@ test("a lead whose Run binding is gone is told to run-use the Run its earlier se
   await hook(w, "session-start", { session_id: "s1", source: "startup" }, VERSION);
   w.heldRun = null;
   const lines = await hook(w, "session-start", { session_id: "s2", source: "clear" }, VERSION);
-  assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use run_lead");
+  assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_lead");
+});
+
+const psRow = (path: string, instance: string) => ({
+  worktreeId: `repo_1::${path}`,
+  worktreeInstanceId: instance,
+  hostId: "local",
+  repo: "api",
+  path,
+  branch: "b",
+  isMainWorktree: false,
+  isArchived: false,
+  liveTerminalCount: 1,
+  unverifiableTerminalCount: 0,
+  status: "idle",
+  agents: [],
+});
+const orchestratorStart = (w: SessionWorld, session: string) => hook(w, "session-start", { session_id: session, source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+const heldRows = (w: SessionWorld) => w.store.events({ type: "session_started" }).map((e) => [e.payload.session, e.source, e.target ?? null, e.payload.worktree ?? null]);
+
+test("273: a session records the Run it takes after it starts, once, at the first prompt that finds it held", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: null });
+  w.psRows = [psRow(w.dir, "inst_a")];
+  await orchestratorStart(w, "o1");
+  assert.deepEqual(heldRows(w), [["o1", "SessionStart", null, "inst_a"]], "nothing is held at start");
+
+  await hook(w, "user-prompt-submit", { session_id: "o1", prompt_id: "p1", prompt: "go" });
+  assert.equal(heldRows(w).length, 1, "still no Run: no row");
+  w.heldRun = "run_orch";
+  await hook(w, "user-prompt-submit", { session_id: "o1", prompt_id: "p2", prompt: "go" });
+  await hook(w, "user-prompt-submit", { session_id: "o1", prompt_id: "p3", prompt: "go" });
+  assert.deepEqual(heldRows(w).slice(1), [["o1", "UserPromptSubmit", "run:run_orch", "inst_a"]], "one row for the Run, not one per prompt");
+
+  // The next session in the same worktree starts unbound and is told to take that Run back.
+  w.heldRun = null;
+  const lines = await orchestratorStart(w, "o2");
+  assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_orch");
+});
+
+test("273: an orchestrator in another worktree, or one whose worktree cannot be read, is not handed that Run", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  w.psRows = [psRow(w.dir, "inst_a")];
+  await orchestratorStart(w, "o1");
+  w.heldRun = null;
+
+  w.psRows = [psRow(w.dir, "inst_b")];
+  assert.deepEqual((await orchestratorStart(w, "o2")).slice(1), [], "another worktree: another orchestrator");
+  w.psRows = null;
+  assert.deepEqual((await orchestratorStart(w, "o3")).slice(1), [], "unread: unknown is not the same place");
+  w.psRows = [psRow(w.dir, "inst_a")];
+  assert.equal((await orchestratorStart(w, "o4"))[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_orch");
+});
+
+test("273: a session whose row predates the worktree column gets the worktree stamped when its Run is recorded", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  // As an earlier release wrote it: the Run held at start, no worktree.
+  w.store.append({ type: "session_started", source: "SessionStart", target: "run:run_orch", dedupe_key: "session_started:old:startup", payload: { session: "old", role: "orchestrator", model: "m" } });
+  w.psRows = [psRow(w.dir, "inst_a")];
+  await hook(w, "user-prompt-submit", { session_id: "old", prompt_id: "p1", prompt: "go" });
+  await hook(w, "user-prompt-submit", { session_id: "old", prompt_id: "p2", prompt: "go" });
+  assert.deepEqual(heldRows(w).slice(1), [["old", "UserPromptSubmit", "run:run_orch", "inst_a"]]);
+  w.heldRun = null;
+  assert.equal((await orchestratorStart(w, "o2"))[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_orch");
 });
 
 /** The row item_create leaves for a Task sangsoe made (core/start/item.ts). */

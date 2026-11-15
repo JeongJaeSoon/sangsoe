@@ -52,7 +52,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 ## 오케스트레이터: 프로그램 사이
 
-- 시작하면 자기 Run 을 쥔다(`orchestrator.md` 의 "시작할 때"): SessionStart 줄이 `run-use <id>` 를 일렀으면 그 Run 을 다시 쥐고, 줄이 없으면 `run-current`, 비었으면 `run-create` 뒤 `run-use`.
+- 시작하면 자기 Run 을 쥔다(`orchestrator.md` 의 "시작할 때"): SessionStart 줄이 `run-use --id <id>` 를 일렀으면 그 Run 을 다시 쥐고, 줄이 없으면 `run-current`, 비었으면 `run-create`(만든 Run 을 바로 쥔다).
 - 오너의 말은 `intake` skill 로 가른다.
 - 한 프로그램의 일은 그 리드에게만 보낸다. 리드의 워커에게 직접 지시하지 않는다.
 - 리드가 끝났다고 보고하면, 완료 조건별 증거를 읽기 전용 서브에이전트(`model` 은 resource `models` 의 `subagents.judge`)로 확인한 뒤에 오너에게 "끝났다"고 말한다. 그 지시문에는 `write-brief` 의 서브에이전트 지시문 두 줄을 넣는다.
