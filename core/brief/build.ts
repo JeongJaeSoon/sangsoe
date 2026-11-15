@@ -94,7 +94,8 @@ function next(f: ItemFacts): string {
   else if (f.state === "pending_verify") base = "검증 대기: verify probe 통과 전";
   else if (f.state === "blocked") base = f.lastReason ?? "—";
   else if (f.state === "ready") base = "시작";
-  else if (f.state === "planned") base = "선행 대기";
+  // Decision 279: an item held by itself says so; "선행 대기" is for one that waits on something else.
+  else if (f.state === "planned") base = f.plannedBy === "hold" ? "⏸️ 보류" : f.plannedBy === "trigger" ? "trigger 확인 필요" : "선행 대기";
   else if (f.idle) base = "워커가 지시를 기다림";
   // A session stopped on a lost login does nothing else until someone signs in (decision 237).
   if (f.alarms.includes("worker_dead:auth")) return `🚨 ${ALARM_NEXT["worker_dead:auth"]}`;

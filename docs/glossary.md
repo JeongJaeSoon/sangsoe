@@ -417,6 +417,7 @@
 | decision | 결정을 열거나 답을 기록한다. 열 때 재질문 게이트를 지난다. MCP 의 `decision_open`·`decision_answer` tool 과 같은 함수다 | `sangsoe decision add` · `sangsoe decision answer` | — |
 | item new | 항목 하나를 만든다 | `sangsoe item new` | — |
 | item retire | 머지 없이 닫힌 PR 의 완료 항목을 거둔다. MCP 의 `item_retire` tool 과 같은 함수다(결정 223) | `sangsoe item retire <iNNN> --reason <글> --by <누가>` | — |
+| item set | 이미 있는 항목의 리드 묶음 · 보류 · trigger 를 바꾼다. `item_extra_set` 한 줄을 더하고 Orca 는 읽지도 쓰지도 않는다. trigger 는 날짜나 `owner/repo#N` 만 받는다(결정 279) | `sangsoe item set <iNNN> [--lead <리드>] [--hold true\|false] [--trigger <날짜\|owner/repo#N>]` | — |
 | priority | 우선순위를 정한다 | `sangsoe priority set` | — |
 | owner-text redact | 원문을 지운다(오너 승인 필요) | `sangsoe owner-text redact` | — |
 | hook | Claude Code hook 의 입구. PreToolUse 한 번의 게이트 판정이나 기록 hook 하나를 표준 입력으로 받는다. `--replay` 는 실제 명령 모음으로 게이트를 잰다 | `sangsoe hook` | — |
