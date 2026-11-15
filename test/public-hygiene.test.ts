@@ -103,7 +103,7 @@ const source = process.env[ENV] ?? "";
 
 test(
   "B4: no tracked file matches the internal-name pattern",
-  { skip: source.trim() === "" ? `${ENV} is unset: the pattern lives outside this public repository (CI gets it from a secret)` : false },
+  { skip: source.trim() === "" ? `${ENV} is empty or unset: the pattern lives outside this public repository (CI gets it from a secret)` : false },
   () => {
     const found = scan(source);
     // assert.ok with a fixed message: a thrown RegExp error or a diff would print the pattern.

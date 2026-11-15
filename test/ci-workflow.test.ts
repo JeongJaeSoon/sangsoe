@@ -51,6 +51,9 @@ test("B4: only ci.yml's npm test step gets the hygiene pattern, as a repository 
   assert.equal(file, "ci.yml");
   assert.match((line ?? "").trim(), /^SANGSOE_HYGIENE_PATTERN: \$\{\{ secrets\.SANGSOE_HYGIENE_PATTERN \}\}$/, "its value is the secret, not text");
   assert.ok(run.includes(line ?? "\0"), "the secret is passed to a step other than npm test");
+  // The workflow that carries the secret starts on these two events only: a new trigger is looked at before it lands.
+  const on = yml.split(/^on:\n/m)[1]?.split(/^\S/m)[0] ?? "";
+  assert.deepEqual([...on.matchAll(/^ {2}([\w-]+):/gm)].map((m) => m[1]), ["pull_request", "push"]);
 });
 
 const OUTPUT = [
