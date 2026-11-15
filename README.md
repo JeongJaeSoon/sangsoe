@@ -1,12 +1,12 @@
 # sangsoe
 
-Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.6`; what changed is in `CHANGELOG.md`.
+Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.7`; what changed is in `CHANGELOG.md`.
 
 ## Install
 
 macOS with Homebrew, Claude Code, Orca and an authenticated `gh`. Run these in order, in a terminal or each on a Claude Code `!` line (step 3 says what changes there).
 
-1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.6`. With the pre-release formula `sangsoe-rc` installed, run Uninstall first: the install refuses while `sangsoe-rc` is there.
+1. Newer Homebrew refuses a formula from a third-party tap until you trust it. Run `brew trust --formula jeongjaesoon/tap/sangsoe` first; this is your decision, because it sets what Homebrew will install from this tap. Without it, Homebrew stops with `Error: Refusing to load formula jeongjaesoon/tap/<formula> from untrusted tap jeongjaesoon/tap.` and the line `Run `brew trust --formula jeongjaesoon/tap/<formula>` or `brew trust jeongjaesoon/tap` to trust it.` Then `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. It prints `sangsoe <version>`, for example `sangsoe 0.1.7`. With the pre-release formula `sangsoe-rc` installed, run Uninstall first: the install refuses while `sangsoe-rc` is there.
 2. `sangsoe install` registers and enables the Claude Code plugin, registers the Orca plugin, then runs `sangsoe doctor`. It is safe to re-run. On a first install it prints:
 
    ```
@@ -63,7 +63,7 @@ Open a new Claude Code session to pick up the plugin.
 
 Every `brew upgrade sangsoe` needs a new review record and a new approval. Each version installs to its own Homebrew Cellar folder, and Orca ties an approval to that folder, so nothing in the new version runs in Orca until `sangsoe plugin approve` passes for it.
 
-1. `brew upgrade sangsoe`, then `sangsoe --version` prints the new version.
+1. If Homebrew refuses the formula as coming from an untrusted tap (it also does so after a `brew update`), run `brew trust --formula jeongjaesoon/tap/sangsoe` once, as Install says. Then `brew upgrade sangsoe`, then `sangsoe --version` prints the new version.
 2. `sangsoe install`. It prints `orca: loaded, approval waits — fingerprint ap1-…; next: sangsoe plugin approve`. Its doctor rows now include:
 
    ```
