@@ -12,7 +12,7 @@ import {
   permissionsYesLine,
   realFiles,
   removePermissions,
-  SANGSOE_RULES,
+  sangsoeRules,
   unifiedDiff,
 } from "./permissions.ts";
 import { addRules, removeRules } from "./settings-json.ts";
@@ -22,10 +22,14 @@ afterEach(() => {
   for (const h of homes.splice(0)) rmSync(h, { recursive: true, force: true });
 });
 
+// The rule set for the temporary HOME the running test made last: the Read rules name that HOME (decision 265).
+let SANGSOE_RULES: string[] = sangsoeRules("/home/acme");
+
 // A temporary HOME whose ~/.claude is the profile both `claude` and Orca use, unless `orcaHome` says otherwise.
 function tempHome(o: { orcaHome?: string | null } = {}) {
   const home = mkdtempSync(join(tmpdir(), "sangsoe-permissions-test-"));
   homes.push(home);
+  SANGSOE_RULES = sangsoeRules(home);
   const claude = join(home, ".claude");
   mkdirSync(claude, { recursive: true });
   const orcaHome = o.orcaHome === undefined ? claude : o.orcaHome;
@@ -89,7 +93,8 @@ test("decision 221: the diff is shown and asked about, y writes, a rerun is a no
   assert.match(shown, new RegExp(`^--- ${t.settings}\n\\+\\+\\+ ${t.settings}\n@@ `));
   assert.match(shown, /^\+ {6}"Read\(~\/notes\/\*\*\)",$/m, "the old last rule gains a comma");
   assert.match(shown, /^- {6}"Read\(~\/notes\/\*\*\)"$/m);
-  assert.match(shown, /^\+ {6}"Bash\(orca terminal close --terminal term_\*\)"$/m);
+  assert.match(shown, /^\+ {6}"mcp__plugin_sangsoe_sangsoe"$/m);
+  assert.match(shown, /^\+ {6}"Bash\(orca terminal read --terminal term_\*\)",$/m);
   assert.match(shown, new RegExp(`Add these ${SANGSOE_RULES.length} rules\\? \\[y/N\\] $`));
 
   const after = readFileSync(t.settings, "utf8");
@@ -148,7 +153,7 @@ test("decision 221: without a terminal and without --yes it shows the diff and w
   writeFileSync(t.settings, ORIGINAL);
   const r = await installPermissions(t.host, opts({}));
   assert.equal(r.code, 1);
-  assert.match(r.lines.join("\n"), /^\+ {6}"mcp__plugin_sangsoe_sangsoe",$/m);
+  assert.match(r.lines.join("\n"), /^\+ {6}"Bash\(gh pr view:\*\)",$/m);
   assert.match(r.lines.at(-1) ?? "", /no terminal to ask on.*nothing was written.*--yes/);
   assert.equal(readFileSync(t.settings, "utf8"), ORIGINAL);
 
@@ -349,9 +354,9 @@ test("decision 221: the diff hunks carry three lines of context", () => {
 
 test("decision 221: doctor's row counts the rules present", () => {
   const m = SANGSOE_RULES.length;
-  assert.deepEqual(permissionsRow("/p/settings.json", { permissions: { allow: [...SANGSOE_RULES] } }), { all: true, detail: `${m} of ${m} sangsoe rules present in /p/settings.json` });
-  assert.deepEqual(permissionsRow("/p/settings.json", { permissions: { allow: [SANGSOE_RULES[0]] } }), { all: false, detail: `1 of ${m} sangsoe rules present in /p/settings.json` });
-  assert.equal(permissionsRow("/p/settings.json", undefined).detail, `0 of ${m} sangsoe rules present in /p/settings.json (missing or not JSON)`);
+  assert.deepEqual(permissionsRow("/p/settings.json", { permissions: { allow: [...SANGSOE_RULES] } }, SANGSOE_RULES), { all: true, detail: `${m} of ${m} sangsoe rules present in /p/settings.json` });
+  assert.deepEqual(permissionsRow("/p/settings.json", { permissions: { allow: [SANGSOE_RULES[0]] } }, SANGSOE_RULES), { all: false, detail: `1 of ${m} sangsoe rules present in /p/settings.json` });
+  assert.equal(permissionsRow("/p/settings.json", undefined, SANGSOE_RULES).detail, `0 of ${m} sangsoe rules present in /p/settings.json (missing or not JSON)`);
 });
 
 test("decision 221: the README's install step quotes the current rule count", () => {
@@ -366,20 +371,48 @@ test("decision 221: the README's install step quotes the current rule count", ()
     assert.ok(readme.includes(quote), quote);
 });
 
-test("decision 221: the rules are narrow: no push, merge, rm, brew, or bare orca/sangsoe Bash", () => {
-  // Orca verbs that open a session or a worktree stay out: sessions start only through start_unit.
-  const orchestration = /^(ask|send|reply|inbox|run-create|run-use|task-list|task-update|worker-list|worker-release)$/;
-  for (const r of SANGSOE_RULES) {
-    if (r === "mcp__plugin_sangsoe_sangsoe") continue;
-    if (r === "Bash(orca terminal close --terminal term_*)") continue; // decision 263: pinned by its own test below
-    const m = /^Bash\(orca (orchestration ([a-z-]+)|worktree (set|show|list)|reference list|search):\*\)$/.exec(r);
-    assert.ok(m, r);
-    if (m[2] !== undefined) assert.match(m[2], orchestration, r);
+test("decision 265: no rule starts a session, deletes, or lets gh write; Read rules are sangsoe's own state under the given HOME", () => {
+  const rules = sangsoeRules("/home/acme");
+  for (const r of rules) {
+    assert.doesNotMatch(r, /gh api|gh pr (merge|close|edit|review)|git push|rm:|brew/, r);
+    if (r.startsWith("Read(")) assert.match(r, /^Read\(\/\/home\/acme\/(\.config|\.local\/share)\/sangsoe\/\*\*\)$/, r);
+    else assert.match(r, /^(mcp__plugin_sangsoe_sangsoe|Bash\((orca|gh) [a-z -]+(:\*| --terminal term_\*)\))$/, r);
   }
 });
 
-test("decision 263: the one terminal rule names a handle, and no rule allows a bare terminal close", () => {
-  const terminal = SANGSOE_RULES.filter((r) => r.includes("terminal"));
-  assert.deepEqual(terminal, ["Bash(orca terminal close --terminal term_*)"]);
-  assert.equal(SANGSOE_RULES.length, 17);
+test("decision 263 and 265: terminal close, read and send are ruled by handle only, never bare", () => {
+  const terminal = sangsoeRules("/home/acme").filter((r) => r.includes("terminal"));
+  assert.deepEqual(terminal, [
+    "Bash(orca terminal close --terminal term_*)",
+    "Bash(orca terminal list:*)",
+    "Bash(orca terminal read --terminal term_*)",
+    "Bash(orca terminal send --terminal term_*)",
+  ]);
+});
+
+test("decision 265: the 17 rules 0.1.7 wrote stay byte for byte, so a user's existing rules still match", () => {
+  const before = [
+    "mcp__plugin_sangsoe_sangsoe",
+    "Bash(orca orchestration ask:*)",
+    "Bash(orca orchestration send:*)",
+    "Bash(orca orchestration reply:*)",
+    "Bash(orca orchestration inbox:*)",
+    "Bash(orca orchestration run-create:*)",
+    "Bash(orca orchestration run-use:*)",
+    "Bash(orca orchestration task-list:*)",
+    "Bash(orca orchestration task-update:*)",
+    "Bash(orca orchestration worker-list:*)",
+    "Bash(orca orchestration worker-release:*)",
+    "Bash(orca worktree set:*)",
+    "Bash(orca worktree show:*)",
+    "Bash(orca worktree list:*)",
+    "Bash(orca reference list:*)",
+    "Bash(orca search:*)",
+    "Bash(orca terminal close --terminal term_*)",
+  ];
+  const now = new Set(sangsoeRules("/home/acme"));
+  assert.deepEqual(
+    before.filter((r) => !now.has(r)),
+    [],
+  );
 });

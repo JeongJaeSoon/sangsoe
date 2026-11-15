@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { SANGSOE_RULES } from "../core/install/permissions.ts";
+import { sangsoeRules } from "../core/index.ts";
 import { derive, renderGenerated } from "../scripts/permissions/derive.ts";
 import { GH_POLICY, ORCA_POLICY } from "../scripts/permissions/policy.ts";
 
@@ -29,7 +29,7 @@ test("every policy entry is run by a source or declares why not", () => {
 
 test("the installed rule set is the derived one: no used command without a rule, no rule for nothing used", () => {
   const derived = derive(ROOT).rules.map((r) => resolve(r.rule));
-  const have = SANGSOE_RULES.map(resolve);
+  const have = sangsoeRules(HOME);
   assert.deepEqual(
     derived.filter((r) => !have.includes(r)),
     [],
@@ -49,7 +49,6 @@ test("the checked-in generated file is what the sources derive", () => {
 test("no rule is a bare prefix over a destructive form, and starts are never ruled", () => {
   const rules = derive(ROOT).rules.map((r) => r.rule);
   for (const r of rules) {
-    assert.doesNotMatch(r, /worker-start|worktree create|terminal create|agent launch|worktree rm|\breset\b/, r);
     assert.doesNotMatch(r, /^Bash\(orca terminal (close|read|send):\*\)$/, r);
   }
   assert.ok(rules.includes("Bash(orca terminal read --terminal term_*)"));

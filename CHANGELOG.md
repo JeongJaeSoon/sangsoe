@@ -4,6 +4,14 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+### Upgrading
+
+- **The permission rule set grows from 17 to 41; run `sangsoe install --permissions` again.** Read the diff, then run it with `--yes` (or answer `y`). It adds 24 rules and keeps the 17 it wrote before byte for byte; `sangsoe doctor` reads `permissions: 41 of 41` once both profiles have them, and warns `17 of 41` until then. Rules you added yourself are not touched.
+
+### Changes
+
+- **The permission rules come from what sangsoe runs, not from a hand list (265).** On 2026-11-15 read-only Orca calls made by sangsoe sessions (`orca status`, `terminal list`, `orchestration worker-show`, `worktree ps` and others) stopped on permission prompts or were refused by auto mode, which cannot see that they are read-only or that sangsoe already checked them; a hand list also drifts from the code (263 added one rule by hand a day after it was needed). `scripts/gen-permissions.ts` reads the commands in sangsoe's skills, agents, session text and the Orca adapter table and writes `core/install/permissions.generated.ts`; a test fails when a command a source runs has no rule, when a rule covers nothing run, or when code makes a new direct `orca`, `gh` or `git` call that is not listed. `install --permissions` keeps its shape (diff first, writes only with `--yes` or `y`, a backup beside each file, both profiles). New: read-only Orca calls, `gh pr view`, `Read` of sangsoe's own state under the installing HOME, and by-handle `orca terminal read --terminal term_*` and `orca terminal send --terminal term_*` (a session can read another terminal and type into it). No rule allows `terminal create`, a worker start, a worktree delete, `gh api` or `gh pr merge`.
+
 ## 0.1.7
 
 Everything since `v0.1.6`: decisions 241, 245, 246, 250, 251, 257, 259, 260, 262, 263 and 264. `v0.1.7-rc.1` carried all of them and was checked on an installed build and the real Orca panel with no failing item; 0.1.7 is the same code.

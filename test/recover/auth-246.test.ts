@@ -423,7 +423,8 @@ test("246: terminalSend is called only from core/recover", () => {
     .flatMap((d) => walk(join(ROOT, d)))
     .filter((f) => /\.(ts|js|sh|py)$/.test(f) && !/\.test\.ts$/.test(f));
   const callers = code.filter((f) => /\bterminalSend\b|terminal["', ]+send\b/.test(readFileSync(f, "utf8"))).map((f) => relative(ROOT, f));
-  assert.deepEqual(callers.sort(), ["core/contract/orca.ts", "core/orca/adapter.ts", "core/orca/commands.ts", "core/recover/auth.ts"]);
+  // permissions.generated.ts holds the by-handle permission rule's text (decision 265), not a call.
+  assert.deepEqual(callers.sort(), ["core/contract/orca.ts", "core/install/permissions.generated.ts", "core/orca/adapter.ts", "core/orca/commands.ts", "core/recover/auth.ts"]);
   const entrances = code.filter((f) => /\bauthRecover\b|recover\/auth\.ts/.test(readFileSync(f, "utf8"))).map((f) => relative(ROOT, f));
   assert.deepEqual(entrances.sort(), ["cli/commands/recover.ts", "core/index.ts", "core/recover/auth.ts"], "only the owner's CLI calls authRecover");
 });
