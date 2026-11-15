@@ -1,7 +1,7 @@
 // Decision 265: reads what sangsoe runs and returns the permissions.allow rules that cover it.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Entry, GH_POLICY, ORCA_POLICY, OTHER_EXEC, STATE_PATHS } from "./policy.ts";
+import { type Entry, GH_POLICY, ORCA_POLICY, OTHER_EXEC, SANGSOE_POLICY, STATE_PATHS } from "./policy.ts";
 
 export type Origin = "prose" | "table" | "session" | "exec";
 export type Hit = { path: string; file: string; line: number; origin: Origin };
@@ -52,6 +52,7 @@ const WORD = /^[a-z][a-z0-9-]*$/;
 const POLICY: Readonly<Record<string, Entry>> = {
   ...Object.fromEntries(Object.entries(ORCA_POLICY).map(([k, v]) => [`orca ${k}`, v])),
   ...Object.fromEntries(Object.entries(GH_POLICY).map(([k, v]) => [`gh ${k}`, v])),
+  ...Object.fromEntries(Object.entries(SANGSOE_POLICY).map(([k, v]) => [`sangsoe ${k}`, v])),
 };
 
 /** The longest prefix of the words after `tool` that the policy names, else the first two words. A hit's path is the whole command. */
@@ -66,8 +67,11 @@ function commandPath(tool: string, words: string[]): { path: string; known: bool
 function leadingWords(text: string): string[] {
   const words: string[] = [];
   for (const t of text.trim().split(/\s+/)) {
-    if (!WORD.test(t)) break;
-    words.push(t);
+    // A closing quote, backtick or punctuation ends the command: "run `sangsoe item new` and".
+    const bare = t.replace(/[`'".,;:)]+$/, "");
+    if (!WORD.test(bare)) break;
+    words.push(bare);
+    if (bare !== t) break;
   }
   return words;
 }
@@ -83,7 +87,7 @@ function proseHits(file: string, text: string, origin: Origin): Hit[] {
     }
     const spans = fenced ? [raw] : [...raw.matchAll(/`([^`]+)`/g)].map((m) => m[1] ?? "");
     for (const span of spans) {
-      for (const m of span.matchAll(/(?:^|[\s("'=;|&])(orca|gh)\s+([^\n]*)/g)) {
+      for (const m of span.matchAll(/(?:^|[\s("'=;|&])(orca|gh|sangsoe)\s+([^\n]*)/g)) {
         const words = leadingWords(m[2] ?? "");
         if (words.length > 0) hits.push({ path: commandPath(m[1] ?? "", words).path, file, line: i + 1, origin });
       }
@@ -101,6 +105,22 @@ function sessionHits(file: string, text: string): Hit[] {
     for (const m of raw.matchAll(/\borca\s+([a-z][^\n]*)/g)) {
       const words = leadingWords(m[1] ?? "");
       if (words.length > 0) hits.push({ path: commandPath("orca", words).path, file, line: i + 1, origin: "session" });
+    }
+  });
+  return hits;
+}
+
+/**
+ * `sangsoe <words>` on a line of a gate's or the session start's text. English prose says "sangsoe made",
+ * so only a command the policy names counts here (a skill's code span reports an unknown one).
+ */
+function sangsoeTextHits(file: string, text: string): Hit[] {
+  const hits: Hit[] = [];
+  text.split("\n").forEach((raw, i) => {
+    for (const m of raw.matchAll(/\bsangsoe\s+([a-z][^\n]*)/g)) {
+      const words = leadingWords(m[1] ?? "");
+      const c = commandPath("sangsoe", words);
+      if (words.length > 0 && c.known) hits.push({ path: c.path, file, line: i + 1, origin: "session" });
     }
   });
   return hits;
@@ -154,6 +174,7 @@ export function derive(root: string): Derived {
   const hits: Hit[] = [];
   for (const f of PROSE_DIRS.flatMap((d) => walk(root, d, (p) => p.endsWith(".md")))) hits.push(...proseHits(f, read(f), "prose"));
   for (const f of SESSION_TEXT) hits.push(...sessionHits(f, read(f)));
+  for (const f of [...SESSION_TEXT, ...walk(root, "core/gates", (p) => p.endsWith(".ts") && !isTest(p))]) hits.push(...sangsoeTextHits(f, read(f)));
   hits.push(...tableHits(TABLE_FILE, read(TABLE_FILE)));
 
   const unclassified: Hit[] = [];

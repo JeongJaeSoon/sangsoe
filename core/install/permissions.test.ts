@@ -380,7 +380,7 @@ test("decision 265: no rule starts a session, deletes, or lets gh write; Read ru
   for (const r of rules) {
     assert.doesNotMatch(r, /gh api|gh pr (merge|close|edit|review)|git push|rm:|brew/, r);
     if (r.startsWith("Read(")) assert.match(r, /^Read\(\/\/home\/acme\/(\.config|\.local\/share)\/sangsoe\/\*\*\)$/, r);
-    else assert.match(r, /^(mcp__plugin_sangsoe_sangsoe|Bash\((orca|gh) [a-z -]+(:\*| --terminal term_\*)\))$/, r);
+    else assert.match(r, /^(mcp__plugin_sangsoe_sangsoe|Bash\((orca|gh|sangsoe) [a-z -]+(:\*| --terminal term_\*)\))$/, r);
   }
 });
 

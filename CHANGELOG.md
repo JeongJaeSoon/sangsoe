@@ -4,8 +4,13 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+### Upgrading
+
+- **The permission rule set grows from 41 to 45; run `sangsoe install --permissions` again.** Read the diff, then run it with `--yes` (or answer `y`). It adds four rules for the sangsoe commands a gate or skill tells a session to run and keeps the 41 it wrote before; `sangsoe doctor` reads `permissions: 45 of 45` once both profiles have them, and warns `41 of 45` until then.
+
 ### Changes
 
+- **The permission rules also cover the `sangsoe` commands sessions are told to run (265 ⑦).** Decision 256 tells every role to run `sangsoe pressure wait` through Bash after a pressure refusal, and no rule covered it, so the session could meet a permission prompt on that very call. The generator now reads `sangsoe <command>` in skills and agents and in the gates' text. Read-only verbs get a rule (`pressure wait`, `brief`, `todo`, `doctor`); `install`, `uninstall`, `plugin approve`, `land` and `item new` appear in the texts and have none. A test fails when a `sangsoe` command a skill runs is not classified.
 - **A session refused by `[gate:pressure]` is woken when the load drops (256).** The refusal now tells the session to start `sangsoe pressure wait` with `run_in_background: true`. The command reads the same load judgment the gate reads every 30 seconds and ends when it is ok twice in a row, or after 2 hours; Claude Code wakes the session when a background command ends, so the session runs the refused call again once. Nothing is queued or stored, and the wait calls neither Orca nor a model. The delegate gate lets the orchestrator run it.
 - **`install --permissions` writes a home path literally.** A home containing `$&`, `$1`, `$$`, `` $` `` or `$'` no longer rewrites the two `Read(//<home>/…)` rules.
 - **`sangsoe doctor` reports an unset HOME.** The permissions row warns that it cannot be checked instead of counting rules built from an empty home.
