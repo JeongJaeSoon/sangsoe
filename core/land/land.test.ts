@@ -436,6 +436,49 @@ test("--dry-run runs the same judgment and writes nothing (R-03)", async () => {
   assert.deepEqual(real.ok ? null : real.refusal, r.ok ? null : r.refusal, "the dry run's refusal is the real one");
 });
 
+// R-06 (decision 268): land schedules a merge at GitHub and keeps no exclusive section of its own, so
+// a refused PR and a PR left waiting for approval hold nothing the next PR of the repo could wait on.
+test("R-06: a refused PR and a held PR hold nothing: the next PR of the same repo lands", async () => {
+  const forPr = (n: number, rules: unknown[]) => ({
+    [`repos/${REPO}/pulls/${n}`]: ok(pull(n)),
+    [`repos/${REPO}/pulls/${n}/files?per_page=100&page=1`]: ok([{ filename: "core/a.ts", patch: "@@ -1 +1 @@\n-a\n+b" }]),
+    [`repos/${REPO}/rules/branches/main`]: ok(rules),
+    [`repos/${REPO}/compare/main...${HEAD}`]: ok({ status: "ahead" }),
+  });
+  const refusedOrHeld = harness({ ...forPr(12, LOOSE), ...forPr(13, LOOSE) });
+  const store = refusedOrHeld.store;
+  const rowsOf = (n: number, kinds: string[]) => {
+    const pr = `${REPO}#${n}`;
+    store.append({ type: "review_verdict", source: "review record", actor: "codex", dedupe_key: dedupeKey(EVENTS.review_verdict, pr, HEAD, "codex", "0"), payload: { pr, head_sha: HEAD, act_on: 0, reviewer: "codex", author: "alice" } });
+    for (const kind of kinds) store.append({ type: "evidence", source: "test", subject: pr, actor: "worker:u11", payload: { kind, head_sha: HEAD, exit_code: 0, not_verified: ["prod"] } });
+  };
+  rowsOf(12, ["test"]);
+  rowsOf(13, ["test", "run"]);
+  rowsOf(14, ["test", "run"]);
+  const before = store.events().length;
+
+  const refused = await land({ repo: REPO, pr: 12 }, refusedOrHeld.deps);
+  assert.equal(refused.ok ? "" : refused.refusal.code, "evidence_missing");
+  const held = await land({ repo: REPO, pr: 13 }, refusedOrHeld.deps);
+  assert.ok(held.ok && held.value.action === "merge_on_approval", JSON.stringify(held));
+
+  // The same store, with the repository now asking for a review and CI: nothing of #12 or #13 is in the way.
+  const next = harness(forPr(14, STRICT));
+  const deps = { ...next.deps, openStore: refusedOrHeld.deps.openStore };
+  const landed = await land({ repo: REPO, pr: 14 }, deps);
+  assert.ok(landed.ok && landed.value.action === "auto_merge", JSON.stringify(landed));
+  assert.deepEqual(next.merges, [{ repo: REPO, pr: 14, head: HEAD }]);
+
+  // What the three calls wrote: one row each, about its own PR. No lock, lease or queue row exists to go stale.
+  const written = store.events().slice(before);
+  assert.deepEqual(written.map((e) => [e.type, e.payload.pr, e.payload.reason ?? ""]), [
+    ["land_failed", `${REPO}#12`, "evidence_missing:run"],
+    ["land_requested", `${REPO}#13`, "merge_on_approval"],
+    ["land_requested", `${REPO}#14`, ""],
+  ]);
+  assert.deepEqual(refusedOrHeld.merges, [], "neither the refused nor the held PR reached GitHub's merge");
+});
+
 test("an unreadable config is V3 and fails closed", async () => {
   const h = harness(routes());
   ready(h.store);
