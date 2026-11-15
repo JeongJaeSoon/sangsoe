@@ -4,8 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
-- **The panel layout tests start headless Chrome with a mock keychain.** The test HOME guard (263 ⑨) points HOME at a temp folder, so on macOS Chrome opened a "Keychain Not Found" dialog during `npm test`; `--use-mock-keychain` and `--password-store=basic` stop it. Test-only; nothing shipped changes.
-
+- **The panel layout tests start headless Chrome with a mock keychain.** The test HOME guard (263 ⑨) points HOME at a temp folder, so on macOS Chrome opened a "Keychain Not Found" dialog during `npm test`; `--use-mock-keychain` and `--password-store=basic` stop it, in both places a test starts Chrome (`test/panel/browser.ts` and the screenshot capture in `panel-262.test.ts`). Test-only; nothing shipped changes.
 - **`unit_close` closes a finished unit's terminal that Orca lists as orphaned (263 ⑩).** After an Orca restart a retained terminal is listed `orphaned: true` with placeholder `tabId` and `leafId`, so `unit_close` looked its agent up under a pane key `worktree ps` never has and refused every one with `agent_not_idle`. For an orphaned terminal it now looks the agent up by `recordedPaneKey`, the key Orca files it under. Every other condition is unchanged, an orphaned row with no `recordedPaneKey`, or whose pane another terminal now holds, is refused, and a missing `ps` row is still not "idle".
 - **`start_unit` reads its parent worktree with `orca worktree show` when `worktree list` omits it.** `worktree list` can leave a live worktree out (a lead's own was); `start_unit` refused with "부모 worktree 를 읽지 못했다". It now asks `worktree show --worktree id:<id>` for that one worktree and accepts it only when the id matches, it is not archived and it is on the local host. A truncated list still refuses first.
 

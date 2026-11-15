@@ -15,7 +15,7 @@ function capture(dir: string, page: string, name: string, width: number, height:
   const out = process.env.SANGSOE_CAPTURE_DIR;
   const bin = chrome();
   if (!out || !bin) return;
-  spawnSync(bin, ["--headless=new", "--disable-gpu", "--allow-file-access-from-files", `--user-data-dir=${join(dir, "shot")}`, `--window-size=${width},${height}`, "--virtual-time-budget=3000", "--run-all-compositor-stages-before-draw", "--hide-scrollbars", `--screenshot=${join(out, name)}`, `file://${join(dir, page)}`], { timeout: 60_000 });
+  spawnSync(bin, ["--headless=new", "--disable-gpu", "--allow-file-access-from-files", `--user-data-dir=${join(dir, "shot")}`, "--use-mock-keychain", "--password-store=basic", `--window-size=${width},${height}`, "--virtual-time-budget=3000", "--run-all-compositor-stages-before-draw", "--hide-scrollbars", `--screenshot=${join(out, name)}`, `file://${join(dir, page)}`], { timeout: 60_000 });
 }
 
 // U133 (decision 262): the 리소스 section is pinned to the panel's bottom, so opening it is a sheet over
