@@ -41,7 +41,9 @@ test("B4: only ci.yml's npm test step gets the hygiene pattern, as a repository 
   const named: string[] = [];
   for (const file of readdirSync(dir).filter((f) => /\.ya?ml$/.test(f))) {
     const text = readFileSync(join(dir, file), "utf8");
-    assert.doesNotMatch(text, /toJSON\(\s*secrets\s*\)/i, `${file} hands every secret to a step`);
+    assert.doesNotMatch(text, /toJSON\(\s*secrets\s*\)|secrets:\s*inherit/i, `${file} hands out every secret`);
+    // A fork's pull request gets no secret only under `pull_request`.
+    assert.doesNotMatch(text, /pull_request_target|workflow_run/, `${file} runs a fork's change with secrets`);
     named.push(...text.split("\n").flatMap((l) => (l.includes("SANGSOE_HYGIENE_PATTERN") ? [`${file}|${l}`] : [])));
   }
   assert.equal(named.length, 1, "the variable is named once, on one step of one workflow");

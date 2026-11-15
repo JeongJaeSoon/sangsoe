@@ -24,10 +24,14 @@ function hits(files: readonly Source[], pattern: RegExp): string[] {
 const report = (found: readonly string[]) => `${found.length} line(s) match ${ENV}: ${found.join(", ")}`;
 
 /**
- * Case-insensitive; null when the source is not a regular expression, or is one that matches the
- * empty string (it would match every line). The error is dropped: it quotes the source.
+ * Case-insensitive, read without the whitespace around it. Null for a source that can find nothing
+ * or everything: a line break inside it (no line holds one, so it would pass falsely), one that is
+ * not a regular expression, or one that matches the empty string. The error is dropped: it quotes
+ * the source.
  */
-function compile(source: string): RegExp | null {
+function compile(raw: string): RegExp | null {
+  const source = raw.trim();
+  if (/[\r\n]/.test(source)) return null;
   try {
     const re = new RegExp(source, "i");
     return re.test("") ? null : re;
@@ -69,7 +73,13 @@ test("B4: the check can fail, and a failure names file:line without the match or
   assert.doesNotMatch(text, /hygiene-fixture-word/i);
   assert.deepEqual(hits(fixture, /never-there/), []);
   assert.equal(compile("("), null, "a broken pattern is refused, not thrown with its source");
-  assert.equal(compile("x*"), null, "a pattern that matches the empty string is refused: it would match every line");
+  assert.equal(compile("x*"), null, "a pattern that matches the empty string is refused");
+  // A secret pasted with its line break would otherwise ask for a line break no line holds, and pass.
+  const pasted = compile("  hygiene-fixture-word\n");
+  assert.ok(pasted, "the whitespace around a pasted value is dropped");
+  assert.deepEqual(hits(fixture, pasted), ["docs/a.md:2", "core/b.ts:1"]);
+  assert.equal(compile("one-name\nhygiene-fixture-word"), null, "a pattern with a line break inside is refused: it can match no line");
+  assert.equal(compile("  \n"), null);
 });
 
 test("B4: the scan reads the real tracked tree: it finds this file's own fixture word and nothing else", () => {
@@ -83,16 +93,15 @@ test("B4: the scan reads the real tracked tree: it finds this file's own fixture
   assert.deepEqual(found.filter((f) => !f.startsWith(`${SELF}:`)), [], "the made-up fixture word is written elsewhere in the tree");
 });
 
-// A value pasted with a trailing newline would need a newline no line holds, and so pass falsely.
-const source = (process.env[ENV] ?? "").trim();
+const source = process.env[ENV] ?? "";
 
 test(
   "B4: no tracked file matches the internal-name pattern",
-  { skip: source === "" ? `${ENV} is unset: the pattern lives outside this public repository (CI gets it from a secret)` : false },
+  { skip: source.trim() === "" ? `${ENV} is unset: the pattern lives outside this public repository (CI gets it from a secret)` : false },
   () => {
     const pattern = compile(source);
     // assert.ok with a fixed message: a thrown RegExp error or a diff would print the pattern.
-    assert.ok(pattern, `${ENV} is not a usable regular expression (it does not compile, or it matches the empty string)`);
+    assert.ok(pattern, `${ENV} is not a usable regular expression (it does not compile, it holds a line break, or it matches the empty string)`);
     const found = hits(tracked(), pattern);
     assert.ok(found.length === 0, report(found));
   },
