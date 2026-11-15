@@ -406,7 +406,6 @@ test("activate subscribes, registers and redraws status bar B from the core each
     assert.deepEqual([...w.handlers.keys()].sort(), [
       "panel.act",
       "panel.brief",
-      "panel.open",
       "panel.reap",
       "panel.resources",
       "probe.exec",

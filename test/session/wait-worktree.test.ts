@@ -10,7 +10,8 @@ import { createSessionWorld, type SessionWorld } from "./world.ts";
 
 const hook = (w: SessionWorld, event: SessionHook, input: Partial<SessionHookInput> & { session_id: string }) =>
   recordHook(event, w, { cwd: w.dir, ...input }, { pluginVersion: VERSION });
-const idle = { session_id: "s1", notification_type: "idle_prompt", message: "Claude is waiting for your input" };
+// A dialog, not the idle notice: that one opens no wait (decision 293).
+const idle = { session_id: "s1", notification_type: "elicitation_dialog", message: "Claude needs your input" };
 
 const psRow = (path: string, instance: string, live: number) => ({
   worktreeId: `repo_1::${path}`,
@@ -39,7 +40,7 @@ test("232: the wait names the innermost Orca worktree holding cwd that has a liv
   await hook(w, "notification", { ...idle, cwd: join(w.dir, "sub") });
   assert.deepEqual(
     w.store.events({ type: "waiting_human" }).map((e) => e.payload),
-    [{ session: "s1", worktree: "inst_card", excerpt: "Claude is waiting for your input" }],
+    [{ session: "s1", worktree: "inst_card", excerpt: "Claude needs your input" }],
   );
 });
 

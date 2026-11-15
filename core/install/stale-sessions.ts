@@ -45,10 +45,13 @@ function servers(stdout: string, now: number): Server[] {
   const out: Server[] = [];
   for (const line of stdout.split("\n")) {
     // Only `node <entry>`, as the plugin's .mcp.json launches it: an editor or pager open on server.ts is no server.
-    const [pid, etime, exe, entry] = line.trim().split(/\s+/);
+    // Either path may hold a space, so the entry is everything from the first argument that starts with `/`.
+    const [, pid, etime, args = ""] = /^(\d+)\s+(\S+)\s+(.+)$/.exec(line.trim()) ?? [];
+    const cut = args.indexOf(" /");
+    const entry = cut < 0 ? "" : args.slice(cut + 1);
     const ms = elapsedMs(etime ?? "");
-    if (basename(exe ?? "") !== "node" || !entry || !SERVER_ENTRY.test(entry)) continue;
-    if (ms !== undefined && /^\d+$/.test(pid ?? "")) out.push({ pid: Number(pid), startedAt: now - ms, entry });
+    if (basename(args.slice(0, Math.max(cut, 0)).trim()) !== "node" || !SERVER_ENTRY.test(entry)) continue;
+    if (ms !== undefined) out.push({ pid: Number(pid), startedAt: now - ms, entry });
   }
   return out;
 }

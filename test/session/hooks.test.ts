@@ -371,18 +371,26 @@ test("waiting_human_released (hook side): the owner's words mark, the session mo
   const rel = w.store.events({ type: "waiting_released" });
   assert.deepEqual(rel.map((e) => e.payload), [{ ref: String(waits[0]?.seq), outcome: "answered", by: "owner", evidence: "tool:Bash" }]);
 
+  // Decision 293: the idle notice is no wait, with the type field or (an older Claude Code) without it.
   await hook(w, "notification", { session_id: "s1", notification_type: "idle_prompt", message: "Claude is waiting for your input" });
+  await hook(w, "notification", { session_id: "s1", message: "Claude is waiting for your input" });
+  assert.equal(w.store.events({ type: "waiting_human" }).length, 1, "a session that finished its turn is not waiting on a person");
+
+  await hook(w, "notification", { session_id: "s1", notification_type: "elicitation_dialog", message: "Claude needs your input" });
   await hook(w, "session-end", { session_id: "s1", reason: "clear" });
   const last = w.store.events({ type: "waiting_released" }).at(-1);
   assert.deepEqual([last?.payload.outcome, last?.payload.by, last?.payload.evidence], ["moot", "unknown", "session_ended"]);
   await hook(w, "notification", { session_id: "s1", notification_type: "auth_success", message: "ok" });
   assert.equal(w.store.events({ type: "waiting_human" }).length, 2, "a notification that is no wait writes nothing");
+  // No type field: the permission wording alone is a wait.
+  await hook(w, "notification", { session_id: "s1", message: "Claude needs your permission to use Write" });
+  assert.deepEqual(w.store.events({ type: "waiting_human" }).at(-1)?.payload.tool, "Write");
 });
 
 test("C11: Orca's nudge, its mail turn, another session's message and a task notice are not the owner's words", async () => {
   const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
   await hook(w, "session-start", { session_id: "s1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
-  await hook(w, "notification", { session_id: "s1", notification_type: "idle_prompt", message: "Claude is waiting for your input" });
+  await hook(w, "notification", { session_id: "s1", notification_type: "elicitation_dialog", message: "Claude needs your input" });
   const prompts = [
     // Orca's nudge goes on to name its read command, which test/orca-boundary.test.ts keeps out of the tree.
     "\nYou have 1 orchestration message.\n",

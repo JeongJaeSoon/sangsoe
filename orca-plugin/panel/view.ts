@@ -153,8 +153,6 @@ export const ERROR_LINE: Readonly<Record<string, string>> = {
   core_error: "sangsoe 코어가 오류로 끝났다. 되풀이되면 sangsoe doctor 를 본다.",
   orca_error: "Orca 가 답하지 않았다. 잠시 뒤 새로 고침을 누른다.",
   not_found: "이 묶음이나 항목은 이제 열려 있지 않다. 뒤로 가서 현황을 본다.",
-  no_worktree: "터미널을 열 worktree 가 없다. 터미널에서 직접 실행한다.",
-  open_failed: "Orca 가 터미널을 열지 못했다. 터미널에서 직접 실행한다.",
   bad_input: "패널이 알 수 없는 요청을 보냈다. 새로 고침을 누른다.",
   not_open: "이 결정은 이미 닫혔다. 새로 고침을 누른다.",
   no_recommendation: "추천 답이 없다. 다른 답으로 답한다.",
@@ -167,7 +165,7 @@ export type Refusal = { code: string; reason: string; fix: string };
 export const errorLine = (r: Refusal): string => ERROR_LINE[r.code] ?? ERROR_OTHER;
 const errorTitle = (r: Refusal): string => [r.code, r.reason, r.fix].filter(Boolean).join(" · ");
 
-/** The one-line note a refusal leaves (an act or an open): Korean text, the raw refusal as its title. */
+/** The one-line note a refused act leaves: Korean text, the raw refusal as its title. */
 export function errorNote(r: Refusal): string {
   return `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorLine(r))}</p>`;
 }
@@ -808,32 +806,21 @@ const ICONS: Record<string, string> = {
     '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
   refresh:
     '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
-  terminal: '<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>',
-  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
 };
 export const icon = (name: string): string =>
   `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] ?? ""}</svg>`;
 
-/** What a header button asks the worker to open in an Orca terminal; the worker builds the command. */
-export type Open = { view: "brief"; group?: string; item?: string } | { view: "doctor" } | { view: "todo" } | { view: "models" };
-
 const iconBtn = (name: string, label: string, data: string) =>
   `<button type="button" class="ibtn" ${data} aria-label="${esc(label)}" title="${esc(label)}">${icon(name)}</button>`;
 
-// The header row (decision 169): title with the panel icon, last-updated time, refresh, open the
-// full brief in a terminal, and an overflow menu. A plain <details> menu needs no script state.
-function header(fresh: { short: string; full: string } | null, at: Target): string {
-  const open: Open = { view: "brief", ...at };
+// The header row (decisions 169 · 294): title with the panel icon, last-updated time, and refresh.
+// The terminal button and the overflow menu are gone: the CLI has those reads.
+function header(fresh: { short: string; full: string } | null): string {
   const stamp = fresh ? `<span class="fresh" title="${esc(fresh.full)}">${esc(fresh.short)}</span>` : "";
-  const menu =
-    `<details class="menu"><summary class="ibtn" aria-label="더 보기" title="더 보기">${icon("more")}</summary><div class="pop" role="menu">` +
-    `<button type="button" role="menuitem" data-open="${attr({ view: "todo" })}">터미널에서 sangsoe todo</button>` +
-    `<button type="button" role="menuitem" data-open="${attr({ view: "models" })}">터미널에서 sangsoe models</button>` +
-    `<button type="button" role="menuitem" data-open="${attr({ view: "doctor" })}">터미널에서 sangsoe doctor</button></div></details>`;
   return (
     `<header class="top"><span class="brand">${icon("layers")}상쇠<small>sangsoe</small></span>` +
     stamp +
-    `<span class="tools">${iconBtn("refresh", "새로 고침", "data-refresh")}${iconBtn("terminal", "터미널에서 전체 현황", `data-open="${attr(open)}"`)}${menu}</span></header>`
+    `<span class="tools">${iconBtn("refresh", "새로 고침", "data-refresh")}</span></header>`
   );
 }
 
@@ -860,13 +847,12 @@ const backLine = (crumbs: readonly string[]) => {
 export function renderStage(
   v: PanelView,
   tab: Tab = "all",
-  at: Target = {},
   pending: ReadonlySet<string> = new Set(),
 ): string {
   const m = v.model;
   const body = m.stage === 1 ? overview(m, v.todo, pending) : m.stage === 2 ? group(m) : item(m);
   // A detail screen's back line stays with the header while the page scrolls (decision 225 (4)).
-  const top = bar(header(v.fresh ?? null, at), m.stage === 1 ? "" : backLine(placeTrail(m)));
+  const top = bar(header(v.fresh ?? null), m.stage === 1 ? "" : backLine(placeTrail(m)));
   return `${top}${m.stage === 1 ? tabs(m, tab) : ""}<main data-view="${m.stage === 1 ? tab : "all"}">${body}</main>`;
 }
 
@@ -876,20 +862,10 @@ const bar = (head: string, nav: string) => `<div class="bar">${head}${nav}</div>
  * A reading that failed (decision 198): the header and, below 현황, the back line stay, then one Korean
  * line and a 새로 고침 the owner presses; nothing re-reads by itself while the panel shows it.
  */
-export function renderError(r: Refusal, crumbs: readonly string[] = [], at: Target = {}): string {
+export function renderError(r: Refusal, crumbs: readonly string[] = []): string {
   const nav = crumbs.length > 0 ? backLine(crumbs) : "";
   const line = `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorLine(r))} <button type="button" class="link" data-refresh>새로 고침</button></p>`;
-  return `${bar(header(null, at), nav)}<main data-view="all">${line}</main>`;
-}
-
-/**
- * What the header's terminal button names. The `sangsoe brief` command takes `<group> [<iNNN>]`, so
- * the item only goes into it under a group; the item alone still names the worktree (decision 198 ②).
- */
-export function openTarget(stack: readonly Target[]): Target {
-  const group = [...stack].reverse().find((t) => t.group)?.group;
-  const item = current(stack).item;
-  return { ...(group ? { group } : {}), ...(item ? { item } : {}) };
+  return `${bar(header(null), nav)}<main data-view="all">${line}</main>`;
 }
 
 /** Pressed items the reading no longer lists as owner items leave the pending set. */

@@ -45,6 +45,7 @@ export type CatalogRow = {
    */
   orcaEfforts: readonly Effort[];
   source: Source;
+  /** The UTC date the row was last read against its source; a session before that day's 00:00Z is not compared (decision 254). */
   verified: string;
   /** A dated ID that must not move (e.g. for a stable release's review); doctor reports it while set. */
   pin?: { id: string; reason: string; since: string };

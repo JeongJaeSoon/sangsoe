@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { readyText } from "../../claude-plugin/mcp/resources/ready.ts";
+import { readyText, watchedRepos } from "../../claude-plugin/mcp/resources/ready.ts";
 import { timelineText } from "../../claude-plugin/mcp/resources/item_timeline.ts";
 import { createServer } from "../../claude-plugin/mcp/server.ts";
 import { type BriefSnapshot, item_timeline, MODEL_CATALOG, MODEL_POLICY, ready, replayJsonl } from "../../core/index.ts";
@@ -48,6 +48,12 @@ test("the server lists templates apart from fixed resources and reads a template
     const miss = (await call("resources/read", { uri })) as { error: { code: number } };
     assert.equal(miss.error.code, -32002, uri);
   }
+});
+
+test("decision 291: the ready resource limits the overlap read to watch.repos, and to nothing when there is no watch config", () => {
+  assert.deepEqual(watchedRepos({ repos: ["acme/api"] }), ["acme/api"]);
+  assert.deepEqual(watchedRepos({ repos: [] }), [], "an emptied list");
+  assert.deepEqual(watchedRepos(null), [], "no file, no `watch`, or a malformed one: pr-monitor reads nothing then either");
 });
 
 test("the real server lists brief, models and ready, and item_timeline as a template", async () => {

@@ -119,8 +119,6 @@ export interface PanelCore {
   brief(target: PanelTarget): Promise<Result<PanelView>>;
   statusBar(): Promise<Result<StatusBarItem>>;
   act(a: PanelAct): Promise<Result<PanelActed>>;
-  /** The Orca worktree id a terminal for `target` opens in: the item's Dispatch worktree, or no_worktree. */
-  worktree(target: PanelTarget): Promise<Result<{ readonly worktree: string }>>;
   /** Tells each new newest store seq until closed; the worker posts it to the open panels (decision 205). */
   watch(onChange: (seq: number) => void): Result<{ close(): void }>;
   /** The 리소스 section, read only when the owner opens or refreshes it (decision 234). */
@@ -129,22 +127,6 @@ export interface PanelCore {
   resourcePart(p: ResourcePart): Promise<Result<ResourcePartView>>;
   /** The confirmed 정리: the owner's press is recorded as an owner_action, then only the listed ids go. */
   reap(a: OwnerReap): Promise<Result<OwnerReaped>>;
-}
-
-const NO_WORKTREE = "run the command in a terminal";
-
-/**
- * Orca resolves `--worktree active` from the caller's cwd, and the plugin worker's is `/` (decision 198).
- * So the id comes from Orca's own worker-list row for the item's Task; a stage with no such row has none.
- */
-async function itemWorktree(orca: OrcaAdapter, input: BriefInput, alias: string): Promise<Result<{ readonly worktree: string }>> {
-  const f = itemFacts(input).find((x) => x.alias === alias);
-  const task = f ? input.orca.tasks.find((t) => t.id === f.task) : undefined;
-  if (!task) return refuse("not_found", `no item ${alias}`, NO_WORKTREE);
-  const rows = await orca.workerList({ run: task.runId });
-  if (!rows.ok) return refuse("orca_error", `worker-list ${task.runId}: ${rows.error.code}`, NO_WORKTREE);
-  const ws = rows.value.rows.filter((w) => w.taskId === task.id && w.workspace).at(-1)?.workspace;
-  return ws ? done({ worktree: ws }) : refuse("no_worktree", `${alias} has no worker worktree`, NO_WORKTREE);
 }
 
 export function panelCore(ports: PanelPorts): PanelCore {
@@ -202,11 +184,6 @@ export function panelCore(ports: PanelPorts): PanelCore {
       if (!input.ok) return input;
       if (a.kind === "done") return closeItem(input.value, a.item);
       return answer(input.value, a.decision, "text" in a ? a.text : null);
-    },
-    async worktree(target) {
-      if (!target.item) return refuse("no_worktree", "this stage has no worktree of its own", NO_WORKTREE);
-      const input = await load(ports.now());
-      return input.ok ? itemWorktree(ports.orca, input.value, target.item) : input;
     },
     watch: (onChange) => (ports.watch ?? watchStore)(onChange),
     async resources() {

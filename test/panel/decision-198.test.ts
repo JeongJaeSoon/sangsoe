@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { type BriefInput, type BriefSnapshot, buildBrief, localShort, localStamp, panelView, renderMarkdown, replayJsonl, statusBarItem } from "../../core/index.ts";
-import { autoRefresh, ERROR_LINE, errorLine, openTarget, type PanelView, prunePending, renderError, renderStage } from "../../orca-plugin/panel/view.ts";
+import { autoRefresh, ERROR_LINE, errorLine, errorNote, type PanelView, prunePending, renderError, renderStage } from "../../orca-plugin/panel/view.ts";
 
 const FIX = new URL("../fixtures/brief/", import.meta.url);
 const NOW = "2026-11-10T12:00:00.000Z";
@@ -70,9 +70,14 @@ test("a refusal is one short Korean line with the raw text in its title; the hea
   }
   const raw = { code: "selector_not_found", reason: '{"selector":"active"}', fix: "run sangsoe brief in a terminal" };
   assert.equal(errorLine(raw), "sangsoe 가 요청을 처리하지 못했다.", "an unlisted code is the generic line, never the raw text");
+  // The note a refused act leaves: the Korean line as text, the raw refusal escaped into the title only.
+  assert.equal(
+    errorNote(raw),
+    '<p class="msg bad" role="status" title="selector_not_found · {&quot;selector&quot;:&quot;active&quot;} · run sangsoe brief in a terminal">sangsoe 가 요청을 처리하지 못했다.</p>',
+  );
 
   const nf = { code: "not_found", reason: "no open group api-migration", fix: "go back to 현황" };
-  const html = renderError(nf, ["현황", "api-migration"], { group: "api-migration" });
+  const html = renderError(nf, ["현황", "api-migration"]);
   assert.match(html, /^<div class="bar"><header class="top">/, "the header row stays");
   assert.match(html, /data-back/, "the way back stays");
   assert.match(html, /data-refresh/);
@@ -89,18 +94,11 @@ test("an owner item the panel pressed into ⏳ 검증 대기 keeps its 완료 of
   assert.ok(owner, "the fixture has an owner item");
   const done = `data-act="${JSON.stringify({ kind: "done", item: owner.ref }).replace(/"/g, "&quot;")}"`;
   assert.ok(renderStage(v).includes(done));
-  const pressed = renderStage(v, "all", {}, new Set([owner.ref]));
+  const pressed = renderStage(v, "all", new Set([owner.ref]));
   assert.ok(!pressed.includes(done), "no 완료 act on the pressed row");
   assert.match(pressed, /<button type="button" class="btn" disabled><span class="em">⏳<span class="sr"> <\/span><\/span>검증 대기<\/button>/);
 
   const pending = new Set([owner.ref, "i999"]);
   prunePending(pending, v.todo);
   assert.deepEqual([...pending], [owner.ref], "a pressed item the reading no longer lists leaves the set");
-});
-
-test("an item opened straight from 현황 still names itself to the terminal button", () => {
-  assert.deepEqual(openTarget([]), {});
-  assert.deepEqual(openTarget([{ item: "i026" }]), { item: "i026" });
-  assert.deepEqual(openTarget([{ group: "acme" }, { item: "i026" }]), { group: "acme", item: "i026" });
-  assert.ok(renderStage(view({ item: "i026" }) as unknown as PanelView, "all", openTarget([{ item: "i026" }])).includes("&quot;item&quot;:&quot;i026&quot;"));
 });

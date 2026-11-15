@@ -17,12 +17,12 @@
 | 절 | 행 | implemented | partial | missing | cut | changed |
 |---|---|---|---|---|---|---|
 | 0. 오너의 고정 규칙 | 5 | 4 | 1 | 0 | 0 | 0 |
-| 1. 칸 배치 · Orca CLI · 설치 | 134 | 92 | 8 | 9 | 1 | 24 |
+| 1. 칸 배치 · Orca CLI · 설치 | 134 | 93 | 8 | 9 | 1 | 23 |
 | 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 80 | 11 | 2 | 6 | 16 |
 | 3. 데이터 · MCP · CLI · GRAPH | 81 | 53 | 6 | 1 | 3 | 18 |
 | 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 34 | 4 | 4 | 6 | 9 |
 | 5. 결정이 자르거나 바꾼 것 | 46 | 0 | 0 | 0 | 13 | 33 |
-| 합계 | 438 | 263 | 30 | 16 | 29 | 100 |
+| 합계 | 438 | 264 | 30 | 16 | 29 | 99 |
 
 `partial`·`missing` 46행은 갭 27개(`G1`–`G36` 에서 U77 이 고친 `G2`, U76 이 고친 `G13` `G16`, 결정 212 가 닫은 `G10`·`G11`·`G23`·`G29`, 결정 215 가 닫은 `G22`·`G31` 을 뺀 것)로 묶인다. 제안은 NOW 0 · LATER 23 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
 
@@ -45,7 +45,7 @@
 | 일반 스킬 자리 | design.html §1 아니다 | changed (결정 95) | `claude-plugin/.claude-plugin/plugin.json:7` | 별도 plugin 이 아니라 ③ 안의 `skills/general` |
 | harness 중심(hook·게이트) | design.html 설계 관점 | implemented | `claude-plugin/hooks/hooks.json:3`, `core/gates/start.ts:39` | 막는 hook 과 기록 hook 등록 |
 | loop 의 끝 | design.html 설계 관점 | changed (결정 121) | `claude-plugin/agents/lead.md:23` | /goal 대신 Dispatch 와 worker_done 한 번 |
-| ① 은 `core/orca` 만 부른다 | design.html §2 네 칸 배치 | partial | `core/orca/commands.ts:22`, `orca-plugin/panel/requests.ts:69` | G1 — 패널 버튼이 `orca terminal create`·`plugin open` 을 어댑터 밖에서 직접 부른다. install·approve 의 `plugin dev`·`enable`·`account list` 도 각자의 host 로 부른다(approve 가 enable 의 유일한 자리인 것은 설계대로) |
+| ① 은 `core/orca` 만 부른다 | design.html §2 네 칸 배치 | partial | `core/orca/commands.ts:22`, `orca-plugin/main.ts:205` | G1 — plugin worker 의 `sangsoe.open` 명령이 `plugin open` 을 어댑터 밖에서 직접 부른다(패널 버튼의 `orca terminal create` 는 결정 294 로 없어졌다). install·approve 의 `plugin dev`·`enable`·`account list` 도 각자의 host 로 부른다(approve 가 enable 의 유일한 자리인 것은 설계대로) |
 | ② Orca plugin | design.html §2 네 칸 배치 | implemented | `orca-plugin/orca-plugin.json:11`, `orca-plugin/main.ts:39` | 패널·상태 표시줄·monitor·REAPER 타이머가 worker 하나 |
 | ③ Claude Code plugin | design.html §2 네 칸 배치 | implemented | `claude-plugin/hooks/hooks.json:3`, `claude-plugin/.mcp.json:3` | hook·skill·MCP·agent 넷 |
 | ④ 코어, 연결점 둘 | design.html §2 네 칸 배치 | implemented | `test/layout.test.ts:126`, `orca-plugin/core-link.ts:51` | 다른 칸은 `core/index.ts` 로만, worker 는 core-link 한 곳 |
@@ -130,8 +130,8 @@
 | doctor model-table | README Install | implemented | `core/checks/model-table.ts:120`, `core/checks/model-table.ts:137` | 60일 warn, 새 Claude Code·고정 notice |
 | doctor 시작 점검 | architecture.md Orca·GitHub 어댑터와 점검 | implemented | `core/checks/index.ts:22`, `core/checks/orca-commands.ts:7` | reachable·capabilities·commands·hooks·remote-hosts·두 plugin 버전 |
 | doctor sqlite-version·store-restore | design-appendix 남는 파일 | implemented | `core/checks/sqlite-version.ts:11`, `core/checks/store-restore.ts:24` | |
-| Orca plugin 매니페스트 능력 | README Layout | partial | `orca-plugin/orca-plugin.json:11`, `orca-plugin/panel/requests.ts:69` | G5 — 능력은 읽기 둘만 선언하고, 패널은 `terminal create` 를 CLI 로 부른다 |
-| 기능표 terminal create | design-appendix Orca 기능 활용 표 | changed (결정 169) | `orca-plugin/panel/requests.ts:69` | 패널 머리 행 버튼이 부른다 |
+| Orca plugin 매니페스트 능력 | README Layout | partial | `orca-plugin/orca-plugin.json:11`, `core/reaper/round.ts` | G5 — 능력은 읽기 둘만 선언하고, worker 는 REAPER 라운드에서 `orca worktree rm` 을 CLI 로 부른다(패널의 `terminal create` 는 결정 294 로 없어졌다) |
+| 기능표 terminal create | design-appendix Orca 기능 활용 표 | implemented | `orca-plugin/panel/requests.ts` | 부록의 "안 씀" 대로 부르지 않는다. 결정 169 가 패널 머리 행 버튼으로 부르게 했던 것을 결정 294 가 없앴다 |
 | 기능표 worker-show·read·list | design-appendix Orca 기능 활용 표 | partial | `core/detect/orca/round.ts:22`, `core/detect/orca/round.ts:65` | G6 — `worker-read` 어댑터 행 없음 |
 | 기능표 inbox | design-appendix Orca 기능 활용 표 | implemented | `core/detect/orca/round.ts:60` | 읽기 전용 |
 | 기능표 request-show·retry-request | design-appendix Orca 기능 활용 표 | implemented | `core/orca/adapter.ts:88`, `core/notify/notify.ts:102` | 잃은 응답만 같은 id 로 |
@@ -511,11 +511,11 @@
 
 | G | 갭 | 제안 | 이유 · 다시 볼 조건 |
 |---|---|---|---|
-| G1 | 패널이 `terminal create`·`plugin open` 을 어댑터 밖에서 부른다 | LATER | 명령 표 대조(`orca-commands`)가 이 두 줄을 보지 못한다. Orca 가 그 인자를 바꾼 첫 버전에서 패널 호출을 `ORCA_COMMANDS` 표에 올린다 |
+| G1 | plugin worker 의 `sangsoe.open` 명령이 `plugin open` 을 어댑터 밖에서 부른다(패널의 `terminal create` 는 결정 294 로 없어졌다) | LATER | 명령 표 대조(`orca-commands`)가 이 줄을 보지 못한다. Orca 가 그 인자를 바꾼 첫 버전에서 그 호출을 `ORCA_COMMANDS` 표에 올린다 |
 | G2 | 결정 193 이 세션 글로 옮긴 `worktree set`·`reference list`·`search` 가 agent·skill 본문에 없다 | NOW | 결정 193 ④ 가 "세션이 자기 글로 부른다" 고 적었고 오너의 고정 규칙(Orca 내장 기능 최대 사용)이 있다. 카드 상태 표시(`worktree set`)는 오너가 Orca 에서 보는 화면이다. 고칠 것은 lead·worker 글 몇 줄이다. U77 에서 고쳤다: agent 셋과 `deliver-ticket`·`orchestrate`·`intake` 가 세 동사를 부르고 `test/session-verbs.test.ts` 가 지킨다 |
 | G3 | Orca plugin storage 를 쓰지 않는다 | LATER | 지금 패널은 매번 store 와 Orca 에서 읽어 잃는 상태가 없다. 패널이 다시 열 때 잃으면 안 되는 화면 상태가 생기면 |
 | G4 | `reference remove` 행이 없다 | LATER | 붙인 참조를 떼야 하는 첫 경우(잘못 붙인 티켓) |
-| G5 | 매니페스트는 읽기 능력만 선언하고 패널은 쓰기 CLI 를 부른다 | LATER | Orca 가 trusted-worker 의 CLI 호출에도 능력 선언을 요구하게 되면 |
+| G5 | 매니페스트는 읽기 능력만 선언하고 worker 는 쓰기 CLI(REAPER 의 `orca worktree rm`)를 부른다. 패널의 쓰기 호출은 결정 294 로 없어졌다 | LATER | Orca 가 trusted-worker 의 CLI 호출에도 능력 선언을 요구하게 되면 |
 | G6 | 기능 활용 표의 `worker-read`·`status` 세션 id·`terminal read`·`skills get`·`worktree show/current`·`repo list`·`terminal-daemon status` 를 쓰지 않는다 | LATER | 행마다 그 기능이 필요한 첫 판정에서. `terminal read` 는 queue-monitor 가 대기 발췌를 못 싣는다고 스스로 적으므로 가장 먼저다 |
 | G7 | Orca 연동 우회 둘(세션 조작 "모름" 응답 `agent_session_operation_unknown`, 기존 터미널에 Dispatch)이 없다 | LATER | 그 오류 코드나 실패가 관측된 첫 경우 |
 | G8 | 남는 파일 표의 브리프·리드 기록 경로, 압박 이력, 실행 로그 폴더를 쓰는 코드가 없다 | DROP | 브리프는 Orca Task spec, 리드 기록은 Orca 메시지와 event 가 원본이라 파일 사본은 이중 저장이 된다. 압박 이력은 G17 과 함께 다시 본다 |
@@ -633,5 +633,12 @@
 | 286 | 부록 `#gates` 의 위임 게이트("조율 밖의 도구 호출을 직접 하지 못하게 한다")와 결정 269 ③ (나). 읽기 전용 Orca 조회와 파일 본문 보내기가 막혔고 거부 문구가 Orca 에 없는 플래그를 일렀다(0.1.10 릴리스 smoke) | 메모: 결정 286 을 새로 적고 코드를 고쳤다(U144). 부록의 글은 그대로 맞다: 조율의 범위를 넓힌 것이 아니라 조율인 호출을 조율로 읽게 했다 | `core/gates/delegate.ts`, `test/fixtures/hook-commands.jsonl` |
 | 287 | 실행 기록(0.1.10 릴리스 smoke), 전환 조건 I2 · M3. 세 페이지는 smoke 를 적지 않는다 | 메모: 결정 287 이 결과와 0.1.11 에서 다시 잴 것을 적었다. 고칠 대목 없음 | `docs/smoke-run.md` "릴리스 smoke (0.1.10)", `docs/switch-conditions.md` I2 · M3 |
 | 288 | 용어집의 🗑️ 취소. Orca 에서는 failed 에 `--result cancelled` 인데, 뒤에 까닭이 붙은 것이 🚧 실패로 읽혔다 | 메모: 결정 288 을 새로 적고 코드를 고쳤다(U144). 낱말을 읽는 곳이 `isCancelledResult` 하나이고 뷰는 snapshot 이 줄인 낱말을 읽는다. 세 페이지에 고칠 대목 없음 | `core/contract/orca.ts` `isCancelledResult`, `core/graph/snapshot.ts` `resultFields`, `core/decision/waiters.ts`, `core/detect/pr/merge-close.ts` |
+| 289 | 용어집의 표시 표, `design.html` 의 표시 표, 대시보드 시안의 꼬리 줄. 결정 236 의 👀 리뷰만 있음이 세 글과 `item_status` 뷰의 행에 없었다 | 고침: 세 글에 👀 줄을 더했고 뷰의 행이 `reviewOnly` 를 싣는다(결정 289, U144) | `docs/glossary.md`, `docs/design.html`, `docs/dashboard/hallmark-final/index.html`, `core/contract/views.ts` `ItemStatusRow` |
+| 290 | 부록의 회귀 시나리오 `unit_lineage_complete`(결정 94 (사)). `worktree list` 가 빠뜨린 worktree 를 단위에 없는 것으로 읽었다 | 메모: 결정 290 을 새로 적고 코드를 고쳤다(U144). `start_unit` 과 같은 `worktree show` 읽기를 쓴다. 세 페이지에 고칠 대목 없음 | `core/start/lineage.ts` `shownWorktree` |
+| 291 | 결정 252 의 겹침 절. 비운 `watch.repos` 와 읽을 수 없는 설정이 모든 저장소로 읽혔다 | 메모: 결정 291 을 새로 적고 코드를 고쳤다(U144). 둘 다 아무 저장소도 읽지 않는다. 세 페이지에 고칠 대목 없음 | `core/brief/overlap.ts`, `claude-plugin/mcp/resources/ready.ts` `watchedRepos` |
+| 292 | 결정 254 의 모델 어긋남. 앞 세션의 뒤 행이 Task 의 새 시작과 비교됐다 | 메모: 결정 292 를 새로 적고 코드를 고쳤다(U144). 세 페이지에 고칠 대목 없음 | `core/models/drift.ts`, `core/models/table.ts` |
+| 293 | 결정 91 ① 의 `waiting_human`(Notification), 결정 232 ①. 쉬는 알림이 오너의 할 일로 올라왔다(0.1.10 릴리스 smoke) | 메모: 결정 293 을 새로 적고 코드를 고쳤다(U144). 권한 프롬프트와 질문 대화만 대기를 연다 | `core/session/record.ts` `WAITS`, `core/session/README.md` |
+| 294 | 부록의 패널 글(머리 행의 터미널 버튼과 더 보기 메뉴), 결정 169 · 198 · 200 · 205 | 고침: `design.html` 과 부록과 blog 와 용어집의 머리 행 글을 고쳤고 결정 169 · 198 · 200 · 205 에 가리킴을 달았다(결정 294, U144). 버튼은 새로 고침 하나이고 패널은 터미널을 열지 않는다 | `orca-plugin/panel/view.ts` `header`, `orca-plugin/panel/requests.ts`, `orca-plugin/main.ts`, `core/brief/panel.ts`, `scripts/permissions/policy.ts` |
+| 295 | 결정 247 의 낡은 세션 목록. 경로에 빈칸이 있는 `node` 나 진입점이 목록에서 빠졌다 | 메모: 결정 295 를 새로 적고 코드를 고쳤다(U144). 세 페이지에 고칠 대목 없음 | `core/install/stale-sessions.ts` `servers` |
 
 첫 빌드 시험 T1–T6 의 결과는 `test-outcomes.md` 의 행이다. 여섯 모두 통과다. T5 는 두 행이다: "워커는 자기 Run 에 Task 를 만들지 못한다"(U10)와, U93 이 Run 을 쥔 리드 세션에서 돌린 이중 시작 거부 · 세 번 실패 차단이다(`smoke-run.md` 3절 끝). 한 번 시작된 Task 는 실패 세기 앞에서 `already_dispatched` 로 멈추므로 버리는 항목 둘을 썼다. 컷오프 항목은 없는 저장소 선택자로 `worktree create` 를 세 번 실패시켜 `loop_detected{start_failed_3x}` 를 남겼고, 넷째는 `stopped` 였다. 이중 시작 항목은 둘째 호출이 `waiting already_dispatched` 였다. 코드는 결정 114 그대로다: 시작 함수는 `worker-start` 전에 그 Task 의 세는 실패를 세어 세 번이면 `stopped` 로 돌려주고(`core/start/start.ts:316-334`), 이어 Task 상태를 읽어 `dispatched` 이면 `already_dispatched` 로 돌려준다(`:341`).

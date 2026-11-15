@@ -11,8 +11,8 @@ import { whyFrom } from "../graph/ready.ts";
 import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import { type Choice, launch, localDay, POLICY, pairing, resolve, spend } from "../models/index.ts";
 import { recoverWrite } from "../orca/adapter.ts";
-import { isLocalHost } from "../orca/host-filter.ts";
 import { settled } from "../recover/recover.ts";
+import { shownWorktree } from "./lineage.ts";
 import { writeLocalSettings } from "./local-settings.ts";
 import { type NewTask, REPO_SELECTOR, type RefusalReason, type Role, type StartOutcome, type StartPorts, type StartRefusal, type StartRequest } from "./types.ts";
 
@@ -276,11 +276,10 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   // Orca cannot infer the repo from the cwd of a worktree its list omits, so create is told.
   let parentRepo: string | undefined;
   if (requester.worktreeId && !rows.some((w) => w.id === requester.worktreeId)) {
-    // `worktree list` can leave a live worktree out (measured 2026-11-15: a lead's own); `worktree show` finds it.
-    const shown = await orca.worktreeShow({ worktree: `id:${requester.worktreeId}` });
-    if (shown.ok && shown.value.id === requester.worktreeId && shown.value.isArchived === false &&isLocalHost(shown.value.hostId)) {
-      rows.push(shown.value);
-      if (shown.value.repoId) parentRepo = `id:${shown.value.repoId}`;
+    const shown = await shownWorktree(orca, requester.worktreeId);
+    if (shown) {
+      rows.push(shown);
+      if (shown.repoId) parentRepo = `id:${shown.repoId}`;
     }
   }
   const innermost = rows

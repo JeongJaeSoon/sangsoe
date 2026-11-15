@@ -74,9 +74,8 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; overflow-wrap
 #root { flex: none; padding: 0 0 var(--s2); container: panel / inline-size; }
 /* The header, and a detail screen's back line under it, stay at the top together (decision 225 (4)). */
 /* The bar (the header and, on a detail screen, its crumbs line) stays under the 리소스 sheet (z-index 3) so a
-   tall sheet never hides its own heading; while the header's menu is open the bar is lifted over it. */
+   tall sheet never hides its own heading. */
 .bar { position: sticky; top: 0; z-index: 2; background: var(--paper); }
-.bar:has(details.menu[open]) { z-index: 4; }
 /* The pinned 리소스 bar covers the viewport's bottom 37px: a focused row scrolls clear of it. */
 html { scroll-padding-bottom: 40px; }
 .top { display: flex; align-items: center; gap: var(--s2); height: 36px; padding: 0 var(--gx); border-bottom: 1px solid var(--rule); background: var(--paper); }
@@ -85,14 +84,9 @@ html { scroll-padding-bottom: 40px; }
 .brand small { color: var(--muted); font-weight: 400; font-size: var(--text-xs); }
 .fresh { color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
 .tools { margin-left: auto; display: flex; align-items: center; gap: 2px; }
-.ibtn { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--r2); background: none; color: var(--muted); cursor: pointer; list-style: none; }
-.ibtn::-webkit-details-marker { display: none; }
-.ibtn:hover, details[open] > .ibtn { background: var(--paper-3); color: var(--ink); }
+.ibtn { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--r2); background: none; color: var(--muted); cursor: pointer; }
+.ibtn:hover { background: var(--paper-3); color: var(--ink); }
 .ibtn .ic { width: 16px; height: 16px; }
-details.menu { position: relative; }
-.pop { position: absolute; right: 0; top: 32px; z-index: 3; display: flex; flex-direction: column; min-width: 208px; padding: var(--s1); background: var(--pop); color: var(--pop-ink); border: 1px solid var(--rule); border-radius: var(--r3); box-shadow: 0 4px 16px rgb(0 0 0 / 0.12); }
-.pop button { height: 28px; padding: 0 var(--s2); border: 0; border-radius: var(--r1); background: none; color: inherit; font: inherit; font-size: var(--text-sm); text-align: left; white-space: nowrap; cursor: pointer; }
-.pop button:hover { background: var(--paper-3); }
 .seg { display: flex; gap: 2px; margin: var(--s2) var(--gx) 0; padding: 2px; border: 1px solid var(--rule); border-radius: var(--r2); }
 .seg button { flex: 1 1 0; height: 24px; padding: 0 var(--s2); border: 0; border-radius: var(--r1); background: none; color: var(--muted); font: inherit; font-size: var(--text-sm); white-space: nowrap; cursor: pointer; }
 .seg button:hover { color: var(--ink); }

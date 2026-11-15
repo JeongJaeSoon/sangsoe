@@ -1,4 +1,14 @@
-import type { OrcaAdapter } from "../contract/orca.ts";
+import type { OrcaAdapter, WorktreeRow } from "../contract/orca.ts";
+import { isLocalHost } from "../orca/host-filter.ts";
+
+/**
+ * `worktree list` can leave a live worktree out (measured 2026-11-15: a lead's own); `worktree show`
+ * by id finds it. Only a local row that is not archived counts: a row with no host is not local.
+ */
+export async function shownWorktree(orca: Pick<OrcaAdapter, "worktreeShow">, id: string): Promise<WorktreeRow | undefined> {
+  const shown = await orca.worktreeShow({ worktree: `id:${id}` });
+  return shown.ok && shown.value.id === id && shown.value.isArchived === false && isLocalHost(shown.value.hostId) ? shown.value : undefined;
+}
 
 export type UnitLineage = {
   taskId: string;
@@ -49,7 +59,7 @@ export async function checkLineage(orca: OrcaAdapter, units: readonly ExpectedUn
       row.problems.push(`worktree 목록을 읽지 못했다 (${trees.error.code})`);
       continue;
     }
-    const tree = trees.value.rows.find((t) => t.id === w.value.workspace);
+    const tree = trees.value.rows.find((t) => t.id === w.value.workspace) ?? (await shownWorktree(orca, w.value.workspace));
     if (!tree) {
       row.problems.push("새 worktree 가 로컬 목록에 없다");
       continue;

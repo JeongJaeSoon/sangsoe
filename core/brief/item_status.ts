@@ -294,6 +294,7 @@ export const toStatusRow =(f: ItemFacts): ItemStatusRow => ({
   alarms: f.alarms,
   unclear: f.unclear,
   evidenceShort: f.evidenceShort,
+  reviewOnly: f.reviewOnly,
 });
 
 export const item_status: ItemStatusView = (input) => itemFacts(input).map(toStatusRow);

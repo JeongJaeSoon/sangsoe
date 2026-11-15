@@ -23,8 +23,8 @@ test("237: a lost login on a session holding no Dispatch is one waiting_human{ca
   await hook(w, "stop-failure", lost);
   assert.deepEqual(waits(w), [{ session: "s1", cause: "auth", excerpt: "Please run /login · API Error: 403 Forbidden" }]);
   await hook(w, "stop-failure", lost);
-  await hook(w, "notification", { session_id: "s1", notification_type: "idle_prompt", message: "Claude is waiting for your input" });
-  assert.equal(waits(w).length, 1, "the same stop is one wait: a repeat failure and the idle notice add nothing");
+  await hook(w, "notification", { session_id: "s1", notification_type: "elicitation_dialog", message: "Claude needs your input" });
+  assert.equal(waits(w).length, 1, "the same stop is one wait: a repeat failure and a dialog while it is open add nothing");
 });
 
 test("237: the session's next finished turn releases it", async () => {

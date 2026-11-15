@@ -14,13 +14,15 @@ const NODE = "/usr/local/bin/node";
 /** A host whose process table is `ps` and whose working directories are `cwd`; it records every call. */
 function processHost(ps: string, cwd: Record<number, string> = {}, psCode = 0) {
   const calls: string[] = [];
+  const timeouts: (number | undefined)[] = [];
   const host: Host = {
     env: { HOME: "/home/u" },
     nodeVersion: "26.13.0",
     exists: () => false,
     readText: () => "",
-    run(cmd, args, env): RunResult {
+    run(cmd, args, env, timeoutMs): RunResult {
       calls.push([cmd, ...args].join(" ") + (env?.LC_ALL ? ` (LC_ALL=${env.LC_ALL})` : ""));
+      timeouts.push(timeoutMs);
       if (cmd === "ps") return { code: psCode, stdout: psCode === 0 ? ps : "", stderr: psCode === 0 ? "" : "ps: denied" };
       if (cmd === "lsof") {
         const out = Object.entries(cwd).map(([pid, dir]) => `p${pid}\nfcwd\nn${dir}\n`);
@@ -29,7 +31,7 @@ function processHost(ps: string, cwd: Record<number, string> = {}, psCode = 0) {
       return { code: 127, stdout: "", stderr: "unexpected" };
     },
   };
-  return { host, calls };
+  return { host, calls, timeouts };
 }
 
 // Installed now: 0.1.5 at the stable path since 1h ago, 0.1.6-rc.1 at the rc path since 10 minutes ago.
@@ -53,7 +55,7 @@ test("decision 247: two servers started before their install are two rows and on
     // An editor open on a checkout's server.ts: its install would read as gone, but it is no server.
     `  106     10:00 /usr/bin/vim /home/u/src/sangsoe/claude-plugin/mcp/server.ts`,
   ].join("\n");
-  const { host, calls } = processHost(ps, { 101: "/home/u/work/acme-api", 102: "/home/u/work/acme-web" });
+  const { host, calls, timeouts } = processHost(ps, { 101: "/home/u/work/acme-api", 102: "/home/u/work/acme-web" });
   const lines = staleSessions(host, { installed, now: () => NOW });
   assert.deepEqual(lines, [
     "stale sessions: 2 sangsoe MCP servers run code older than what is installed now",
@@ -63,6 +65,31 @@ test("decision 247: two servers started before their install are two rows and on
   ]);
   // Read-only: the process table and the two stale servers' working directories, nothing else.
   assert.deepEqual(calls, ["ps -axo pid=,etime=,args= (LC_ALL=C)", "lsof -a -d cwd -Fpn -p 101,102"]);
+  // Both reads carry the 10 s limit: lsof can hang on an unreachable mount, and the end of install must not.
+  assert.deepEqual(timeouts, [10_000, 10_000]);
+});
+
+test("decision 247: a node or an entry whose path holds a space is still read as `node <entry>`", () => {
+  const spaced = "/home/u/Application Support/sangsoe/claude-plugin/mcp/server.js";
+  const ps = [
+    `  301     10:00 /Applications/My Node/bin/node ${OPT}`,
+    `  302     10:00 node ${spaced}`,
+    // A pager given two files is not a server, whatever the first file is called.
+    `  303     10:00 /usr/bin/less /tmp/node ${OPT}`,
+    `  304     10:00 ${NODE} --inspect ${OPT}`,
+  ].join("\n");
+  const seen: string[] = [];
+  const { host } = processHost(ps, { 301: "/home/u/a", 302: "/home/u/b" });
+  const lines = staleSessions(host, { installed: (e) => {
+      seen.push(e);
+      return null;
+    }, now: () => NOW });
+  assert.deepEqual(seen, [OPT, spaced]);
+  assert.deepEqual(lines.slice(0, 3), [
+    "stale sessions: 2 sangsoe MCP servers run code older than what is installed now",
+    "  pid 301  ~/a  runs an install that is gone  installed none",
+    "  pid 302  ~/b  runs an install that is gone  installed none",
+  ]);
 });
 
 test("decision 247: no server older than its install is one line, and no cwd read", () => {
