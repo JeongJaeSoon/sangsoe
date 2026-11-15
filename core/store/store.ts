@@ -476,7 +476,7 @@ export class Store {
     this.#tx(() => writeSample(this.#db, Date.parse(this.#now()), s));
   }
 
-  /** Decision 250: the load samples after `since` (epoch ms) for the panel's card; writes nothing. */
+  /** Decision 250: the load samples after `since` (epoch ms) for the panel's load rows; writes nothing. */
   loadSamples(since: number): StoredSample[] {
     return readSamples(this.#db, since);
   }

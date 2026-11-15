@@ -322,7 +322,7 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 /* The 리소스 section (decision 234): its own element under #root, so a panel repaint never touches an
-   open confirm list. One quiet fold; the gauges are the only drawing in it. */
+   open confirm list. One quiet fold; the load lines and the level strip are the only drawing in it. */
 /* Decision 253: the closed row's text sits centred in its 36px; open, the frame ends as far above the
    section's end as the title's text sits below its rule. */
 #res { --res-bar: 36px; position: sticky; bottom: 0; z-index: 3; height: calc(var(--res-bar) + 1px); margin: auto 0 0; padding: 0 var(--gx); border-top: 1px solid var(--rule); background: var(--paper); }
