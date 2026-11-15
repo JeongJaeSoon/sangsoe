@@ -4,6 +4,10 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+### Changes
+
+- **The lead's ready read names open PRs that change the same file (252).** Resource `ready` ends with a 겹침 section: one line per pair of open PRs on the same repository and base, with the files both change, so the land order is set before a merge makes the other one conflict. It is computed when read, from pr-monitor's open PRs and GitHub's file lists (read only for a base with two or more open PRs); nothing is stored or sent. A list that could not be read leaves its PR's pairs unjudged and says so.
+
 ## 0.1.8
 
 Everything since `v0.1.7`: #162 (decision 263 ⑩, `start_unit`), #163 (decision 265) and #164 (test-only). No release candidate was cut: there is no schema change and no panel change, and every change has tests; the live checks run on the installed stable.
