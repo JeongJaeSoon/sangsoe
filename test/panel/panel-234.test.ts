@@ -73,11 +73,11 @@ test("the fold is closed by default and reads nothing until opened", () => {
   assert.match(renderResources({ kind: "shown", view: view() }, true, NOW), /<details class="fold res-fold" open>/);
 });
 
-test("open: load gauges and the candidates with why; the counts of what sangsoe made are not drawn (decision 248)", () => {
+test("open: load rows and the candidates with why; the counts of what sangsoe made are not drawn (decision 248)", () => {
   const html = renderResBody({ kind: "shown", view: view() }, NOW);
   assert.match(html, /PC 부하 <span class="badge t-run">경고<\/span>/);
-  assert.match(html, /aria-label="CPU 1\.50 \/ 코어"><i class="t-warn" style="width:75%">/);
-  assert.match(html, /aria-label="메모리 여유 40%"><i class="" style="width:40%">/);
+  assert.match(html, /<span class="g-l">CPU<\/span><span><\/span><span class="g-v t-warn">1\.50 \/ 코어<\/span>/);
+  assert.match(html, /<span class="g-l">메모리 사용<\/span><span><\/span><span class="g-v ">60%<\/span>/);
   assert.match(html, /부하 높음: warn: load\/CPU 1\.50/);
   assert.doesNotMatch(html, /sangsoe 가 만든 것|<td>worktree<\/td>|13,201/);
   assert.match(html, /title="acme-u12: \/w\/a">acme-u12<\/td><td title="끝남 \(PR #12\)">끝남 \(PR #12\)<\/td><td class="num">2\.0 MB/);

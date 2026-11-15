@@ -356,15 +356,12 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
    summary, so the keyboard reaches them next and a press never toggles the fold. */
 .res-h { position: absolute; top: 0; right: var(--s5); height: 36px; display: flex; align-items: center; gap: var(--s3); font-size: var(--text-sm); }
 .res-h .stale { color: var(--bad); }
-.gauge { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; align-items: center; gap: var(--s3); min-height: 24px; font-size: var(--text-sm); }
+/* Decision 281: one PC 부하 row is a name, its line, and the value read now; every row is 24px high
+   and its line sits in the middle of that height, on the name's text line. */
+.gauge { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; align-items: center; gap: var(--s3); height: 24px; font-size: var(--text-sm); }
 .g-l { color: var(--ink-2); white-space: nowrap; }
-/* White like the rest (decision 222): an outlined track; the fill takes its tone's text colour. */
-.g-bar { height: 8px; padding: 1px; border: 1px solid var(--rule-2); border-radius: 4px; overflow: hidden; color: var(--ink-2); }
-.g-bar i { display: block; height: 100%; border-radius: 2px; background: currentColor; }
-.g-bar i.t-warn { color: var(--accent); }
-.g-bar i.t-bad { color: var(--bad); }
-.g-v { min-width: 6.5em; text-align: right; white-space: nowrap; }
-.g-v.wide { grid-column: 2 / 4; }
+.g-v { min-width: 6.5em; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.g-v.t-warn { color: var(--accent); }
 .g-v.t-bad { color: var(--bad); }
 .ep { margin: var(--s1) 0 0; font-size: var(--text-xs); color: var(--muted); }
 #res .pending { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--text-sm); }
@@ -374,7 +371,7 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .rng { display: inline-flex; gap: 2px; margin-left: auto; padding: 2px; font-size: var(--text-xs); line-height: 16px; border: 1px solid var(--rule); border-radius: var(--r2); }
 .rng button { height: 20px; padding: 0 var(--s2); border: 0; border-radius: var(--r1); background: none; color: var(--muted); font: inherit; font-weight: 400; cursor: pointer; }
 .rng button[aria-pressed="true"] { color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--rule-2); }
-/* White like the gauges (decision 222): an outlined track, a stretch nobody watched stays white. */
+/* White like the rest (decision 222): an outlined track, a stretch nobody watched stays white. */
 .band { display: block; width: 100%; height: 10px; margin-top: var(--s3); padding: 0; border: 1px solid var(--rule-2); border-radius: 2px; }
 .band .s-ok, .sw .s-ok { fill: var(--rule-2); }
 .band .s-warn, .sw .s-warn { fill: var(--accent); }
@@ -386,14 +383,11 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .sw rect { stroke: var(--rule-2); }
 button.link:disabled { color: var(--muted); cursor: default; }
 .band-ax { display: flex; justify-content: space-between; margin-top: 2px; color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
-/* Decision 250: the 24-hour card under the gauges, on their grid so the labels line up. White with a
-   1px rule (decision 222); the line is a quiet stroke, the dashed warn line the band's warn colour. */
-.spark { margin-top: var(--s2); padding: var(--s1) var(--s3) 0; border: 1px solid var(--rule); border-radius: var(--r2); }
-.sp { display: block; width: 100%; height: 24px; overflow: visible; }
+/* Decisions 250 · 281: a row's line is a quiet stroke that stays inside the row's height. */
+.sp { display: block; width: 100%; height: 16px; }
 .sp-line { fill: none; stroke: var(--ink-2); stroke-width: 1.25px; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.sp-th { stroke: var(--accent); stroke-width: 1px; stroke-dasharray: 2 3; opacity: 0.6; vector-effect: non-scaling-stroke; }
-.sp-min, .sp-none { color: var(--muted); font-size: var(--text-xs); }
-.sp-none { grid-column: 2 / 4; }
+.sp-none, .sp-from span { color: var(--muted); font-size: var(--text-xs); }
+.sp-from { height: 16px; }
 .ep.t-bad { color: var(--bad); }
 .unread { color: var(--bad); }
 /* One line per row at every width: a long name or reason is cut, its whole text in the cell's title. */

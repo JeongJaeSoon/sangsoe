@@ -46,7 +46,7 @@ test("reading: each part says what is being read until it comes, and a part that
   assert.match(none, /<h3>정리 후보<\/h3><p class="pending" role="status">끝난 worktree 를 GitHub·Orca 에 묻는 중…<\/p>/);
   const one: Got = { load: ok("load") };
   const html = renderResBody({ kind: "reading", got: one }, NOW);
-  assert.match(html, /aria-label="CPU 0\.20 \/ 코어"/, "the load part is drawn");
+  assert.match(html, /<span class="g-l">CPU<\/span>.*?<span class="g-v [^"]*">0\.20 \/ 코어<\/span>/, "the load part is drawn");
   assert.doesNotMatch(html, /부하를 읽는 중/);
   assert.match(html, /끝난 worktree 를 GitHub·Orca 에 묻는 중…/);
   assert.doesNotMatch(html, /data-res="ask"/, "nothing to clean up while the candidates are read");
@@ -56,7 +56,7 @@ test("a refresh keeps the last read in place until each part's new answer comes,
   const before = { ...parts.load.load.value, loadPerCpu: 0.9 };
   const last = { ...parts.made, ...parts.candidates, ...parts.load, load: { ok: true, value: before }, at: AT } as unknown as ResView;
   const html = renderResBody({ kind: "reading", got: { load: ok("load") }, last }, NOW);
-  assert.match(html, /aria-label="CPU 0\.20 \/ 코어"/, "a part that came is drawn fresh");
+  assert.match(html, /<span class="g-l">CPU<\/span>.*?<span class="g-v [^"]*">0\.20 \/ 코어<\/span>/, "a part that came is drawn fresh");
   assert.doesNotMatch(html, /0\.90/, "the last read never covers a fresh answer");
   assert.doesNotMatch(html, /읽는 중…<\/p>/, "no part drops to a reading row");
   assert.doesNotMatch(html, /sangsoe 가 만든 것/);
