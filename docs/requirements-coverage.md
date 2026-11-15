@@ -4,13 +4,13 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 
 상태: 🟢 그 시험이 요구 전체를 main 에서 지킨다 · 🟡 일부만 지킨다(빠진 것을 적었다) · 🔴 지키는 시험이 없다 · `PR #N`/`U<번호>` 그 단위가 가져온다.
 
-집계: R 23행 · 🟢 11 · 🟡 9 · 🔴 3 · 단위 0
+집계: R 23행 · 🟢 10 · 🟡 10 · 🔴 3 · 단위 0
 
 ## R-01–R-23
 
 | 요구 | 지켜야 할 것 | 시험 파일 | 상태 |
 |---|---|---|---|
-| R-01 | hook 등록 경로의 존재·실행 비트·공개 위생 검사가 실제로 실패할 수 있음 | `test/hooks-registered.test.ts`, `test/layout.test.ts`, `test/public-hygiene.test.ts` | 🟢 공개 위생 검사가 실제로 실패할 수 있음을 패턴 없이 도는 시험 둘이 고정한다(결정 267). 진짜 패턴의 검사는 CI 의 `npm test` 가 저장소 secret 으로 돌리고, secret 이 없는 동안(오너가 만들기 전, fork 의 PR)은 건너뛰며 job 요약이 그 건너뜀을 적는다 |
+| R-01 | hook 등록 경로의 존재·실행 비트·공개 위생 검사가 실제로 실패할 수 있음 | `test/hooks-registered.test.ts`, `test/layout.test.ts`, `test/public-hygiene.test.ts` | 🟡 hook 경로와 실행 비트는 지킨다. 공개 위생 검사는 시험이 되었고 그 코드가 실패할 수 있음을 패턴 없이 도는 시험 둘이 고정한다(결정 267). 빠진 것: 진짜 패턴은 저장소 secret 으로 받는데 그 secret 이 아직 없어, main 의 CI 는 그 검사를 건너뛴다(job 요약이 건너뜀을 적는다). 오너가 secret 을 만들고 main 의 run 이 건너뛰지 않은 것을 본 뒤 🟢 로 고친다 |
 | R-02 | 간선이 일급이고 읽지 못한 선행은 "모름" | `test/graph/edges.test.ts`, `test/graph/regressions.test.ts` | 🟢 |
 | R-03 | 머지 사전 확인·실행·거부 문구가 한 함수, 입구가 달라도 같은 결과 | `test/land/entrances.test.ts`, `core/land/land.test.ts` | 🟢 |
 | R-04 | 리뷰 근거 네 칸, 작성자가 자기 통과를 못 씀, 리뷰 못 한 실행은 통과 아님 | `core/land/land.test.ts`, `core/verify/evidence.test.ts`, `core/approve/review-verdict.test.ts` | 🟢 |

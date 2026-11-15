@@ -58,6 +58,12 @@ function tracked(): Source[] {
   });
 }
 
+/** The whole check: every tracked file against one pattern source. Null when the source is not usable. */
+function scan(raw: string): string[] | null {
+  const pattern = compile(raw);
+  return pattern ? hits(tracked(), pattern) : null;
+}
+
 test("B4: the check can fail, and a failure names file:line without the match or the pattern", () => {
   const fixture: Source[] = [
     { path: "docs/a.md", text: "fine\nmentions Hygiene-Fixture-Word here\nfine" },
@@ -82,15 +88,15 @@ test("B4: the check can fail, and a failure names file:line without the match or
   assert.equal(compile("  \n"), null);
 });
 
+// The same `scan` the real check below runs, so what is pinned here is that check with another word.
 test("B4: the scan reads the real tracked tree: it finds this file's own fixture word and nothing else", () => {
-  const files = tracked();
-  const paths = new Set(files.map((f) => f.path));
+  const paths = new Set(tracked().map((f) => f.path));
   for (const want of [SELF, "package.json", ".github/workflows/ci.yml"]) assert.ok(paths.has(want), `the scan does not read ${want}`);
-  const pattern = compile("hygiene-fixture-word");
-  assert.ok(pattern);
-  const found = hits(files, pattern);
+  const found = scan("hygiene-fixture-word\n");
+  assert.ok(found);
   assert.ok(found.length >= 3, `the fixture word in ${SELF} was not found: ${found.length} line(s)`);
   assert.deepEqual(found.filter((f) => !f.startsWith(`${SELF}:`)), [], "the made-up fixture word is written elsewhere in the tree");
+  assert.equal(scan("("), null);
 });
 
 const source = process.env[ENV] ?? "";
@@ -99,10 +105,9 @@ test(
   "B4: no tracked file matches the internal-name pattern",
   { skip: source.trim() === "" ? `${ENV} is unset: the pattern lives outside this public repository (CI gets it from a secret)` : false },
   () => {
-    const pattern = compile(source);
+    const found = scan(source);
     // assert.ok with a fixed message: a thrown RegExp error or a diff would print the pattern.
-    assert.ok(pattern, `${ENV} is not a usable regular expression (it does not compile, it holds a line break, or it matches the empty string)`);
-    const found = hits(tracked(), pattern);
+    assert.ok(found, `${ENV} is not a usable regular expression (it does not compile, it holds a line break, or it matches the empty string)`);
     assert.ok(found.length === 0, report(found));
   },
 );
