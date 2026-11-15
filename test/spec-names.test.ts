@@ -165,6 +165,9 @@ const ALLOWED = new Map<string, string>([
   ["cli:priority set:design-only", "160"],
   // The lead's own task-update close, the done_blockers close point design names no gate for.
   ["gate:done-blockers:code-only", "212"],
+  // Decision 263: unit_close and its row, built after design.html's last edit.
+  ["event:unit_closed:code-only", "263"],
+  ["event-glossary:unit_closed:code-only", "263"],
 ]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };
@@ -188,7 +191,7 @@ test("every category reads a non-empty name list from both sides", () => {
 });
 
 /** Tools built after design.html's last edit, each with its decision; design.html counts them when it next folds that decision in. */
-const TOOLS_NOT_IN_DESIGN = new Map<string, string>();
+const TOOLS_NOT_IN_DESIGN = new Map<string, string>([["unit_close", "263"]]);
 
 test("design.html states the MCP tool count the code has", () => {
   for (const t of TOOLS_NOT_IN_DESIGN.keys()) assert.ok(toolCode.has(t), `${t} is not a tool any more`);

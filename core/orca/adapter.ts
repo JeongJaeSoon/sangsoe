@@ -11,6 +11,7 @@ import type {
   PortRow,
   TaskRow,
   WorkerPlacement,
+  WorktreeRow,
   WriteOptions,
 } from "../contract/orca.ts";
 import { type CommandName, ORCA_COMMANDS } from "./commands.ts";
@@ -86,14 +87,14 @@ export function parseEnvelope(r: ExecResult, write: boolean): OrcaResult<unknown
  * only with the same request id. `absent` is not proof nothing happened, so it is not resent.
  */
 export async function recoverWrite<T>(
-  orca: OrcaAdapter,
+  orca: Pick<OrcaAdapter, "requestShow">,
   requestId: string,
-  replay: (o: WriteOptions) => Promise<OrcaResult<T>>,
+  replay: (o: WriteOptions, state: "completed" | "pending") => Promise<OrcaResult<T>>,
 ): Promise<OrcaResult<T>> {
   const shown = await orca.requestShow({ request: requestId });
   if (!shown.ok) return { ok: false, error: shown.error, requestId };
   const state: unknown = shown.value?.state;
-  if (state === "completed" || state === "pending") return replay({ retryRequest: requestId });
+  if (state === "completed" || state === "pending") return replay({ retryRequest: requestId }, state);
   const message = shown.value?.interpretation ?? `request-show answered state ${JSON.stringify(state)}`;
   return { ok: false, error: { code: state === "absent" ? "request_absent" : "unexpected_shape", message }, requestId };
 }
@@ -143,6 +144,9 @@ export function inboxRow(row: Json): InboxMessage {
     handled: row.read === 1 || row.read === true || row.handled === true,
     ...(typeof row.body === "string" ? { body: row.body } : {}),
     ...(Object.keys(payload).length > 0 ? { payload } : {}),
+    ...(typeof row.created_at === "string" ? { createdAt: row.created_at } : {}),
+    ...(typeof row.run_id === "string" ? { runId: row.run_id } : {}),
+    ...(typeof row.sender_pane_key === "string" ? { senderPane: row.sender_pane_key } : {}),
   };
 }
 
@@ -314,6 +318,13 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
 
     worktreeList: (a) =>
       local("worktreeList", "worktrees", "hostId", "id", { flags: { repo: a.repo, limit: a.limit } }, (row) => row.instanceId),
+    worktreeShow: async (a) => {
+      const r = await shaped<Json>("worktreeShow", has("worktree", isObject), { flags: { worktree: a.worktree } });
+      if (!r.ok) return r;
+      const w = r.value.worktree as Json;
+      if (typeof w.id !== "string" || typeof w.path !== "string") return unexpected("orca worktree show: no worktree id and path", r.value);
+      return { ok: true, value: w as unknown as WorktreeRow };
+    },
     worktreePs: (a) =>
       local("worktreePs", "worktrees", "hostId", "worktreeId", { flags: { limit: a.limit, "agent-wait": a.agentWait } }),
     worktreeRm: (a) => run("worktreeRm", { flags: { worktree: a.worktree, "run-hooks": true, "delete-branch": true } }),
@@ -329,6 +340,8 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     },
     terminalList: (a) => local("terminalList", "terminals", "executionHostId", "handle", { flags: { worktree: a.worktree } }),
     terminalClose: (a) => run("terminalClose", { flags: { terminal: a.terminal } }),
+    terminalSend: (a, o) =>
+      run("terminalSend", { flags: { terminal: a.terminal, text: a.text, enter: a.enter, "wait-submit": a.waitSubmit } }, o),
     repoShow: async (a) => {
       const r = await shaped<Json>("repoShow", has("repo", isObject), { flags: { repo: a.repo } });
       if (!r.ok) return r;

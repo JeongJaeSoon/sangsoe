@@ -87,6 +87,7 @@ export const OWN_TYPES = [
   "todo_due",
   "trigger_unclear",
   "turn_ended",
+  "unit_closed",
   "unit_started",
   "unmapped_reviewer",
   "waiting_human",

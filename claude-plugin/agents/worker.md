@@ -45,7 +45,7 @@ effort: medium
 
 ## 묻고 알리는 길
 
-- 판단이 필요하면 Orca `ask` 로 묻고 턴을 끝낸다. 답은 Orca 메시지로 온다.
+- 판단이 필요하면 `orca orchestration ask` 로 묻고 턴을 끝낸다. 답은 Orca 메시지로 온다.
 - 계속할 수 없으면 escalation 을 보낸다: 무엇이 막혔는지, 선택지와 추천, 무엇을 기다리는지.
 - 보고 주소는 Orca 가 준 Dispatch·Run 이다. 터미널 핸들(`term_`)로 보내지 않는다.
 
