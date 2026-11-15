@@ -89,6 +89,23 @@ export const GH_POLICY: Readonly<Record<string, Entry>> = {
   api: { kind: "deny", why: "gh api reaches merge and write endpoints; sangsoe's own calls run in its process" },
 };
 
+/**
+ * `sangsoe` commands the skills, agents and gates tell a session to run, keyed by the words after
+ * `sangsoe`. Read-only verbs only (decision 265): what installs, lands, approves or writes an item
+ * runs from the owner's hand or an MCP tool, never from a rule.
+ */
+export const SANGSOE_POLICY: Readonly<Record<string, Entry>> = {
+  "pressure wait": { kind: "allow" },
+  brief: { kind: "allow" },
+  todo: { kind: "allow" },
+  doctor: { kind: "allow" },
+  install: { kind: "deny", why: "writes settings and registers the plugin; the owner runs it" },
+  uninstall: { kind: "deny", why: "removes registrations and the rules sangsoe added; the owner runs it" },
+  "plugin approve": { kind: "deny", why: "approval is the owner's act" },
+  land: { kind: "deny", why: "merges; sessions land through the land MCP tool, which checks the verdict first" },
+  "item new": { kind: "deny", why: "writes an item; sessions use the item_create MCP tool" },
+};
+
 /** Literal `exec("gh"|"git", [...])` calls in sangsoe's code, keyed by command and first non-flag word. */
 export const OTHER_EXEC: Readonly<Record<string, string>> = {
   "gh api": "land, doctor and the monitors read GitHub in sangsoe's process",
