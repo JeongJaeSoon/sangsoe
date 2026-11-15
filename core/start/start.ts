@@ -273,11 +273,14 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   // runs in: with worktrees nested under a checkout, the outer one also contains the cwd.
   const cwd = real((ports.cwd ?? (() => process.cwd()))());
   const rows = [...trees.value.rows];
+  // Orca cannot infer the repo from the cwd of a worktree its list omits, so create is told.
+  let parentRepo: string | undefined;
   if (requester.worktreeId && !rows.some((w) => w.id === requester.worktreeId)) {
     // `worktree list` can leave a live worktree out (measured 2026-11-15: a lead's own); `worktree show` finds it.
     const shown = await orca.worktreeShow({ worktree: `id:${requester.worktreeId}` });
     if (shown.ok && shown.value.id === requester.worktreeId && shown.value.isArchived === false &&isLocalHost(shown.value.hostId)) {
       rows.push(shown.value);
+      if (shown.value.repoId) parentRepo = `id:${shown.value.repoId}`;
     }
   }
   const innermost = rows
@@ -346,7 +349,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       entity_id: id,
     });
   }
-  const repo = req.repo ?? storedRepo(store, taskId);
+  const repo = req.repo ?? storedRepo(store, taskId) ?? parentRepo;
 
   // T5: count this Task's failed start attempts; stop at the third.
   const failures = store

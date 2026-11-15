@@ -117,7 +117,9 @@ function orcaProfileCheck(host: Host, root: string, current: ClaudeProfile): Che
 }
 
 // Decisions 198, 221 and 228: one read-only row, never `fail`. The profile Orca starts workers with is the one that matters.
-function settingsChecks(host: Host, current: ClaudeProfile): Check[] {
+export function settingsChecks(host: Host, current: ClaudeProfile): Check[] {
+  const home = host.env.HOME;
+  if (!home) return [{ state: "warn", name: "permissions", detail: "HOME is unset, so the Read rules for sangsoe's own state cannot be checked", fix: "set HOME, then run sangsoe doctor again" }];
   const dir = orcaProfile(host)?.dir ?? current.dir;
   const path = join(dir, "settings.json");
   let settings: unknown;
@@ -126,7 +128,7 @@ function settingsChecks(host: Host, current: ClaudeProfile): Check[] {
   } catch {
     settings = undefined;
   }
-  const perms = permissionsRow(path, settings, sangsoeRules(host.env.HOME ?? ""));
+  const perms = permissionsRow(path, settings, sangsoeRules(home));
   if (perms.all) return [{ state: "ok", name: "permissions", detail: perms.detail }];
   const land = landAllowClause(settings === undefined ? undefined : landAllowRules(settings));
   return [{ state: "warn", name: "permissions", detail: `${perms.detail}: sangsoe's sessions may stop on permission prompts${land}`, fix: PERMISSIONS_DOCTOR_FIX }];

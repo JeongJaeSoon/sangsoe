@@ -1195,6 +1195,31 @@ test("the parent worktree missing from `worktree list` is read with `worktree sh
   assert.equal(flag(h.named("worktree create")[0] ?? [], "parent-worktree"), `id:${PARENT_TREE}`);
 });
 
+test("a parent that only `worktree show` returns passes its repo to create, which Orca refuses without one", async () => {
+  const { parent, list, show } = listOmittingParent();
+  const create = (args: readonly string[]) =>
+    args.includes("--repo")
+      ? ok({ worktree: { id: CHILD_TREE, path: CHILD_PATH, repoId: "repo-0001" } })
+      : fail("invalid_argument", "Missing repo selector. Pass --repo or run from inside an Orca-managed worktree.");
+  const h = harness({ replies: { "worktree-list": list, "worktree-show": show(parent), "worktree-create": create } });
+  const out = await start(h);
+  assert.equal(out.kind, "started", JSON.stringify(out));
+  assert.equal(flag(h.named("worktree create")[0] ?? [], "repo"), `id:${parent.repoId}`);
+
+  const given = harness({ replies: { "worktree-list": list, "worktree-show": show(parent), "worktree-create": create } });
+  assert.equal((await start(given, request({ repo: TARGET }))).kind, "started");
+  assert.equal(flag(given.named("worktree create")[0] ?? [], "repo"), TARGET, "a named repo wins");
+
+  const recorded = harness({ replies: { "worktree-list": list, "worktree-show": show(parent), "worktree-create": create } });
+  recorded.store.append({ type: "item_extra_set", source: "core:item", payload: { task: NEW_TASK, repo: "path:/home/dev/src/web" }, entity: "task", entity_id: NEW_TASK });
+  assert.equal((await start(recorded, request({ task: { id: NEW_TASK } }))).kind, "started");
+  assert.equal(flag(recorded.named("worktree create")[0] ?? [], "repo"), "path:/home/dev/src/web", "a Task's recorded repo beats the parent's");
+
+  const listed = harness();
+  assert.equal((await start(listed)).kind, "started");
+  assert.ok(!(listed.named("worktree create")[0] ?? []).includes("--repo"), "a parent found in the list adds no --repo");
+});
+
 test("a parent that only `worktree show` returns is refused when it is archived, on another host, another worktree, or unreadable", async () => {
   const { parent, list, show } = listOmittingParent();
   const cases: [string, () => ExecResult][] = [

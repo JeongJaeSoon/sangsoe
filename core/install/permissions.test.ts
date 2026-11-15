@@ -3,6 +3,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, sy
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, test } from "node:test";
+import { settingsChecks } from "./doctor.ts";
 import type { Host } from "./host.ts";
 import {
   type Files,
@@ -381,6 +382,22 @@ test("decision 265: no rule starts a session, deletes, or lets gh write; Read ru
     if (r.startsWith("Read(")) assert.match(r, /^Read\(\/\/home\/acme\/(\.config|\.local\/share)\/sangsoe\/\*\*\)$/, r);
     else assert.match(r, /^(mcp__plugin_sangsoe_sangsoe|Bash\((orca|gh) [a-z -]+(:\*| --terminal term_\*)\))$/, r);
   }
+});
+
+test("a home containing a replacement pattern is written into the Read rules as it is", () => {
+  for (const home of ["/h/$&x", "/h/$1x", "/h/a$$b", "/h/$`x", "/h/$'x"]) {
+    const reads = sangsoeRules(home).filter((r) => r.startsWith("Read("));
+    assert.deepEqual(reads, [`Read(/${home}/.config/sangsoe/**)`, `Read(/${home}/.local/share/sangsoe/**)`], home);
+  }
+});
+
+test("doctor warns that the permissions row cannot be checked when HOME is unset, instead of counting rules built from an empty home", () => {
+  const { host } = tempHome();
+  const checks = settingsChecks({ ...host, env: {} }, { dir: "/nowhere/.claude" });
+  assert.equal(checks.length, 1);
+  assert.equal(checks[0]?.state, "warn");
+  assert.match(checks[0]?.detail ?? "", /HOME is unset/);
+  assert.doesNotMatch(checks[0]?.detail ?? "", /\d+ of \d+/);
 });
 
 test("decision 263 and 265: terminal close, read and send are ruled by handle only, never bare", () => {
