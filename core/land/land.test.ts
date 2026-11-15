@@ -437,8 +437,9 @@ test("--dry-run runs the same judgment and writes nothing (R-03)", async () => {
 });
 
 // R-06 (decision 268): land schedules a merge at GitHub and keeps no exclusive section of its own, so
-// a refused PR and a PR left waiting for approval hold nothing the next PR of the repo could wait on.
-test("R-06: a refused PR and a held PR hold nothing: the next PR of the same repo lands", async () => {
+// a refused PR, a PR left waiting for approval and a merge GitHub refused hold nothing the next PR of
+// the repo could wait on.
+test("R-06: a refused PR, a held PR and a refused merge hold nothing: the next PR of the same repo lands", async () => {
   const forPr = (n: number, rules: unknown[]) => ({
     [`repos/${REPO}/pulls/${n}`]: ok(pull(n)),
     [`repos/${REPO}/pulls/${n}/files?per_page=100&page=1`]: ok([{ filename: "core/a.ts", patch: "@@ -1 +1 @@\n-a\n+b" }]),
@@ -455,12 +456,17 @@ test("R-06: a refused PR and a held PR hold nothing: the next PR of the same rep
   rowsOf(12, ["test"]);
   rowsOf(13, ["test", "run"]);
   rowsOf(14, ["test", "run"]);
+  rowsOf(11, ["test", "run"]);
   const before = store.events().length;
 
   const refused = await land({ repo: REPO, pr: 12 }, refusedOrHeld.deps);
   assert.equal(refused.ok ? "" : refused.refusal.code, "evidence_missing");
   const held = await land({ repo: REPO, pr: 13 }, refusedOrHeld.deps);
   assert.ok(held.ok && held.value.action === "merge_on_approval", JSON.stringify(held));
+  // A merge GitHub refuses is the one call an exclusive section would wrap: it leaves nothing held either.
+  const unmerged = harness(forPr(11, STRICT), false);
+  const failed = await land({ repo: REPO, pr: 11 }, { ...unmerged.deps, openStore: refusedOrHeld.deps.openStore });
+  assert.equal(failed.ok ? "" : failed.refusal.code, "merge_refused");
 
   // The same store, with the repository now asking for a review and CI: nothing of #12 or #13 is in the way.
   const next = harness(forPr(14, STRICT));
@@ -469,14 +475,16 @@ test("R-06: a refused PR and a held PR hold nothing: the next PR of the same rep
   assert.ok(landed.ok && landed.value.action === "auto_merge", JSON.stringify(landed));
   assert.deepEqual(next.merges, [{ repo: REPO, pr: 14, head: HEAD }]);
 
-  // What the three calls wrote: one row each, about its own PR. No lock, lease or queue row exists to go stale.
+  // What the four calls wrote: one row each, about its own PR. No lock, lease or queue row exists to go stale.
   const written = store.events().slice(before);
   assert.deepEqual(written.map((e) => [e.type, e.payload.pr, e.payload.reason ?? ""]), [
     ["land_failed", `${REPO}#12`, "evidence_missing:run"],
     ["land_requested", `${REPO}#13`, "merge_on_approval"],
+    ["land_failed", `${REPO}#11`, "merge_refused"],
     ["land_requested", `${REPO}#14`, ""],
   ]);
   assert.deepEqual(refusedOrHeld.merges, [], "neither the refused nor the held PR reached GitHub's merge");
+  assert.equal(unmerged.merges.length, 1, "the third reached it and was refused there");
 });
 
 test("an unreadable config is V3 and fails closed", async () => {

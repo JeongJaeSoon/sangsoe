@@ -5,10 +5,14 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 // R-21 (decision 268) is about notes, and notes live outside sangsoe (D-2). The part sangsoe can keep
-// is about its own code: every place shipped code removes something for good is listed here with
-// what it removes and why that is allowed. A new one fails this test until it is moved to the trash
-// or listed with its reason. Three kinds are found: a node:fs delete, a `rm` word handed to an exec
-// (docker's), and a call of Orca's `worktree rm`.
+// is about its own code: the places shipped code deletes data for good (files, Docker resources,
+// worktrees, rows of its own store) are listed here with what each removes and why that is allowed.
+// The scan finds four spellings: a node:fs delete, a `rm` word handed to an exec (docker's), a call
+// of Orca's `worktree rm`, and an SQL `DELETE FROM`. A new removal in one of those spellings fails
+// this test until it is moved to the trash or listed with its reason. Another spelling (a shell
+// string, another CLI's delete command) is not seen: add its pattern here with it.
+// Not counted, because they delete no data: closing a terminal, and unregistering a plugin at
+// uninstall (the files it registered are a copy of the release).
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SHIPPED = ["core", "cli", "orca-plugin", "claude-plugin"];
 const SKIP = new Set(["node_modules", "vendor", "dist"]);
@@ -20,6 +24,7 @@ const KINDS = {
   argv: /["'`]rm["'`]/g,
   // A call of Orca's worktree removal (`worktree rm --run-hooks --delete-branch`); its declaration has no dot.
   worktree: /\.worktreeRm\s*\(/g,
+  sql: /\bDELETE\s+FROM\b/gi,
 } as const;
 type Kind = keyof typeof KINDS;
 
@@ -31,8 +36,9 @@ const LISTED: Readonly<Record<string, Partial<Record<Kind, number>> & { why: str
   "core/install/stage.ts": { fs: 2, why: "orca-plugin/vendor, the staged copy of core it builds" },
   "core/reaper/docker.ts": { argv: 1, why: "a container, volume, network or image whose id a session recorded with resource_record (R-12), after the in-use checks; a volume's data goes with it" },
   "core/orca/commands.ts": { argv: 1, why: "the one place Orca's `worktree rm` is spelled; its callers are the two worktree rows below" },
-  "core/reaper/round.ts": { worktree: 1, why: "a finished unit's worktree after every REAPER check passed (clean tree, merged or closed work); files git ignores go with it" },
-  "core/start/start.ts": { worktree: 1, why: "the worktree a failed start made a moment ago, only when the shell it recorded is the one terminal there" },
+  "core/reaper/round.ts": { worktree: 1, why: "a finished unit's worktree after every REAPER check passed (clean tree; work merged or closed, or the owner confirmed a card with no trace); its branch and the files git ignores go with it, and the repository's archive hook runs" },
+  "core/start/start.ts": { worktree: 1, why: "the worktree a failed start made a moment ago, with its branch, only when its one terminal is the shell the start recorded or it has no terminal at all" },
+  "core/store/samples.ts": { sql: 1, why: "sangsoe's own load samples older than 24 hours (decision 241); the event table itself refuses a delete" },
 };
 
 function sources(dir: string): string[] {
@@ -65,4 +71,5 @@ test("R-21: the scan sees each kind of removal it claims to list", () => {
   assert.equal(seen("argv", 'exec("docker", [kind, "rm", ref]); path: ["worktree", "rm"]'), 2);
   assert.equal(seen("argv", 'const s = "worktree rm fails"; "rmdir"'), 0);
   assert.equal(seen("worktree", "await d.orca.worktreeRm({ worktree }); worktreeRm: (a) => run(); worktreeRm(a: { worktree: string }): Promise<x>;"), 1);
+  assert.equal(seen("sql", 'db.prepare("DELETE FROM load_sample WHERE at <= ?"); db.exec(`delete\n  from t`); "BEFORE DELETE ON event"'), 2);
 });

@@ -15,7 +15,7 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 | R-03 | 머지 사전 확인·실행·거부 문구가 한 함수, 입구가 달라도 같은 결과 | `test/land/entrances.test.ts`, `core/land/land.test.ts` | 🟢 |
 | R-04 | 리뷰 근거 네 칸, 작성자가 자기 통과를 못 씀, 리뷰 못 한 실행은 통과 아님 | `core/land/land.test.ts`, `core/verify/evidence.test.ts`, `core/approve/review-verdict.test.ts` | 🟢 |
 | R-05 | 머지·main 기록은 저장소 단위 하나, 재실행으로 가려진 실패를 따로 센다 | `core/land/land.test.ts` | 🟡 `main_red` 동결과 `repo_level_main` 은 있고 재실행으로 가려진 실패 세기는 pr-monitor(U16) 몫 |
-| R-06 | 독점 구간을 거부·보류 PR 이 쥐지 않고 보유에 stale 상한 | `core/land/land.test.ts` | 🟢 sangsoe 의 land 는 머지 예약(`gh pr merge --auto`)이라 독점 구간이 없다. 거부된 PR 과 승인을 기다리는 PR 뒤에 같은 저장소의 다음 PR 이 그대로 머지 예약되고, 세 호출이 쓴 행은 자기 PR 의 `land_failed` · `land_requested` 하나씩뿐임을 시험이 본다(결정 268). 쥐는 것이 없으므로 stale 상한을 둘 대상도 없다 |
+| R-06 | 독점 구간을 거부·보류 PR 이 쥐지 않고 보유에 stale 상한 | `core/land/land.test.ts` | 🟢 sangsoe 의 land 는 머지 예약(`gh pr merge --auto`)이라 독점 구간이 없다. 거부된 PR, 승인을 기다리는 PR, GitHub 이 머지를 거부한 PR 뒤에 같은 저장소의 다음 PR 이 그대로 머지 예약되고, 네 호출이 쓴 행은 자기 PR 의 `land_failed` · `land_requested` 하나씩뿐임을 시험이 본다(결정 268). 쥐는 것이 없으므로 stale 상한을 둘 대상도 없다 |
 | R-07 | 상태는 구조 신호가 정본, 판별 못 하면 행동 0, 시작 실패와 일부러 쉼을 구분 | `core/detect/orca/judge.test.ts` | 🟢 |
 | R-08 | 보낸 쪽이 잘림·수신자 없음 실패를 받음, 받는 쪽 하나에 소비자 하나, 재개 시 대기를 다시 붙임 | `test/decision/notify.test.ts`, `test/orca-boundary.test.ts`, `test/session/hooks.test.ts` | 🟡 수신자 없음(`send_failed`)·소비자 하나·재개는 시험한다. 보낸 글이 잘린 것을 보낸 쪽이 받는 시험은 없다 |
 | R-09 | hook 은 이벤트당 프로세스 하나, 합치기 표 시험, 실제 명령 모음으로 오탐·미탐 | `test/hooks-registered.test.ts`, `core/gates/merge.test.ts`, `core/gates/gates.test.ts`, `cli/commands/hook.test.ts` | 🟢 |
@@ -29,8 +29,8 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 | R-17 | Orca 가 하는 일은 Orca 로, 기대 동작은 버전 변경 시 시험, 호환 경로 없음 | `core/checks/checks.test.ts`, `test/orca-boundary.test.ts`, `test/lineage/real-orca.test.ts` | 🟢 |
 | R-18 | 감시는 할 일이 생기는 전이에만 깨움, 자동화마다 목적·사용 증거·비용·끄는 명령 | `core/detect/run.test.ts`, `core/detect/orca/judge.test.ts` | 🟡 전이마다 한 번(에피소드·멈춤 키)은 시험한다. monitor 마다 목적·사용 증거·비용·끄는 명령을 한 목록에 두고 세는 시험이 없다 |
 | R-19 | 역할·모델이 시작 기록에 남고 역할 줄 없는 시작은 오류, 감독 비용 측정 | `test/session/hooks.test.ts`, `test/judgment-layer.test.ts` | 🟡 역할·모델과 역할 줄 없는 세션(`worker_stuck{no_role_line}`)은 시험한다. 머지된 PR 한 건당 컨텍스트 측정(reflect)은 시험이 없다 |
-| R-20 | 남의 스택·서비스 대상 단위는 보내기 전 읽기 전용 사전 확인, LAND 줄에 필수 체크 | `test/skill-text-268.test.ts`, `test/graph/regressions.test.ts` | 🟢 write-brief 의 `사전 확인` 칸(읽기 전용 사전 확인 항목을 `deps` 로 `blocks` 선행에)과 `머지` 칸의 "필수 체크는 명령으로" 문장을 시험이 고정한다(결정 268). 그 칸이 기대는 규칙은 GRAPH 의 `precheck_blocks_send` 다 |
-| R-21 | 노트는 영구 삭제하지 않고 옮김 | `test/no-permanent-delete.test.ts`, `test/reaper/resources.test.ts` | 🟡 노트 저장소는 sangsoe 밖이라(D-2) 요구가 말하는 "노트를 옮김" 은 여기 없다. sangsoe 쪽에서 지키는 것: 싣는 코드가 무엇을 영구히 치우는지가 이유와 함께 한 목록에 있고(제 파일 다섯 파일 · Docker 기록 id · worktree 둘), 목록에 없는 치움이 생기면 실패한다(결정 268). REAPER 가 임시 폴더에서 치우는 것은 휴지통으로 간다(`resources.test.ts`) |
+| R-20 | 남의 스택·서비스 대상 단위는 보내기 전 읽기 전용 사전 확인, LAND 줄에 필수 체크 | `test/skill-text-268.test.ts`, `test/graph/regressions.test.ts`, `test/lineage/start.test.ts` | 🟢 write-brief 의 `사전 확인` 칸(읽기 전용 사전 확인 항목을 `deps` 로 `blocks` 선행에)과 `머지` 칸의 "필수 체크는 명령으로" 문장을 시험이 고정한다(결정 268). 그 칸이 기대는 규칙은 GRAPH 의 `precheck_blocks_send` 와, Orca 가 준비됨이라 하지 않는 Task 를 `start_unit` 이 시작하지 않는다는 것이다(`start.test.ts`) |
+| R-21 | 노트는 영구 삭제하지 않고 옮김 | `test/no-permanent-delete.test.ts`, `test/reaper/resources.test.ts` | 🟡 노트 저장소는 sangsoe 밖이라(D-2) 요구가 말하는 "노트를 옮김" 은 여기 없다. sangsoe 쪽에서 지키는 것: 싣는 코드가 데이터를 영구히 지우는 곳이 이유와 함께 한 목록에 있고(제 파일 다섯 파일 · Docker 기록 id · worktree 둘 · 제 store 의 부하 표본), 시험이 찾는 네 꼴의 새 삭제가 목록에 없으면 실패한다(결정 268 ③ 이 그 꼴과 찾지 못하는 것을 적는다). REAPER 가 임시 폴더에서 치우는 것은 휴지통으로 간다(`resources.test.ts`) |
 | R-22 | 문서 숫자·번역 기준을 손으로 유지하지 않음 | `test/migrate/port-map.test.ts`, `test/migrate/coverage.test.ts` | 🟡 이관 표·이 문서의 집계는 시험이 센다. 다른 문서의 숫자는 아직 손으로 쓴다 |
 | R-23 | 설치 갱신은 오너가 지운 규칙을 되살리지 않음, reload 방송은 받을 수 있는 세션만 | `core/install/install.test.ts` | 🟡 설치는 사람의 설정을 쓰지 않아 되살릴 규칙이 없고 두 번째 설치는 갱신만 한다(결정 90). reload 방송은 없다 |
 
