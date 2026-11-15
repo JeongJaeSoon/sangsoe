@@ -10,7 +10,7 @@ export interface TestSummary {
   readonly fail: number;
   readonly skipped: number;
   readonly todo: number;
-  /** The names of the skipped tests, in output order. */
+  /** The names of the skipped tests, each with its reason when it gave one, in output order. */
   readonly skippedNames: readonly string[];
 }
 
@@ -22,7 +22,8 @@ export function summarize(output: string): TestSummary | null {
   };
   const [tests, pass, fail, skipped, todo] = ["tests", "pass", "fail", "skipped", "todo"].map(last);
   if (tests === undefined || pass === undefined || fail === undefined || skipped === undefined || todo === undefined) return null;
-  const skippedNames = [...output.matchAll(/^\s*﹣ (.+?) \([\d.]+ms\) # SKIP/gm)].map((m) => m[1] as string);
+  // A skip with a reason prints `# <reason>` where a bare one prints `# SKIP`.
+  const skippedNames = [...output.matchAll(/^\s*﹣ (.+?) \([\d.]+ms\) # (.*)$/gm)].map((m) => (m[2] === "SKIP" ? (m[1] as string) : `${m[1]} (${m[2]})`));
   return { tests, pass, fail, skipped, todo, skippedNames };
 }
 
@@ -36,6 +37,8 @@ export function render(s: TestSummary, attempt: number): string {
     attempt > 1 ? `**Rerun: attempt ${attempt}.** ${attempt - 1} earlier attempt(s) of this commit did not pass; a green here is a flake until the cause is found.` : "Rerun: attempt 1 (no earlier attempt of this commit).",
   ];
   if (s.skippedNames.length > 0) lines.push("", "Skipped:", ...s.skippedNames.map((n) => `- ${n}`));
+  const unnamed = s.skipped - s.skippedNames.length;
+  if (unnamed > 0) lines.push("", `${unnamed} skipped test(s) have no line this script could read; find them in the log.`);
   return `${lines.join("\n")}\n`;
 }
 

@@ -43,22 +43,25 @@ const OUTPUT = [
   // A child run a test printed: its counters come first and must not win.
   "ℹ skipped 9",
   "﹣ needs a browser (0.04ms) # SKIP",
-  "ℹ tests 4",
+  "﹣ macOS only (0.19ms) # dash exits 2 on a missing script",
+  "ℹ tests 5",
   "ℹ suites 1",
   "ℹ pass 2",
   "ℹ fail 0",
   "ℹ cancelled 0",
-  "ℹ skipped 2",
+  "ℹ skipped 3",
   "ℹ todo 0",
   "ℹ duration_ms 12.5",
 ].join("\n");
 
 test("B1: the summary counts skipped tests from the closing counters and names them", () => {
   const s = summarize(OUTPUT);
-  assert.deepEqual(s, { tests: 4, pass: 2, fail: 0, skipped: 2, todo: 0, skippedNames: ["needs real Orca", "needs a browser"] });
+  const names = ["needs real Orca", "needs a browser", "macOS only (dash exits 2 on a missing script)"];
+  assert.deepEqual(s, { tests: 5, pass: 2, fail: 0, skipped: 3, todo: 0, skippedNames: names });
+  assert.equal(s?.skippedNames.length, s?.skipped, "every counted skip is named");
   const text = render(s as NonNullable<typeof s>, 1);
-  assert.match(text, /skipped 2/);
-  assert.match(text, /- needs real Orca\n- needs a browser\n/);
+  assert.match(text, /skipped 3/);
+  assert.ok(text.endsWith(`Skipped:\n${names.map((n) => `- ${n}`).join("\n")}\n`), text);
   assert.match(text, /Rerun: attempt 1 /);
 });
 
@@ -66,4 +69,5 @@ test("B1: a rerun attempt is called a flake, and output without closing counters
   const s = summarize(OUTPUT);
   assert.match(render(s as NonNullable<typeof s>, 3), /\*\*Rerun: attempt 3\.\*\* 2 earlier attempt\(s\)/);
   assert.equal(summarize("✔ a test (0.1ms)\nℹ tests 1\n"), null);
+  assert.match(render({ ...(s as NonNullable<typeof s>), skipped: 5 }, 1), /\n2 skipped test\(s\) have no line/);
 });
