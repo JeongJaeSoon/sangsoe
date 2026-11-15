@@ -27,8 +27,8 @@ const STAGE_GAP = 8;
 const shown = async (): Promise<ResState> => readParts(async (input) => PARTS_GOT[input?.part ?? "load"], () => undefined);
 // Decisions 250 · 281: the same panel with a full day of samples, so the rows carry their lines:
 // three rows of 24px.
-const CARD_MAX = 72;
-const withCard = async (): Promise<ResState> => {
+const ROWS_MAX = 72;
+const withHistory = async (): Promise<ResState> => {
   const load = PARTS_GOT.load.ok ? { ok: true as const, value: { ...PARTS_GOT.load.value, history: { ok: true as const, value: loadHistory(NOW) } } } : PARTS_GOT.load;
   return readParts(async (input) => (input?.part === "load" || !input ? load : PARTS_GOT[input.part]), () => undefined);
 };
@@ -62,7 +62,7 @@ addEventListener("load", () => {
     lastLine: lastText ? line.getBoundingClientRect().bottom : null,
     stageEnd: stageEnd ? stageEnd.getBoundingClientRect().bottom : null,
     vh: innerHeight, docH: d.scrollHeight, contentH: Math.round(document.getElementById("root").getBoundingClientRect().height + document.getElementById("res").getBoundingClientRect().height), hscroll: d.scrollWidth - d.clientWidth, scrollers,
-    res: rect("#res"), summary: rect("#res summary"), stamp: rect("#res .res-h"), card: rect("#res .lrows"),
+    res: rect("#res"), summary: rect("#res summary"), stamp: rect("#res .res-h"), rows: rect("#res .lrows"),
     summaryWeight: Number(getComputedStyle(sum).fontWeight), bodyBorder: getComputedStyle(document.querySelector("#res .res-fold")).borderTopWidth,
   };
 });`;
@@ -78,7 +78,7 @@ type Measured = {
   res: DOMRect;
   summary: DOMRect;
   stamp: DOMRect | null;
-  card: DOMRect | null;
+  rows: DOMRect | null;
   summaryWeight: number;
   bodyBorder: string;
   lastLine: number | null;
@@ -140,14 +140,14 @@ test("the rc.3 panel fits 1070px at 440 / 544 / 600 / 900 with the 리소스 sec
 });
 
 test("decisions 250 · 281: with the rows' lines drawn the panel still fits 1070px at every width, the three rows at most 72px", { skip: noBrowser }, async (t) => {
-  const open = renderResources(await withCard(), true, Date.parse(NOW), 24);
-  const pages = Object.fromEntries(WIDTHS.map((w) => [`card-${w}`, panelPage(renderStage(VIEW), open)]));
+  const open = renderResources(await withHistory(), true, Date.parse(NOW), 24);
+  const pages = Object.fromEntries(WIDTHS.map((w) => [`rows-${w}`, panelPage(renderStage(VIEW), open)]));
   const got = measure(pages, (name) => Number(name.split("-")[1]));
-  t.diagnostic(Object.entries(got).map(([k, m]) => `${k} content ${m?.contentH} docH ${m?.docH} card ${m?.card ? `${Math.round(m.card.width)}x${Math.round(m.card.height)}` : "-"} hscroll ${m?.hscroll}`).join("; "));
+  t.diagnostic(Object.entries(got).map(([k, m]) => `${k} content ${m?.contentH} docH ${m?.docH} rows ${m?.rows ? `${Math.round(m.rows.width)}x${Math.round(m.rows.height)}` : "-"} hscroll ${m?.hscroll}`).join("; "));
   for (const [name, m] of Object.entries(got)) {
-    assert.ok(m?.card, `${name}: the rows are drawn`);
-    assert.ok(m.card.height <= CARD_MAX, `${name}: the rows are ${m.card.height}px tall`);
-    assert.ok(m.card.right <= (m.res.right ?? 0), `${name}: the rows end inside the section`);
+    assert.ok(m?.rows, `${name}: the rows are drawn`);
+    assert.ok(m.rows.height <= ROWS_MAX, `${name}: the rows are ${m.rows.height}px tall`);
+    assert.ok(m.rows.right <= (m.res.right ?? 0), `${name}: the rows end inside the section`);
     assert.ok(m.docH <= m.vh, `${name}: the document is ${m.docH - m.vh}px taller than the panel`);
     assert.ok(m.hscroll <= 0, `${name}: ${m.hscroll}px of horizontal scroll`);
     assert.deepEqual(m.scrollers, [], `${name}: nothing scrolls inside the page`);

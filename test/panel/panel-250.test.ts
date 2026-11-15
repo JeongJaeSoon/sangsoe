@@ -17,7 +17,7 @@ const ok = (h: LoadHistory) => ({ ok: true as const, value: h });
 const LIVE = { level: "warn" as const, reasons: ["load/CPU 1.50 (경고 1.3 이상)"], loadPerCpu: 1.5, memFreePct: 40, diskFreeGb: 120 };
 const svgs = (html: string) => [...html.matchAll(/<svg class="sp"[^>]*aria-label="([^"]*)"[^>]*>([\s\S]*?)<\/svg>/g)].map((m) => ({ label: m[1] ?? "", body: m[2] ?? "" }));
 const paths = (body: string) => [...body.matchAll(/<path class="sp-line" d="([^"]*)"/g)].map((m) => m[1] ?? "");
-const rows = (html: string) => [...html.matchAll(/<div class="gauge"( title="([^"]*)")?><span class="g-l">([^<]+)<\/span>([\s\S]*?)<span class="g-v ([^"]*)">([^<]+)<\/span><\/div>/g)].map((m) => ({ title: m[2] ?? "", label: m[3], mid: m[4] ?? "", tone: m[5], value: m[6] }));
+const rows = (html: string) => [...html.matchAll(/<div class="lrow"( title="([^"]*)")?><span class="g-l">([^<]+)<\/span>([\s\S]*?)<span class="g-v ([^"]*)">([^<]+)<\/span><\/div>/g)].map((m) => ({ title: m[2] ?? "", label: m[3], mid: m[4] ?? "", tone: m[5], value: m[6] }));
 
 test("a full day: three rows of name, line and the value read now; the range is the row's title, not on screen", () => {
   const h = loadHistory(NOW);
@@ -69,7 +69,7 @@ test("partial (fresh install): x spans the whole window, the line starts where t
   const d = paths(svgs(html)[0]?.body ?? "")[0] ?? "";
   const x0 = Number(/^M([\d.]+)/.exec(d)?.[1]);
   assert.ok(Math.abs(x0 - (1000 * (1440 - 55)) / 1440) < 1, `first point at ${x0}`);
-  assert.match(html, /<div class="gauge sp-from"><span><\/span><span>\d\d:\d\d부터<\/span><\/div><\/div>$/, "under the rows, in the lines' column");
+  assert.match(html, /<div class="lrow sp-from"><span><\/span><span>\d\d:\d\d부터<\/span><\/div><\/div>$/, "under the rows, in the lines' column");
   const six = loadRows(ok(h), LIVE, 6);
   assert.ok(Math.abs(Number(/^M([\d.]+)/.exec(paths(svgs(six)[0]?.body ?? "")[0] ?? "")?.[1]) - (1000 * (360 - 55)) / 360) < 1);
   assert.match(six, /sp-from/);
@@ -138,7 +138,7 @@ test("unread history says so under the rows; a core without the field, or an unr
   assert.deepEqual(rows(unread).map((x) => [x.mid, x.value]), [["<span></span>", "1.50 / 코어"], ["<span></span>", "60%"], ["<span></span>", "120 GB"]]);
   for (const none of [undefined, null]) {
     const html = loadRows(none, LIVE, 24);
-    assert.match(html, /^<div class="lrows" role="group" aria-label="PC 부하: 지금 값"><div class="gauge">.*<\/div>$/);
+    assert.match(html, /^<div class="lrows" role="group" aria-label="PC 부하: 지금 값"><div class="lrow">.*<\/div>$/);
     assert.equal(rows(html).length, 3);
   }
   const noLoad = loadRows(ok(loadHistory(NOW)), null, 24);
@@ -155,7 +155,7 @@ test("the rows sit in PC 부하 above the level band, the switch drives both, an
   const rowsAt = html.indexOf('class="lrows"');
   const band = html.indexOf('class="band"');
   assert.ok(rowsAt > 0 && band > rowsAt, "rows, band");
-  assert.equal((html.match(/class="gauge"/g) ?? []).length, 3, "one row per metric and no second set");
+  assert.equal((html.match(/class="lrow"/g) ?? []).length, 3, "one row per metric and no second set");
   assert.match(html, /aria-label="CPU 최근 24시간 /);
   assert.match(html, /<span>24시간 전<\/span><span>지금<\/span>/, "the level strip keeps its own axis");
   const six = renderResBody(s, Date.parse(NOW), 6);
@@ -163,7 +163,7 @@ test("the rows sit in PC 부하 above the level band, the switch drives both, an
   assert.match(six, /<span>6시간 전<\/span><span>지금<\/span>/);
   const old = renderResBody(await readParts(async (input) => PARTS_GOT[input?.part ?? "load"], () => undefined), Date.parse(NOW), 24);
   assert.doesNotMatch(old, /class="sp"|sp-none/, "no history field: values only");
-  assert.equal((old.match(/class="gauge"/g) ?? []).length, 3);
+  assert.equal((old.match(/class="lrow"/g) ?? []).length, 3);
   const reading = renderResBody({ kind: "reading", got: { load: got.load } } as ResState, Date.parse(NOW), 24);
   assert.match(reading, /class="sp"/, "the load part paints its lines as soon as it comes");
 });
@@ -190,7 +190,7 @@ test("the worker passes history through untouched; the panel opens no database",
 
 test("decision 281: no box around the lines and no guide line; a row is 24px high, its line 16px and a stroke only", () => {
   assert.doesNotMatch(STYLE, /\.spark\b|\.sp-th\b|\.g-bar\b|\.sp-ax\b/);
-  const row = /\n\.gauge \{([^}]*)\}/.exec(STYLE)?.[1] ?? "";
+  const row = /\n\.lrow \{([^}]*)\}/.exec(STYLE)?.[1] ?? "";
   assert.match(row, /align-items: center/);
   assert.match(row, /(^|[; ])height: 24px/);
   const line = /\n\.sp \{([^}]*)\}/.exec(STYLE)?.[1] ?? "";

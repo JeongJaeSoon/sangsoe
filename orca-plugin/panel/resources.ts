@@ -246,11 +246,11 @@ export function loadRows(h: Reading<LoadHistory> | null | undefined, l: Load | n
   const rows = SERIES.map((s) => {
     const now = l ? s.now(l) : undefined;
     const { svg, range } = v ? spark(s, v, from, hours) : { svg: "<span></span>", range: "" };
-    return `<div class="gauge"${range ? ` title="${esc(range)}"` : ""}><span class="g-l">${s.label}</span>${svg}<span class="g-v ${l ? toneOf(l.reasons, s.reason) : ""}">${now === undefined ? "모름" : esc(`${s.num(now)}${s.unit}`)}</span></div>`;
+    return `<div class="lrow"${range ? ` title="${esc(range)}"` : ""}><span class="g-l">${s.label}</span>${svg}<span class="g-v ${l ? toneOf(l.reasons, s.reason) : ""}">${now === undefined ? "모름" : esc(`${s.num(now)}${s.unit}`)}</span></div>`;
   });
   // The window's left edge is `hours` ago; samples that begin later say when, under that edge.
   const first = v?.points.find((p) => p.at >= from);
-  const late = v && first && first.at - from > GAP_STEPS * v.stepMs ? `<div class="gauge sp-from"><span></span><span>${hhmm(new Date(first.at).toISOString())}부터</span></div>` : "";
+  const late = v && first && first.at - from > GAP_STEPS * v.stepMs ? `<div class="lrow sp-from"><span></span><span>${hhmm(new Date(first.at).toISOString())}부터</span></div>` : "";
   return `<div class="lrows" role="group" aria-label="${v ? `PC 부하: 지금 값과 최근 ${hours}시간` : "PC 부하: 지금 값"}">${rows.join("")}${late}</div>${h && !h.ok ? `<p class="ep">부하 기록을 ${unread(h.why)}</p>` : ""}`;
 }
 

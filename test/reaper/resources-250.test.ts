@@ -66,7 +66,7 @@ test("the machine's own thresholds travel with the samples", async () => {
   assert.deepEqual(p.history.value.points, [], "an empty store is no samples, not a failure");
 });
 
-test("a store read that fails is this card's unread, and the point read still comes", async () => {
+test("a store read that fails is the history's unread, and the point read still comes", async () => {
   const { store } = storeAt();
   const p = await readResourcePart({ ...deps(store), samples: () => { throw new Error("database is locked"); } }, "load");
   assert.ok(p.part === "load");

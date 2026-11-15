@@ -358,7 +358,7 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .res-h .stale { color: var(--bad); }
 /* Decision 281: one PC 부하 row is a name, its line, and the value read now; every row is 24px high
    and its line sits in the middle of that height, on the name's text line. */
-.gauge { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; align-items: center; gap: var(--s3); height: 24px; font-size: var(--text-sm); }
+.lrow { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; align-items: center; gap: var(--s3); height: 24px; font-size: var(--text-sm); }
 .g-l { color: var(--ink-2); white-space: nowrap; }
 .g-v { min-width: 6.5em; text-align: right; white-space: nowrap; }
 .g-v.t-warn { color: var(--accent); }
