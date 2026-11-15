@@ -1114,6 +1114,22 @@ test("unit_lineage_complete: a missing Dispatch, a different parent or Run, a cr
   assert.match((await lineage(recorded, { ...topLevel, runId: "run_other" })).units[0]?.problems.join() ?? "", /Run 이 다르다/);
 });
 
+test("unit_lineage_complete: a unit's worktree missing from `worktree list` is read with `worktree show` (decision 290)", async () => {
+  const doc = JSON.parse(readFileSync(new URL("../fake-orca/scenarios/local/worktree-list.json", import.meta.url), "utf8"));
+  const child = doc.result.worktrees.find((w: { id: string }) => w.id === CHILD_TREE);
+  doc.result.worktrees = doc.result.worktrees.filter((w: { id: string }) => w.id !== CHILD_TREE);
+  const list = () => ({ code: 0, stdout: JSON.stringify(doc), stderr: "" });
+  const lineage = (show: FakeReply) => {
+    const fake = createFakeOrca({ replies: asReplies({ ...recorded, "worktree-list": list, "worktree-show": show }) });
+    return checkLineage(createOrcaAdapter(fake.exec), [unit]);
+  };
+  assert.deepEqual((await lineage(() => ok({ worktree: child }))).units[0]?.problems, []);
+  for (const row of [{ ...child, isArchived: true }, { ...child, hostId: "remote-1" }, { ...child, hostId: undefined }]) {
+    assert.match((await lineage(() => ok({ worktree: row }))).units[0]?.problems.join() ?? "", /새 worktree 가 로컬 목록에 없다/);
+  }
+  assert.match((await lineage(() => fail("selector_not_found"))).units[0]?.problems.join() ?? "", /새 worktree 가 로컬 목록에 없다/);
+});
+
 // ---- decision 197: placement, target repo, keep-open, alias, T5 once ----
 
 const { worktreeId: _tree, ...plainFolder } = orchestrator;

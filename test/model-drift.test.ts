@@ -107,6 +107,15 @@ test("a resumed session counts once, and a session from before the table was che
   assert.deepEqual(modelDrift([unit("t1", everyday.alias, 0), session("t1", MOVED, 1, undefined, before)]), []);
 });
 
+test("292: a session's later row pairs with the start that session began under, not a newer start of the Task", () => {
+  // The Task is started again on another tier while the first session, resumed, writes one more row.
+  const events = [unit("t1", everyday.alias, 0), session("t1", everyday.currentId, 1, "first"), unit("t1", primary.alias, 2), session("t1", everyday.currentId, 3, "first")];
+  assert.deepEqual(modelDrift(events), [], "the first session resolved to its own start's model");
+  // The second start's own session is still judged against the second start.
+  const [d] = modelDrift([...events, session("t1", everyday.currentId, 4, "second")]);
+  assert.deepEqual([d?.alias, d?.cause, d?.sessions], [primary.alias, "other_tier", 1]);
+});
+
 function ctx(home: string, env: Record<string, string> = {}) {
   return {
     orca: { worktreeList: async () => ({ ok: true, value: { rows: [], nonLocal: { rows: 0, hostIds: [] }, omittedHostIds: [], truncated: false } }) } as never,

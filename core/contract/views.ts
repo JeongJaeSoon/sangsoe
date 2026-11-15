@@ -93,6 +93,8 @@ export interface ItemStatusRow {
   readonly unclear: boolean;
   /** 🔍 closed done without enough evidence. */
   readonly evidenceShort: boolean;
+  /** 👀 closed done with no evidence, but its PR has an act_on 0 review (decision 236); never also 🔍. */
+  readonly reviewOnly: boolean;
 }
 
 export interface OwnerTodoRow {

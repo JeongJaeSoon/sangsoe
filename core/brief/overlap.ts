@@ -19,7 +19,8 @@ const numberOf = (ref: string) => Number(ref.slice(ref.indexOf("#") + 1));
  * per PR. With `repos` given, a repository no longer in it is not read: its rows may never close.
  */
 export async function prOverlaps(o: { events: readonly StoredEvent[]; gh: GhClient; repos?: readonly string[] }): Promise<Overlaps> {
-  const watched = o.repos && o.repos.length > 0 ? new Set(o.repos.map((r) => r.toLowerCase())) : undefined;
+  // An empty list is a list: an emptied watch.repos watches nothing (decision 291).
+  const watched = o.repos ? new Set(o.repos.map((r) => r.toLowerCase())) : undefined;
   const groups = new Map<string, string[]>();
   for (const p of foldFacts(o.events).prs.values()) {
     if (!p.opened || p.merged || p.closed || p.base === undefined) continue;

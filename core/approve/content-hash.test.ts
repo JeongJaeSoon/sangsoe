@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { diskHash } from "../../test/dir-hash.ts";
 import { scratchDir } from "../../test/scratch.ts";
 import { inspectContentHash } from "./content-hash.ts";
@@ -117,7 +118,8 @@ test("a folder that cannot be copied cannot be hashed", async (t) => {
 
 // Decision 258 ③: leaving .orca/ out is safe only while no plugin code loads anything from it.
 test("no plugin source loads anything from .orca/", () => {
-  const plugin = new URL("../../orca-plugin/", import.meta.url).pathname;
+  // fileURLToPath, not .pathname: a checkout path with a space is percent-encoded there.
+  const plugin = fileURLToPath(new URL("../../orca-plugin/", import.meta.url));
   const hits: string[] = [];
   const walk = (d: string) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {

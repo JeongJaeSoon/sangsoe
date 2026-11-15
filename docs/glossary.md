@@ -77,6 +77,7 @@
 | 🚨 오류·멈춤 | 풀리지 않은 `worker_stuck`·`worker_dead`·`ci_failed`·`land_failed`·`loop_detected`·`decision_untracked` 가 있거나, 부가 정보가 Orca 에 없는 Task id 를 가리킨다(`orphan_extra`, 뷰가 읽을 때 계산한다). 그 밖의 오류 출처는 앞의 `worker_stuck`·`worker_dead`·`ci_failed`·`land_failed`·`loop_detected` 중 하나로 쓰고 `reason` 에 사유를 적는다(§9) | `item_status.flag_error` | 장애, 경고 |
 | ⚠️ 확인 필요 | `trigger_unclear` 하나만 뜻한다 | `item_status.flag_unclear` | 주의, 불확실 |
 | 🔍 근거 부족 | 일한 세션이 스스로 완료를 판정한 경우. 그 판정은 증거가 아니라서 완료로 닫혔는데 증거 `event` 가 없거나 모자란 항목에 오른다 | `item_status.flag_noevidence` | 미검증 |
+| 👀 리뷰만 있음 | 완료로 닫혔고 증거 `event` 는 없지만, 그 항목의 PR 에 Act-on 0 인 리뷰 판정이 기록돼 있다. 🔍 근거 부족과 겹치지 않고 따로 센다(결정 236) | `item_status.flag_reviewonly` | 리뷰 통과 |
 | 플래그 | 상태 위에 덧붙는 표시. 화면에서도 "플래그"라고 부른다 | — | 표시, 배지, 태그 |
 
 이모지는 상태·플래그 표시에만 쓰고 하나에 뜻 하나이며 꾸밈으로 쓰지 않는다. 물음표 이모지는 쓰지 않는다. 이모지 체계에 없는 그 밖의 이모지도 쓰지 않는다.

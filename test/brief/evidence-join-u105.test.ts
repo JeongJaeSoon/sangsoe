@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildBrief, itemFacts } from "../../core/index.ts";
+import { buildBrief, item_status, itemFacts } from "../../core/index.ts";
 import { bindItem, createGraphWorld, type GraphWorld } from "../graph/world.ts";
 
 // Decision 236: `sangsoe evidence record` writes `subject` = the PR and no entity; the item that owns
@@ -74,6 +74,9 @@ test("an act_on 0 review with no evidence reads 리뷰만 있음, not 근거 부
   assert.deepEqual(await marks(w, "t_a"), { short: true, reviewOnly: false }, "a review with Act-on left is not one");
   review(w, 0, "second");
   assert.deepEqual(await marks(w, "t_a"), { short: false, reviewOnly: true });
+  // The contract's row carries the mark too (decision 289): the view used to drop it.
+  const row = item_status(await w.input()).find((x) => x.task === "t_a");
+  assert.deepEqual([row?.evidenceShort, row?.reviewOnly], [false, true]);
   evidence(w, 0);
   assert.deepEqual(await marks(w, "t_a"), { short: false, reviewOnly: false }, "evidence: neither");
 });

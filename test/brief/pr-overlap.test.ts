@@ -107,6 +107,12 @@ test("a PR of a repository no longer in watch.repos is not read", async () => {
   w.open(2, ["CHANGELOG.md"]);
   const r = await prOverlaps({ events: w.store.events(), gh: { get: async () => ({ kind: "error", status: 404, message: "" }) }, repos: ["acme/web"] });
   assert.deepEqual(r, { overlaps: [], unseen: [] });
+  // Decision 291: an emptied watch.repos watches nothing; it used to read every repository.
+  let asked = 0;
+  const none = await prOverlaps({ events: w.store.events(), gh: { get: async () => (asked++, { kind: "error", status: 404, message: "" }) }, repos: [] });
+  assert.deepEqual([none, asked], [{ overlaps: [], unseen: [] }, 0]);
+  // No list given at all (a caller with no watch config to read) reads every repository, as before.
+  assert.equal((await prOverlaps({ events: w.store.events(), gh: { get: async () => ({ kind: "error", status: 404, message: "" }) } })).unseen.length, 2);
 });
 
 test("an unread list's line names the PR and GitHub's answer once", async () => {
