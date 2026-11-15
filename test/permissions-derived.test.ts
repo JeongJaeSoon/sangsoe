@@ -58,6 +58,34 @@ test("no rule is a bare prefix over a destructive form, and starts are never rul
   assert.ok(rules.includes("Bash(gh pr view:*)"));
 });
 
+test("the sangsoe commands a gate or skill tells a session to run: read-only verbs are ruled, mutating ones are not", () => {
+  const rules = derive(ROOT).rules.map((r) => r.rule);
+  // core/gates/pressure.ts tells every role to run this in the background after a refusal.
+  for (const verb of ["pressure wait", "brief", "todo", "doctor"]) assert.ok(rules.includes(`Bash(sangsoe ${verb}:*)`), verb);
+  for (const verb of ["install", "uninstall", "land", "plugin approve", "item new", "reap"]) assert.ok(!rules.some((r) => r.startsWith(`Bash(sangsoe ${verb}`)), verb);
+});
+
+test("a sangsoe command a skill runs that the policy does not name is reported with its file:line", () => {
+  const root = fixture({ "claude-plugin/skills/x/SKILL.md": "intro\nrun `sangsoe frobnicate --now` here\n" });
+  try {
+    assert.deepEqual(
+      derive(root).unclassified.map((h) => `${h.file}:${h.line} ${h.path}`),
+      ["claude-plugin/skills/x/SKILL.md:2 sangsoe frobnicate"],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a sangsoe command named in a gate's text counts as a use", () => {
+  const root = fixture({ "core/gates/x.ts": 'const why = "run sangsoe pressure wait in the background";\n' });
+  try {
+    assert.ok(derive(root).rules.some((r) => r.rule === "Bash(sangsoe pressure wait:*)" && r.source === "core/gates/x.ts"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("no rule holds a machine path", () => {
   const text = renderGenerated(derive(ROOT));
   assert.doesNotMatch(text, /\/Users\/|\/home\/|\/private\/var|\/tmp\//);
