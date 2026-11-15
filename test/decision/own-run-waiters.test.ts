@@ -29,7 +29,8 @@ const OWED: Record<TaskState, Partial<Record<GateState, Due>> & { carrierGate: b
   // No worker yet: the answer rides in its first prompt (91④(i)), so nobody is told now.
   waiting: { open: [true, null], resolved: [false, null], none: [false, null], carrierGate: true },
   // Orca refuses a gate on a running Task and an open gate keeps its Task from starting, so a running
-  // Task has no open gate. One whose gate was resolved before its worker started is told by mail.
+  // Task has no open gate. One whose gate was resolved before its worker started is told by mail,
+  // unless that worker's first prompt carried the answer and wrote the key first (the "+told" cells).
   running: { resolved: [false, "worker"], none: [false, "worker"], carrierGate: false },
   // A closed Task's gate stays open on purpose and its Run is told (91④(ii)). A gate resolved while
   // the Task was live was the delivery: the Run is not told again when the Task closes later.

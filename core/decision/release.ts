@@ -29,10 +29,11 @@ export interface ReleaseInput {
 /**
  * Frees every waiter of a closed decision. Gates bound to the caller's Run are resolved here; a gate in
  * another Run cannot be (decision 77 라), so that Run gets one message and resumes the same operation.
- * Each waiter whose gate is no longer open is told once (decision 84③: resolve alone is not trusted to
- * wake anyone): its worker by Dispatch, or its Run when the Task is closed (decision 91④(ii)), whichever
- * Run the waiter sits in. A Task with no worker yet is not told: the start procedure puts the answer in
- * the first prompt (91④(i)). One waiter's failure does not hold back the others: the call goes on, then
+ * What a waiter is owed is read by `owed` (waiters.ts), whichever Run it sits in. A waiter whose worker
+ * runs is told once by Dispatch (decision 84③: resolve alone is not trusted to wake anyone). A closed
+ * Task's Run is told once when its gate is still open or it has none (decision 91④(ii)); a gate resolved
+ * while the Task was live was the delivery. A Task with no worker yet is not told: the start procedure
+ * puts the answer in the first prompt (91④(i)). One waiter's failure does not hold back the others: the call goes on, then
  * refuses naming each failure, and calling again resumes only what is left.
  */
 export async function release(deps: CoreDeps, state: DecisionState, input: ReleaseInput): Promise<Result<Released>> {
