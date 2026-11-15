@@ -55,7 +55,7 @@ test("sends: reads the send time and messageId from each log line, skipping line
   }
 });
 
-test("idle send: latency is the first tool call after the send", () => {
+test("idle send: latency is the time from the send to the check call whose result carries the id", () => {
   withFiles([[wake(5), tool(12), result(13, "msg_m1 body"), done(20)]], (p) => {
     const r = one(collect([sent("msg_m1", 4)], p));
     assert.equal(r.kind, "idle");
@@ -94,6 +94,27 @@ test("a mid-turn send read in the same batch as the turn's own message is woken 
     assert.equal(r.kind, "mid-turn");
     assert.equal(r.outcome, "woken");
     assert.equal(r.latencyS, 1);
+  });
+});
+
+test("an assistant line that repeats the id is not a read, so there is no duplicate", () => {
+  const echo = { type: "assistant", timestamp: iso(14), message: { content: [{ type: "text", text: "got msg_m1" }], stop_reason: "end_turn" } };
+  withFiles([[wake(5), tool(12), result(13, "msg_m1"), echo]], (p) => {
+    assert.equal(one(collect([sent("msg_m1", 4)], p)).outcome, "woken");
+  });
+});
+
+test("a read inside the same turn between 60 s and 120 s is woken", () => {
+  withFiles([[prompt(0), tool(3), result(100, "msg_m1 msg_m2", 3), done(101)]], (p) => {
+    const r = one(collect([sent("msg_m2", 5)], p));
+    assert.equal(r.outcome, "woken");
+    assert.equal(r.latencyS, 95);
+  });
+});
+
+test("transcript files given out of order are still read in time order", () => {
+  withFiles([[tool(9), result(10, "msg_m1"), done(11)], [wake(5), done(6)]], (p) => {
+    assert.equal(one(collect([sent("msg_m1", 4)], p)).latencyS, 5);
   });
 });
 

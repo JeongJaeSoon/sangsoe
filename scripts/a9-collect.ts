@@ -1,7 +1,7 @@
 // Probe A9 (decision 261): did Orca message delivery alone wake a top-level orchestrator session?
 // Token-free, read-only. Two records that already exist are joined by Orca's messageId; nothing is stored:
 //   sender side   the sender's own log, one line per send: <n> <condition> scheduled=<time> sent=<time> messageId=<id>
-//   receiver side the probe session's transcript(s): the `check` tool_result that carries the id, and the first tool call
+//   receiver side the probe session's transcript(s): the tool_result that carries the id and the `check` call it answers
 // The result is a table on stdout.
 //
 //   node scripts/a9-collect.ts <sends.log> <probe.jsonl>...
@@ -26,10 +26,9 @@ interface Line {
   ts: number;
   role: "user" | "assistant" | "other";
   text: string;
-  toolUse: boolean;
   toolResult: boolean;
   endTurn: boolean;
-  commands: { id: string; command: string }[];
+  commands: { id: string }[];
   resultIds: string[];
 }
 
@@ -52,12 +51,9 @@ function parseTranscript(files: string[]): Line[] {
         ts,
         role: o.type === "user" || o.type === "assistant" ? o.type : "other",
         text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content ?? ""),
-        toolUse: parts.some((p) => p.type === "tool_use"),
         toolResult: parts.some((p) => p.type === "tool_result"),
         endTurn: msg.stop_reason === "end_turn",
-        commands: parts
-          .filter((p) => p.type === "tool_use")
-          .map((p) => ({ id: String(p.id ?? ""), command: String((p.input as { command?: unknown } | undefined)?.command ?? "") })),
+        commands: parts.filter((p) => p.type === "tool_use").map((p) => ({ id: String(p.id ?? "") })),
         resultIds: parts.filter((p) => p.type === "tool_result").map((p) => String(p.tool_use_id ?? "")),
       });
     }
