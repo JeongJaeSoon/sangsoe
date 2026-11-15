@@ -4,7 +4,7 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 
 상태: 🟢 그 시험이 요구 전체를 main 에서 지킨다 · 🟡 일부만 지킨다(빠진 것을 적었다) · 🔴 지키는 시험이 없다 · `PR #N`/`U<번호>` 그 단위가 가져온다.
 
-집계: R 23행 · 🟢 13 · 🟡 10 · 🔴 0 · 단위 0
+집계: R 23행 · 🟢 12 · 🟡 11 · 🔴 0 · 단위 0
 
 ## R-01–R-23
 
@@ -29,8 +29,8 @@ port-plan 3.5 의 공통 요구 23개가 어느 시험 파일로 지켜지는지
 | R-17 | Orca 가 하는 일은 Orca 로, 기대 동작은 버전 변경 시 시험, 호환 경로 없음 | `core/checks/checks.test.ts`, `test/orca-boundary.test.ts`, `test/lineage/real-orca.test.ts` | 🟢 |
 | R-18 | 감시는 할 일이 생기는 전이에만 깨움, 자동화마다 목적·사용 증거·비용·끄는 명령 | `core/detect/run.test.ts`, `core/detect/orca/judge.test.ts` | 🟡 전이마다 한 번(에피소드·멈춤 키)은 시험한다. monitor 마다 목적·사용 증거·비용·끄는 명령을 한 목록에 두고 세는 시험이 없다 |
 | R-19 | 역할·모델이 시작 기록에 남고 역할 줄 없는 시작은 오류, 감독 비용 측정 | `test/session/hooks.test.ts`, `test/judgment-layer.test.ts` | 🟡 역할·모델과 역할 줄 없는 세션(`worker_stuck{no_role_line}`)은 시험한다. 머지된 PR 한 건당 컨텍스트 측정(reflect)은 시험이 없다 |
-| R-20 | 남의 스택·서비스 대상 단위는 보내기 전 읽기 전용 사전 확인, LAND 줄에 필수 체크 | `test/skill-text-268.test.ts`, `test/graph/regressions.test.ts` | 🟢 write-brief 의 `사전 확인` 칸(읽기 전용 사전 확인 항목을 `blocks` 선행으로)과 `머지` 칸의 "필수 체크는 명령으로" 문장을 시험이 고정한다(결정 268). 그 칸이 기대는 규칙은 GRAPH 의 `precheck_blocks_send` 다 |
-| R-21 | 노트는 영구 삭제하지 않고 옮김 | `test/no-permanent-delete.test.ts` | 🟢 노트 저장소는 sangsoe 밖이다(D-2). sangsoe 가 지킬 수 있는 쪽은 자기 코드다: 싣는 코드의 영구 삭제는 제가 만든 짧은 수명의 파일 여섯 곳뿐이고(목록에 없는 삭제가 생기면 실패), REAPER 가 임시 폴더에서 치우는 것은 휴지통으로 간다(결정 268) |
+| R-20 | 남의 스택·서비스 대상 단위는 보내기 전 읽기 전용 사전 확인, LAND 줄에 필수 체크 | `test/skill-text-268.test.ts`, `test/graph/regressions.test.ts` | 🟢 write-brief 의 `사전 확인` 칸(읽기 전용 사전 확인 항목을 `deps` 로 `blocks` 선행에)과 `머지` 칸의 "필수 체크는 명령으로" 문장을 시험이 고정한다(결정 268). 그 칸이 기대는 규칙은 GRAPH 의 `precheck_blocks_send` 다 |
+| R-21 | 노트는 영구 삭제하지 않고 옮김 | `test/no-permanent-delete.test.ts`, `test/reaper/resources.test.ts` | 🟡 노트 저장소는 sangsoe 밖이라(D-2) 요구가 말하는 "노트를 옮김" 은 여기 없다. sangsoe 쪽에서 지키는 것: 싣는 코드가 무엇을 영구히 치우는지가 이유와 함께 한 목록에 있고(제 파일 다섯 파일 · Docker 기록 id · worktree 둘), 목록에 없는 치움이 생기면 실패한다(결정 268). REAPER 가 임시 폴더에서 치우는 것은 휴지통으로 간다(`resources.test.ts`) |
 | R-22 | 문서 숫자·번역 기준을 손으로 유지하지 않음 | `test/migrate/port-map.test.ts`, `test/migrate/coverage.test.ts` | 🟡 이관 표·이 문서의 집계는 시험이 센다. 다른 문서의 숫자는 아직 손으로 쓴다 |
 | R-23 | 설치 갱신은 오너가 지운 규칙을 되살리지 않음, reload 방송은 받을 수 있는 세션만 | `core/install/install.test.ts` | 🟡 설치는 사람의 설정을 쓰지 않아 되살릴 규칙이 없고 두 번째 설치는 갱신만 한다(결정 90). reload 방송은 없다 |
 

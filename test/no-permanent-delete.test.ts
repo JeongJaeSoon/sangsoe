@@ -2,48 +2,67 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
-// R-21 (decision 268): sangsoe does not permanently delete a file it did not just make. Notes live
-// outside sangsoe (D-2), so the rule it can keep is about its own code: what it clears goes to the
-// trash (core/reaper/resources.ts), and every permanent delete left in shipped code is listed here
-// with the reason it removes only sangsoe's own short-lived file. A new delete fails this test until
-// it is either moved to the trash or added with its reason.
-const ROOT = new URL("..", import.meta.url).pathname;
+// R-21 (decision 268) is about notes, and notes live outside sangsoe (D-2). The part sangsoe can keep
+// is about its own code: every place shipped code removes something for good is listed here with
+// what it removes and why that is allowed. A new one fails this test until it is moved to the trash
+// or listed with its reason. Three kinds are found: a node:fs delete, a `rm` word handed to an exec
+// (docker's), and a call of Orca's `worktree rm`.
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SHIPPED = ["core", "cli", "orca-plugin", "claude-plugin"];
 const SKIP = new Set(["node_modules", "vendor", "dist"]);
 
-const OWN_FILES: Readonly<Record<string, { calls: number; why: string }>> = {
-  "core/approve/content-hash.ts": { calls: 1, why: "the mkdtemp copy it hashed" },
-  "core/approve/ports.ts": { calls: 1, why: "the mkdtemp folder the release tarball was unpacked into" },
-  "core/install/doctor.ts": { calls: 1, why: "the mkdtemp folder the release tarball was unpacked into" },
-  "core/install/permissions.ts": { calls: 1, why: "sangsoe's record of the rules it added, or a settings file it created and emptied again" },
-  "core/install/stage.ts": { calls: 2, why: "orca-plugin/vendor, the staged copy of core it builds" },
-};
+const KINDS = {
+  // A call of a node:fs delete, also through a namespace (`fs.rmSync(`, `fs.promises.rm(`).
+  fs: /\b(?:rmSync|unlinkSync|rmdirSync|rm|unlink|rmdir)\s*\(/g,
+  // `rm` as its own string: an argv word of an exec, or one word of a command path.
+  argv: /["'`]rm["'`]/g,
+  // A call of Orca's worktree removal (`worktree rm --run-hooks --delete-branch`); its declaration has no dot.
+  worktree: /\.worktreeRm\s*\(/g,
+} as const;
+type Kind = keyof typeof KINDS;
 
-// A call of a node:fs delete, or a shell `rm` handed to an exec.
-const DELETE = /\b(?:rmSync|unlinkSync|rmdirSync|rm|unlink|rmdir)\s*\(|exec\w*\(\s*["'`]rm["'`]/g;
+const LISTED: Readonly<Record<string, Partial<Record<Kind, number>> & { why: string }>> = {
+  "core/approve/content-hash.ts": { fs: 1, why: "the mkdtemp copy it just made and hashed" },
+  "core/approve/ports.ts": { fs: 1, why: "the mkdtemp folder it unpacked the release tarball into" },
+  "core/install/doctor.ts": { fs: 1, why: "the mkdtemp folder it unpacked the release tarball into" },
+  "core/install/permissions.ts": { fs: 1, why: "sangsoe's own record of the rules it added, or a settings file it created that is empty again; both live from install to uninstall" },
+  "core/install/stage.ts": { fs: 2, why: "orca-plugin/vendor, the staged copy of core it builds" },
+  "core/reaper/docker.ts": { argv: 1, why: "a container, volume, network or image whose id a session recorded with resource_record (R-12), after the in-use checks; a volume's data goes with it" },
+  "core/orca/commands.ts": { argv: 1, why: "the one place Orca's `worktree rm` is spelled; its callers are the two worktree rows below" },
+  "core/reaper/round.ts": { worktree: 1, why: "a finished unit's worktree after every REAPER check passed (clean tree, merged or closed work); files git ignores go with it" },
+  "core/start/start.ts": { worktree: 1, why: "the worktree a failed start made a moment ago, only when the shell it recorded is the one terminal there" },
+};
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     if (SKIP.has(name)) return [];
     const p = join(dir, name);
     if (statSync(p).isDirectory()) return sources(p);
-    return /\.(ts|js|mjs|sh)$/.test(name) && !/\.test\.ts$/.test(name) ? [p] : [];
+    return /\.(ts|js|mjs)$/.test(name) && !/\.test\.ts$/.test(name) ? [p] : [];
   });
 }
 
-test("R-21: every permanent delete in shipped code is a listed one of sangsoe's own short-lived files", () => {
-  const found: Record<string, number> = {};
+test("R-21: every permanent removal in shipped code is a listed one, with what it removes and why", () => {
+  const found: Record<string, Partial<Record<Kind, number>>> = {};
   for (const f of SHIPPED.flatMap((d) => sources(join(ROOT, d)))) {
-    const n = readFileSync(f, "utf8").match(DELETE)?.length ?? 0;
-    if (n > 0) found[relative(ROOT, f)] = n;
+    const text = readFileSync(f, "utf8");
+    for (const kind of Object.keys(KINDS) as Kind[]) {
+      const n = text.match(KINDS[kind])?.length ?? 0;
+      if (n > 0) found[relative(ROOT, f)] = { ...found[relative(ROOT, f)], [kind]: n };
+    }
   }
-  assert.deepEqual(found, Object.fromEntries(Object.entries(OWN_FILES).map(([f, v]) => [f, v.calls])));
-  for (const [f, v] of Object.entries(OWN_FILES)) assert.ok(v.why.length > 10, `${f}: say why`);
+  const listed = Object.fromEntries(Object.entries(LISTED).map(([f, { why: _why, ...kinds }]) => [f, kinds]));
+  assert.deepEqual(found, listed);
+  for (const [f, v] of Object.entries(LISTED)) assert.ok(v.why.length > 20, `${f}: say what it removes and why`);
 });
 
-test("R-21: what REAPER clears from the temp folder goes to the trash, and without the trash command nothing is touched", () => {
-  const src = readFileSync(join(ROOT, "core/reaper/resources.ts"), "utf8");
-  assert.match(src, /export const TRASH_BIN = "\/usr\/bin\/trash";/);
-  assert.match(src, /if \(a\.tmp && d\.trashBin\)/);
+test("R-21: the scan sees each kind of removal it claims to list", () => {
+  const seen = (kind: Kind, text: string) => text.match(KINDS[kind])?.length ?? 0;
+  assert.equal(seen("fs", 'rmSync(dir); await fs.promises.rm(p); fs.unlinkSync(q); const form = "rm (x)";'), 4, "a call in any spelling, and it over-matches a string on purpose");
+  assert.equal(seen("fs", "const confirm = perform(x); const arm = 1;"), 0);
+  assert.equal(seen("argv", 'exec("docker", [kind, "rm", ref]); path: ["worktree", "rm"]'), 2);
+  assert.equal(seen("argv", 'const s = "worktree rm fails"; "rmdir"'), 0);
+  assert.equal(seen("worktree", "await d.orca.worktreeRm({ worktree }); worktreeRm: (a) => run(); worktreeRm(a: { worktree: string }): Promise<x>;"), 1);
 });

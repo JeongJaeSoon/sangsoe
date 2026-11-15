@@ -19,7 +19,8 @@ function row(cell: string): string {
 
 test("R-20: write-brief has a 사전 확인 field: a read-only precheck item that blocks the unit", () => {
   const precheck = row("사전 확인");
-  for (const want of ["남이 가진 스택·서비스", "읽기 전용 사전 확인 항목", "선행(`blocks`)", "`item_create` 의 `deps`", "`edge_add`", "준비됨이 되지 않는다"]) {
+  // `deps` first: only an Orca dep keeps the Task from starting; an edge_add edge holds it in the ready view alone.
+  for (const want of ["남이 가진 스택·서비스", "읽기 전용 사전 확인 항목", "`item_create` 의 `deps` 에 넣어 선행(`blocks`)으로 건다", "Orca 가 이 항목의 Task 를 시작하지 못하게 잡는다", "`edge_add`", "`start_unit` 을 부르지 않는다"]) {
     assert.ok(precheck.includes(want), `사전 확인 row lacks ${want}`);
   }
 });
