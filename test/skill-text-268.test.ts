@@ -23,7 +23,7 @@ test("R-20: write-brief has a 사전 확인 field: a read-only precheck item tha
   // The brief is written before the precheck ends, so it names the precheck item and cannot carry what it found.
   for (const want of [
     "남이 가진 스택·서비스",
-    "읽기 전용 사전 확인 항목",
+    "읽기 전용 사전 확인 항목을 먼저 만들고",
     "`item_create` 가 돌려준 그 항목의 `task` id 를 `deps` 에 넣어 선행(`blocks`)으로 건다(같은 Run 의 Task 여야 한다)",
     "Orca 가 이 항목의 Task 를 시작하지 못하게 잡는다",
     "이 순서를 지킨다: 이미 만든 항목에는 이 칸을 뒤늦게 달지 못한다",
