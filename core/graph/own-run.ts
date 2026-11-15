@@ -37,12 +37,13 @@ export type OwnRunSync = { run: string; synced: SyncResult; rereview: RereviewRe
  * Orca call from a worker (bound to no Run) or unless the store names a pending item; then one
  * run-current, and the sync only when this session is bound to a Run the item belongs in.
  */
-export async function syncOwnRun(deps: CoreDeps, role: Role, now: string): Promise<OwnRunSync> {
+export async function syncOwnRun(deps: CoreDeps, role: Role, now: string, held?: string | null): Promise<OwnRunSync> {
   if (role === "worker") return { skipped: "a worker holds no Run" };
   const runs = rereviewRuns(deps.store);
   if (runs.size === 0) return { skipped: "nothing pending" };
-  const current = await deps.orca.runCurrent();
-  const run = current.ok && typeof current.value.runId === "string" ? current.value.runId : null;
+  // `held`: the caller already read run-current (the recording hook does, once, decision 274).
+  const current = held === undefined ? await deps.orca.runCurrent() : undefined;
+  const run = held !== undefined ? held : current?.ok && typeof current.value.runId === "string" ? current.value.runId : null;
   if (!run || !runs.has(run)) return { skipped: `pending in ${[...runs].join(", ")}, not this session's Run` };
   const input = await readInput(deps, [run], now);
   if (!input.ok) return { skipped: input.refusal.code };

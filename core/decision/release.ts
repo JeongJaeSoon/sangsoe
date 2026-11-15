@@ -1,12 +1,18 @@
 import type { NotifiedKey } from "../contract/index.ts";
 import { notify } from "../notify/notify.ts";
 import { type CoreDeps, done, type Result, refuse } from "../notify/result.ts";
-import { type DecisionState, isClosedTask, isOpenGate, orcaReads, type Waiter } from "./waiters.ts";
+import { type DecisionState, isOpenGate, orcaReads, owed, type Waiter } from "./waiters.ts";
 
 export interface Released {
   readonly resolved: readonly string[];
   readonly notified: readonly string[];
   readonly handedOff: readonly string[];
+  /**
+   * Waiters this caller could neither free nor tell, because Orca takes no message from a process
+   * with no terminal (the panel, the timer). The session holding the waiter's Run frees them from
+   * its own hooks (decision 274).
+   */
+  readonly pending: readonly string[];
 }
 
 export interface ReleaseInput {
@@ -23,14 +29,15 @@ export interface ReleaseInput {
 /**
  * Frees every waiter of a closed decision. Gates bound to the caller's Run are resolved here; a gate in
  * another Run cannot be (decision 77 라), so that Run gets one message and resumes the same operation.
- * Each waiter whose gate is no longer open is told once (decision 84③: resolve alone is not trusted to
- * wake anyone): its worker by Dispatch, or its Run when the Task is closed (decision 91④(ii)), whichever
- * Run the waiter sits in. A Task with no worker yet is not told: the start procedure puts the answer in
- * the first prompt (91④(i)). One waiter's failure does not hold back the others: the call goes on, then
+ * What a waiter is owed is read by `owed` (waiters.ts), whichever Run it sits in. A waiter whose worker
+ * runs is told once by Dispatch (decision 84③: resolve alone is not trusted to wake anyone). A closed
+ * Task's Run is told once when its gate is still open or it has none (decision 91④(ii)); a gate resolved
+ * while the Task was live was the delivery. A Task with no worker yet is not told: the start procedure
+ * puts the answer in the first prompt (91④(i)). One waiter's failure does not hold back the others: the call goes on, then
  * refuses naming each failure, and calling again resumes only what is left.
  */
 export async function release(deps: CoreDeps, state: DecisionState, input: ReleaseInput): Promise<Result<Released>> {
-  const out: Out = { resolved: [], notified: [], handedOff: [] };
+  const out: Out = { resolved: [], notified: [], handedOff: [], pending: [] };
   const failed: string[] = [];
   const reads = orcaReads(deps.orca);
   for (const w of state.waiters) {
@@ -43,7 +50,18 @@ export async function release(deps: CoreDeps, state: DecisionState, input: Relea
   return done(out);
 }
 
-type Out = { resolved: string[]; notified: string[]; handedOff: string[] };
+type Out = { resolved: string[]; notified: string[]; handedOff: string[]; pending: string[] };
+
+// notify's answer when this process has no terminal to send from: not a failure of the release.
+const told = (out: Out, task: string, r: Awaited<ReturnType<typeof notify>>, into: "handedOff" | "notified"): Result<null> => {
+  if (r.ok) {
+    if (r.value.status === "sent") out[into].push(task);
+    return done(null);
+  }
+  if (r.refusal.code !== "no_sender") return r;
+  out.pending.push(task);
+  return done(null);
+};
 
 async function releaseOne(
   deps: CoreDeps,
@@ -59,8 +77,8 @@ async function releaseOne(
   if (!task.ok) return task;
   const gate = w.gate ? await reads.gate(w.run, w.gate) : done(undefined);
   if (!gate.ok) return gate;
-  const closed = task.value !== undefined && isClosedTask(task.value);
-  const open = !closed && w.gate && gate.value !== undefined && isOpenGate(gate.value) ? w.gate : null;
+  const due = owed(w, task.value, gate.value !== undefined && isOpenGate(gate.value));
+  const open = due.gate;
 
   if (open && w.run !== input.callerRun) {
     const key = input.keyFor(w.task);
@@ -73,8 +91,7 @@ async function releaseOne(
       msgType: "handoff",
       source: input.resumeWith,
     });
-    if (r.ok && r.value.status === "sent") out.handedOff.push(w.task);
-    return r.ok ? done(null) : r;
+    return told(out, w.task, r, "handedOff");
   }
   if (open) {
     const r = await deps.orca.gateResolve({ id: open, resolution: input.resolution });
@@ -82,19 +99,17 @@ async function releaseOne(
     out.resolved.push(open);
   }
 
-  if (w.carrier || !task.value) return done(null);
-  const dispatch = task.value.dispatchId;
-  if (!closed && !dispatch) return done(null);
+  if (!due.tell) return done(null);
+  const dispatch = task.value?.dispatchId;
   const r = await notify(deps, {
     key: input.keyFor(w.task),
-    to: closed ? "lead" : "worker",
-    chain: closed || !dispatch ? { leadRun: w.run } : { dispatch, leadRun: w.run },
+    to: due.tell === "run" ? "lead" : "worker",
+    chain: due.tell === "worker" && dispatch ? { dispatch, leadRun: w.run } : { leadRun: w.run },
     subject: input.subject,
     body: input.resolution,
     // Not decision_gate: Orca takes that type (and escalation) only from the Dispatch's own process (decision 197).
     msgType: "status",
     source: input.resumeWith,
   });
-  if (r.ok && r.value.status === "sent") out.notified.push(w.task);
-  return r.ok ? done(null) : r;
+  return told(out, w.task, r, "notified");
 }

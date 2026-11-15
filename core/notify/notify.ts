@@ -1,4 +1,5 @@
 import { dedupeSegment, type NotifiedKey, type StoredEvent } from "../contract/index.ts";
+import { NO_SENDER_TERMINAL } from "../contract/orca.ts";
 import { recoverWrite } from "../orca/adapter.ts";
 import { bareId } from "./address.ts";
 import { receiptId } from "./receipt.ts";
@@ -110,6 +111,10 @@ export async function notify(deps: CoreDeps, input: NotifyInput): Promise<Result
       payload: { msg_id: `undetermined:${r.requestId ?? "none"}`, to: address, msg_type: msgType },
     });
     return refuse("send_undetermined", `orca send to ${address}: ${r.error.code} ${r.error.message}`, "do not resend; ask the recipient whether it arrived");
+  }
+  // Decision 274: not a failure to retry. This process has no terminal, and the Run's own session delivers.
+  if (!r.ok && r.error.code === NO_SENDER_TERMINAL) {
+    return refuse("no_sender", `orca send to ${address}: ${r.error.code}: this process has no terminal, so Orca takes no message from it`, "nothing to retry: the session holding that Run delivers it from its own hooks");
   }
   if (!r.ok) return refuse("send_failed", `orca send to ${address}: ${r.error.code} ${r.error.message}`, "retry; nothing was recorded");
   const msgId = receiptId(r.value, "message") ?? r.requestId ?? "unrecorded";

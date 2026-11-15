@@ -7,13 +7,16 @@ import type {
   InboxPayload,
   LocalRows,
   OrcaAdapter,
+  OrcaError,
   OrcaResult,
   PortRow,
+  Receipt,
   TaskRow,
   WorkerPlacement,
   WorktreeRow,
   WriteOptions,
 } from "../contract/orca.ts";
+import { NO_SENDER_TERMINAL } from "../contract/orca.ts";
 import { type CommandName, ORCA_COMMANDS } from "./commands.ts";
 import { isLocalHost, keepLocal } from "./host-filter.ts";
 
@@ -155,6 +158,8 @@ function placement(p: WorkerPlacement): string {
 }
 
 export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
+  // Decision 274: the answer Orca gave this process's first send when it has no terminal, kept for its life.
+  let senderless: { ok: false; error: OrcaError } | null = null;
   async function run<T>(name: CommandName, call?: Call, o?: WriteOptions): Promise<OrcaResult<T>> {
     const spec = ORCA_COMMANDS[name];
     let args: string[];
@@ -223,7 +228,7 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
 
   const jsonArray = (xs: readonly string[] | undefined) => (xs ? JSON.stringify(xs) : undefined);
 
-  return {
+  const adapter: OrcaAdapter = {
     status: () => shaped("status", has("runtime", has("capabilities", strings))),
     hostList: () => field<HostRow[]>("hostList", "hosts", rowsWith({ id: "string", kind: "string" })),
     agentHooksStatus: () => shaped("agentHooksStatus", has("statuses", rowsWith({ agent: "string", state: "string" }))),
@@ -270,8 +275,10 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
       return r.ok ? { ok: true, value: r.value.map(gateRow) } : r;
     },
 
-    send: (a, o) =>
-      run(
+    send: async (a, o) => {
+      // A send that names its sender (`--from`) is another question; only the unnamed one is remembered.
+      if (senderless && a.from === undefined) return senderless;
+      const r = await run<Receipt>(
         "send",
         {
           flags: {
@@ -286,7 +293,13 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
           },
         },
         o,
-      ),
+      );
+      if (!r.ok && r.error.code === NO_SENDER_TERMINAL && a.from === undefined) {
+        senderless = { ok: false, error: r.error };
+        SENDERLESS.add(adapter);
+      }
+      return r;
+    },
     inbox: async (a) => {
       const r = await field<Json[]>("inbox", "messages", rowsWith({ id: "string", type: "string" }), { flags: { terminal: a.terminal, limit: a.limit, full: true } });
       return r.ok ? { ok: true, value: r.value.map(inboxRow) } : r;
@@ -366,4 +379,14 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
     pluginList: () => field("pluginList", "plugins", rowsWith({ pluginKey: "string", version: "string", status: "string" })),
     pluginInspect: (a) => run("pluginInspect", { pos: [a.dir] }),
   };
+  return adapter;
 }
+
+const SENDERLESS = new WeakSet<OrcaAdapter>();
+/**
+ * True once Orca has answered a send through this adapter with NO_SENDER_TERMINAL: the process has no
+ * terminal, which does not change while it lives. The adapter then answers later sends itself, and a
+ * round stops queueing them (decision 274). A wrapper around the adapter reads false and still calls
+ * no Orca: the wrapped adapter answers.
+ */
+export const noSender = (orca: OrcaAdapter): boolean => SENDERLESS.has(orca);

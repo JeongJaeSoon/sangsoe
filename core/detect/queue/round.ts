@@ -5,10 +5,11 @@ import { decisionAnswer } from "../../decision/answer.ts";
 import { decisionMoot } from "../../decision/moot.ts";
 import { isOpenGate } from "../../decision/waiters.ts";
 import type { GhClient } from "../../gh/client.ts";
-import { notifyReady } from "../../graph/notify-ready.ts";
+import { notifyReady, readyKeys } from "../../graph/notify-ready.ts";
 import { type RereviewResult, rereviewItems } from "../../graph/rereview.ts";
 import { readSnapshot } from "../../graph/snapshot.ts";
 import { syncGraph } from "../../graph/sync.ts";
+import { noSender } from "../../orca/adapter.ts";
 import { probeRound } from "../../owner/probe.ts";
 import { recordUnreleased, unreleasedWaits } from "../../owner/release.ts";
 import { OWNER_DEFAULTS } from "../../owner/types.ts";
@@ -22,7 +23,9 @@ import { judgeStall } from "./stall.ts";
 /**
  * The Run the queue-monitor passes as its caller: none. The plugin worker holds no Run, and
  * gate-resolve works only inside the gate's own Run (decision 77 라), so `release` hands every open
- * gate to the session holding its Run, which resolves it with the same call (decision 0148).
+ * gate to the session holding its Run, which resolves it with the same call (decision 0148). From a
+ * process with no terminal the handoff cannot be sent either: the waiter comes back as `pending`
+ * and that session finds the open gate itself (decision 274, own-run.ts).
  */
 export const QUEUE_CALLER = "monitor:queue";
 
@@ -76,7 +79,16 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
     }
   } else calls.push("would call graph sync", "would call rereview items");
 
-  if (j.ready.length > 0) {
+  // Decision 274: once Orca has said this process has no terminal, no ready, due or unclear notice is
+  // queued for sending. Each Run's own session reads those from its hooks instead. The moot, re-answer
+  // and stale-raise calls below still run: their sends come back as the remembered refusal.
+  const mute = noSender(d.orca);
+  const told = new Set(events.flatMap((e) => (e.type === "notified" && e.dedupe_key ? [e.dedupe_key] : [])));
+  if (mute) {
+    const keys = readyKeys(input);
+    const left = j.ready.filter((r) => !told.has(keys.get(r.task)?.dedupe_key ?? "")).length;
+    if (left > 0) calls.push(`notifyReady: ${left} left to their Runs' own sessions (no sender terminal)`);
+  } else if (j.ready.length > 0) {
     const runOf = new Map(input.orca.tasks.map((t) => [t.id, t.runId]));
     if (core && !signal.aborted) {
       const notices = await notifyReady(core, input, (task) => {
@@ -113,7 +125,7 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
       continue;
     }
     const r = await decisionMoot(core, { decision: m.decision, evidence: m.evidence, callerRun: QUEUE_CALLER });
-    calls.push(`decision_moot ${m.decision} (${ev}): ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}` : r.refusal.code}`);
+    calls.push(`decision_moot ${m.decision} (${ev}): ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}, left to the Run ${r.value.pending.length}` : r.refusal.code}`);
   }
 
   for (const a of j.reanswer) {
@@ -123,11 +135,10 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
       continue;
     }
     const r = await decisionAnswer(core, { ...a, callerRun: QUEUE_CALLER });
-    calls.push(`decision_answer ${a.decision} again: ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}, told ${r.value.notified.length}` : r.refusal.code}`);
+    calls.push(`decision_answer ${a.decision} again: ${r.ok ? `${r.value.status}, handed off ${r.value.handedOff.length}, told ${r.value.notified.length}, left to the Run ${r.value.pending.length}` : r.refusal.code}`);
   }
 
   const above = runAbove(d.orca);
-  const told = new Set(events.flatMap((e) => (e.type === "notified" && e.dedupe_key ? [e.dedupe_key] : [])));
   for (const s of j.stale) {
     planned.push(s.event);
     // Raised already: the gate stays open, but the Run lookup (a paged worker list) is not read again.
@@ -164,9 +175,17 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   const runOf = new Map(input.orca.tasks.map((t) => [t.id, t.runId]));
   const acts: Act[] = [];
   // A row already written whose notice never went (a failed send) is offered again; notify keeps it to one.
+  let muted = 0;
+  let unsent = 0;
   for (const e of planned) {
     const n = leadNotice(e);
     if (!n || have.has(n.key)) continue;
+    if (mute) {
+      // The Run's session tells its due and unclear items (own-run.ts); nothing tells verify_unconfirmed.
+      if (e.type === "escalation_stale") unsent += 1;
+      else muted += 1;
+      continue;
+    }
     const lead = runOf.get(n.task);
     if (!lead) {
       unseen.push(`owning lead of ${n.task}`);
@@ -188,6 +207,8 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
       }),
     });
   }
+  if (muted > 0) calls.push(`notices: ${muted} left to their Runs' own sessions (no sender terminal)`);
+  if (unsent > 0) calls.push(`notices: ${unsent} verify_unconfirmed not sent (no sender terminal); the rows are written`);
   // Decision 219: Orca fences this worker out of a lead's Run and refuses its sends (no terminal), so a
   // fenced re-review item is left to that Run's own session, whose Stop and UserPromptSubmit hooks make it.
   for (const f of fenced) calls.push(`re-review item of ${f.pr}: left to run:${f.run}'s own hook (consumer_fenced)`);
@@ -200,9 +221,11 @@ type LeadNotice = { task: string; key: string; subject: string; body: string; ms
 /**
  * The rows whose notice goes to the item's owning lead (decision 154): todo_due and trigger_unclear
  * (appendix queue-monitor card), escalation_stale{verify_unconfirmed} (decision 91② row 11). One
- * notice per row: the key carries the row's own condition.
+ * notice per row: the key carries the row's own condition. When this process cannot send, the Run's
+ * own session tells its todo_due and trigger_unclear rows under the same key (decision 274);
+ * verify_unconfirmed then reaches nobody.
  */
-function leadNotice(e: Planned): LeadNotice | undefined {
+export function leadNotice(e: Planned): LeadNotice | undefined {
   const p = e.payload as Record<string, unknown>;
   const seg = dedupeSegment;
   if (e.type === "todo_due" || e.type === "trigger_unclear") {

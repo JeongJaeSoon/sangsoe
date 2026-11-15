@@ -4,6 +4,7 @@ import { syncOwnRun } from "../graph/own-run.ts";
 import { advisorCalls } from "../models/spend.ts";
 import { readDecision } from "../decision/waiters.ts";
 import type { CoreDeps } from "../notify/result.ts";
+import { deliverOwnRun } from "../detect/queue/own-run.ts";
 import { classifyPrompt } from "../owner/prompt.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
 import type { Store } from "../store/store.ts";
@@ -27,28 +28,33 @@ export const SESSION_HOOKS = [
 export type SessionHook = (typeof SESSION_HOOKS)[number];
 
 /**
- * One recording hook call. Returns the lines to print: only SessionStart prints (its stdout is injected
- * context); every other hook prints nothing. A session with no session_started row is not sangsoe's and
- * gets no write and no Orca call.
+ * One recording hook call. Returns the lines to print: SessionStart and UserPromptSubmit print (their
+ * stdout is injected context; UserPromptSubmit at most the Run's one count line, decision 274); every
+ * other hook prints nothing. A session with no session_started row is not sangsoe's and gets no write
+ * and no Orca call.
  */
 export async function recordHook(event: SessionHook, deps: CoreDeps, input: SessionHookInput, opts: SessionStartOptions = {}): Promise<string[]> {
   if (event === "session-start") return sessionStart(deps, input, opts);
   const row = sessionOf(deps.store, input.session_id);
   if (!row) return [];
   switch (event) {
-    case "user-prompt-submit":
+    case "user-prompt-submit": {
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
       await ownerSaid(deps, row, input);
-      await syncOwnRun(deps, row.role, new Date().toISOString());
-      break;
-    case "stop":
+      // Decision 274: this prompt's context gets the Run's one count line; Claude Code injects the stdout.
+      return ownRun(deps, row);
+    }
+    case "stop": {
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
       advisorUsed(deps.store, row, input);
       turnEnded(deps.store, row, input);
       released(deps.store, { kind: "turn_ended", session: input.session_id }, "Stop");
       await workerIdle(deps, row, input);
+      // Stop makes only the re-review items (no Orca call unless one is pending); the Run's deliveries
+      // ride the next prompt, which is how every Orca wake arrives (decision 274).
       await syncOwnRun(deps, row.role, new Date().toISOString());
       break;
+    }
     case "stop-failure":
       await lostLogin(deps, row, input);
       break;
@@ -68,6 +74,22 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
       break;
   }
   return [];
+}
+
+/**
+ * What a Run's own session does for its Run on each prompt (decisions 219, 274): the re-review items
+ * and the deliveries the plugin cannot make. A worker holds no Run and makes no Orca call; anyone
+ * else reads run-current once, then its Run's Tasks and gates.
+ */
+async function ownRun(deps: CoreDeps, row: SessionRow): Promise<string[]> {
+  if (row.role === "worker") return [];
+  const now = new Date().toISOString();
+  const current = await deps.orca.runCurrent();
+  const run = current.ok && typeof current.value.runId === "string" && current.value.runId !== "" ? current.value.runId : null;
+  await syncOwnRun(deps, row.role, now, run);
+  if (!run) return [];
+  const own = await deliverOwnRun(deps, run, now);
+  return "lines" in own ? [...own.lines] : [];
 }
 
 /** Decision 91①: the session moving again, or ending, releases its waits; core/owner decides which. */

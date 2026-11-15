@@ -179,7 +179,7 @@ test("decision_moot_closed (detection side): every waiter Task closed moots the 
   t1.status = "completed";
   delete t1.dispatchId;
   const r = await queue(deps(w.store, w.orca));
-  assert.ok(r.calls.includes(`decision_moot ${d} (tasks_closed): moot, handed off 0`), r.calls.join("\n"));
+  assert.ok(r.calls.includes(`decision_moot ${d} (tasks_closed): moot, handed off 0, left to the Run 0`), r.calls.join("\n"));
   assert.deepEqual(w.store.events({ type: "decision_closed" }).map((e) => e.payload), [{ decision: d, reason: "moot", evidence: "tasks_closed" }]);
   assert.equal(w.calls("orchestration gate-resolve").length, 0, "a closed Task's gate is not called");
   assert.equal(w.calls("orchestration task-update").length, 0, "moot closes the decision, never an item");
@@ -196,7 +196,7 @@ test("decision_moot_closed (detection side): a waiter's PR closed unmerged moots
   w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#3", task: T1 } });
   w.store.append({ type: "pr_closed", source: "pr-monitor", payload: { pr: "acme/api#3" } });
   const r = await queue(deps(w.store, w.orca));
-  assert.ok(r.calls.includes(`decision_moot ${d} (pr_closed:acme/api#3): moot, handed off 1`), r.calls.join("\n"));
+  assert.ok(r.calls.includes(`decision_moot ${d} (pr_closed:acme/api#3): moot, handed off 1, left to the Run 0`), r.calls.join("\n"));
   assert.equal(w.store.events({ type: "decision_closed" })[0]?.payload.evidence, "pr_closed:acme/api#3");
   assert.equal(w.gates.get("gate_000000000001")?.status, "pending", "resolved by its own Run, not from here");
   assert.match(w.sends[0]?.body ?? "", /sangsoe decision moot --decision d001/);

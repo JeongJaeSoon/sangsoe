@@ -12,6 +12,7 @@ export { type Overlap, type Overlaps, overlapLines, prOverlaps } from "./overlap
 export { owner_todo } from "./owner_todo.ts";
 export {
   ACTED_LABEL,
+  ANSWER_PENDING_LABEL,
   openPanelCore,
   PANEL_RUN,
   type PanelAct,

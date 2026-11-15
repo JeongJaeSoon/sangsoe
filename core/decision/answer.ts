@@ -32,7 +32,7 @@ export async function decisionAnswer(deps: CoreDeps, input: DecisionAnswerInput)
   const d = input.decision;
   const before = readDecision(store, d);
   if (!before) return refuse("unknown_decision", `no decision ${d}`, "answer an open dNNN");
-  const nothing = { resolved: [], notified: [], handedOff: [] };
+  const nothing = { resolved: [], notified: [], handedOff: [], pending: [] };
   const source = sourceOf(store, input);
   if (!source.ok) return source;
 

@@ -161,6 +161,7 @@ test("decision_answer_linked: an answer linked to dNNN resolves the waiter's gat
     resolved: ["gate_000000000001"],
     notified: [T1],
     handedOff: [],
+    pending: [],
   });
   const gate = w.gates.get("gate_000000000001");
   assert.equal(gate?.status, "resolved");
@@ -331,7 +332,7 @@ test("decision_moot_closed: a closed PR moots the decision, frees the gate with 
   const input = { decision: d, evidence: { kind: "pr_closed" as const, pr: "acme/api#3" }, callerRun: RUN };
   const r = await decisionMoot(w, input);
   assert.ok(r.ok, JSON.stringify(r));
-  assert.deepEqual(r.value, { status: "moot", decision: d, resolved: ["gate_000000000001"], notified: [T1], handedOff: [] });
+  assert.deepEqual(r.value, { status: "moot", decision: d, resolved: ["gate_000000000001"], notified: [T1], handedOff: [], pending: [] });
   assert.equal(w.gates.get("gate_000000000001")?.resolution, "MOOT d001: pr_closed:acme/api#3");
   assert.deepEqual(w.store.events({ type: "decision_closed" }).map((e) => e.payload), [
     { decision: d, reason: "moot", evidence: "pr_closed:acme/api#3" },
@@ -341,7 +342,7 @@ test("decision_moot_closed: a closed PR moots the decision, frees the gate with 
 
   const again = await decisionMoot(w, input);
   assert.ok(again.ok);
-  assert.deepEqual(again.value, { status: "moot", decision: d, resolved: [], notified: [], handedOff: [] });
+  assert.deepEqual(again.value, { status: "moot", decision: d, resolved: [], notified: [], handedOff: [], pending: [] });
   assert.equal(w.calls("orchestration gate-resolve").length, 1);
   assert.equal(w.sends.length, 1);
 
@@ -423,7 +424,7 @@ test("decision 231: `decision moot` retires a broken decision with no waiter at 
   const before = w.calls().length;
   const r = await decisionMootFrom({ decision: "d001" }, w);
   assert.ok(r.ok, JSON.stringify(r));
-  assert.deepEqual(r.value, { status: "moot", decision: "d001", resolved: [], notified: [], handedOff: [] });
+  assert.deepEqual(r.value, { status: "moot", decision: "d001", resolved: [], notified: [], handedOff: [], pending: [] });
   assert.deepEqual(w.calls().slice(before), [["orchestration", "run-current"]], "only the entrance's run-current");
   assert.equal(w.sends.length, 0);
   assert.deepEqual(
@@ -434,7 +435,7 @@ test("decision 231: `decision moot` retires a broken decision with no waiter at 
 
   const again = await decisionMootFrom({ decision: "d001" }, w);
   assert.ok(again.ok);
-  assert.deepEqual(again.value, { status: "moot", decision: "d001", resolved: [], notified: [], handedOff: [] });
+  assert.deepEqual(again.value, { status: "moot", decision: "d001", resolved: [], notified: [], handedOff: [], pending: [] });
   assert.equal(w.store.events({ type: "decision_closed" }).length, 1);
 });
 

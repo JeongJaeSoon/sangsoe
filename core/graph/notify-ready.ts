@@ -12,6 +12,14 @@ export function readyNotifiedKey(task: string, edges: readonly string[]): Notifi
   return { target: task, dedupe_key: `notify:${dedupeSegment(task)}:ready:${hash}` };
 }
 
+/** The wake key of each item the ready view lists, for a caller that tells its own Run without mail (decision 274). */
+export function readyKeys(input: ViewInput): Map<string, NotifiedKey> {
+  const facts = foldFacts(input.events);
+  const tasks = new Map(input.orca.tasks.map((t) => [t.id, t]));
+  const edges = (task: string) => inEdges(task, facts, tasks).map((e) => `${e.pred}|${e.kind}`);
+  return new Map(readiness(input).filter((x) => x.readiness === "ready").map((r) => [r.task, readyNotifiedKey(r.task, edges(r.task))]));
+}
+
 export interface ReadyNotice {
   readonly task: string;
   readonly item: string;
@@ -24,8 +32,7 @@ export interface ReadyNotice {
  * the orchestrator) once, through notify. Nothing about readiness is written; only `notified`.
  */
 export async function notifyReady(deps: CoreDeps, input: ViewInput, chainOf: (task: string) => Chain | undefined): Promise<ReadyNotice[]> {
-  const facts = foldFacts(input.events);
-  const tasks = new Map(input.orca.tasks.map((t) => [t.id, t]));
+  const keys = readyKeys(input);
   const out: ReadyNotice[] = [];
   for (const r of readiness(input).filter((x) => x.readiness === "ready")) {
     const chain = chainOf(r.task);
@@ -34,7 +41,7 @@ export async function notifyReady(deps: CoreDeps, input: ViewInput, chainOf: (ta
       out.push({ task: r.task, item: r.item, status: "no_chain" });
       continue;
     }
-    const key = readyNotifiedKey(r.task, inEdges(r.task, facts, tasks).map((e) => `${e.pred}|${e.kind}`));
+    const key = keys.get(r.task) as NotifiedKey;
     const sent = await notify(deps, {
       key,
       to,
