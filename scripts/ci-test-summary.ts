@@ -1,7 +1,7 @@
 // CI's `unit` job pipes `npm test` into a log and runs this over it (decision 266): the skipped
-// tests and the run attempt go to the job summary, so neither a skip nor a rerun that turned a
-// red run green stays inside a collapsed log.
-import { appendFileSync, readFileSync } from "node:fs";
+// tests and the run attempt go to the job summary, so neither a skip nor a rerun stays inside a
+// collapsed log.
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 export interface TestSummary {
@@ -27,18 +27,26 @@ export function summarize(output: string): TestSummary | null {
   return { tests, pass, fail, skipped, todo, skippedNames };
 }
 
-/** `attempt` is GitHub's run attempt: above 1 means a person reran this commit's job after a failure. */
+/**
+ * `attempt` is GitHub's attempt number of this workflow run, not of the commit: above 1 means the run
+ * was rerun, which GitHub also allows on a green run or after another job failed. So the text says an
+ * earlier attempt exists and where to look; it does not say that attempt failed here.
+ */
 export function render(s: TestSummary, attempt: number): string {
   const lines = [
     "### unit tests",
     "",
     `tests ${s.tests} · pass ${s.pass} · fail ${s.fail} · skipped ${s.skipped} · todo ${s.todo}`,
     "",
-    attempt > 1 ? `**Rerun: attempt ${attempt}.** ${attempt - 1} earlier attempt(s) of this commit did not pass; a green here is a flake until the cause is found.` : "Rerun: attempt 1 (no earlier attempt of this commit).",
+    attempt > 1
+      ? `**Attempt ${attempt} of this workflow run: it was rerun.** Read the earlier attempt(s): if \`unit\` failed there and passes here, that test is a flake until its cause is found.`
+      : "Attempt 1 of this workflow run.",
   ];
   if (s.skippedNames.length > 0) lines.push("", "Skipped:", ...s.skippedNames.map((n) => `- ${n}`));
+  // node counts neither a skipped suite nor the tests inside it, but prints the suite's line.
   const unnamed = s.skipped - s.skippedNames.length;
   if (unnamed > 0) lines.push("", `${unnamed} skipped test(s) have no line this script could read; find them in the log.`);
+  if (unnamed < 0) lines.push("", `${-unnamed} of the lines above are outside node's skipped count (a skipped suite is listed, and the tests inside it are not counted).`);
   return `${lines.join("\n")}\n`;
 }
 
@@ -47,6 +55,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (!log) {
     console.error("usage: node scripts/ci-test-summary.ts <test output log>");
     process.exit(2);
+  }
+  // The step also runs when an earlier step failed and npm test never started.
+  if (!existsSync(log)) {
+    console.error(`${log}: no test output; npm test did not run`);
+    process.exit(1);
   }
   const s = summarize(readFileSync(log, "utf8"));
   if (!s) {

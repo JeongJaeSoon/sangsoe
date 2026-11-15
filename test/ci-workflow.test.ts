@@ -62,12 +62,15 @@ test("B1: the summary counts skipped tests from the closing counters and names t
   const text = render(s as NonNullable<typeof s>, 1);
   assert.match(text, /skipped 3/);
   assert.ok(text.endsWith(`Skipped:\n${names.map((n) => `- ${n}`).join("\n")}\n`), text);
-  assert.match(text, /Rerun: attempt 1 /);
+  assert.match(text, /\nAttempt 1 of this workflow run\.\n/);
+  assert.doesNotMatch(text, /rerun/);
 });
 
-test("B1: a rerun attempt is called a flake, and output without closing counters is no summary", () => {
-  const s = summarize(OUTPUT);
-  assert.match(render(s as NonNullable<typeof s>, 3), /\*\*Rerun: attempt 3\.\*\* 2 earlier attempt\(s\)/);
+test("B1: a rerun is marked, output without closing counters is no summary, and a count the names do not match is said", () => {
+  const s = summarize(OUTPUT) as NonNullable<ReturnType<typeof summarize>>;
+  assert.match(render(s, 3), /\*\*Attempt 3 of this workflow run: it was rerun\.\*\*/);
   assert.equal(summarize("✔ a test (0.1ms)\nℹ tests 1\n"), null);
-  assert.match(render({ ...(s as NonNullable<typeof s>), skipped: 5 }, 1), /\n2 skipped test\(s\) have no line/);
+  assert.match(render({ ...s, skipped: 5 }, 1), /\n2 skipped test\(s\) have no line/);
+  assert.match(render({ ...s, skipped: 2 }, 1), /\n1 of the lines above are outside node's skipped count/);
+  assert.doesNotMatch(render(s, 1), /no line|outside node/);
 });
