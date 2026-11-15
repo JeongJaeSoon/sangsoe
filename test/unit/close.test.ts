@@ -170,10 +170,6 @@ const ORPHAN_REFUSED: [string, Scene][] = [
     { terminals: [orphan(), orphan({ handle: "term_other", tabId: `${PLACEHOLDER}2`, leafId: `${PLACEHOLDER}2` })] },
   ],
   ["its recorded pane key only in another worktree's ps row", { terminals: [orphan()], agentsIn: "wt-2::/work/acme/web" }],
-  [
-    "a live terminal whose pane an orphan also records",
-    { terminals: [{ handle: TERM, worktreeId: WS, executionHostId: "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" }, orphan({ handle: "term_other" })] },
-  ],
   ["no recordedPaneKey", { terminals: [orphan({ recordedPaneKey: undefined })] }],
   ["an empty recordedPaneKey", { terminals: [orphan({ recordedPaneKey: "" })] }],
   [
@@ -181,6 +177,31 @@ const ORPHAN_REFUSED: [string, Scene][] = [
     { terminals: [orphan(), { handle: "term_other", worktreeId: WS, executionHostId: "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" }] },
   ],
 ];
+
+// Decision 277 (i163): an orphan and the live terminal that took its pane each made the other's close
+// refuse. The ps row under the pane key is the attached terminal's, so that one is closed by it; the
+// orphan stays refused while the pane is attached, and is judged alone once the attached one is gone.
+test("277: a live terminal whose pane an orphan also records is closed; the orphan is refused until then", async () => {
+  const attached = { handle: TERM, worktreeId: WS, executionHostId: "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" };
+  const live = world({ terminals: [attached, orphan({ handle: "term_other" })] });
+  const r = await live.run();
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(live.closes(), [["terminal", "close", "--terminal", TERM, "--json"]]);
+
+  const before = world({ terminals: [orphan(), { ...attached, handle: "term_other" }] });
+  assert.equal(code(await before.run()), "agent_not_idle", "the orphan, while its pane is attached to the live one");
+  assert.equal(before.closes().length, 0);
+
+  const after = world({ terminals: [orphan()] });
+  assert.ok((await after.run()).ok, "the orphan alone on its pane, once the live one is closed");
+});
+
+test("277: two attached terminals on one pane key are both refused", async () => {
+  const attached = { handle: TERM, worktreeId: WS, executionHostId: "local", agentIdentity: "claude", tabId: "tab1", leafId: "leaf1" };
+  const w = world({ terminals: [attached, { ...attached, handle: "term_other" }] });
+  assert.equal(code(await w.run()), "agent_not_idle");
+  assert.equal(w.closes().length, 0);
+});
 
 for (const [name, scene] of ORPHAN_REFUSED) {
   test(`refuses an orphaned terminal with ${name}`, async () => {
