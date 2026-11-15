@@ -9,6 +9,7 @@ import { notifyReady } from "../../graph/notify-ready.ts";
 import { type RereviewResult, rereviewItems } from "../../graph/rereview.ts";
 import { readSnapshot } from "../../graph/snapshot.ts";
 import { syncGraph } from "../../graph/sync.ts";
+import { noSender } from "../../orca/adapter.ts";
 import { probeRound } from "../../owner/probe.ts";
 import { recordUnreleased, unreleasedWaits } from "../../owner/release.ts";
 import { OWNER_DEFAULTS } from "../../owner/types.ts";
@@ -76,7 +77,11 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
     }
   } else calls.push("would call graph sync", "would call rereview items");
 
-  if (j.ready.length > 0) {
+  // Decision 274: once Orca has said this process has no terminal, nothing is queued for sending.
+  // Each Run's own session reads its ready, due and unclear items from its hooks instead.
+  const mute = noSender(d.orca);
+  if (j.ready.length > 0 && mute) calls.push(`notifyReady: ${j.ready.length} left to their Runs' own sessions (no sender terminal)`);
+  else if (j.ready.length > 0) {
     const runOf = new Map(input.orca.tasks.map((t) => [t.id, t.runId]));
     if (core && !signal.aborted) {
       const notices = await notifyReady(core, input, (task) => {
@@ -164,9 +169,14 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   const runOf = new Map(input.orca.tasks.map((t) => [t.id, t.runId]));
   const acts: Act[] = [];
   // A row already written whose notice never went (a failed send) is offered again; notify keeps it to one.
+  let muted = 0;
   for (const e of planned) {
     const n = leadNotice(e);
     if (!n || have.has(n.key)) continue;
+    if (mute) {
+      muted += 1;
+      continue;
+    }
     const lead = runOf.get(n.task);
     if (!lead) {
       unseen.push(`owning lead of ${n.task}`);
@@ -188,6 +198,7 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
       }),
     });
   }
+  if (muted > 0) calls.push(`notices: ${muted} left to their Runs' own sessions (no sender terminal)`);
   // Decision 219: Orca fences this worker out of a lead's Run and refuses its sends (no terminal), so a
   // fenced re-review item is left to that Run's own session, whose Stop and UserPromptSubmit hooks make it.
   for (const f of fenced) calls.push(`re-review item of ${f.pr}: left to run:${f.run}'s own hook (consumer_fenced)`);

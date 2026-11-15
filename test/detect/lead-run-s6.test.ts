@@ -129,11 +129,12 @@ test("decision 219: the timer round makes no re-review item and sends no doomed 
   assert.equal(others()[0]?.payload.run, LEAD_RUN);
   assert.deepEqual(graphRead.why(await x.view(), x.task).map((r) => r.kind), ["blocks"]);
 
-  // Made once: the next wake's hooks read the store and stop there.
+  // Made once: the next wake's prompt hook makes no second item. It reads its own Run for what the
+  // plugin cannot deliver (decision 274) and writes nothing to Orca.
   const after = x.w.calls().length;
   await recordHook("user-prompt-submit", { store: x.w.store, orca: x.w.orca }, { session_id: LEAD_SESSION, prompt: "You have 1 orchestration message." });
   assert.equal(others().length, 1);
-  assert.deepEqual(x.w.calls().slice(after), [], "nothing pending: store reads only, no Orca call");
+  assert.deepEqual(x.w.calls().slice(after).map((c) => c[1]), ["run-current", "task-list", "gate-list"]);
 
   // The next base change of the same PR needs its own item; the lead's next wake makes it.
   baseMoved(x, "main", "release");
@@ -141,7 +142,7 @@ test("decision 219: the timer round makes no re-review item and sends no doomed 
   assert.equal(others().length, 2);
 });
 
-test("decision 219: a failed wake keeps Orca's code and message in the round's act", async () => {
+test("decisions 219, 274: the timer's first wake is refused once by Orca, and the round after queues none", async () => {
   const x = await leadWorld();
   x.w.strict();
   x.w.as(TIMER);
@@ -153,5 +154,12 @@ test("decision 219: a failed wake keeps Orca's code and message in the round's a
   const act = round.acts.find((a) => a.what.startsWith(`notify run:${LEAD_RUN}`));
   assert.ok(act, JSON.stringify(round.acts));
   assert.equal(act.ok, false);
-  assert.match(act.detail, /send_failed: .*sender_unresolved Could not resolve the sender/);
+  assert.match(act.detail, /^no_sender: .*this process has no terminal/);
+  assert.equal(x.w.calls("orchestration send").length, 1, "Orca was asked once");
+
+  // The process has no terminal for as long as it lives: the next round does not queue the notice again.
+  const next = await runMonitor("queue", x.monitor);
+  assert.deepEqual(next.acts, []);
+  assert.ok(next.calls.some((c) => /^notices: 1 left to their Runs' own sessions/.test(c)), next.calls.join("\n"));
+  assert.equal(x.w.calls("orchestration send").length, 1, "and Orca is not asked again");
 });

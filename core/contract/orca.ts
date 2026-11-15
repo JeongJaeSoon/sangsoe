@@ -20,6 +20,12 @@ export type OrcaError = {
 };
 
 /**
+ * Orca's code for an orchestration write from a process it cannot tie to a terminal: the plugin
+ * worker (its timer and its panel handlers). Seen on Orca 1.4.259 (decision 274).
+ */
+export const NO_SENDER_TERMINAL = "no_active_sender_terminal";
+
+/**
  * Every wrapper returns this. `requestId` is whatever request id Orca reported for a write
  * (decision 60): keep it, and after `response_lost` hand it to `recoverWrite`.
  */

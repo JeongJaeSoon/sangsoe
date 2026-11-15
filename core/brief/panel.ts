@@ -109,6 +109,9 @@ export const ACTED_LABEL: Readonly<Record<(DecisionAnswered | ItemActed)["status
   pending_verify: READING_LABEL.pending_verify,
 };
 
+/** An answer recorded from the panel while its gate sits on a Run: the press is done, the delivery is that Run's. */
+export const ANSWER_PENDING_LABEL = "답을 기록했다. 그 Run 의 세션이 다음에 깰 때 전달한다";
+
 // The panel shows `label`, never `status`: a to-do with a verify is not done yet (decision 181).
 export type PanelActed = (DecisionAnswered | ItemActed) & { readonly label: string };
 
@@ -169,7 +172,10 @@ export function panelCore(ports: PanelPorts): PanelCore {
         { store, orca: ports.orca },
         { decision: d, answer: answerText, ownerAction: action.seq, linkedBy: "button", callerRun: PANEL_RUN },
       );
-      return r.ok ? done({ ...r.value, label: ACTED_LABEL[r.value.status] }) : r;
+      if (!r.ok) return r;
+      // Decision 274: the panel has no terminal, so a gate on a Run waits for that Run's own session.
+      const waits = r.value.status === "answered" && r.value.pending.length > 0;
+      return done({ ...r.value, label: waits ? ANSWER_PENDING_LABEL : ACTED_LABEL[r.value.status] });
     });
   }
 

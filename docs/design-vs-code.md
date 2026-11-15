@@ -427,7 +427,7 @@
 | escalation 한 단계 위 | design-appendix 전달 규칙 | implemented | `core/detect/queue/judge.ts:118` | |
 | 잘린 메시지를 보낸 쪽이 받음 | design-appendix 전달 규칙 | cut (결정 161) | `core/notify/notify.ts:65` | LATER(R-08) — Orca 가 잘림을 응답에 싣게 되면 |
 | 재개 시 대기 다시 붙이기 | design-appendix 전달 규칙 | missing | `core/session/session-start.ts:56` | G32 — SessionStart 도 agent 글도 대기를 다시 붙이라고 하지 않는다 |
-| 모아 보내기(기본 300초) | design-appendix 전달 규칙 | missing | `core/notify/notify.ts:55` | G33 — notify 와 notice 에 모아 보내기가 없다 |
+| 모아 보내기(기본 300초) | design-appendix 전달 규칙 | changed (결정 274) | `core/detect/queue/own-run.ts` `deliverOwnRun` | G33 — 300초 창은 없다. Run 을 쥔 세션의 hook 이 그 Run 의 준비됨·기한·trigger 불명을 프롬프트마다 수 한 줄로 모은다 |
 | reload 알림 | design-appendix 전달 규칙 | cut (결정 161) | — | LATER(R-23) — 설치가 열린 세션에 갱신을 알려야 할 때 |
 | 거부된 행동을 다른 길로 다시 하지 않음 | design-appendix 전달 규칙 | cut (결정 161) | `core/gates/record.ts:12` | LATER(R-10) — 재시도가 관측된 첫 거부에서 |
 | 거부 보고 refusal_report·파일 형식 | design-appendix 전달 규칙 | implemented | `core/detect/orca/mail.ts:40`, `core/detect/orca/judge.ts:36` | 결정 196 |
@@ -543,7 +543,7 @@
 | G30 | 깨울지를 event 의 `needs` 칸이 아니라 판정마다 정한다 | LATER | 깨움이 빠지거나 넘친 첫 경우에 `needs` 로 모은다 |
 | G31 | retarget 뒤 재리뷰 항목을 blocks 로 만들지 않는다 | 닫힘(결정 215) | 오너가 NOW 로 옮겼고 U78 이 고쳤다 |
 | G32 | 재개 뒤 대기를 다시 붙이라는 안내가 없다 | LATER | Orca 가 깨움을 밀어 주므로 지금은 필요가 없다. 재시작 뒤 메시지를 놓친 첫 경우 |
-| G33 | 깨움을 모아 보내지 않는다 | LATER | 한 세션에 짧은 시간 안에 깨움이 몰린 첫 경우 |
+| G33 | 깨움을 모아 보내지 않는다 | 닫힘(결정 274 ⑤) | 조건이 찼다: 가져온 항목 113개의 알림이 한 Run 에 몰렸다(P3 smoke). Run 을 쥔 세션의 hook 이 그 Run 의 준비됨·기한·trigger 불명을 수 한 줄로 낸다. 리드의 워커 알림(`notify`)은 그대로 한 건씩이다 |
 | G34 | 거부 수집 뷰와 설정 차이 뷰가 없다 | LATER | reflect 가 거부를 묶어 세야 하는 첫 회고 |
 | G35 | 머지 대기열 이탈 사유 분류와 merge_group 사전 점검이 없다 | LATER | land 가 머지 예약이라 대기열이 없다(결정 161 R-06). 저장소가 merge queue 를 켜면 |
 | G36 | chat-monitor 의 provider 를 꽂을 자리가 없고 `mention_new` 로 깨우지 않는다 | LATER | 공개 트리에는 채팅 provider 를 실을 수 없다. 오너가 채팅 감시를 켜려는 첫 경우에 provider 를 설정으로 받는 자리와 오케스트레이터 알림을 함께 짓는다 |
@@ -611,5 +611,7 @@
 | 261 | 전환 갭 조사 D1 "최상위 오케스트레이터를 Orca 메시지 전달만으로 깨울 수 있는가" 와 `orchestrator.md` 의 "너를 깨우는 것은 오너의 말과 Orca 메시지뿐이다". 세 페이지는 오케스트레이터가 Run 을 쥐는 단계도, 오케스트레이터 Run 으로 보내는 발신 경로도 적지 않는다 | 메모: 결정 261 을 새로 적었다(U131, 프로브 A9). 코드는 바꾸지 않았다. 깨움은 Orca 전달로 충분했고(17건 모두, 보낸 시각부터 유휴 최대 6.0초·턴 중간 최대 약 7.1초) 압축·재시작 뒤는 재지 못했다. 문서대로 띄운 오케스트레이터는 Run 을 쥐지 않고 Dispatch 가 있는 발신자는 다른 Run 으로 보내지 못한다: B1 이 정할 일. 메모 갱신(U143, 261 ⑨): `orchestrator.md` 에 Run 을 쥐는 "시작할 때" 절을 더했고, `worker.md` 가 워커는 자기 Dispatch 의 Run 으로 보고하고 그 코디네이터가 위로 전한다고 적는다. 코드·Orca 동작은 그대로 | `scripts/a9-collect.ts` `collect`, `test/a9-collect.test.ts`, `claude-plugin/agents/orchestrator.md`("시작할 때"), `claude-plugin/agents/worker.md`, `test/skill-text-u143.test.ts`, `claude-plugin/agents/lead.md:30` |
 | 262 | 결정 235 의 "절은 맨 아래, 열면 페이지가 길어짐" 과 248·253 의 "펼친 틀은 절 끝 위에서 끝남". 세 페이지에는 리소스 절이 아직 없다 | 메모: 결정 262 를 새로 적고 패널을 고쳤다(U133). 열린 절은 보드를 덮는 시트, 못 읽은 후보를 "없음" 이라 하지 않음, 시작 거부 줄은 Task 를 닫아야 사라짐, 카드 둘째 줄은 한 줄 | `orca-plugin/panel/style.ts` `#res`, `orca-plugin/panel/resources.ts` `candidates`, `core/owner/todo.ts`, `scripts/panel-measure.devtools.js` |
 | 265 | 결정 221 의 손으로 쓴 규칙 목록(`SANGSOE_RULES`)과 "orca 명령만", 결정 263 의 "규칙 하나를 손으로 더한다". 세 페이지는 `install --permissions` 의 규칙 수를 적지 않는다 | 메모: 결정 265 를 새로 적고 코드를 고쳤다(U137). 규칙 목록은 skill·agent 글과 `ORCA_COMMANDS` 에서 생성기가 만들어 한 파일에 넣고, 시험이 빠진 규칙·쓰이지 않는 규칙·표에 없는 명령을 막는다. 17 → 41 규칙 | `scripts/gen-permissions.ts`, `scripts/permissions/derive.ts`, `scripts/permissions/policy.ts`, `core/install/permissions.generated.ts`, `core/install/permissions.ts` `sangsoeRules`, `core/install/doctor.ts` `settingsChecks`, `test/permissions-derived.test.ts` |
+| 266 | 결정 161 R-11(CI 시간 제한·건너뜀·다시 돌림 표시)과 전환 조건 B1. 세 페이지는 CI 를 적지 않는다 | 메모: 결정 266 을 새로 적고 `ci.yml` 을 고쳤다(U144). 고칠 대목 없음 | `.github/workflows/ci.yml`, `scripts/ci-test-summary.ts`, `test/ci-workflow.test.ts` |
+| 274 | 부록 queue-monitor 카드의 "소유 리드에게 `item_ready` 로 알린다(Orca 메시지)", 부록 전달 규칙의 모아 보내기(G33), 결정 136·0148 의 "열린 게이트는 그 Run 에 `handoff` 로 넘긴다". Orca 는 터미널 없는 plugin worker 의 orchestration 쓰기를 받지 않는다(P3 smoke) | 메모: 결정 274 를 새로 적고 코드를 고쳤다(U144). 타이머와 패널은 보내지 않고, Run 을 쥔 세션의 `UserPromptSubmit` hook 이 자기 Run 의 게이트를 풀고 수 한 줄을 낸다. 세 페이지는 쉬는 세션을 깨우는 한 줄(274 ⑦)을 싣는 다음 PR 이 함께 고친다 | `core/detect/queue/own-run.ts` `deliverOwnRun`, `core/orca/adapter.ts` `noSender`, `core/notify/notify.ts`, `core/decision/release.ts` `told`, `core/detect/queue/round.ts`, `core/session/record.ts` `ownRun`, `core/brief/panel.ts` `ANSWER_PENDING_LABEL` |
 
 첫 빌드 시험 T1–T6 의 결과는 `test-outcomes.md` 의 행이다. 여섯 모두 통과다. T5 는 두 행이다: "워커는 자기 Run 에 Task 를 만들지 못한다"(U10)와, U93 이 Run 을 쥔 리드 세션에서 돌린 이중 시작 거부 · 세 번 실패 차단이다(`smoke-run.md` 3절 끝). 한 번 시작된 Task 는 실패 세기 앞에서 `already_dispatched` 로 멈추므로 버리는 항목 둘을 썼다. 컷오프 항목은 없는 저장소 선택자로 `worktree create` 를 세 번 실패시켜 `loop_detected{start_failed_3x}` 를 남겼고, 넷째는 `stopped` 였다. 이중 시작 항목은 둘째 호출이 `waiting already_dispatched` 였다. 코드는 결정 114 그대로다: 시작 함수는 `worker-start` 전에 그 Task 의 세는 실패를 세어 세 번이면 `stopped` 로 돌려주고(`core/start/start.ts:316-334`), 이어 Task 상태를 읽어 `dispatched` 이면 `already_dispatched` 로 돌려준다(`:341`).

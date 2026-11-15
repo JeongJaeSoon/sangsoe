@@ -61,7 +61,7 @@ export * from "./session/index.ts";
 export * from "./unit/index.ts";
 
 export type * from "./contract/orca.ts";
-export { createOrcaAdapter, recoverWrite } from "./orca/adapter.ts";
+export { createOrcaAdapter, noSender, recoverWrite } from "./orca/adapter.ts";
 export { type CommandName, type CommandSpec, ORCA_COMMANDS } from "./orca/commands.ts";
 export { nodeExec } from "./orca/exec.ts";
 export { isLocalHost, keepLocal, LOCAL_HOST } from "./orca/host-filter.ts";
@@ -125,6 +125,7 @@ export { judgeQueue, type Moot, QUEUE_SOURCE, type QueueJudgment, type ReadyItem
 export { judgeDrift } from "./detect/queue/drift.ts";
 export { judgeStall, STALL_SOURCE } from "./detect/queue/stall.ts";
 export { QUEUE_CALLER, queueRound, type StallReport, stallCheck } from "./detect/queue/round.ts";
+export { deliverOwnRun, type OwnRunDelivery } from "./detect/queue/own-run.ts";
 export { orcaPluginDrift, type PluginDrift } from "./checks/orca-plugin-version.ts";
 
 export {

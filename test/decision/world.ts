@@ -39,10 +39,12 @@ export type Caller = { run: string | null; dispatchRun?: string; terminal: boole
 export const TIMER: Caller = { run: null, terminal: false };
 
 /**
- * The no-terminal send refusal. The S6 capture showed only that Orca answers not ok; until a capture
- * names its code this generic one stands in (decision 219).
+ * The no-terminal send refusal, as Orca 1.4.259 answered the plugin worker in the P3 smoke
+ * (2026-11-15, decision 274). The S6 capture had shown only that Orca answers not ok (decision 219).
  */
-export const NO_TERMINAL_CODE = "sender_unresolved";
+export const NO_TERMINAL_CODE = "no_active_sender_terminal";
+export const NO_TERMINAL_MESSAGE =
+  "Could not determine the calling terminal for this orchestration command. Pass --from with your own terminal's handle — another pane's handle would act on its mailbox — or run the command inside a live Orca terminal with ORCA_TERMINAL_HANDLE set.";
 
 const ok = (result: unknown): ExecResult => ({ code: 0, stdout: JSON.stringify({ ok: true, result }), stderr: "" });
 const err = (code: string, message = code): ExecResult => ({
@@ -131,7 +133,7 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
     "orchestration-send": (args: readonly string[]) => {
       if (o.failSend || flag(args, "to") === deadAddress) return err("recipient_not_found");
       const to = flag(args, "to") ?? "";
-      if (strict && !terminal && !flag(args, "from")) return err(NO_TERMINAL_CODE, "Could not resolve the sender of this message: pass --from <terminal handle>.");
+      if (strict && !terminal && !flag(args, "from")) return err(NO_TERMINAL_CODE, NO_TERMINAL_MESSAGE);
       if (strict && dispatchRun && to.startsWith("run:") && to.slice(4) !== dispatchRun) {
         return err("dispatch_run_mismatch", `Dispatch ctx_caller belongs to Run ${dispatchRun}, not ${to.slice(4)}.`);
       }
@@ -173,9 +175,14 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
   }
   const fake = createFakeOrca({ replies });
   const store = Store.open({ path: ":memory:" });
+  // One adapter per calling process: an adapter remembers that its process has no terminal (decision
+  // 274), so `as` hands out a new one, as a new process would have. Deps built before keep theirs.
+  let adapter = createOrcaAdapter(fake.exec);
   return {
     store,
-    orca: createOrcaAdapter(fake.exec),
+    get orca() {
+      return adapter;
+    },
     tasks: taskMap,
     gates,
     sends,
@@ -200,6 +207,7 @@ export function createWorld(tasks: WorldTask[], o: { failSend?: boolean; current
       current = c.run;
       dispatchRun = c.dispatchRun;
       terminal = c.terminal;
+      adapter = createOrcaAdapter(fake.exec);
     },
   };
 }

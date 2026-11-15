@@ -26,7 +26,7 @@ export interface DecisionMooted extends Released {
 export async function decisionMoot(deps: CoreDeps, input: DecisionMootInput): Promise<Result<DecisionMooted>> {
   const { store } = deps;
   const d = input.decision;
-  const nothing = { resolved: [], notified: [], handedOff: [] };
+  const nothing = { resolved: [], notified: [], handedOff: [], pending: [] };
   const before = readDecision(store, d);
   if (!before) return refuse("unknown_decision", `no decision ${d}`, "moot an open dNNN");
   if (before.row.state !== "open" && before.row.closedReason !== "moot") {

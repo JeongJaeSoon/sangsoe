@@ -7,6 +7,12 @@ export interface Released {
   readonly resolved: readonly string[];
   readonly notified: readonly string[];
   readonly handedOff: readonly string[];
+  /**
+   * Waiters this caller could neither free nor tell, because Orca takes no message from a process
+   * with no terminal (the panel, the timer). The session holding the waiter's Run frees them from
+   * its own hooks (decision 274).
+   */
+  readonly pending: readonly string[];
 }
 
 export interface ReleaseInput {
@@ -30,7 +36,7 @@ export interface ReleaseInput {
  * refuses naming each failure, and calling again resumes only what is left.
  */
 export async function release(deps: CoreDeps, state: DecisionState, input: ReleaseInput): Promise<Result<Released>> {
-  const out: Out = { resolved: [], notified: [], handedOff: [] };
+  const out: Out = { resolved: [], notified: [], handedOff: [], pending: [] };
   const failed: string[] = [];
   const reads = orcaReads(deps.orca);
   for (const w of state.waiters) {
@@ -43,7 +49,18 @@ export async function release(deps: CoreDeps, state: DecisionState, input: Relea
   return done(out);
 }
 
-type Out = { resolved: string[]; notified: string[]; handedOff: string[] };
+type Out = { resolved: string[]; notified: string[]; handedOff: string[]; pending: string[] };
+
+// notify's answer when this process has no terminal to send from: not a failure of the release.
+const told = (out: Out, task: string, r: Awaited<ReturnType<typeof notify>>, into: "handedOff" | "notified"): Result<null> => {
+  if (r.ok) {
+    if (r.value.status === "sent") out[into].push(task);
+    return done(null);
+  }
+  if (r.refusal.code !== "no_sender") return r;
+  out.pending.push(task);
+  return done(null);
+};
 
 async function releaseOne(
   deps: CoreDeps,
@@ -73,8 +90,7 @@ async function releaseOne(
       msgType: "handoff",
       source: input.resumeWith,
     });
-    if (r.ok && r.value.status === "sent") out.handedOff.push(w.task);
-    return r.ok ? done(null) : r;
+    return told(out, w.task, r, "handedOff");
   }
   if (open) {
     const r = await deps.orca.gateResolve({ id: open, resolution: input.resolution });
@@ -95,6 +111,5 @@ async function releaseOne(
     msgType: "status",
     source: input.resumeWith,
   });
-  if (r.ok && r.value.status === "sent") out.notified.push(w.task);
-  return r.ok ? done(null) : r;
+  return told(out, w.task, r, "notified");
 }
