@@ -3,14 +3,16 @@ import { test } from "node:test";
 import {
   ACTED_LABEL,
   ANSWER_PENDING_LABEL,
+  answerNotifiedKey,
   DEFAULT_MONITOR_CONFIG,
-  dedupeKey,
   decisionAnswer,
   decisionMoot,
   decisionOpen,
+  dedupeKey,
   deliverOwnRun,
   EVENTS,
   type MonitorDeps,
+  mootNotifiedKey,
   noSender,
   nullChatProvider,
   panelCore,
@@ -167,13 +169,16 @@ const timer = (w: World): MonitorDeps => ({
 });
 
 test("274: rows the timer wrote first are still told once by the Run's session, and the timer then counts none left", async () => {
+  const T3 = "task_000000000003";
   const w = createWorld([
     { id: T1, run: RUN, status: "pending" },
     { id: T2, run: RUN, status: "pending" },
+    { id: T3, run: RUN, status: "pending" },
   ]);
   w.as({ run: RUN, terminal: true });
   item(w, T1, { exec_by: "owner", trigger: "2026-01-01" });
   item(w, T2, { trigger: "when the vendor answers" });
+  item(w, T3);
   w.strict();
   w.as(TIMER);
   const monitor = timer(w);
@@ -181,12 +186,13 @@ test("274: rows the timer wrote first are still told once by the Run's session, 
   assert.deepEqual(first.acts.map((a) => a.detail.split(":")[0]), ["no_sender", "no_sender"], JSON.stringify(first.acts));
   const second = await runMonitor("queue", monitor);
   assert.ok(second.calls.some((c) => c.startsWith("notices: 2 left to their Runs' own sessions")), second.calls.join("\n"));
+  assert.ok(second.calls.some((c) => c.startsWith("notifyReady: 1 left to their Runs' own sessions")), second.calls.join("\n"));
   assert.equal(w.store.events({ type: "todo_due" }).length + w.store.events({ type: "trigger_unclear" }).length, 2, "the timer wrote both rows");
 
   w.as({ run: RUN, terminal: true });
   const out = await deliverOwnRun(w, RUN, NOW);
   assert.ok("run" in out, JSON.stringify(out));
-  assert.deepEqual(out.lines, [`sangsoe: Run ${RUN} — 🟢 준비됨 0 · 📅 기한 1 · ⚠️ trigger 불명 1 (새로 2건). 목록은 resource ready 와 brief 로 읽는다.`]);
+  assert.deepEqual(out.lines, [`sangsoe: Run ${RUN} — 🟢 준비됨 1 · 📅 기한 1 · ⚠️ trigger 불명 1 (새로 3건). 목록은 resource ready 와 brief 로 읽는다.`]);
   const again = await deliverOwnRun(w, RUN, NOW);
   assert.ok("run" in again);
   assert.deepEqual(again.lines, []);
@@ -194,7 +200,7 @@ test("274: rows the timer wrote first are still told once by the Run's session, 
   w.as(TIMER);
   const third = await runMonitor("queue", monitor);
   assert.deepEqual(third.acts, []);
-  assert.ok(!third.calls.some((c) => c.startsWith("notices:")), third.calls.join("\n"));
+  assert.ok(!third.calls.some((c) => c.startsWith("notices:") || c.startsWith("notifyReady")), third.calls.join("\n"));
   assert.deepEqual(w.sends, []);
 });
 
@@ -219,7 +225,59 @@ test("274: a decision the timer closed as moot keeps its gate until the Run's se
   assert.deepEqual([quiet.resolved, quiet.lines], [[], []]);
 });
 
-test("274: a moot decision whose waiter Task is closed is left alone: its gate stays open on purpose", async () => {
+// A lead as Orca binds it: its own Run, and a Dispatch in the orchestrator's Run, which is why Orca
+// refuses its mail to any other Run's mailbox, its own included (decision 197).
+const ORCH = "run_000000000009";
+const asLead = (w: World) => w.as({ run: RUN, dispatchRun: ORCH, terminal: true });
+
+/** Three prompts of the Run's session: what the first printed, and that every prompt made only the two reads. */
+async function prompts(w: World): Promise<readonly string[]> {
+  const lines: string[][] = [];
+  for (const round of [1, 2, 3]) {
+    const before = w.calls().length;
+    const out = await deliverOwnRun(w, RUN, NOW);
+    assert.ok("run" in out, JSON.stringify(out));
+    assert.deepEqual(out.resolved, []);
+    assert.deepEqual(w.calls().slice(before).map((c) => c[1]), ["task-list", "gate-list"], `prompt ${round}: only the two reads`);
+    lines.push([...out.lines]);
+  }
+  assert.deepEqual(lines.slice(1), [[], []], "told once: the second and third prompts print nothing");
+  return lines[0] ?? [];
+}
+
+for (const [who, as] of [
+  ["a lead with a Dispatch", asLead],
+  ["a session with no Dispatch", (w: World) => w.as({ run: RUN, terminal: true })],
+] as const) {
+  test(`274: a closed Task's waiter is told the answer in the line, once, with no call to Orca beyond the two reads (${who})`, async () => {
+    const w = createWorld([{ id: T1, run: RUN, status: "pending" }]);
+    const d = await opened(w);
+    const t1 = w.tasks.get(T1);
+    assert.ok(t1);
+    t1.status = "completed";
+    w.strict();
+    w.as(TIMER);
+    const said = ownerSays(w.store, `${d} yes`);
+    const r = await decisionAnswer(w, { decision: d, answer: "yes,\nafter the release", ownerAction: said, linkedBy: "button", callerRun: "" });
+    assert.ok(r.ok && r.value.pending.length === 1, JSON.stringify(r));
+    const sent = w.calls("orchestration send").length;
+
+    as(w);
+    const first = await prompts(w);
+    assert.deepEqual(first, [
+      `sangsoe: Run ${RUN} — 🟢 준비됨 0 · 📅 기한 0 · ⚠️ trigger 불명 0 (새로 0건). 목록은 resource ready 와 brief 로 읽는다. 닫힌 Task 가 기다리던 결정: ${d}: yes, after the release.`,
+    ]);
+    assert.equal(w.gates.get("gate_000000000001")?.status, "pending", "a closed Task's gate stays open on purpose (91④(ii))");
+    assert.equal(w.calls("orchestration send").length, sent, "the Run is told by its own hook, not by mail");
+    assert.deepEqual(w.store.events({ type: "notified" }).map((e) => e.dedupe_key), [answerNotifiedKey(d, T1).dedupe_key]);
+    // The answer no longer reads as undelivered: the timer's next round does not answer it again.
+    w.as(TIMER);
+    const round = await runMonitor("queue", timer(w));
+    assert.ok(!round.calls.some((c) => c.startsWith("decision_answer")), round.calls.join("\n"));
+  });
+}
+
+test("274: a moot decision whose waiter Task is closed is told once and its gate is left open", async () => {
   const w = createWorld([{ id: T1, run: RUN, status: "pending" }]);
   const d = await opened(w);
   const t1 = w.tasks.get(T1);
@@ -230,14 +288,41 @@ test("274: a moot decision whose waiter Task is closed is left alone: its gate s
   const r = await decisionMoot(w, { decision: d, evidence: { kind: "pr_closed", pr: "acme/api#4" }, callerRun: QUEUE_CALLER });
   assert.ok(r.ok && r.value.status === "moot", JSON.stringify(r));
 
+  asLead(w);
+  const first = await prompts(w);
+  assert.match(first[0] ?? "", new RegExp(`닫힌 Task 가 기다리던 결정: ${d} 무효\\(moot\\)\\.$`));
+  assert.equal(w.gates.get("gate_000000000001")?.status, "pending");
+  assert.deepEqual(w.store.events({ type: "notified" }).map((e) => e.dedupe_key), [mootNotifiedKey(d, T1).dedupe_key]);
+  assert.deepEqual(w.sends, []);
+});
+
+test("274: a decision only another Run's Task waits on is that Run's: this Run's hook calls nothing for it", async () => {
+  const OTHER = "run_000000000002";
+  const w = createWorld([
+    { id: T1, run: RUN, status: "pending" },
+    { id: T2, run: OTHER, status: "dispatched" },
+  ]);
   w.as({ run: RUN, terminal: true });
-  for (const round of [1, 2]) {
-    const before = w.calls().length;
-    const out = await deliverOwnRun(w, RUN, NOW);
-    assert.ok("run" in out, JSON.stringify(out));
-    assert.deepEqual([out.resolved, out.lines], [[], []]);
-    assert.deepEqual(w.calls().slice(before).map((c) => c[1]), ["task-list", "gate-list"], `prompt ${round}: only the two reads`);
-  }
+  item(w, T1);
+  item(w, T2, {}, OTHER);
+  const [pred, succ] = [`item:${T2}`, `item:${T1}`];
+  w.store.append({ type: "edge_added", source: "GRAPH", dedupe_key: dedupeKey(EVENTS.edge_added, pred, succ, "blocks"), payload: { pred, succ, kind: "blocks" } });
+  // Opened on a running Task of the other Run: Orca gives such a waiter no gate, so its answer goes by message only.
+  w.strict();
+  w.as({ run: OTHER, terminal: true });
+  const o = await decisionOpen(w, { subject: "item:i002", options: ["yes", "no"], question: "Take it?", waiters: [{ task: T2, run: OTHER }], callerRun: OTHER });
+  assert.ok(o.ok && o.value.status === "opened", JSON.stringify(o));
+  w.as(TIMER);
+  const said = ownerSays(w.store, `${o.value.decision} yes`);
+  const a = await decisionAnswer(w, { decision: o.value.decision, answer: "yes", ownerAction: said, linkedBy: "button", callerRun: "" });
+  assert.ok(a.ok, JSON.stringify(a));
+
+  asLead(w);
+  const before = w.calls().length;
+  const out = await deliverOwnRun(w, RUN, NOW);
+  assert.ok("run" in out, JSON.stringify(out));
+  assert.deepEqual([out.resolved, out.lines], [[], []]);
+  assert.deepEqual(w.calls().slice(before).map((c) => c[1]), ["task-list", "gate-list", "task-list"], "its own Run's two reads and the predecessor Run's Tasks");
   assert.deepEqual(w.sends, []);
 });
 

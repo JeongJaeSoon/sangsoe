@@ -5,7 +5,7 @@ import { decisionAnswer } from "../../decision/answer.ts";
 import { decisionMoot } from "../../decision/moot.ts";
 import { isOpenGate } from "../../decision/waiters.ts";
 import type { GhClient } from "../../gh/client.ts";
-import { notifyReady } from "../../graph/notify-ready.ts";
+import { notifyReady, readyKeys } from "../../graph/notify-ready.ts";
 import { type RereviewResult, rereviewItems } from "../../graph/rereview.ts";
 import { readSnapshot } from "../../graph/snapshot.ts";
 import { syncGraph } from "../../graph/sync.ts";
@@ -79,11 +79,16 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
     }
   } else calls.push("would call graph sync", "would call rereview items");
 
-  // Decision 274: once Orca has said this process has no terminal, nothing is queued for sending.
-  // Each Run's own session reads its ready, due and unclear items from its hooks instead.
+  // Decision 274: once Orca has said this process has no terminal, no ready, due or unclear notice is
+  // queued for sending. Each Run's own session reads those from its hooks instead. The moot, re-answer
+  // and stale-raise calls below still run: their sends come back as the remembered refusal.
   const mute = noSender(d.orca);
-  if (j.ready.length > 0 && mute) calls.push(`notifyReady: ${j.ready.length} left to their Runs' own sessions (no sender terminal)`);
-  else if (j.ready.length > 0) {
+  const told = new Set(events.flatMap((e) => (e.type === "notified" && e.dedupe_key ? [e.dedupe_key] : [])));
+  if (mute) {
+    const keys = readyKeys(input);
+    const left = j.ready.filter((r) => !told.has(keys.get(r.task)?.dedupe_key ?? "")).length;
+    if (left > 0) calls.push(`notifyReady: ${left} left to their Runs' own sessions (no sender terminal)`);
+  } else if (j.ready.length > 0) {
     const runOf = new Map(input.orca.tasks.map((t) => [t.id, t.runId]));
     if (core && !signal.aborted) {
       const notices = await notifyReady(core, input, (task) => {
@@ -134,7 +139,6 @@ export async function queueRound(d: MonitorDeps, signal: AbortSignal): Promise<R
   }
 
   const above = runAbove(d.orca);
-  const told = new Set(events.flatMap((e) => (e.type === "notified" && e.dedupe_key ? [e.dedupe_key] : [])));
   for (const s of j.stale) {
     planned.push(s.event);
     // Raised already: the gate stays open, but the Run lookup (a paged worker list) is not read again.
