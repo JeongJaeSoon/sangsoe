@@ -19,9 +19,9 @@ sangsoe 가 모델을 고르는 곳은 이 폴더의 `table.ts` 하나다(결정
 |---|---|---|
 | `core/start/start.ts` (`start_unit`) | 정책 + 카탈로그 | `resolve` → `worker-start --model <alias> --effort <level>`, 승격은 `model_changed` 로 기록. 그 tier 의 `orcaEfforts` 에 없는 effort 는 넘기지 않는다(결정 209) |
 | MCP resource `models` | 표 전체 | 판단 층(skill·agent)은 이 resource 로만 읽는다. 표를 본문에 옮겨 적지 않는다 |
-| `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice, advisor 가 닿는 길(기본은 route `worktree_file`, 결정 202). `.claude/settings.local.json` 을 커밋한 저장소가 있으면 오너 `advisorModel` 이 없을 때 warn, 있을 때 notice(route `owner_setting`), 이 환경에 advisor 끄는 env 가 있으면 notice, 확인 못 한 저장소는 이름만, 오늘의 advisor 호출 수와 추정 비용 |
+| `core/checks/model-table.ts` (`doctor`) | 카탈로그 | 확인 날짜 60일 초과 warn, 더 새 Claude Code notice, 고정(pin·환경변수·`modelSettings`) notice, advisor 가 닿는 길(기본은 route `worktree_file`, 결정 202). `.claude/settings.local.json` 을 커밋한 저장소가 있으면 오너 `advisorModel` 이 없을 때 warn, 있을 때 notice(route `owner_setting`), 이 환경에 advisor 끄는 env 가 있으면 notice, 확인 못 한 저장소는 이름만, 오늘의 advisor 호출 수와 추정 비용, 시작한 세션이 풀린 모델이 표와 다르면 alias 마다 notice 한 줄(`drift.ts`, 결정 254) |
 | `cli/commands/models.ts` (`sangsoe models`) | 표 전체 | 토큰 X 한국어 보기. `--markdown` 의 출력이 `docs/models.md` 다 |
-| `core/brief/build.ts` | 정책 + `unit_started`·`advisor_used` | 항목 상세의 "모델:" 줄, 현황의 오늘 advisor 사용 |
+| `core/brief/build.ts` | 정책 + `unit_started`·`session_started`·`advisor_used` | 항목 상세의 "모델:" 줄(풀린 모델이 표와 다르면 그 모델, 결정 254), 현황의 오늘 advisor 사용 |
 | `claude-plugin/agents/*.md` frontmatter `model:`·`effort:` | 정책의 역할 행 | `test/model-table.test.ts` 가 표의 alias·effort 와 같은지 본다 |
 
 ## 갱신 절차

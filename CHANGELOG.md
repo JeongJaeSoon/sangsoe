@@ -6,6 +6,8 @@ Decision numbers refer to `docs/decisions.md`.
 
 ### Changes
 
+- **Model drift is shown (254).** When a session start_unit started resolved to a model other than the one the model table expects for the alias it was given, `sangsoe doctor`'s `model-table` row adds one notice naming the alias, the table's model and the resolved one, with the likely cause (the alias moved, a pin in the owner's settings, or another tier's model). The item detail in `sangsoe brief` adds `세션 <resolved> (표 <expected>)` to its model line. Both compare rows the store already has and store nothing new; a drift is one line however many sessions show it and is gone once the newest session for that alias matches the table.
+
 - **The lead's ready read names open PRs that change the same file (252).** Resource `ready` ends with a 겹침 section: one line per pair of open PRs on the same repository and base, with the files both change, so the land order is set before a merge makes the other one conflict. It is computed when read, from pr-monitor's open PRs and GitHub's file lists (read only for a base with two or more open PRs); nothing is stored or sent. A list that could not be read leaves its PR's pairs unjudged and says so.
 
 ## 0.1.8
