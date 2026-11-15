@@ -4,6 +4,8 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+- **A one-day probe says Orca message delivery alone wakes a top-level orchestrator (261).** A `sangsoe:orchestrator` session started with no Dispatch was woken by all 17 test messages sent over about 18 hours, in 1.6 to 6.0 seconds, with no loss and no message handled twice; a message that arrived inside an open turn was handled right after it. Not measured: a send after a compaction (the probe never reached one), after an Orca restart, and the last 5 hours of the day. The same probe found two gaps B1 has to close: `orchestrator.md` has no step that makes the session hold a Run (a session started as documented has no Run mailbox), and a worker with a Dispatch cannot send to a Run that is not its own (`dispatch_run_mismatch`). No product code changed; `scripts/a9-collect.ts` is the read-only collector.
+
 ## 0.1.9
 
 Everything since `v0.1.8`: #146 (decision 252), #147 (254), #148 (255), #151 (256), #166 (263 ⑩, the permission rules' home path) and #167 (265 ⑦). No release candidate was cut: there is no schema change and no panel change, and every change has tests; the live checks run on the installed stable.
