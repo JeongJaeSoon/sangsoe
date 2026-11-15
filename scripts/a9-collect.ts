@@ -118,13 +118,15 @@ export function collect(sent: Send[], probeFiles: string[]): Row[] {
       continue;
     }
     // Sent while the session was mid-`check`: one batch carried both messages, so the id was read inside the open turn.
-    const readAt = hits[0]?.ts ?? s.sentAt;
-    if (turn && readAt <= turn.end) {
-      rows.push({ ...base, outcome: "woken", latencyS: (readAt - s.sentAt) / 1000 });
+    const hit = hits[0];
+    if (turn && hit && hit.ts <= turn.end) {
+      const inTurnS = (hit.ts - s.sentAt) / 1000;
+      rows.push({ ...base, outcome: inTurnS > MAX_LATENCY_S ? "slow" : "woken", latencyS: inTurnS });
       continue;
     }
+    // The call that read the message is the tool_use whose id the matching tool_result answers, not any later call.
     const from = kind === "mid-turn" && turn ? turn.end : s.sentAt;
-    const act = lines.find((l) => l.role === "assistant" && l.toolUse && l.ts >= from);
+    const act = lines.find((l) => l.role === "assistant" && l.ts >= s.sentAt && l.commands.some((c) => hit?.resultIds.includes(c.id)));
     if (!act) {
       rows.push({ ...base, outcome: "no-action", latencyS: null });
       continue;

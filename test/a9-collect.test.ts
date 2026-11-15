@@ -13,7 +13,8 @@ const iso = (s: number) => new Date(T0 + s * 1000).toISOString();
 const prompt = (s: number) => ({ type: "user", timestamp: iso(s), message: { role: "user", content: "go" } });
 const wake = (s: number) => ({ type: "user", timestamp: iso(s), message: { role: "user", content: "You have 1 orchestration message. Run `orca orchestration check`." } });
 const tool = (s: number) => ({ type: "assistant", timestamp: iso(s), message: { content: [{ type: "tool_use", id: `u${s}`, name: "Bash", input: { command: "ls" } }], stop_reason: "tool_use" } });
-const result = (s: number, text: string) => ({ type: "user", timestamp: iso(s), message: { content: [{ type: "tool_result", tool_use_id: `u${s}`, content: text }] } });
+// A tool_result at `s` answers the tool call made at `call` (default: one second earlier).
+const result = (s: number, text: string, call = s - 1) => ({ type: "user", timestamp: iso(s), message: { content: [{ type: "tool_result", tool_use_id: `u${call}`, content: text }] } });
 const done = (s: number) => ({ type: "assistant", timestamp: iso(s), message: { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" } });
 
 function withFiles<T>(files: unknown[][], fn: (paths: string[]) => T): T {
@@ -88,11 +89,37 @@ test("send inside an open turn is mid-turn and is timed from the turn end", () =
 });
 
 test("a mid-turn send read in the same batch as the turn's own message is woken at the read, not at a later call", () => {
-  withFiles([[prompt(0), tool(3), result(6, "msg_m1 msg_m2"), done(12), tool(2400)]], (p) => {
+  withFiles([[prompt(0), tool(3), result(6, "msg_m1 msg_m2", 3), done(12), tool(2400)]], (p) => {
     const r = one(collect([sent("msg_m2", 5)], p));
     assert.equal(r.kind, "mid-turn");
     assert.equal(r.outcome, "woken");
     assert.equal(r.latencyS, 1);
+  });
+});
+
+test("a read inside the same turn is still held to the 120 s limit", () => {
+  withFiles([[prompt(0), tool(3), result(2000, "msg_m1 msg_m2", 3), done(2001)]], (p) => {
+    const r = one(collect([sent("msg_m2", 5)], p));
+    assert.equal(r.outcome, "slow");
+    assert.equal(r.latencyS, 1995);
+  });
+});
+
+test("an unrelated tool call before the real read does not end the latency (idle)", () => {
+  withFiles([[prompt(1), tool(2), done(3), tool(901), result(902, "msg_m1", 901), done(903)]], (p) => {
+    const r = one(collect([sent("msg_m1", 0)], p));
+    assert.equal(r.kind, "idle");
+    assert.equal(r.outcome, "slow");
+    assert.equal(r.latencyS, 901);
+  });
+});
+
+test("an unrelated tool call before the real read does not end the latency (mid-turn)", () => {
+  withFiles([[prompt(0), done(10), prompt(11), tool(12), done(13), tool(801), result(802, "msg_m1", 801), done(803)]], (p) => {
+    const r = one(collect([sent("msg_m1", 5)], p));
+    assert.equal(r.kind, "mid-turn");
+    assert.equal(r.outcome, "slow");
+    assert.equal(r.latencyS, 791);
   });
 });
 
@@ -117,17 +144,18 @@ test("limits: exactly the maximum passes, one second over is slow (idle and mid-
   withFiles([[wake(1), tool(MAX_LATENCY_S + 1), result(MAX_LATENCY_S + 2, "msg_m1"), done(MAX_LATENCY_S + 3)]], (p) => {
     assert.equal(one(collect([sent("msg_m1", 0)], p)).outcome, "slow");
   });
-  withFiles([[prompt(0), done(100), wake(101), tool(100 + MAX_MIDTURN_S), result(165, "msg_m1"), done(200)]], (p) => {
+  withFiles([[prompt(0), done(100), wake(101), tool(100 + MAX_MIDTURN_S), result(165, "msg_m1", 100 + MAX_MIDTURN_S), done(200)]], (p) => {
     assert.equal(one(collect([sent("msg_m1", 50)], p)).outcome, "woken");
   });
-  withFiles([[prompt(0), done(100), wake(101), tool(101 + MAX_MIDTURN_S), result(165, "msg_m1"), done(200)]], (p) => {
+  withFiles([[prompt(0), done(100), wake(101), tool(101 + MAX_MIDTURN_S), result(165, "msg_m1", 101 + MAX_MIDTURN_S), done(200)]], (p) => {
     assert.equal(one(collect([sent("msg_m1", 50)], p)).outcome, "slow");
   });
 });
 
 test("a slash command line never opens a turn, so a send long after it is idle", () => {
   const slash = { type: "user", timestamp: iso(1), message: { role: "user", content: "<command-name>/reload-plugins</command-name>" } };
-  withFiles([[slash, wake(3601), tool(3604), result(3605, "msg_m1"), done(3606)]], (p) => {
+  const caveat = { type: "user", timestamp: iso(2), message: { role: "user", content: "<local-command-caveat>ran by the user</local-command-caveat>" } };
+  withFiles([[slash, caveat, wake(3601), tool(3604), result(3605, "msg_m1"), done(3606)]], (p) => {
     const r = one(collect([sent("msg_m1", 3600)], p));
     assert.equal(r.kind, "idle");
     assert.equal(r.outcome, "woken");
