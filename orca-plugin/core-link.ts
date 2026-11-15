@@ -41,8 +41,6 @@ export type PanelCore = {
   brief(target: { group?: string; item?: string }): Promise<Reply<unknown>>;
   statusBar(): Promise<Reply<{ text: string; tone: "neutral" | "danger"; tooltip: string }>>;
   act(a: unknown): Promise<Reply<unknown>>;
-  /** Absent in a core older than decision 198; the open then refuses without calling Orca. */
-  worktree?(target: { group?: string; item?: string }): Promise<Reply<{ worktree: string }>>;
   /** Absent in a core older than decision 205; the panel then re-reads on its interval only. */
   watch?(onChange: (seq: number) => void): Reply<{ close(): void }>;
   /** Absent in a core older than decision 234; the 리소스 section then says so. */

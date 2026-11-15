@@ -80,7 +80,10 @@ test("decision 247: a node or an entry whose path holds a space is still read as
   ].join("\n");
   const seen: string[] = [];
   const { host } = processHost(ps, { 301: "/home/u/a", 302: "/home/u/b" });
-  const lines = staleSessions(host, { installed: (e) => (seen.push(e), null), now: () => NOW });
+  const lines = staleSessions(host, { installed: (e) => {
+      seen.push(e);
+      return null;
+    }, now: () => NOW });
   assert.deepEqual(seen, [OPT, spaced]);
   assert.deepEqual(lines.slice(0, 3), [
     "stale sessions: 2 sangsoe MCP servers run code older than what is installed now",

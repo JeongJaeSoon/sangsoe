@@ -66,7 +66,6 @@ export const ORCA_POLICY: Readonly<Record<string, Entry>> = {
   // Starts belong to the start gate (decision 94); a session opens another session through start_unit only.
   "orchestration worker-start": { kind: "deny", why: "starts go through start_unit and its gate (decision 94)" },
   "worktree create": { kind: "deny", why: "starts go through start_unit and its gate (decision 94)" },
-  "terminal create": { kind: "inprocess", why: "the Orca panel's own start button runs it (orca-plugin/panel/requests.ts)" },
   "agent launch": { kind: "deny", why: "launch agents are forbidden; start_unit is the only start (decision 94)" },
   // Deletes, resets and close-alls.
   "worktree rm": { kind: "deny", why: "deletes a worktree; the REAPER checks first (decisions 62, 86)" },

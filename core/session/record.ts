@@ -237,7 +237,9 @@ function compacted(store: Store, row: SessionRow, input: SessionHookInput): void
 }
 
 const PERMISSION = /permission to use ([A-Za-z_][\w:.-]*)/i;
-const WAITS = new Set(["permission_prompt", "idle_prompt", "elicitation_dialog"]);
+// Decision 293: `idle_prompt` is not a wait. It comes about a minute after any turn ends, so a
+// session that has simply finished would read as waiting on a person.
+const WAITS = new Set(["permission_prompt", "elicitation_dialog"]);
 
 const SIGN_IN = new Set(["authentication_failed", "oauth_org_not_allowed"]);
 
@@ -262,8 +264,9 @@ async function lostLogin(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
 
 /**
  * Notification → waiting_human for a session holding no Dispatch (the owner reaches it through
- * queue-monitor's escalation, decision 91①). The tool is read from the text or left out; a repeat
- * notification for a wait still open writes nothing.
+ * queue-monitor's escalation, decision 91①): a permission prompt or an elicitation dialog, not the
+ * idle notice. The tool is read from the text or left out; a repeat notification for a wait still
+ * open writes nothing.
  */
 async function waitingHuman(deps: CoreDeps, row: SessionRow, input: SessionHookInput): Promise<void> {
   // A session holding a Dispatch is seen through Orca's needs-input mail alone (decision 196), which
@@ -271,7 +274,8 @@ async function waitingHuman(deps: CoreDeps, row: SessionRow, input: SessionHookI
   if (row.task) return;
   const message = input.message ?? "";
   const kind = input.notification_type;
-  if (kind ? !WAITS.has(kind) : !/permission|waiting for your input/i.test(message)) return;
+  // With no type sent, only the permission wording is a wait: the idle notice says "waiting for your input".
+  if (kind ? !WAITS.has(kind) : !/permission/i.test(message)) return;
   const tool = PERMISSION.exec(message)?.[1];
   // Read Orca before the store, so no await sits between counting this session's waits and writing.
   const worktree = await liveWorktree(deps.orca, input.cwd);

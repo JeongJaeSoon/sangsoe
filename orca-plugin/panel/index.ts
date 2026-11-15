@@ -33,8 +33,6 @@ import {
   current,
   down,
   errorNote,
-  type Open,
-  openTarget,
   type PanelView,
   prunePending,
   type Refusal,
@@ -201,7 +199,6 @@ function mountResources(after: HTMLElement): () => void {
       ev.stopImmediatePropagation();
       return;
     }
-    if (document.querySelector("details.menu[open]")) return;
     const fold = box.querySelector<HTMLDetailsElement>("details.res-fold");
     if (!fold) return;
     fold.open = false;
@@ -263,7 +260,6 @@ function mount(): void {
   let tab: Tab = "all";
   let note = "";
   let busy = false;
-  const where = (): Target => openTarget(stack);
 
   const esc = (text: string) => text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const failed = (e: unknown) => ({ ok: false as const, refusal: { code: "request_failed", reason: String(e), fix: "reopen the panel" } });
@@ -284,7 +280,7 @@ function mount(): void {
   const memo = screenMemo();
   const paint = (r: Reply<PanelView>) => {
     // The message sits under the header row, above the tabs or the back line.
-    const html = r.ok ? renderStage(r.value, tab, where(), pending) : renderError(r.refusal, trail(stack), where());
+    const html = r.ok ? renderStage(r.value, tab, pending) : renderError(r.refusal, trail(stack));
     const page = html.replace("</header>", () => `</header>${note}`);
     if (page === painted) return;
     root.innerHTML = page;
@@ -308,15 +304,6 @@ function mount(): void {
     if (known) paint({ ok: true, value: known });
     void draw();
   };
-  const closeMenu = () => root.querySelector("details.menu")?.removeAttribute("open");
-  const open = async (o: Open) => {
-    closeMenu();
-    const r = (await orca.plugin.request("panel.open", o).catch(failed)) as Reply<{ status: string }>;
-    const stale = note !== "";
-    if (r.ok) say("");
-    else sayRefused(r.refusal);
-    if (!r.ok || stale) await draw();
-  };
   // Decisions 198, 205: the panel re-reads a few seconds after the worker's store.changed push, when
   // it is shown again, and on the status bar's interval; a failed reading waits for 새로 고침.
   const reads = panelReads({
@@ -329,12 +316,6 @@ function mount(): void {
   });
   orca.plugin.on?.("store.changed", reads.changed);
   document.addEventListener("visibilitychange", reads.changed);
-  document.addEventListener("click", (ev) => {
-    if (!(ev.target as Element).closest("details.menu")) closeMenu();
-  });
-  document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") closeMenu();
-  });
   // One act at a time: a second click while the first is in flight would answer the decision twice.
   const act = async (a: Act) => {
     if (busy) return;
@@ -353,13 +334,11 @@ function mount(): void {
   };
 
   root.addEventListener("click", (ev) => {
-    const el = (ev.target as Element).closest("[data-act],[data-other],[data-back],[data-nav],[data-refresh],[data-open],[data-tab-to]");
+    const el = (ev.target as Element).closest("[data-act],[data-other],[data-back],[data-nav],[data-refresh],[data-tab-to]");
     if (!el || (ev.target as Element).closest("a")) return;
     if (el.hasAttribute("data-refresh")) {
       say("");
       void draw();
-    } else if (el.hasAttribute("data-open")) {
-      void open(JSON.parse(el.getAttribute("data-open") ?? "{}") as Open);
     } else if (el.hasAttribute("data-tab-to")) {
       const t = el.getAttribute("data-tab-to") as Tab;
       if (!TABS.includes(t)) return;

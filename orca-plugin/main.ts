@@ -9,7 +9,7 @@ import { prMonitor } from "./monitors/pr.ts";
 import { queueMonitor } from "./monitors/queue.ts";
 import { resourceMonitor } from "./monitors/resource.ts";
 import { type LastRound, monitorRound } from "./monitors/spec.ts";
-import { openHandler, panelHandlers } from "./panel/requests.ts";
+import { panelHandlers } from "./panel/requests.ts";
 import { ownKey, probeExec, probeSqlite } from "./probe.ts";
 import { type LastReap, REAPER_HINTS, REAPER_ID, reaperRound } from "./reaper/round.ts";
 import { stallWatch } from "./stall.ts";
@@ -148,7 +148,6 @@ export default function activate(
     return r;
   });
   orca.panels.handle("panel.act", panel["panel.act"]);
-  orca.panels.handle("panel.open", openHandler(exec, panel.worktree));
   orca.panels.handle("panel.resources", panel["panel.resources"]);
   orca.panels.handle("panel.reap", panel["panel.reap"]);
   stopRounds = () => {
