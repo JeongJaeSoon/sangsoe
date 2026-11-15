@@ -17,12 +17,12 @@
 | 절 | 행 | implemented | partial | missing | cut | changed |
 |---|---|---|---|---|---|---|
 | 0. 오너의 고정 규칙 | 5 | 4 | 1 | 0 | 0 | 0 |
-| 1. 칸 배치 · Orca CLI · 설치 | 134 | 92 | 8 | 9 | 1 | 24 |
+| 1. 칸 배치 · Orca CLI · 설치 | 134 | 93 | 8 | 9 | 1 | 23 |
 | 2. 컴포넌트 · 게이트 · hook · 패널 | 115 | 80 | 11 | 2 | 6 | 16 |
 | 3. 데이터 · MCP · CLI · GRAPH | 81 | 53 | 6 | 1 | 3 | 18 |
 | 4. 흐름 · 결정 루프 · 실패 방지 | 57 | 34 | 4 | 4 | 6 | 9 |
 | 5. 결정이 자르거나 바꾼 것 | 46 | 0 | 0 | 0 | 13 | 33 |
-| 합계 | 438 | 263 | 30 | 16 | 29 | 100 |
+| 합계 | 438 | 264 | 30 | 16 | 29 | 99 |
 
 `partial`·`missing` 46행은 갭 27개(`G1`–`G36` 에서 U77 이 고친 `G2`, U76 이 고친 `G13` `G16`, 결정 212 가 닫은 `G10`·`G11`·`G23`·`G29`, 결정 215 가 닫은 `G22`·`G31` 을 뺀 것)로 묶인다. 제안은 NOW 0 · LATER 23 · DROP 4 다. 집계는 표의 상태 칸을 세어 냈다.
 
@@ -131,7 +131,7 @@
 | doctor 시작 점검 | architecture.md Orca·GitHub 어댑터와 점검 | implemented | `core/checks/index.ts:22`, `core/checks/orca-commands.ts:7` | reachable·capabilities·commands·hooks·remote-hosts·두 plugin 버전 |
 | doctor sqlite-version·store-restore | design-appendix 남는 파일 | implemented | `core/checks/sqlite-version.ts:11`, `core/checks/store-restore.ts:24` | |
 | Orca plugin 매니페스트 능력 | README Layout | partial | `orca-plugin/orca-plugin.json:11`, `core/reaper/round.ts` | G5 — 능력은 읽기 둘만 선언하고, worker 는 REAPER 라운드에서 `orca worktree rm` 을 CLI 로 부른다(패널의 `terminal create` 는 결정 294 로 없어졌다) |
-| 기능표 terminal create | design-appendix Orca 기능 활용 표 | changed (결정 294) | `orca-plugin/panel/requests.ts` | 결정 169 가 패널 머리 행 버튼으로 부르게 했고 결정 294 가 그 버튼을 없앴다. 코드는 부록의 "안 씀" 대로 부르지 않는다 |
+| 기능표 terminal create | design-appendix Orca 기능 활용 표 | implemented | `orca-plugin/panel/requests.ts` | 부록의 "안 씀" 대로 부르지 않는다. 결정 169 가 패널 머리 행 버튼으로 부르게 했던 것을 결정 294 가 없앴다 |
 | 기능표 worker-show·read·list | design-appendix Orca 기능 활용 표 | partial | `core/detect/orca/round.ts:22`, `core/detect/orca/round.ts:65` | G6 — `worker-read` 어댑터 행 없음 |
 | 기능표 inbox | design-appendix Orca 기능 활용 표 | implemented | `core/detect/orca/round.ts:60` | 읽기 전용 |
 | 기능표 request-show·retry-request | design-appendix Orca 기능 활용 표 | implemented | `core/orca/adapter.ts:88`, `core/notify/notify.ts:102` | 잃은 응답만 같은 id 로 |
@@ -638,7 +638,7 @@
 | 291 | 결정 252 의 겹침 절. 비운 `watch.repos` 와 읽을 수 없는 설정이 모든 저장소로 읽혔다 | 메모: 결정 291 을 새로 적고 코드를 고쳤다(U144). 둘 다 아무 저장소도 읽지 않는다. 세 페이지에 고칠 대목 없음 | `core/brief/overlap.ts`, `claude-plugin/mcp/resources/ready.ts` `watchedRepos` |
 | 292 | 결정 254 의 모델 어긋남. 앞 세션의 뒤 행이 Task 의 새 시작과 비교됐다 | 메모: 결정 292 를 새로 적고 코드를 고쳤다(U144). 세 페이지에 고칠 대목 없음 | `core/models/drift.ts`, `core/models/table.ts` |
 | 293 | 결정 91 ① 의 `waiting_human`(Notification), 결정 232 ①. 쉬는 알림이 오너의 할 일로 올라왔다(0.1.10 릴리스 smoke) | 메모: 결정 293 을 새로 적고 코드를 고쳤다(U144). 권한 프롬프트와 질문 대화만 대기를 연다 | `core/session/record.ts` `WAITS`, `core/session/README.md` |
-| 294 | 부록의 패널 글(머리 행의 터미널 버튼과 더 보기 메뉴), 결정 169 · 198 · 200 · 205 | 고침: 부록의 머리 행 글을 고쳤고 결정 169 에 가리킴을 달았다(결정 294, U144). 버튼은 새로 고침 하나이고 패널은 터미널을 열지 않는다 | `orca-plugin/panel/view.ts` `header`, `orca-plugin/panel/requests.ts`, `orca-plugin/main.ts`, `core/brief/panel.ts`, `scripts/permissions/policy.ts` |
+| 294 | 부록의 패널 글(머리 행의 터미널 버튼과 더 보기 메뉴), 결정 169 · 198 · 200 · 205 | 고침: `design.html` 과 부록과 blog 와 용어집의 머리 행 글을 고쳤고 결정 169 · 198 · 200 · 205 에 가리킴을 달았다(결정 294, U144). 버튼은 새로 고침 하나이고 패널은 터미널을 열지 않는다 | `orca-plugin/panel/view.ts` `header`, `orca-plugin/panel/requests.ts`, `orca-plugin/main.ts`, `core/brief/panel.ts`, `scripts/permissions/policy.ts` |
 | 295 | 결정 247 의 낡은 세션 목록. 경로에 빈칸이 있는 `node` 나 진입점이 목록에서 빠졌다 | 메모: 결정 295 를 새로 적고 코드를 고쳤다(U144). 세 페이지에 고칠 대목 없음 | `core/install/stale-sessions.ts` `servers` |
 
 첫 빌드 시험 T1–T6 의 결과는 `test-outcomes.md` 의 행이다. 여섯 모두 통과다. T5 는 두 행이다: "워커는 자기 Run 에 Task 를 만들지 못한다"(U10)와, U93 이 Run 을 쥔 리드 세션에서 돌린 이중 시작 거부 · 세 번 실패 차단이다(`smoke-run.md` 3절 끝). 한 번 시작된 Task 는 실패 세기 앞에서 `already_dispatched` 로 멈추므로 버리는 항목 둘을 썼다. 컷오프 항목은 없는 저장소 선택자로 `worktree create` 를 세 번 실패시켜 `loop_detected{start_failed_3x}` 를 남겼고, 넷째는 `stopped` 였다. 이중 시작 항목은 둘째 호출이 `waiting already_dispatched` 였다. 코드는 결정 114 그대로다: 시작 함수는 `worker-start` 전에 그 Task 의 세는 실패를 세어 세 번이면 `stopped` 로 돌려주고(`core/start/start.ts:316-334`), 이어 Task 상태를 읽어 `dispatched` 이면 `already_dispatched` 로 돌려준다(`:341`).
