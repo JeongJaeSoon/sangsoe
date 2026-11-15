@@ -1,7 +1,4 @@
-import type { StoredEvent, ViewTask } from "../../contract/index.ts";
-import { doneBlockers } from "../../graph/flow.ts";
-import { type FullTaskRow, snapshotTasks } from "../../graph/snapshot.ts";
-import { canTransition } from "../../contract/transitions.ts";
+import type { StoredEvent } from "../../contract/index.ts";
 import { budgetLevel, type GhResponse } from "../../gh/client.ts";
 import { approvedAndGreen, mergeConfirm, type Pull, readDiff, readLabels, readPull } from "../../land/github.ts";
 import { pendingRereview } from "../../land/rereview.ts";
@@ -10,7 +7,8 @@ import { verifyTier } from "../../verify/verify-tier.ts";
 import type { Act, MonitorDeps, Planned, Reading } from "../monitor.ts";
 import { sendNotice } from "../notice.ts";
 import type { WatchConfig } from "./config.ts";
-import { classifyMain, isClosedTask, itemStateOf, key, type MainRun, prRef, prUrl, requestedTier } from "./judge.ts";
+import { classifyMain, isClosedTask, key, type MainRun, prRef, prUrl, requestedTier } from "./judge.ts";
+import { closeMerged } from "./merge-close.ts";
 import { type IssueEvent, PAGE, type Review, type ReviewComment, type ReviewReads, reviewFacts } from "./reviews.ts";
 
 const SOURCE = "pr-monitor";
@@ -143,38 +141,21 @@ function itemTask(r: Reads, ref: string, link: Link | null): string | undefined 
   return link?.tasks.length === 1 ? link.tasks[0]?.task : undefined;
 }
 
-async function taskStatus(d: MonitorDeps, t: LinkedTask): Promise<string | null> {
+/** The item Task's Run: the one Orca's link shows, else the one its `item_created` row recorded (decision 216). */
+function runOf(d: MonitorDeps, task: string, linked: LinkedTask | undefined): string | undefined {
+  if (linked) return linked.run;
+  const made = d.events({ type: "item_created" }).find((e) => e.payload.task === task)?.payload.run;
+  return typeof made === "string" ? made : undefined;
+}
+
+async function taskStatus(d: MonitorDeps, t: Pick<LinkedTask, "task" | "run">): Promise<string | null> {
   const l = await d.orca.taskList({ run: t.run });
   return l.ok ? (l.value.find((x) => x.id === t.task)?.status ?? null) : null;
 }
 
-/** Decision 84 ①: the one close a detector makes, after the merge is confirmed. */
-function closeTask(ref: string, sha: string, task: string, linked: LinkedTask | undefined): Act {
-  return {
-    what: `task-update ${task} completed (${ref} merged)`,
-    run: async (d) => {
-      let from = null;
-      let tasks: ViewTask[] = [];
-      if (linked) {
-        const l = await d.orca.taskList({ run: linked.run, full: true });
-        tasks = l.ok ? snapshotTasks(l.value as FullTaskRow[], linked.run) : [];
-        // The raw status: the snapshot folds statuses it does not list (Orca's "cancelled") into blocked.
-        const status = l.ok ? (l.value.find((x) => x.id === task)?.status ?? null) : null;
-        if (status && isClosedTask(status)) return { ok: true, detail: `already ${status}`, planned: [] };
-        from = status ? itemStateOf(status) : null;
-      }
-      // Decision 212 ④: an unread task list leaves every child unfinished, so it refuses rather than guesses.
-      const blockers = doneBlockers({ orca: { tasks, gates: [] }, events: d.events(), now: new Date(d.now()).toISOString() }, task);
-      if (blockers.length > 0) return { ok: false, detail: `done_blockers: ${blockers.join(" · ")}`, planned: [] };
-      const u = await d.orca.taskUpdate({ id: task, status: "completed", result: `merged ${ref} as ${sha}`, ...(linked ? { run: linked.run } : {}) });
-      if (!u.ok) return { ok: false, detail: `${u.error.code}: ${u.error.message}`, planned: [] };
-      const planned: Planned[] =
-        from && canTransition(from, "done")
-          ? [{ type: "item_transition", source: SOURCE, dedupe_key: key("item_transition", task, "done"), payload: { task, from, to: "done", reason: `pr_merged ${ref}` } }]
-          : [];
-      return { ok: true, detail: from ? `${from} → done` : "closed; prior state unread", planned };
-    },
-  };
+/** The merge close (decisions 84 ① and 275), run after the round's rows are written. */
+function closeTask(ref: string, sha: string, task: string, run: string | undefined): Act {
+  return { what: `task-update ${task} completed (${ref} merged)`, run: (d) => closeMerged(d, { ref, sha, task, run, source: SOURCE }) };
 }
 
 async function onMerged(r: Reads, repo: string, p: ListedPull, link: Link | null): Promise<void> {
@@ -186,9 +167,10 @@ async function onMerged(r: Reads, repo: string, p: ListedPull, link: Link | null
     // A close that failed last round is tried again while the PR is among the recent merges.
     const done = (r.rows.get("item_transition") ?? []).some((e) => e.payload.task === task && e.payload.to === "done");
     const sha = str(rowsOf(r, "pr_merged", ref).at(-1)?.payload.merge_sha);
-    if (task && linked && sha && !done) {
-      const status = await taskStatus(r.d, linked);
-      if (status && !isClosedTask(status)) r.acts.push(closeTask(ref, sha, task, linked));
+    const run = task ? runOf(r.d, task, linked) : undefined;
+    if (task && run && sha && !done) {
+      const status = await taskStatus(r.d, { task, run });
+      if (status && !isClosedTask(status)) r.acts.push(closeTask(ref, sha, task, run));
     }
     return;
   }
@@ -207,7 +189,7 @@ async function onMerged(r: Reads, repo: string, p: ListedPull, link: Link | null
     ...(by ? { actor: ownerMerge ? `owner:${by}` : by } : {}),
     payload: { pr: ref, merge_sha: confirm.merge_sha, ...(p.merged_at ? { merged_at: p.merged_at } : {}) },
   });
-  if (task) r.acts.push(closeTask(ref, confirm.merge_sha, task, linked));
+  if (task) r.acts.push(closeTask(ref, confirm.merge_sha, task, runOf(r.d, task, linked)));
   else r.unseen.push(`item Task of ${ref}`);
   // §9 X4: the other Tasks the PR touched get a suggestion, only while Orca keeps them open.
   for (const other of link?.tasks.filter((t) => t.task !== task) ?? []) {
