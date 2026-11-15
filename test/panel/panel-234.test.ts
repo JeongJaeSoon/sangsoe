@@ -50,8 +50,8 @@ test("preview pages for the screenshots (only with PANEL_PREVIEW_DIR)", { skip: 
   const one = panelView(await w.input(), {});
   assert.ok(one.ok);
   const stage = renderStage(one.value as unknown as PanelView);
-  // ui-review checks on the fold: horizontal-overflow, row-height, vertical-center (gauge rows), value-wrap.
-  const measure = `<script>addEventListener("load",()=>{const r=document.getElementById("res");const q=(s)=>r?[...r.querySelectorAll(s)]:[];const box=(e)=>e.getBoundingClientRect();const out=q("*").filter(e=>box(e).right>box(r).right+0.5).map(e=>e.className||e.tagName);const rows={};for(const t of q("tbody tr")){const h=Math.round(box(t).height);rows[h]=(rows[h]||0)+1;}const off=q(".gauge").map(g=>{const c=[...g.children].map(x=>{const b=box(x);return b.top+b.height/2;});return Math.round(Math.max(...c)-Math.min(...c));});const wrapped=q("td.num,.g-v,.g-l").filter(e=>box(e).height>34&&e.tagName!=="TD"||e.tagName==="TD"&&e.scrollHeight>36).length;const clipped=q("td.num").filter(e=>e.scrollWidth>e.clientWidth).map(e=>e.textContent);const p=document.createElement("pre");p.id="measure";p.textContent=JSON.stringify({pageOverflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,resOverflow:out,rowHeights:rows,gaugeCenterOff:off,wrapped,clipped});document.body.append(p);});</script>`;
+  // ui-review checks on the fold: horizontal-overflow, row-height, vertical-center (load rows), value-wrap.
+  const measure = `<script>addEventListener("load",()=>{const r=document.getElementById("res");const q=(s)=>r?[...r.querySelectorAll(s)]:[];const box=(e)=>e.getBoundingClientRect();const out=q("*").filter(e=>box(e).right>box(r).right+0.5).map(e=>e.className||e.tagName);const rows={};for(const t of q("tbody tr")){const h=Math.round(box(t).height);rows[h]=(rows[h]||0)+1;}const off=q(".lrow").map(g=>{const c=[...g.children].map(x=>{const b=box(x);return b.top+b.height/2;});return Math.round(Math.max(...c)-Math.min(...c));});const wrapped=q("td.num,.g-v,.g-l").filter(e=>box(e).height>34&&e.tagName!=="TD"||e.tagName==="TD"&&e.scrollHeight>36).length;const clipped=q("td.num").filter(e=>e.scrollWidth>e.clientWidth).map(e=>e.textContent);const p=document.createElement("pre");p.id="measure";p.textContent=JSON.stringify({pageOverflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,resOverflow:out,rowHeights:rows,rowCenterOff:off,wrapped,clipped});document.body.append(p);});</script>`;
   const cases: [string, string][] = [
     ["before", ""],
     ["closed", renderResources({ kind: "idle" }, false, NOW)],
@@ -73,11 +73,11 @@ test("the fold is closed by default and reads nothing until opened", () => {
   assert.match(renderResources({ kind: "shown", view: view() }, true, NOW), /<details class="fold res-fold" open>/);
 });
 
-test("open: load gauges and the candidates with why; the counts of what sangsoe made are not drawn (decision 248)", () => {
+test("open: load rows and the candidates with why; the counts of what sangsoe made are not drawn (decision 248)", () => {
   const html = renderResBody({ kind: "shown", view: view() }, NOW);
   assert.match(html, /PC 부하 <span class="badge t-run">경고<\/span>/);
-  assert.match(html, /aria-label="CPU 1\.50 \/ 코어"><i class="t-warn" style="width:75%">/);
-  assert.match(html, /aria-label="메모리 여유 40%"><i class="" style="width:40%">/);
+  assert.match(html, /<span class="g-l">CPU<\/span><span><\/span><span class="g-v t-warn">1\.50 \/ 코어<\/span>/);
+  assert.match(html, /<span class="g-l">메모리 사용<\/span><span><\/span><span class="g-v ">60%<\/span>/);
   assert.match(html, /부하 높음: warn: load\/CPU 1\.50/);
   assert.doesNotMatch(html, /sangsoe 가 만든 것|<td>worktree<\/td>|13,201/);
   assert.match(html, /title="acme-u12: \/w\/a">acme-u12<\/td><td title="끝남 \(PR #12\)">끝남 \(PR #12\)<\/td><td class="num">2\.0 MB/);

@@ -215,7 +215,7 @@ addEventListener("load", () => setTimeout(read, 100));
   assert.equal(s.tick.tickParts, "load+made");
   assert.ok(Number(s.tick.tickMs) >= 50, `the tick's cost is kept: ${s.tick.tickMs}ms`);
 
-  assert.equal(got.load.tick.tickPaint, "load", "a moving gauge rewrites the load piece alone");
+  assert.equal(got.load.tick.tickPaint, "load", "a moving load value rewrites the load piece alone");
   assert.equal(got.load.loadKept, false);
   assert.equal(got.load.candKept, true, "정리 후보 stays as it was drawn");
 

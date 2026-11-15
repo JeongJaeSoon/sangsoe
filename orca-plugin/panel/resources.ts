@@ -149,12 +149,7 @@ const hhmm = (iso: string) => {
   return Number.isNaN(d.getTime()) ? iso : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-/** A thin bar: how full the gauge is, toned by the level the one load judgment gave that metric. */
-function gauge(label: string, value: string, pct: number, tone: string): string {
-  const w = Math.max(0, Math.min(100, Math.round(pct)));
-  return `<div class="gauge"><span class="g-l">${esc(label)}</span><span class="g-bar" role="img" aria-label="${esc(`${label} ${value}`)}"><i class="${tone}" style="width:${w}%"></i></span><span class="g-v">${esc(value)}</span></div>`;
-}
-
+/** The level the one load judgment gave a metric; its reason starts with the metric's name. */
 const toneOf = (reasons: readonly string[], metric: string) => {
   const hit = reasons.find((r) => r.startsWith(metric));
   return hit ? (hit.includes("위험") ? "t-bad" : "t-warn") : "";
@@ -192,75 +187,71 @@ function bandBlock(b: Band, hours: 6 | 24): string {
 }
 
 type Point = LoadHistory["points"][number];
+type Load = Extract<ResView["load"], { ok: true }>["value"];
 type Series = {
   key: "loadPerCpu" | "memUsedPct" | "diskFreeGb";
   label: string;
-  /** The value as read: a number with its unit, `per` after the last one only. */
-  fmt: (v: number) => string;
-  per: string;
-  /** [warn, danger] on this series' own axis, and how the words name them. */
-  lines: (t: LoadHistory["thresholds"]) => readonly [number, number];
-  line: (v: number) => string;
-  top: (peak: number, lines: readonly [number, number]) => number;
+  /** The number as read, and the unit that follows it (once, after a range's last number). */
+  num: (v: number) => string;
+  unit: string;
+  /** The live reading on this series' axis, and what the load judgment's reason for it starts with. */
+  now: (l: Load) => number | undefined;
+  reason: string;
+  /** The top of the row's own axis, so a quiet stretch does not fill its height. */
+  top: (peak: number, t: LoadHistory["thresholds"]) => number;
 };
 
-/** Decision 250: the rows of the card; a fourth series is one more entry once the core samples it. */
+/** Decisions 250 · 281: one row per series; a fourth is one more entry once the core samples it. */
 const SERIES: readonly Series[] = [
-  { key: "loadPerCpu", label: "CPU 부하", fmt: (v) => v.toFixed(2), per: "/코어", lines: (t) => t.loadPerCpu, line: String, top: (p, [, d]) => Math.max(d * 1.25, p) },
-  { key: "memUsedPct", label: "사용 메모리", fmt: (v) => `${Math.round(v)}%`, per: "", lines: (t) => [100 - t.memFreePct[0], 100 - t.memFreePct[1]], line: (v) => `${v}%`, top: () => 100 },
-  { key: "diskFreeGb", label: "디스크 여유", fmt: (v) => `${n(Math.round(v))} GB`, per: "", lines: (t) => t.diskFreeGb, line: (v) => `${v} GB`, top: (p, [w]) => Math.max(p, w * 2) },
+  { key: "loadPerCpu", label: "CPU", num: (v) => v.toFixed(2), unit: " / 코어", now: (l) => l.loadPerCpu, reason: "load/CPU", top: (p, t) => Math.max(t.loadPerCpu[1] * 1.25, p) },
+  { key: "memUsedPct", label: "메모리 사용", num: (v) => String(Math.round(v)), unit: "%", now: (l) => (l.memFreePct === undefined ? undefined : 100 - l.memFreePct), reason: "메모리", top: () => 100 },
+  { key: "diskFreeGb", label: "디스크 여유", num: (v) => n(Math.round(v)), unit: " GB", now: (l) => l.diskFreeGb, reason: "디스크", top: (p, t) => Math.max(p, t.diskFreeGb[0] * 2) },
 ];
 
 /** More than this many periods without a sample is a stretch nobody watched: the line breaks there. */
 const GAP_STEPS = 3;
 
-function sparkRow(s: Series, h: LoadHistory): string {
-  const pts = h.points.flatMap((p: Point) => (p[s.key] === undefined ? [] : [{ at: p.at, v: p[s.key] as number }]));
-  const last = pts.at(-1);
-  if (!last) return `<div class="gauge sp-row"><span class="g-l">${esc(s.label)}</span><span class="sp-none">기록 없음</span></div>`;
+/** The middle of a row: the series' line over the window that starts at `from`, or that it has no sample there. */
+function spark(s: Series, h: LoadHistory, from: number, hours: 6 | 24): { svg: string; range: string } {
+  const pts = h.points.flatMap((p: Point) => (p[s.key] === undefined || p.at < from ? [] : [{ at: p.at, v: p[s.key] as number }]));
+  if (!pts.length) return { svg: `<span class="sp-none">표본 없음</span>`, range: "" };
   const vs = pts.map((p) => p.v);
   const lo = Math.min(...vs);
   const hi = Math.max(...vs);
-  const lines = s.lines(h.thresholds);
-  const top = s.top(hi, lines);
-  const from = Date.parse(h.from);
-  const span = Date.parse(h.to) - from;
+  const top = s.top(hi, h.thresholds);
   const y = (v: number) => (23 - (Math.max(0, Math.min(top, v)) / top) * 22).toFixed(1);
-  const x = (t: number) => ((Math.max(0, t - from) / span) * 1000).toFixed(1);
+  const x = (t: number) => (((t - from) / (hours * HOUR)) * 1000).toFixed(1);
   let d = "";
   let prev: number | null = null;
   for (const p of pts) {
     d += `${prev === null || p.at - prev > GAP_STEPS * h.stepMs ? "M" : "L"}${x(p.at)} ${y(p.v)}`;
     prev = p.at;
   }
-  // A lone sample between two gaps gets a short stroke of its own so it shows.
-  d = d.replace(/M([\d.]+ [\d.]+)(?=M|$)/g, "M$1h3");
-  const said = `${s.label} 최근 24시간: 마지막 ${s.fmt(last.v)}${s.per}, 최저 ${s.fmt(lo)}, 최고 ${s.fmt(hi)}, 표본 ${pts.length}개, 경고 ${s.line(lines[0])}, 위험 ${s.line(lines[1])}`;
-  // The warn line only: at 24px, memory's warn and danger lines (80% and 90%) sit 2px apart and read as one.
-  const warn = y(lines[0]);
-  return (
-    `<div class="gauge sp-row"><span class="g-l">${esc(s.label)}</span>` +
-    `<svg class="sp" viewBox="0 0 1000 24" preserveAspectRatio="none" role="img" aria-label="${esc(said)}"><line class="sp-th" x1="0" x2="1000" y1="${warn}" y2="${warn}"/><path class="sp-line" d="${d}"/></svg>` +
-    `<span class="g-v sp-min">${esc(`${s.fmt(lo)}–${s.fmt(hi)}`.replace(/(%| GB)–/, "–"))}</span></div>`
-  );
+  // A lone sample between two gaps gets a short stroke of its own so it shows; at the right edge
+  // (a new install's first sample) the stroke runs back into the row.
+  d = d.replace(/M([\d.]+) ([\d.]+)(?=M|$)/g, (_, px: string, py: string) => `M${px} ${py}h${Number(px) > 997 ? -3 : 3}`);
+  const range = `최근 ${hours}시간 ${s.num(lo) === s.num(hi) ? "" : `${s.num(lo)}–`}${s.num(hi)}${s.unit}`;
+  const said = `${s.label} ${range}, 표본 ${pts.length}개`;
+  return { svg: `<svg class="sp" viewBox="0 0 1000 24" preserveAspectRatio="none" role="img" aria-label="${esc(said)}"><path class="sp-line" d="${d}"/></svg>`, range };
 }
 
 /**
- * Decision 250: the last 24 hours of the resource monitor's 5-minute samples, one sparkline per
- * series on the full 24-hour axis. The core sends them in the load part; the panel keeps no copy.
+ * Decision 281: PC 부하 is one row per metric: its name, the line of its samples over the last
+ * `hours`, and the value read now. The samples are the resource monitor's (decision 250), sent by
+ * the core in the load part; the panel keeps no copy. A core that sends none still gets the values.
  */
-export function historyCard(h: Reading<LoadHistory> | null | undefined): string {
-  if (!h) return "";
-  if (!h.ok) return `<p class="ep">부하 기록을 ${unread(h.why)}</p>`;
-  const v = h.value;
-  const first = v.points[0];
-  if (!first) return `<p class="empty sp-empty">부하 기록 없음. 감시가 5분마다 하나씩 남긴다.</p>`;
-  const partial = first.at - Date.parse(v.from) > GAP_STEPS * v.stepMs;
-  const count = `${partial ? `${hhmm(new Date(first.at).toISOString())}부터 ` : ""}표본 ${n(v.points.length)}개`;
-  return (
-    `<div class="spark" role="group" aria-label="최근 24시간 부하">${SERIES.map((s) => sparkRow(s, v)).join("")}` +
-    `<div class="band-ax sp-ax"><span>24시간 전</span><span>${count}</span><span>지금</span></div></div>`
-  );
+export function loadRows(h: Reading<LoadHistory> | null | undefined, l: Load | null, hours: 6 | 24): string {
+  const v = h?.ok ? h.value : null;
+  const from = v ? Date.parse(v.to) - hours * HOUR : 0;
+  const rows = SERIES.map((s) => {
+    const now = l ? s.now(l) : undefined;
+    const { svg, range } = v ? spark(s, v, from, hours) : { svg: "<span></span>", range: "" };
+    return `<div class="lrow"${range ? ` title="${esc(range)}"` : ""}><span class="g-l">${s.label}</span>${svg}<span class="g-v ${l ? toneOf(l.reasons, s.reason) : ""}">${now === undefined ? "모름" : esc(`${s.num(now)}${s.unit}`)}</span></div>`;
+  });
+  // The window's left edge is `hours` ago; samples that begin later say when, under that edge.
+  const first = v?.points.find((p) => p.at >= from);
+  const late = v && first && first.at - from > GAP_STEPS * v.stepMs ? `<div class="lrow sp-from"><span></span><span>${hhmm(new Date(first.at).toISOString())}부터</span></div>` : "";
+  return `<div class="lrows" role="group" aria-label="${v ? `PC 부하: 지금 값과 최근 ${hours}시간` : "PC 부하: 지금 값"}">${rows.join("")}${late}</div>${h && !h.ok ? `<p class="ep">부하 기록을 ${unread(h.why)}</p>` : ""}`;
 }
 
 const pending = (title: string, what: string) => `<h3>${title}</h3><p class="pending" role="status">${what}</p>`;
@@ -273,19 +264,15 @@ function loadBlock(v: Pick<ResView, "load" | "episode" | "band" | "history">, ho
         ? `<p class="ep">${esc(hhmm(v.episode.since ?? ""))}부터 부하 정상</p>`
         : "";
   const band = v.band ? bandBlock(v.band, hours) : "";
-  const pick = v.band
-    ? `<span class="rng" role="group" aria-label="기간">${([6, 24] as const).map((h) => `<button type="button" data-res="h${h}" aria-pressed="${h === hours}">${h}시간</button>`).join("")}</span>`
-    : "";
+  // The switch sets the span of the rows' lines and of the level strip alike (decision 281).
+  const pick =
+    v.band || v.history?.ok
+      ? `<span class="rng" role="group" aria-label="기간">${([6, 24] as const).map((h) => `<button type="button" data-res="h${h}" aria-pressed="${h === hours}">${h}시간</button>`).join("")}</span>`
+      : "";
   const head = (badge: string) => `<div class="load-h"><h3>PC 부하${badge}</h3>${pick}</div>`;
-  const card = historyCard(v.history);
-  if (!v.load.ok) return `${head("")}<p class="ep">${unread(v.load.why)}</p>${card}${ep}${band}`;
+  if (!v.load.ok) return `${head("")}<p class="ep">${unread(v.load.why)}</p>${loadRows(v.history, null, hours)}${ep}${band}`;
   const l = v.load.value;
-  const rows = [
-    l.loadPerCpu !== undefined ? gauge("CPU", `${l.loadPerCpu.toFixed(2)} / 코어`, (l.loadPerCpu / 2) * 100, toneOf(l.reasons, "load/CPU")) : gauge("CPU", "모름", 0, ""),
-    l.memFreePct !== undefined ? gauge("메모리 여유", `${Math.round(l.memFreePct)}%`, l.memFreePct, toneOf(l.reasons, "메모리")) : gauge("메모리 여유", "모름", 0, ""),
-    l.diskFreeGb !== undefined ? `<div class="gauge"><span class="g-l">디스크 여유</span><span class="g-v wide ${toneOf(l.reasons, "디스크")}">${n(Math.round(l.diskFreeGb))} GB</span></div>` : "",
-  ];
-  return `${head(` <span class="badge ${l.level === "ok" ? "" : l.level === "warn" ? "t-run" : "t-bad"}">${LEVEL[l.level]}</span>`)}${rows.join("")}${card}${ep}${band}`;
+  return `${head(` <span class="badge ${l.level === "ok" ? "" : l.level === "warn" ? "t-run" : "t-bad"}">${LEVEL[l.level]}</span>`)}${loadRows(v.history, l, hours)}${ep}${band}`;
 }
 
 const OWNED = "기록됨·오너 손";
