@@ -12,13 +12,13 @@ agent-skills(공개 저장소, `2a065706` 기준)의 skill·hook·agent·script�
 
 | 옛 항목 | sangsoe 위치 | 남긴 것 / 버린 것 · 근거 |
 |---|---|---|
-| `skills/orchestrate` | `claude-plugin/skills/orchestrate/SKILL.md` | 남김: 깨움 처리·나누기·결정은 `decision_open`·리뷰와 land 경로. 버림: inbox 대기·카드 감시·대시보드 갱신(깨움은 Orca 메시지, 현황은 resource, 결정 120) |
+| `skills/orchestrate` | `claude-plugin/skills/orchestrate/SKILL.md` | 남김: 깨움 처리·나누기·결정은 `decision_open`·리뷰와 land 경로. 버림: inbox 대기·카드 감시·대시보드 갱신(깨움은 Orca 메시지, 현황은 resource, 결정 120). 브리프 틀(`references/brief.md`)은 write-brief 칸 표로: 계보 `start_unit`·머지 `review_record`·`land`·`READY-WAIT` 줄·검증 `evidence_record`, 회고 교훈 셋(결정 251). 버림: 부하 상한 명령·CI 대기 명령·머지 대기 시간·1분 자기 점검(sangsoe 대응 없음) |
 | `skills/dispatch-card` | `claude-plugin/skills/start/SKILL.md`, `core/start/` | 남김: `start_unit` 한 번과 started·waiting·stopped·거부 읽기. 버림: 다른 모든 시작 경로(결정 94) |
 | `skills/end-session` | `claude-plugin/skills/end-session/SKILL.md` | 남김: 정리·`resource_record`·`handoff_save`·`worker_done` 한 번. 버림: 터미널 닫기·카드 아카이브(Orca 자동 해제, REAPER) |
-| `skills/deliver-ticket` | `claude-plugin/skills/deliver-ticket/SKILL.md`, `core/land/`, `core/verify/` | 남김: 계획·시험·독립 리뷰·V0–V3 증거·land·`merge_ready`. 버림: 직접 머지와 티켓 도구 단계(결정 93) |
+| `skills/deliver-ticket` | `claude-plugin/skills/deliver-ticket/SKILL.md`, `core/land/`, `core/verify/` | 남김: 계획·시험·독립 리뷰·V0–V3 증거·land·`merge_ready`. 버림: 직접 머지와 티켓 도구 단계(결정 93). `references/independent-review.md` 의 리뷰어 지시문 두 줄(Read 로만 읽기, 비밀 꼴 줄 금지)은 §3 으로(결정 251) |
 | `skills/reflect` | `claude-plugin/skills/reflect/SKILL.md`, `core/store/views/item_timeline.ts` | 남김: 세 리뷰어 교훈과 `item_timeline` 측정. 버림: 교훈 원장 파일(재료는 event 와 리뷰 원문) |
 | `skills/reap-resources` | `claude-plugin/skills/reap-resources/SKILL.md`, U18 | 남김: 당사자 몫과 REAPER 보고 처리. 버림: 목록·판정·정리 절차(토큰 X 인 REAPER 라운드, U18 이 짓는다) |
-| `skills/skills-config` | `claude-plugin/skills/setup/SKILL.md`, `core/install/`, `core/install/permissions.ts` | 남김: `sangsoe install`·`doctor`·`plugin approve`·`uninstall` 을 가리키기, `permissions.allow` 규칙 더하기는 `sangsoe install --permissions` 로(sangsoe 세션이 부르는 16개만, diff·y/N·백업, 터미널이 없으면 `--yes` 줄을 적고 끝냄, `uninstall` 이 기록한 것만 뺌, 결정 221·224). 버림: 그 밖의 설정 쓰기(`agent-skills.json` 값, autoMode 규칙, 다른 allow 규칙) |
+| `skills/skills-config` | `claude-plugin/skills/setup/SKILL.md`, `core/install/`, `core/install/permissions.ts` | 남김: `sangsoe install`·`doctor`·`plugin approve`·`uninstall` 을 가리키기, `permissions.allow` 규칙 더하기는 `sangsoe install --permissions` 로(sangsoe 세션이 부르는 17개만, diff·y/N·백업, 터미널이 없으면 `--yes` 줄을 적고 끝냄, `uninstall` 이 기록한 것만 뺌, 결정 221·224). 버림: 그 밖의 설정 쓰기(`agent-skills.json` 값, autoMode 규칙, 다른 allow 규칙) |
 | `skills/setup-pc` | `claude-plugin/skills/setup/SKILL.md`, `cli/commands/install.ts`, `cli/commands/doctor.ts` | 남김: 설치·점검. 버림: dry-run 스크립트와 `agent-skills.json` 키(결정 90), 이 PC 에서 다른 PC 를 다루는 일(cross-PC, 결정 203) |
 | `skills/brief` | `claude-plugin/skills/brief/SKILL.md`, `claude-plugin/skills/todo/SKILL.md`, `core/brief/`, `cli/commands/brief.ts`, `cli/commands/todo.ts` | 남김: 렌더러 출력을 그대로 보내기, 78칸 표. 바꿈: 세 단계와 `todo`(결정 89, 128) |
 | `skills/watch-prs` | U16 | pr-monitor(머지 확인·main 감시). 아직 PR 없음 |

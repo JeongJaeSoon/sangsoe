@@ -4,6 +4,7 @@ import { isOpenGate } from "../../decision/waiters.ts";
 import { orphanedWaits } from "../../owner/release.ts";
 import { settled } from "../../recover/recover.ts";
 import { type MonitorConfig, minutes, type Planned, type Reading } from "../monitor.ts";
+import { type CoordinatorRead, judgeCoordinators } from "./coordinator.ts";
 import { judgeMail } from "./mail.ts";
 
 const SOURCE = "orca-monitor";
@@ -23,6 +24,8 @@ export type OrcaReads = {
   events: readonly StoredEvent[];
   /** Header text of each refusal file the inbox points to (mail.ts); absent: none read. */
   refusals?: ReadonlyMap<string, string | null>;
+  /** The coordinator of each Run that has old unread mail, and of each Run the inbox page names (coordinator.ts). */
+  coordinators?: ReadonlyMap<string, CoordinatorRead>;
 };
 
 export const ORCA_EVENT_TYPES = [
@@ -287,6 +290,7 @@ export function judgeOrca(r: OrcaReads, now: number, c: MonitorConfig, previous:
   judgeWorkers(r, now, c, planned, unseen);
   judgeGates(r, now, c, planned, unseen);
   judgeWakes(r, now, c, planned, unseen);
+  judgeCoordinators(r.inbox, r.coordinators ?? new Map(), r.ps, now, c, planned, unseen);
   if (r.inbox) {
     const known = knownWorkers(r);
     const unfinished = new Set([...known.values()].filter(isUnfinished).map((w) => w.dispatchId));

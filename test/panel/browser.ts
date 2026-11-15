@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 
 // Headless Chrome for the panel's layout tests (U116): the page is drawn as Orca draws an html panel,
 // and the page itself writes what it measured into <pre id="out">, which --dump-dom returns.
@@ -21,26 +22,46 @@ export function chrome(): string | null {
 /** A test that needs a browser runs wherever one is found, and always on CI. */
 export const noBrowser = !chrome() && !process.env.CI ? "no Chrome on this machine (CI requires one)" : false;
 
-/** Loads `dir/index.html` and returns the JSON its page put in <pre id="out">. */
-export function dump(dir: string, index: string, budgetMs = 5000): unknown {
-  const bin = chrome();
-  assert.ok(bin, "no Chrome: set CHROME");
-  writeFileSync(join(dir, "index.html"), index);
-  const args = [
+// The test HOME is a temp dir (decision 263 ⑨), so macOS would show "Keychain Not Found" for Chrome's own store.
+export const KEYCHAIN_FLAGS = ["--use-mock-keychain", "--password-store=basic"];
+
+export function chromeArgs(dir: string, budgetMs: number): string[] {
+  return [
     "--headless=new",
     "--disable-gpu",
     "--allow-file-access-from-files",
     `--user-data-dir=${join(dir, "profile")}`,
+    ...KEYCHAIN_FLAGS,
     "--window-size=1000,1200",
     `--virtual-time-budget=${budgetMs}`,
     ...(process.platform === "linux" ? ["--no-sandbox"] : []),
     "--dump-dom",
     `file://${join(dir, "index.html")}`,
   ];
-  const r = spawnSync(bin, args, { encoding: "utf8", timeout: 60_000 });
+}
+
+/** Loads `dir/index.html` and returns the JSON its page put in <pre id="out">. */
+export function dump(dir: string, index: string, budgetMs = 5000): unknown {
+  const bin = chrome();
+  assert.ok(bin, "no Chrome: set CHROME");
+  writeFileSync(join(dir, "index.html"), index);
+  const r = spawnSync(bin, chromeArgs(dir, budgetMs), { encoding: "utf8", timeout: 60_000 });
   const json = /<pre id="out">([^<]*)<\/pre>/.exec(r.stdout)?.[1];
   assert.ok(json, `no measurement from Chrome: ${r.stderr.slice(-500)}`);
   return JSON.parse(json.replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&"));
+}
+
+/** The panel entry and what it imports, written under `dir` as the browser module files Orca serves. */
+export function transpilePanel(dir: string): void {
+  const root = new URL("../../", import.meta.url).pathname;
+  mkdirSync(join(dir, "orca-plugin/panel"), { recursive: true });
+  for (const f of ["timer.ts", "panel/index.ts", "panel/refresh.ts", "panel/resources.ts", "panel/style.ts", "panel/view.ts"]) {
+    const src = readFileSync(join(root, "orca-plugin", f), "utf8");
+    const out = ts.transpileModule(src, {
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, rewriteRelativeImportExtensions: true, verbatimModuleSyntax: true },
+    });
+    writeFileSync(join(dir, "orca-plugin", f.replace(/\.ts$/, ".js")), out.outputText);
+  }
 }
 
 /** Orca's html panel page for a .ts entry (the frame bridge aside): no body tag, #root alone. */

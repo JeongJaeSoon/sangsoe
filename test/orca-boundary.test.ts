@@ -24,7 +24,8 @@ test("no code path names a consuming mail read or the fallback start", () => {
   const hits: string[] = [];
   for (const f of walk(ROOT)) {
     const rel = relative(ROOT, f);
-    if (rel === SELF || !/\.(c|m)?(ts|js)x?$|\.json$|\.sh$/.test(rel) || rel === "package-lock.json") continue;
+    // The permission policy names the commands it refuses to rule (decision 265); it runs none of them.
+    if (rel === SELF || rel === "scripts/permissions/policy.ts" || !/\.(c|m)?(ts|js)x?$|\.json$|\.sh$/.test(rel) || rel === "package-lock.json") continue;
     readFileSync(f, "utf8")
       .split("\n")
       .forEach((line, i) => {

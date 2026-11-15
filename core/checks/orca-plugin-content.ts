@@ -1,13 +1,16 @@
+import { inspectContentHash } from "../approve/content-hash.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
 import type { Check, CheckResult, PluginBuild } from "./check.ts";
 
 const id = "orca-plugin-content";
 const APPROVE = "sangsoe plugin approve";
 
-async function contentHash(orca: OrcaAdapter, dir: string): Promise<string | null> {
-  const r = await orca.pluginInspect({ dir });
-  const hash = r.ok ? r.value.contentHash : undefined;
-  return typeof hash === "string" ? hash : null;
+function contentHash(orca: OrcaAdapter, dir: string): Promise<string | null> {
+  return inspectContentHash(dir, async (d) => {
+    const r = await orca.pluginInspect({ dir: d });
+    const hash = r.ok ? r.value.contentHash : undefined;
+    return typeof hash === "string" ? hash : null;
+  });
 }
 
 // gh's own 401 line and the usual wording of a token or credential helper refusing; not 403, which is also a rate limit.

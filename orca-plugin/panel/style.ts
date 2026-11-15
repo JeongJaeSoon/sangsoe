@@ -7,6 +7,7 @@ export const STYLE = `
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
   --text-xs: 11px; --text-sm: 12px; --text-base: 13px; --text-md: 15px;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --emoji-gap: var(--s1);
   /* The one side gutter: header, tab row, breadcrumb and content line up on it (decision 219 (7)). */
   --gx: var(--s3);
   --r1: 4px; --r2: 6px; --r3: 8px; --dur: 120ms;
@@ -72,7 +73,12 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; overflow-wrap
 /* 8px, not rc.3's 16: a stage taller than the panel still ends clear of the 리소스 rule (decision 248). */
 #root { flex: none; padding: 0 0 var(--s2); container: panel / inline-size; }
 /* The header, and a detail screen's back line under it, stay at the top together (decision 225 (4)). */
+/* The bar (the header and, on a detail screen, its crumbs line) stays under the 리소스 sheet (z-index 3) so a
+   tall sheet never hides its own heading; while the header's menu is open the bar is lifted over it. */
 .bar { position: sticky; top: 0; z-index: 2; background: var(--paper); }
+.bar:has(details.menu[open]) { z-index: 4; }
+/* The pinned 리소스 bar covers the viewport's bottom 37px: a focused row scrolls clear of it. */
+html { scroll-padding-bottom: 40px; }
 .top { display: flex; align-items: center; gap: var(--s2); height: 36px; padding: 0 var(--gx); border-bottom: 1px solid var(--rule); background: var(--paper); }
 .brand { display: inline-flex; align-items: center; gap: var(--s2); font-weight: 600; font-size: var(--text-base); white-space: nowrap; }
 .brand .ic { width: 16px; height: 16px; color: var(--muted); }
@@ -134,6 +140,9 @@ section.nil + section:not(.nil) { margin-top: var(--s2); }
 .badge.t-run { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 45%, var(--paper)); background: color-mix(in oklab, var(--accent) 8%, var(--paper)); }
 .badge.t-done, .badge.t-gone { color: var(--muted); }
 .badge.cnt { margin-left: var(--s2); }
+/* Decision 259: the one gap between an emoji and its label, before it (.em) or after a badge (.fl). */
+.em { margin-right: var(--emoji-gap); }
+.fl { margin-left: var(--emoji-gap); }
 /* The badge's 11px em: 4em leaves the time beside it four glyphs at 13px ("119m", 34px) and its 8px gap. */
 .who .badge { min-width: 0; max-width: min(14em, calc(100% - 4em)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who .age { margin-left: var(--s2); color: var(--muted); }
@@ -152,8 +161,8 @@ h3 .note { margin-left: var(--s1); font-weight: 400; }
 details.fold { margin: 0 0 var(--s3); }
 details.fold summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: var(--s2); padding: var(--s1) 0; border-bottom: 1px solid var(--rule); font-size: var(--text-sm); font-weight: 600; }
 details.fold summary::-webkit-details-marker { display: none; }
-details.fold summary::after { content: "›"; margin-left: auto; color: var(--muted); }
-details.fold[open] summary::after { content: "⌄"; }
+details.fold summary .chev { flex: none; align-self: center; width: 12px; height: 12px; margin-left: auto; color: var(--muted); }
+details.fold[open] > summary .chev { transform: rotate(90deg); }
 details.fold summary .count { color: var(--muted); font-weight: 400; }
 .done { list-style: none; margin: 0; padding: 0; }
 .done li { display: flex; gap: var(--s3); padding: var(--s2) var(--s1); border-bottom: 1px solid var(--rule); font-size: var(--text-sm); }
@@ -231,7 +240,6 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl col.c-state { width: 8.5em; }
   .tbl col.c-acts { width: 200px; }
   .tbl .mk { vertical-align: middle; }
-  .tbl .mk + .st { margin-left: var(--s1); }
   .tbl tr.lead td { background: var(--tint-2); }
   .tbl:not(:has(tr.lead)) tbody tr:nth-child(even of :where(:not(.other))) td { background: var(--tint-1); }
   .tbl:not(:has(tr.lead)) tbody tr:hover td { background: var(--paper-2); }
@@ -265,8 +273,10 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl td[data-l]::before { content: attr(data-l); color: var(--muted); margin-right: var(--s1); font-size: var(--text-xs); }
   /* Decision 225 (2)(3)(7): the PR stays one line, the middle text takes what is left for at most two
      lines, and who (a cut badge) and the elapsed time end the meta line at the card's right edge. */
-  .tbl:not(.gt) td.pr { flex: 0 1 auto; max-width: 10em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tbl:not(.gt) td.mid { flex: 1 1 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  /* Decision 262 (owner UI 10) replaces the two lines: the status text is one line cut with an ellipsis
+     (its title holds it whole), never broken inside a Korean word, and the PR and who never shrink. */
+  .tbl:not(.gt) td.pr { flex: 0 0 auto; max-width: 10em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tbl:not(.gt) td.mid { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: keep-all; overflow-wrap: normal; }
   .tbl:not(.gt) td.who { flex: none; display: flex; align-items: center; margin-left: auto; max-width: 55%; }
   .tbl:not(.gt) td.age, .tbl .who .age { flex: none; margin-left: auto; padding-left: var(--s2); color: var(--muted); }
   .tbl td.age::before { content: none; }
@@ -276,14 +286,14 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
   .tbl tr.oneline td.brk { display: none; }
   .tbl tr.oneline td.age { order: -2; }
   /* A group row heads its item cards instead of being one more card beside them. */
-  .tbl tr.lead { margin-top: var(--s3); padding: var(--s1) 0 0; border-color: transparent; }
+  .tbl tr.lead { margin-top: var(--s3); padding: var(--s1) 0 0; border-color: transparent; column-gap: var(--emoji-gap); }
   .tbl tr.lead:first-child { margin-top: 0; }
   .tbl tr.lead td { border: 0; }
   .tbl tr.lead td.title { display: flex; align-items: center; }
   /* A group head is one line: who and how long show on the item cards under it. */
   .tbl tr.lead td[data-l], .tbl tr.lead td.brk { display: none; }
   /* The head line keeps the bare mark decision 225 (11) drew; its word stays for screen readers. */
-  .tbl tr.lead .mk { display: inline; }
+  .tbl tr.lead .mk { display: inline; margin-right: 0; }
   .tbl tr.lead .st { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .tbl tr.lead .go { display: inline; flex: none; margin-left: auto; padding-left: var(--s3); color: var(--link); font-size: var(--text-xs); font-weight: 500; }
   .tbl tr.lead:hover .go, .tbl tr.lead:focus-visible .go { text-decoration: underline; text-underline-offset: 2px; }
@@ -313,13 +323,34 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 /* The 리소스 section (decision 234): its own element under #root, so a panel repaint never touches an
    open confirm list. One quiet fold; the gauges are the only drawing in it. */
-#res { margin: auto 0 0; padding: 0 var(--gx) var(--s2); border-top: 1px solid var(--rule); }
+/* Decision 253: the closed row's text sits centred in its 36px; open, the frame ends as far above the
+   section's end as the title's text sits below its rule. */
+#res { --res-bar: 36px; position: sticky; bottom: 0; z-index: 3; height: calc(var(--res-bar) + 1px); margin: auto 0 0; padding: 0 var(--gx); border-top: 1px solid var(--rule); background: var(--paper); }
 /* Decision 248: closed, the heading is a quiet muted row; open, it is ink and the body sits in the
    panel's one emphasis, a 1px rule with rounded corners (decision 222), so the two read apart. */
 #res .res-fold { margin: 0; position: relative; }
 #res .res-fold > summary { padding: var(--s2) 0; border-bottom: 0; color: var(--muted); font-weight: 500; }
 #res .res-fold[open] > summary { color: var(--ink); font-weight: 600; }
-#res .res-fold[open] > .res-body { padding: 0 var(--s3) var(--s3); border: 1px solid var(--rule); border-radius: var(--r3); }
+/* Decision 253: the 6시간/24시간 box sits 12px in from the top and the right; 16px at the bottom puts the
+   last line's text as far from the frame as the first line's, which the 26px switch centres lower. */
+#res .res-fold[open] > .res-body { margin: 0; padding: var(--s3) var(--s3) var(--s4); border: 0; max-height: calc(100dvh - 80px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+/* Decision 262: the section stays pinned to the panel's bottom and its bar keeps its place in the page,
+   so opening it never moves the board. Open, the fold is a sheet over the board that rises from the
+   bar's place: popover surface, a rule and rounded top corners, no scrim (the board's strip above keeps
+   the owner's place, and emphasis is a border, decision 222). Its heading is the sheet's head; the body
+   scrolls inside it, leaving 44px for the panel's own header. A very short panel gives that gap up. */
+#res { --sheet-shadow: rgb(0 0 0 / 0.12); }
+@media (prefers-color-scheme: dark) { :root:not(.light):not([data-theme="light"]) #res { --sheet-shadow: rgb(0 0 0 / 0.4); } }
+:root.dark #res, :root[data-theme="dark"] #res { --sheet-shadow: rgb(0 0 0 / 0.4); }
+#res .res-fold[open] { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; background: var(--pop); color: var(--pop-ink); border-top: 1px solid var(--rule); border-radius: var(--r3) var(--r3) 0 0; box-shadow: 0 -4px 16px var(--sheet-shadow); transform-origin: bottom; transition: transform calc(var(--dur) * 1.5) ease-out, opacity calc(var(--dur) * 1.5) ease-out; }
+/* It grows from its bottom edge: a translate would add 12px to the page's scroll height while it plays. */
+@starting-style { #res .res-fold[open] { transform: scaleY(0.94); opacity: 0.6; } }
+#res .res-fold[open] > summary { padding-inline: var(--s3); border-bottom: 1px solid var(--rule); }
+#res .res-fold[open] .res-h { right: calc(var(--s5) + var(--s3)); }
+@media (max-height: 320px) { #res .res-fold[open] > .res-body { max-height: calc(100dvh - var(--res-bar)); } }
+@media (prefers-reduced-motion: reduce) { #res .res-fold[open] { transition: none; } }
+#res .res-body > :first-child:not(.res-h), #res .res-body > .res-h + * { margin-top: 0; }
+#res .res-body > .res-h + .load-h { padding-top: 0; }
 #res h3 { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s3); }
 /* The reading time and 새로 고침 end the 리소스 row, left of its chevron; in the DOM they stay after the
    summary, so the keyboard reaches them next and a press never toggles the fold. */
@@ -355,6 +386,14 @@ tr.other input { flex: 1; height: 28px; padding: 0 var(--s2); border: 1px solid 
 .sw rect { stroke: var(--rule-2); }
 button.link:disabled { color: var(--muted); cursor: default; }
 .band-ax { display: flex; justify-content: space-between; margin-top: 2px; color: var(--muted); font-size: var(--text-xs); line-height: 16px; }
+/* Decision 250: the 24-hour card under the gauges, on their grid so the labels line up. White with a
+   1px rule (decision 222); the line is a quiet stroke, the dashed warn line the band's warn colour. */
+.spark { margin-top: var(--s2); padding: var(--s1) var(--s3) 0; border: 1px solid var(--rule); border-radius: var(--r2); }
+.sp { display: block; width: 100%; height: 24px; overflow: visible; }
+.sp-line { fill: none; stroke: var(--ink-2); stroke-width: 1.25px; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.sp-th { stroke: var(--accent); stroke-width: 1px; stroke-dasharray: 2 3; opacity: 0.6; vector-effect: non-scaling-stroke; }
+.sp-min, .sp-none { color: var(--muted); font-size: var(--text-xs); }
+.sp-none { grid-column: 2 / 4; }
 .ep.t-bad { color: var(--bad); }
 .unread { color: var(--bad); }
 /* One line per row at every width: a long name or reason is cut, its whole text in the cell's title. */
