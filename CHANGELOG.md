@@ -4,9 +4,15 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
-### Upgrading
+## 0.1.8
 
-- **The permission rule set grows from 17 to 41; run `sangsoe install --permissions` again.** Read the diff, then run it with `--yes` (or answer `y`). It adds 24 rules and keeps the 17 it wrote before byte for byte; `sangsoe doctor` reads `permissions: 41 of 41` once both profiles have them, and warns `17 of 41` until then. Rules you added yourself are not touched.
+Everything since `v0.1.7`: #162 (decision 263 ⑩, `start_unit`), #163 (decision 265) and #164 (test-only). No release candidate was cut: there is no schema change and no panel change, and every change has tests; the live checks run on the installed stable.
+
+### Upgrading from 0.1.7
+
+- **Re-approve the Orca plugin.** The plugin's own files did not change except its version (`orca-plugin/orca-plugin.json`, 0.1.7 → 0.1.8), but the core it runs, packed into `orca-plugin/vendor/` at release, did: `core/contract/orca.ts`, `core/index.ts`, `core/install/` (`doctor.ts`, `permissions.ts`, the new `permissions.generated.ts`), `core/orca/adapter.ts`, `core/orca/commands.ts`, `core/start/start.ts` and `core/unit/close.ts` differ from 0.1.7 (`git diff v0.1.7 HEAD -- core`). Approval is tied to the new Cellar folder and its content, so after `brew upgrade sangsoe` and `sangsoe install`, have the build reviewed and recorded by someone other than the session that wrote it, then run `sangsoe plugin approve`, as the README's Update section says.
+- **The permission rule set grows from 17 to 41; run `sangsoe install --permissions` again.** The rule set is now derived from what sangsoe runs (265). Read the diff, then run it with `--yes` (or answer `y`). It adds 24 rules and keeps the 17 it wrote before byte for byte; `sangsoe doctor` reads `permissions: 41 of 41` once both profiles have them, and warns `17 of 41` until then. Rules you added yourself are not touched.
+- **Nothing else.** The store schema is still 3 (`SCHEMA_V` in `core/store/schema.ts`, and `core/store` has no change since `v0.1.7`), so no backup and no downgrade note.
 
 ### Changes
 
