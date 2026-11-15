@@ -18,40 +18,48 @@ const NOW = "2026-11-15T12:00:00Z";
 const COUNTS = `sangsoe: Run ${RUN} — 🟢 준비됨 0 · 📅 기한 0 · ⚠️ trigger 불명 0 (새로 0건). 목록은 resource ready 와 brief 로 읽는다.`;
 
 type TaskState = "waiting" | "running" | "closed" | "elsewhere";
-type Cell = { task: TaskState; gate: boolean; carrier: boolean; told: boolean };
+/** The waiter's gate: none recorded (it joined while its worker ran), still open, or resolved before this prompt. */
+type GateState = "none" | "open" | "resolved";
+type Cell = { task: TaskState; gate: GateState; carrier: boolean; told: boolean };
 type Reason = "answered" | "moot";
+type Due = readonly [resolve: boolean, tell: "worker" | "run" | null];
 
 /** Per kind of waiter: is its open gate resolved, and who is told once. `elsewhere`: the Task is another Run's. */
-const OWED: Record<TaskState, { gate: readonly [boolean, "worker" | "run" | null]; bare: readonly [boolean, "worker" | "run" | null]; carrierGate: boolean }> = {
+const OWED: Record<TaskState, Partial<Record<GateState, Due>> & { carrierGate: boolean }> = {
   // No worker yet: the answer rides in its first prompt (91④(i)), so nobody is told now.
-  waiting: { gate: [true, null], bare: [false, null], carrierGate: true },
-  running: { gate: [true, "worker"], bare: [false, "worker"], carrierGate: true },
-  // A closed Task's gate stays open on purpose and its Run is told (91④(ii)).
-  closed: { gate: [false, "run"], bare: [false, "run"], carrierGate: false },
-  elsewhere: { gate: [false, null], bare: [false, null], carrierGate: false },
+  waiting: { open: [true, null], resolved: [false, null], none: [false, null], carrierGate: true },
+  // Orca refuses a gate on a running Task and an open gate keeps its Task from starting, so a running
+  // Task has no open gate. One whose gate was resolved before its worker started is told by mail.
+  running: { resolved: [false, "worker"], none: [false, "worker"], carrierGate: false },
+  // A closed Task's gate stays open on purpose and its Run is told (91④(ii)). A gate resolved while
+  // the Task was live was the delivery: the Run is not told again when the Task closes later.
+  closed: { open: [false, "run"], resolved: [false, null], none: [false, "run"], carrierGate: false },
+  elsewhere: { open: [false, null], resolved: [false, null], none: [false, null], carrierGate: false },
 };
-/** A carrier is told nothing; with no gate it is owed nothing at all. */
-const expected = (c: Cell): readonly [boolean, "worker" | "run" | null] => {
-  if (c.carrier) return [c.gate && OWED[c.task].carrierGate, null];
-  const [resolve, tell] = c.gate ? OWED[c.task].gate : OWED[c.task].bare;
+/** A carrier is told nothing; only its open gate on a live Task is resolved. */
+const expected = (c: Cell): Due => {
+  if (c.carrier) return [c.gate === "open" && OWED[c.task].carrierGate, null];
+  const [resolve, tell] = OWED[c.task][c.gate] as Due;
   return [resolve, c.told ? null : tell];
 };
 
 const CELLS: Cell[] = (["waiting", "running", "closed", "elsewhere"] as const).flatMap((task) =>
-  [true, false].flatMap((gate) => [false, true].flatMap((carrier) => [false, true].map((told) => ({ task, gate, carrier, told })))),
+  (["open", "resolved", "none"] as const)
+    .filter((gate) => OWED[task][gate] !== undefined)
+    .flatMap((gate) => [false, true].flatMap((carrier) => [false, true].map((told) => ({ task, gate, carrier, told })))),
 );
-const name = (c: Cell) => `${c.task}${c.gate ? " +gate" : ""}${c.carrier ? " +carrier" : ""}${c.told ? " +told" : ""}`;
+const name = (c: Cell) => `${c.task}${c.gate === "none" ? "" : ` +gate ${c.gate}`}${c.carrier ? " +carrier" : ""}${c.told ? " +told" : ""}`;
 const keyOf = (reason: Reason) => (reason === "moot" ? mootNotifiedKey(D, T) : answerNotifiedKey(D, T)).dedupe_key;
 
 function world(c: Cell, reason: Reason): World {
-  // Waiting: blocked by its gate, or (joined while its worker ran, so no gate) failed and startable again.
-  const status = { waiting: c.gate ? "blocked" : "failed", running: "dispatched", closed: "completed", elsewhere: "pending" }[c.task];
+  // Waiting: blocked by its open gate, else failed and startable again (a pending Task would read as ready).
+  const status = { waiting: c.gate === "open" ? "blocked" : "failed", running: "dispatched", closed: "completed", elsewhere: "pending" }[c.task];
   const run = c.task === "elsewhere" ? OTHER : RUN;
   const w = createWorld([{ id: T, run, status, ...(c.task === "running" ? { dispatchId: DISPATCH } : {}) }]);
-  if (c.gate) w.gates.set(GATE, { id: GATE, taskId: T, status: "pending", question: "Take it?" });
+  if (c.gate !== "none") w.gates.set(GATE, { id: GATE, taskId: T, status: c.gate === "open" ? "pending" : "resolved", question: "Take it?" });
   if (c.carrier) w.store.append({ type: "item_extra_set", source: "test", payload: { task: T, exec_by: "owner" } });
   w.store.append({ type: "decision_opened", source: "decision_open", dedupe_key: "decision:k1", payload: { decision: D, decision_key: "k1" } });
-  w.store.append({ type: "decision_joined", source: "decision_open", dedupe_key: `decision_joined:${D}:${T}`, payload: { decision: D, waiter: T, run, ...(c.gate ? { gate: GATE } : {}) } });
+  w.store.append({ type: "decision_joined", source: "decision_open", dedupe_key: `decision_joined:${D}:${T}`, payload: { decision: D, waiter: T, run, ...(c.gate !== "none" ? { gate: GATE } : {}) } });
   if (reason === "answered") {
     const said = ownerSays(w.store, `${D} yes`);
     w.store.append({ type: "decision_answered", source: "decision_answer", dedupe_key: `decision_answered:${D}`, payload: { decision: D, owner_action: said, answer: "yes", linked_by: "button" } });
@@ -82,7 +90,7 @@ const ROLES = {
 for (const [who, as] of Object.entries(ROLES)) {
   for (const reason of ["answered", "moot"] as const) {
     test(`274: every kind of waiter of a decision closed as ${reason}, as ${who}`, async () => {
-      assert.equal(CELLS.length, 32);
+      assert.equal(CELLS.length, 44);
       for (const c of CELLS) {
         const [resolve, tell] = expected(c);
         const w = world(c, reason);
@@ -93,14 +101,14 @@ for (const [who, as] of Object.entries(ROLES)) {
           "task-list",
           "gate-list",
           // The re-call's own reads, what it does, and the gate-list that reads back what it resolved.
-          ...(recall ? ["task-list", ...(c.gate ? ["gate-list"] : []), ...(resolve ? ["gate-resolve"] : []), ...(tell === "worker" ? ["send"] : []), ...(resolve ? ["gate-list"] : [])] : []),
+          ...(recall ? ["task-list", ...(c.gate !== "none" ? ["gate-list"] : []), ...(resolve ? ["gate-resolve"] : []), ...(tell === "worker" ? ["send"] : []), ...(resolve ? ["gate-list"] : [])] : []),
         ];
         assert.deepEqual(first.calls, calls, `${name(c)}: Orca calls of the first prompt`);
         const said = reason === "moot" ? `${D} 무효(moot)` : `${D}: yes`;
         const line = `${COUNTS}${resolve ? ` 닫힌 결정 ${D} 의 게이트 1개를 풀었다.` : ""}${tell === "run" ? ` 닫힌 Task 가 기다리던 결정: ${said}.` : ""}`;
         assert.deepEqual(first.lines, resolve || tell === "run" ? [line] : [], `${name(c)}: the line`);
         assert.deepEqual(first.resolved, resolve ? [GATE] : [], `${name(c)}: resolved`);
-        if (c.gate) assert.equal(w.gates.get(GATE)?.status, resolve ? "resolved" : "pending", `${name(c)}: the gate`);
+        if (c.gate !== "none") assert.equal(w.gates.get(GATE)?.status, resolve || c.gate === "resolved" ? "resolved" : "pending", `${name(c)}: the gate`);
         if (resolve) assert.equal(w.gates.get(GATE)?.resolution, reason === "moot" ? `MOOT ${D}: pr_closed:acme/api#4` : `${D}: yes`);
         assert.deepEqual(w.sends.map((s) => s.to), tell === "worker" ? [`dispatch:${DISPATCH}`] : [], `${name(c)}: mail`);
         assert.deepEqual(w.store.events({ type: "notified" }).map((e) => e.dedupe_key), c.told || tell ? [keyOf(reason)] : [], `${name(c)}: notified rows`);
@@ -116,7 +124,7 @@ for (const [who, as] of Object.entries(ROLES)) {
   test(`274: a closed waiter and a live one of the same decision: the Run is told in the line before the re-call, so nothing is mailed (${who})`, async () => {
     const T2 = "task_000000000002";
     const G2 = "gate_000000000002";
-    const w = world({ task: "closed", gate: true, carrier: false, told: false }, "answered");
+    const w = world({ task: "closed", gate: "open", carrier: false, told: false }, "answered");
     w.tasks.set(T2, { id: T2, run: RUN, status: "blocked" });
     w.gates.set(G2, { id: G2, taskId: T2, status: "pending", question: "Take it?" });
     w.store.append({ type: "decision_joined", source: "decision_open", dedupe_key: `decision_joined:${D}:${T2}`, payload: { decision: D, waiter: T2, run: RUN, gate: G2 } });
@@ -130,7 +138,7 @@ for (const [who, as] of Object.entries(ROLES)) {
   });
 
   test(`274: a worker Orca cannot reach is tried again on each prompt, with no line and no row (${who})`, async () => {
-    const w = world({ task: "running", gate: false, carrier: false, told: false }, "answered");
+    const w = world({ task: "running", gate: "none", carrier: false, told: false }, "answered");
     w.failSendTo(`dispatch:${DISPATCH}`);
     as(w);
     for (const n of [1, 2, 3]) {

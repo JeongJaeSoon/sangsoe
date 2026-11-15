@@ -61,7 +61,8 @@ export interface Owed {
  * waiter and what Orca shows of its Task and gate now. Whether the telling already happened is the
  * `notified` row under the waiter's key, which the caller reads.
  * - no Run recorded, or a carrier with no gate: nothing;
- * - a closed Task: its gate stays open on purpose and its Run is told (decision 91④(ii));
+ * - a closed Task: its gate stays open on purpose and its Run is told (decision 91④(ii)). A gate
+ *   that is no longer open was resolved while the Task was live, and that was the delivery: nothing;
  * - a live Task: its open gate is resolved, and its worker is told when one runs (a Task with no
  *   worker yet gets the answer in its first prompt, 91④(i));
  * - a carrier or a Task Orca no longer lists is told nothing.
@@ -71,7 +72,8 @@ export function owed(w: Waiter, task: Pick<TaskRow, "status" | "result" | "dispa
   const closed = task !== undefined && isClosedTask(task);
   const gate = !closed && w.gate && gateOpen ? w.gate : null;
   if (w.carrier || !task) return { gate, tell: null };
-  return { gate, tell: closed ? "run" : task.dispatchId ? "worker" : null };
+  if (closed) return { gate, tell: !w.gate || gateOpen ? "run" : null };
+  return { gate, tell: task.dispatchId ? "worker" : null };
 }
 
 // Orca's gate-resolve help speaks of "a pending decision gate"; "open" is accepted too until recorded.
