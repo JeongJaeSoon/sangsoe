@@ -800,9 +800,9 @@ store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (1
 | 24시간 폭에서 `HH:MM부터` 가 선의 시작과 떨어져 있었다 | 결정 285 |
 | 패널의 버튼과 접기가 접근성 누르기에 답하지 않았다(좌표 클릭은 됐다) | 적기만 했다(결정 285 ⑤). 누르는 걸음은 좌표 클릭이다 |
 | `[gate:delegate]` 가 smoke 오케스트레이터를 네 번 막았다: 읽기 전용 조회 둘, 파일 본문 보내기, 셸 heredoc 으로 파일 쓰기 | 결정 286(마지막 것은 막는 것이 맞다) |
-| 쉬는 세션의 Notification 이 `waiting_human` 을 세 번 열었다 | 0.1.11 의 다음 PR |
+| 쉬는 세션의 Notification 이 `waiting_human` 을 세 번 열었다 | 결정 293 |
 | resource `ready` 는 Run 에 묶이지 않는다: 수 한 줄만 그 Run 의 것이다 | 남김(결정 287 ④) |
 
 ### 0.1.11 의 릴리스 smoke 가 다시 잴 것
 
-3번: 워커가 `READY-WAIT: checks_missing` 줄로 끝내는지. 실패로 끝냈다면 머지 뒤에 그 Task 가 닫히는지, 실제 Orca 가 failed 인 Task 의 `task-update --status completed` 를 받는지(결정 283 ⑥). 5번의 한 줄: 여러 문단의 긴 프롬프트를 밀어 넣고 `owner_action` 이 없는지(결정 282). 게이트를 푼 프롬프트의 수에 그 항목이 드는지(결정 284). 패널의 시작 시각이 선의 시작에 있는지(결정 285). 패널을 누르는 걸음은 좌표 클릭으로 한다.
+3번: 워커가 `READY-WAIT: checks_missing` 줄로 끝내는지. 실패로 끝냈다면 머지 뒤에 그 Task 가 닫히는지, 실제 Orca 가 failed 인 Task 의 `task-update --status completed` 를 받는지(결정 283 ⑥). 5번의 한 줄: 여러 문단의 긴 프롬프트를 밀어 넣고 `owner_action` 이 없는지(결정 282). 게이트를 푼 프롬프트의 수에 그 항목이 드는지(결정 284). 패널의 시작 시각이 선의 시작에 있는지(결정 285). 패널 머리 행의 버튼이 새로 고침 하나인지(결정 294). 턴을 마치고 쉬는 세션이 `waiting_human` 을 열지 않는지(결정 293). 패널을 누르는 걸음은 좌표 클릭으로 한다.
