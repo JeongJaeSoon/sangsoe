@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildBrief, itemFacts, Store, type ViewInput, type ViewTask, why } from "../../core/index.ts";
+import { run } from "../main.ts";
 import { itemSet } from "./item-set.ts";
 
 // Decision 279: `sangsoe item set` on an in-memory store. The item's facts are sangsoe's own, so no Orca is needed.
@@ -29,6 +30,9 @@ test("item set moves an item to a lead group, by alias or Task id, with one item
     { task: T1, lead: "api-migration" },
     { task: T1, lead: "app-login" },
   ]);
+  // An old `who` reads `lead:api`: typed as it stands, it is the group `api`, not a second group.
+  assert.deepEqual(itemSet({ lead: "lead: api" }, ["i001"], w), { ok: true, value: { task: T1, alias: "i001", set: { lead: "api" } } });
+  assert.equal(w.fact()?.lead, "api");
 });
 
 test("item set takes a hold off and puts one on, and the brief says a held item is held, not waiting on a predecessor", () => {
@@ -57,7 +61,13 @@ test("item set takes a date or a PR as the trigger, in any case, and refuses tex
   const before = w.sets().length;
   const text = itemSet({ trigger: "when the vendor answers" }, ["i001"], w);
   assert.equal(!text.ok && text.refusal.code, "invalid_trigger");
-  assert.equal(w.sets().length, before, "a refusal writes nothing");
+  // A date of the right shape that the calendar does not have would compare as a day that never comes.
+  for (const bad of ["2026-13-45", "2026-02-30", "2026-12-01T25:00Z", ""]) {
+    const r = itemSet({ trigger: bad }, ["i001"], w);
+    assert.equal(!r.ok && r.refusal.code, "invalid_trigger", bad);
+  }
+  assert.ok(itemSet({ trigger: "2026-12-01T09:00Z" }, ["i001"], w).ok, "a date with a time");
+  assert.equal(w.sets().length, before + 1, "a refusal writes nothing");
 });
 
 test("a trigger written in GitHub's own case is read as a PR, and one no script reads says so in the brief", () => {
@@ -71,6 +81,21 @@ test("a trigger written in GitHub's own case is read as a PR, and one no script 
   w.store.append({ type: "item_extra_set", source: "test", payload: { task: T1, trigger: "when the vendor answers" }, entity: "task", entity_id: T1 });
   assert.deepEqual([w.fact()?.state, w.fact()?.plannedBy], ["planned", "trigger"]);
   assert.ok(w.next().includes("trigger 확인 필요"));
+
+  // Both at once, as an imported held item has them: the hold is said first, the trigger once the hold is off.
+  assert.ok(itemSet({ hold: "true" }, ["i001"], w).ok);
+  assert.deepEqual([w.fact()?.plannedBy, w.next().includes("⏸️ 보류"), w.next().includes("trigger 확인 필요")], ["hold", true, false]);
+  assert.ok(itemSet({ hold: "false" }, ["i001"], w).ok);
+  assert.deepEqual([w.fact()?.plannedBy, w.next().includes("trigger 확인 필요")], ["trigger", true]);
+});
+
+test("the command line takes one item and refuses a second positional before anything is read", async () => {
+  const two = await run(["item", "set", "i001", "i002", "--lead", "api"]);
+  assert.equal(two.code, 2);
+  assert.match(two.out, /unexpected argument/);
+  // The test home's store is empty: the command runs through the router and core and finds no such item.
+  const none = await run(["item", "set", "i001", "--lead", "api"]);
+  assert.deepEqual([none.code, /\[not_found\]/.test(none.out)], [1, true]);
 });
 
 test("item set refuses an unknown item, an empty lead, a hold that is not a boolean, and a call that sets nothing", () => {

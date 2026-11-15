@@ -42,6 +42,12 @@ export interface ItemSetDone {
   readonly set: { readonly lead?: string; readonly hold?: boolean; readonly trigger?: string };
 }
 
+/** The trigger's shape lets `2026-13-45` through, and as text it compares like a day that never comes. */
+function realDate(trigger: string): boolean {
+  const ms = Date.parse(trigger.length === 10 ? `${trigger}T00:00:00Z` : trigger);
+  return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === trigger.slice(0, 10);
+}
+
 /**
  * Decision 279: `sangsoe item set`. Changes an existing item's group, hold or trigger with one
  * item_extra_set row; the views fold the latest of each field, so nothing is rewritten. A trigger
@@ -52,10 +58,13 @@ export function setItemExtra(store: Pick<Store, "append" | "events">, a: ItemSet
   const task = facts.aliases.get(a.item) ?? a.item;
   const alias = facts.items.get(task)?.alias;
   if (alias === undefined) return refuse("not_found", `no item ${a.item}`, "name an item by its iNNN or Task id");
-  const lead = a.lead?.trim();
+  // The group is the bare name: an old `who` reads `lead:api`, and that prefix would make a second group.
+  const lead = a.lead?.trim().replace(/^lead:\s*/, "");
   if (lead === "") return refuse("invalid_input", "lead is empty", "lead is the lead group's name, not empty");
   const kind = a.trigger === undefined ? undefined : triggerKind(a.trigger);
-  if (kind === "text") return refuse("invalid_trigger", `trigger ${JSON.stringify(a.trigger)} is neither a date nor a PR`, "give an ISO date (2026-12-01 or 2026-12-01T09:00Z) or owner/repo#N");
+  if (kind === "text" || (kind === "date" && !realDate(a.trigger ?? ""))) {
+    return refuse("invalid_trigger", `trigger ${JSON.stringify(a.trigger)} is neither a date the calendar has nor a PR`, "give an ISO date (2026-12-01 or 2026-12-01T09:00Z) or owner/repo#N");
+  }
   // The store keys a PR in lower case, whatever case GitHub or the caller spells the repository in.
   const trigger = kind === "pr" ? a.trigger?.toLowerCase() : a.trigger;
   const set = { ...(lead !== undefined ? { lead } : {}), ...(a.hold !== undefined ? { hold: a.hold } : {}), ...(trigger !== undefined ? { trigger } : {}) };

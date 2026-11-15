@@ -118,6 +118,13 @@ test("planImport: each open item becomes one Task with extras; text stays out of
   assert.match(plan.decisions[0]?.question ?? "", /pick a store/);
 });
 
+test("planImport: the lead group is the name after `lead:`, with or without a space after the colon; a bare `lead:` or another who gives none", () => {
+  const r = readOldState(oldDb({ items: [item("c1", { who: "lead: api " }), item("c2", { who: "lead:" }), item("c3", { who: "owner" })] }));
+  assert.ok(r.ok);
+  const by = new Map(planImport(r.value, importedFrom(Store.open({ path: ":memory:" }))).items.map((p) => [p.id, p.extra.lead]));
+  assert.deepEqual([by.get("c1"), by.get("c2"), by.get("c3")], ["api", undefined, undefined]);
+});
+
 test("applyImport: Tasks, extras, the edge through GRAPH; a second run creates nothing", async () => {
   const w = createGraphWorld();
   const r = readOldState(oldDb({ items: SAMPLE.items }));

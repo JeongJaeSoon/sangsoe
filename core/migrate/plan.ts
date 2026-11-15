@@ -89,7 +89,7 @@ export const NOTHING_IMPORTED: Imported = { items: new Map(), edges: new Set(), 
 function planItem(it: OldItem, edgeTo: boolean, imported: Imported): PlannedItem {
   const trigger = [it.trig, it.due ? `due ${it.due}` : null, it.afterRef && !edgeTo ? `after ${it.afterRef}` : null].filter(Boolean).join(" · ");
   // The brief groups by the item's lead, which only item_extra_set carries: `who` alone leaves the item under "others".
-  const lead = /^lead:(\S.*)$/.exec(it.who ?? "")?.[1]?.trim();
+  const lead = /^lead:\s*(\S.*)$/.exec(it.who ?? "")?.[1]?.trim();
   const extra: ImportExtra = {
     ...(it.status === "held" ? { hold: true as const } : {}),
     ...(it.lane === "owner_todo" ? { exec_by: "owner" as const } : {}),
