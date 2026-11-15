@@ -223,6 +223,9 @@ test("decision 221: the user scope writes Orca's profile too when it is another 
   assert.ok(existsSync(join(project, ".claude", "settings.json")));
   assert.ok(existsSync(join(project, ".claude", "settings.local.json")));
   assert.equal(Object.keys(JSON.parse(readFileSync(t.state, "utf8")).targets).length, 4);
+  // Decision 265: a project file is often committed, so it gets no rule that holds this machine's home path.
+  const projectAllow: string[] = JSON.parse(readFileSync(join(project, ".claude", "settings.json"), "utf8")).permissions.allow;
+  assert.deepEqual(projectAllow, SANGSOE_RULES.filter((r) => !r.startsWith("Read(")));
   const u = removePermissions(t.host);
   assert.equal(u.lines.length, 4, u.lines.join("\n"));
   assert.equal(readFileSync(t.settings, "utf8"), ORIGINAL);

@@ -179,7 +179,8 @@ export async function installPermissions(host: Host, opts: PermissionOptions): P
   const files = opts.files ?? realFiles;
   const home = host.env.HOME;
   if (!home) return { code: 1, lines: ["permissions: HOME is unset, so sangsoe cannot record which rules it adds; nothing written"] };
-  const rules = sangsoeRules(home);
+  // A project file is often committed: the Read rules hold this machine's home path, so only the user scope gets them.
+  const rules = sangsoeRules(home).filter((r) => opts.scope === "user" || !r.startsWith("Read("));
   const lines: string[] = [];
   const changes: { path: string; before: string | undefined; after: string; add: string[]; created: Created[]; inner?: string }[] = [];
   for (const path of targets(host, opts.scope, opts.cwd, lines)) {

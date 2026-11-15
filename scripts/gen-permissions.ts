@@ -16,7 +16,7 @@ const problems = [
 
 const mode = process.argv[2];
 if (mode === "--explain") {
-  for (const h of d.hits) console.log(`${h.file}:${h.line}\t${h.origin}\torca ${h.path}`);
+  for (const h of d.hits) console.log(`${h.file}:${h.line}\t${h.origin}\t${h.path}`);
   for (const r of d.rules) console.log(`rule\t${r.rule}\t${r.source}`);
 } else if (mode === "--check") {
   if (readFileSync(`${root}core/install/permissions.generated.ts`, "utf8") !== renderGenerated(d)) problems.push("core/install/permissions.generated.ts is not what the sources derive: run node scripts/gen-permissions.ts and replace it");

@@ -83,11 +83,13 @@ function proseHits(file: string, text: string, origin: Origin): Hit[] {
     }
     const spans = fenced ? [raw] : [...raw.matchAll(/`([^`]+)`/g)].map((m) => m[1] ?? "");
     for (const span of spans) {
-      for (const m of span.matchAll(/(?:^|[\s(;|&])(orca|gh)\s+([^\n]*)/g)) {
+      for (const m of span.matchAll(/(?:^|[\s("'=;|&])(orca|gh)\s+([^\n]*)/g)) {
         const words = leadingWords(m[2] ?? "");
         if (words.length > 0) hits.push({ path: commandPath(m[1] ?? "", words).path, file, line: i + 1, origin });
       }
     }
+    // The skills' shorthand `Orca \`send\`` always means an orchestration subcommand (test/spec-names.test.ts checks the verb exists).
+    for (const m of raw.matchAll(/\bOrca\s+`([a-z][a-z0-9-]*)/g)) hits.push({ path: `orca orchestration ${m[1]}`, file, line: i + 1, origin });
   });
   return hits;
 }
@@ -98,8 +100,7 @@ function sessionHits(file: string, text: string): Hit[] {
   text.split("\n").forEach((raw, i) => {
     for (const m of raw.matchAll(/\borca\s+([a-z][^\n]*)/g)) {
       const words = leadingWords(m[1] ?? "");
-      const c = commandPath("orca", words);
-      if (words.length > 0 && c.known) hits.push({ path: c.path, file, line: i + 1, origin: "session" });
+      if (words.length > 0) hits.push({ path: commandPath("orca", words).path, file, line: i + 1, origin: "session" });
     }
   });
   return hits;

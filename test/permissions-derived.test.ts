@@ -93,6 +93,27 @@ test("a command a skill runs that the policy does not name is reported with its 
   }
 });
 
+test("an unknown command in the session text, a quoted command and a bare Orca verb in a skill are all reported", () => {
+  const root = fixture({
+    "core/session/session-start.ts": "const t = `run orca orchestration frobnicate now`;\n",
+    "claude-plugin/skills/x/SKILL.md": 'run `bash -c "orca terminal wipe --x"` or Orca `worker-stop --dispatch d`, Orca `send`\n',
+  });
+  try {
+    const d = derive(root);
+    assert.deepEqual(
+      d.unclassified.map((h) => `${h.file}:${h.line} ${h.path}`).sort(),
+      [
+        "claude-plugin/skills/x/SKILL.md:1 orca orchestration worker-stop",
+        "claude-plugin/skills/x/SKILL.md:1 orca terminal wipe",
+        "core/session/session-start.ts:1 orca orchestration frobnicate",
+      ],
+    );
+    assert.ok(d.rules.some((r) => r.rule === "Bash(orca orchestration send:*)" && r.source === "claude-plugin/skills/x/SKILL.md"), "the shorthand counts as a use of orchestration send");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("a rule nothing runs is stale, a declared one is not", () => {
   const root = fixture({ "claude-plugin/skills/x/SKILL.md": "run `orca status`\n" });
   try {
