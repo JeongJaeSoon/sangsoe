@@ -13,7 +13,7 @@ import { createOrcaAdapter } from "../orca/adapter.ts";
 import { doctor, realCheckContext, realPluginBuild } from "./doctor.ts";
 import { type Host, type Marketplace, type RunResult, realHost, sangsoeOrca, treeRoot } from "./host.ts";
 import { install, uninstall } from "./install.ts";
-import { type Files, SANGSOE_RULES } from "./permissions.ts";
+import { type Files, sangsoeRules } from "./permissions.ts";
 
 const ROOT = "/opt/homebrew/opt/sangsoe/libexec";
 // A fixture tree's version, deliberately not the release's: these tests must not need a bump per release.
@@ -42,6 +42,9 @@ type State = Profile & { orca: boolean };
 
 const HOME = "/home/u";
 const DEFAULT_DIR = join(HOME, ".claude");
+const SANGSOE_RULES = sangsoeRules(HOME);
+// The server rule is the one that allows land, so a set without it is one rule short.
+const WITHOUT_MCP = SANGSOE_RULES.filter((r) => !r.startsWith("mcp__"));
 const ORCA_DIR = "/orca/claude-profiles/p1/home";
 
 // A stand-in for claude and orca that keeps just enough state to show idempotence. `state` is the
@@ -296,7 +299,7 @@ test("decision 228: with rules missing the one row still warns with its fix and 
   );
   assert.ok(!calls.some((c) => /\b(config|settings)\b.*\bset\b/.test(c)), "nothing is written");
 
-  const partial = withSettings(fakeHost().host, DEFAULT_DIR, { permissions: { allow: [...SANGSOE_RULES.slice(1)] }, autoMode: { allow: ["Allow sangsoe land for workers"] } });
+  const partial = withSettings(fakeHost().host, DEFAULT_DIR, { permissions: { allow: [...WITHOUT_MCP] }, autoMode: { allow: ["Allow sangsoe land for workers"] } });
   const r = await doctor(partial, ROOT, online());
   assert.deepEqual(
     settingsRows(r.lines),
@@ -304,7 +307,7 @@ test("decision 228: with rules missing the one row still warns with its fix and 
     r.lines.join("\n"),
   );
 
-  const noLand = await doctor(withSettings(fakeHost().host, DEFAULT_DIR, { permissions: { allow: [...SANGSOE_RULES.slice(1)] } }), ROOT, online());
+  const noLand = await doctor(withSettings(fakeHost().host, DEFAULT_DIR, { permissions: { allow: [...WITHOUT_MCP] } }), ROOT, online());
   assert.deepEqual(
     settingsRows(noLand.lines),
     [`warn     permissions: ${m - 1} of ${m} sangsoe rules present in ${DEFAULT_DIR}/settings.json: sangsoe's sessions may stop on permission prompts, and auto mode may refuse a worker's land${fix}`],

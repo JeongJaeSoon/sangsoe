@@ -2,32 +2,18 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkS
 import { dirname, join, resolve } from "node:path";
 import { diff } from "node:util";
 import { currentProfile, type Host, orcaProfile, UNREADABLE } from "./host.ts";
+import { GENERATED_RULES } from "./permissions.generated.ts";
 import { addRules, allowList, type Created, parseSettings, removeRules } from "./settings-json.ts";
 
 /**
- * The permissions.allow rules sangsoe's own sessions need (decision 221 lists the file:line that
- * calls each). sangsoe's MCP tools are one server rule; every Bash rule is one Orca verb.
+ * The permissions.allow rules sangsoe's own sessions need. Decision 265: not a hand list; the
+ * generator (scripts/gen-permissions.ts) derives them from the commands sangsoe's skills, agents
+ * and adapters run. The Read rules name sangsoe's own state under `homeDir`, the HOME `install`
+ * runs with: a session's own `~` may be another directory, so no `~` is written.
  */
-export const SANGSOE_RULES: readonly string[] = [
-  "mcp__plugin_sangsoe_sangsoe",
-  "Bash(orca orchestration ask:*)",
-  "Bash(orca orchestration send:*)",
-  "Bash(orca orchestration reply:*)",
-  "Bash(orca orchestration inbox:*)",
-  "Bash(orca orchestration run-create:*)",
-  "Bash(orca orchestration run-use:*)",
-  "Bash(orca orchestration task-list:*)",
-  "Bash(orca orchestration task-update:*)",
-  "Bash(orca orchestration worker-list:*)",
-  "Bash(orca orchestration worker-release:*)",
-  "Bash(orca worktree set:*)",
-  "Bash(orca worktree show:*)",
-  "Bash(orca worktree list:*)",
-  "Bash(orca reference list:*)",
-  "Bash(orca search:*)",
-  // Decision 263: the by-handle form only, never a bare `orca terminal close`. `unit_close` is the path that checks the Dispatch first.
-  "Bash(orca terminal close --terminal term_*)",
-];
+export function sangsoeRules(homeDir: string): string[] {
+  return GENERATED_RULES.map((r) => r.rule.replace("{HOME}", homeDir.replace(/^\//, "")));
+}
 
 export const PERMISSIONS_FIX = "sangsoe install --permissions";
 
@@ -188,11 +174,13 @@ function targets(host: Host, scope: Scope, cwd: string, lines: string[]): string
   return userSettingsPaths(host, "permissions", lines);
 }
 
-/** `sangsoe install --permissions`: adds the missing SANGSOE_RULES after showing the diff and asking. */
+/** `sangsoe install --permissions`: adds the missing `sangsoeRules` after showing the diff and asking. */
 export async function installPermissions(host: Host, opts: PermissionOptions): Promise<Report> {
   const files = opts.files ?? realFiles;
   const home = host.env.HOME;
   if (!home) return { code: 1, lines: ["permissions: HOME is unset, so sangsoe cannot record which rules it adds; nothing written"] };
+  // A project file is often committed: the Read rules hold this machine's home path, so only the user scope gets them.
+  const rules = sangsoeRules(home).filter((r) => opts.scope === "user" || !r.startsWith("Read("));
   const lines: string[] = [];
   const changes: { path: string; before: string | undefined; after: string; add: string[]; created: Created[]; inner?: string }[] = [];
   for (const path of targets(host, opts.scope, opts.cwd, lines)) {
@@ -206,9 +194,9 @@ export async function installPermissions(host: Host, opts: PermissionOptions): P
     const parsed = parseSettings(text);
     if (!parsed.ok) return { code: 1, lines: [...lines, `permissions: ${path} is ${parsed.reason}; nothing written. Fix the file, then run ${PERMISSIONS_FIX} again`] };
     const present = new Set(allowList(parsed.value));
-    const add = SANGSOE_RULES.filter((r) => !present.has(r));
+    const add = rules.filter((r) => !present.has(r));
     if (add.length === 0) {
-      lines.push(`permissions: ${path} already has all ${SANGSOE_RULES.length} sangsoe rules; nothing to write`);
+      lines.push(`permissions: ${path} already has all ${rules.length} sangsoe rules; nothing to write`);
       continue;
     }
     const spliced = addRules(text, add);
@@ -338,11 +326,11 @@ export function removePermissions(host: Host, files: Files = realFiles): Report 
   return { code, lines };
 }
 
-/** Doctor's row: how many of SANGSOE_RULES the settings at `path` list; `settings` undefined when missing or not JSON. */
-export function permissionsRow(path: string, settings: unknown): { all: boolean; detail: string } {
+/** Doctor's row: how many of `rules` the settings at `path` list; `settings` undefined when missing or not JSON. */
+export function permissionsRow(path: string, settings: unknown, rules: readonly string[]): { all: boolean; detail: string } {
   const present = new Set(allowList(settings));
-  const have = SANGSOE_RULES.filter((r) => present.has(r)).length;
-  const m = SANGSOE_RULES.length;
+  const have = rules.filter((r) => present.has(r)).length;
+  const m = rules.length;
   const where = settings === undefined ? `${path} (missing or not JSON)` : path;
   return { all: have === m, detail: `${have} of ${m} sangsoe rules present in ${where}` };
 }

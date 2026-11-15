@@ -28,7 +28,7 @@ import {
   userPlugin,
 } from "./host.ts";
 import { AUTO_COMPACT_DOCTOR_FIX, autoCompactRow } from "./auto-compact.ts";
-import { PERMISSIONS_DOCTOR_FIX, permissionsRow, userSettingsPaths } from "./permissions.ts";
+import { PERMISSIONS_DOCTOR_FIX, permissionsRow, sangsoeRules, userSettingsPaths } from "./permissions.ts";
 import { stageCore } from "./stage.ts";
 
 // `warn` and `notice` print their fix but leave the exit code alone, as at the start.
@@ -126,7 +126,7 @@ function settingsChecks(host: Host, current: ClaudeProfile): Check[] {
   } catch {
     settings = undefined;
   }
-  const perms = permissionsRow(path, settings);
+  const perms = permissionsRow(path, settings, sangsoeRules(host.env.HOME ?? ""));
   if (perms.all) return [{ state: "ok", name: "permissions", detail: perms.detail }];
   const land = landAllowClause(settings === undefined ? undefined : landAllowRules(settings));
   return [{ state: "warn", name: "permissions", detail: `${perms.detail}: sangsoe's sessions may stop on permission prompts${land}`, fix: PERMISSIONS_DOCTOR_FIX }];
