@@ -251,12 +251,21 @@ test("280: a prompt Orca reported as driven into the session's terminal is not t
   assert.deepEqual(counts(driven), [1, 1], "other text in the same terminal is still the owner's");
 
   const elsewhere = await start();
-  recordDriven(elsewhere.store, { terminal: "term_other", prompt: said });
+  recordDriven(elsewhere.store, { terminal: "term_other", prompt: said, inputKind: "driving" });
   await prompt(elsewhere, TERM);
   assert.deepEqual(counts(elsewhere), [1, 1], "the same text driven into another terminal says nothing about this one");
 
+  // A launch prompt can be the owner's own words typed into Orca; only the measured kind is taken as not the owner's.
+  for (const inputKind of ["launch", "orchestration", undefined]) {
+    const other = await start();
+    recordDriven(other.store, { terminal: TERM, prompt: said, inputKind });
+    await prompt(other, TERM);
+    assert.deepEqual(counts(other), [1, 1], `a row of kind ${inputKind} leaves the prompt to be read by its shape`);
+    assert.equal(other.store.events({ type: "prompt_driven" }).length, 1, "the row itself is kept");
+  }
+
   const unknown = await start();
-  recordDriven(unknown.store, { terminal: TERM, prompt: said });
+  recordDriven(unknown.store, { terminal: TERM, prompt: said, inputKind: "driving" });
   await prompt(unknown, undefined);
   assert.deepEqual(counts(unknown), [1, 1], "a session whose terminal handle is not known is read by shape alone, as before");
 

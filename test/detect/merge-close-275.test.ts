@@ -70,7 +70,7 @@ test("275: the session that holds the Run closes its Task whose PR merged, says 
   assert.equal(w.store.events({ type: "item_transition" }).length, 1);
 });
 
-test("275: a Task a live Dispatch holds is left open; it is closed on the first prompt after that Dispatch is no longer live", async () => {
+test("275: a Task a live Dispatch holds is left open; it is closed on the first prompt after Orca says that Dispatch's terminal ended", async () => {
   const w = world({ run: RUN, status: "dispatched", dispatchId: DISPATCH });
   w.liveness.set(DISPATCH, "live");
   for (const n of [1, 2]) {
@@ -83,7 +83,14 @@ test("275: a Task a live Dispatch holds is left open; it is closed on the first 
   const unread = await w.prompt();
   assert.deepEqual([unread.calls, unread.lines], [["task-list", "worker-show", "gate-list"], []], "a Dispatch Orca does not show closes nothing");
 
-  w.liveness.set(DISPATCH, "dead");
+  for (const unknown of ["unverifiable", "dead"]) {
+    w.liveness.set(DISPATCH, unknown);
+    const p = await w.prompt();
+    assert.deepEqual([p.calls, p.lines], [["task-list", "worker-show", "gate-list"], []], `liveness ${unknown} does not say the worker ended: nothing is closed`);
+  }
+  assert.equal(w.tasks[0]?.status, "dispatched");
+
+  w.liveness.set(DISPATCH, "gone");
   const ended = await w.prompt();
   assert.deepEqual(ended.calls, ["task-list", "worker-show", `task-update ${T} completed`, "task-list", "gate-list"]);
   assert.deepEqual(ended.lines, [`${COUNTS} 머지된 PR 의 Task 를 닫았다: ${REF}.`]);

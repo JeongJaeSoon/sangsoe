@@ -11,9 +11,10 @@ export const DRIVEN_WINDOW_MS = 60 * 60_000;
 const hashOfPrompt = (prompt: string) => hashOf(mask(prompt.trim()));
 
 /**
- * Decision 280: one row per prompt Orca's `agent.prompt.before` hook reports. Orca calls that hook for
- * input driven into an agent's terminal, not for what a person types there, so the row says "this
- * terminal was handed this text by a program". Called from the plugin worker; the text is not stored.
+ * Decision 280: one row per prompt Orca's `agent.prompt.before` hook reports. Orca calls that hook
+ * for a prompt it submits itself (input driven into a terminal, an orchestration dispatch, a launch
+ * prompt), not for what a person types into the session. Called from the plugin worker; the text
+ * is not stored.
  */
 export function recordDriven(store: Store, e: { terminal: string; prompt: string; inputKind?: string | undefined; agent?: string | undefined }): void {
   if (e.terminal === "" || e.prompt.trim() === "") return;
@@ -24,9 +25,15 @@ export function recordDriven(store: Store, e: { terminal: string; prompt: string
   });
 }
 
-/** Whether Orca reported this text as driven into this terminal within the window before `now`. */
+/**
+ * Whether Orca reported this text as driven into this terminal within the window before `now`.
+ * Only the `driving` kind counts: a launch prompt can be the owner's own words typed into Orca, and
+ * the other kinds were not measured, so those rows are kept and the prompt is read by its shape.
+ */
 export function wasDriven(events: readonly StoredEvent[], terminal: string | undefined, prompt: string, now: number): boolean {
   if (!terminal) return false;
   const hash = hashOfPrompt(prompt);
-  return events.some((e) => e.type === "prompt_driven" && e.payload.terminal === terminal && e.payload.hash === hash && now - Date.parse(e.ts) <= DRIVEN_WINDOW_MS);
+  return events.some(
+    (e) => e.type === "prompt_driven" && e.payload.input_kind === "driving" && e.payload.terminal === terminal && e.payload.hash === hash && now - Date.parse(e.ts) <= DRIVEN_WINDOW_MS,
+  );
 }

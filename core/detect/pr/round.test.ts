@@ -547,7 +547,12 @@ test("275: a merged PR's Task is left open while its Dispatch is live, and close
   assert.deepEqual(unread.acts.map((a) => [a.ok, a.detail]), [[false, "worker-show ctx_task_item: not_found"]]);
   assert.deepEqual(w.calls, []);
 
-  w.dispatch("task_item", "dead");
+  w.dispatch("task_item", "unverifiable");
+  const unknown = await w.round();
+  assert.deepEqual(unknown.acts.map((a) => [a.ok, a.detail]), [[false, "worker-show ctx_task_item: liveness unverifiable"]]);
+  assert.deepEqual(w.calls, []);
+
+  w.dispatch("task_item", "exited");
   const ended = await w.round();
   assert.deepEqual(ended.acts.map((a) => [a.ok, a.detail]), [[true, "in_progress → done"]]);
   assert.deepEqual(w.calls, ["task-update task_item completed run=run_lead"]);

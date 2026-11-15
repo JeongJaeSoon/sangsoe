@@ -1,5 +1,5 @@
 import type { StoredEvent } from "../../contract/index.ts";
-import { NO_SENDER_TERMINAL, type OrcaAdapter, type TaskRow } from "../../contract/orca.ts";
+import { ENDED_LIVENESS, NO_SENDER_TERMINAL, type OrcaAdapter, type TaskRow } from "../../contract/orca.ts";
 import { canTransition } from "../../contract/transitions.ts";
 import { doneBlockers } from "../../graph/flow.ts";
 import { type FullTaskRow, snapshotTasks } from "../../graph/snapshot.ts";
@@ -29,9 +29,9 @@ export function mergedItemTasks(events: readonly StoredEvent[]): { ref: string; 
 
 /**
  * Decision 84 ① as decision 275 amends it: the one close a detector makes, after the merge is
- * confirmed, and only of a Task no live Dispatch holds. A Task whose worker still runs is left open
- * for that worker's worker_done to close (owner decision d149). What cannot be read (the Task's Run,
- * its rows, its Dispatch) closes nothing.
+ * confirmed, and only of a Task with no Dispatch or one whose terminal has ended. A Task whose worker
+ * still runs is left open for that worker's worker_done to close (owner decision d149). What cannot
+ * be read (the Task's Run, its rows, its Dispatch, whether that Dispatch still runs) closes nothing.
  * pr-monitor's round and the hook of the session that holds the Run both call this: the round runs
  * in the plugin's process, which Orca takes no write from (decision 274).
  */
@@ -55,6 +55,7 @@ export async function closeMerged(
     const show = await d.orca.workerShow({ dispatch: row.dispatchId });
     if (!show.ok) return none(false, `worker-show ${row.dispatchId}: ${show.error.code}`);
     if (show.value.liveness === "live") return none(true, `left open: Dispatch ${row.dispatchId} is live`);
+    if (!ENDED_LIVENESS.has(show.value.liveness ?? "")) return none(false, `worker-show ${row.dispatchId}: liveness ${show.value.liveness ?? "missing"}`);
   }
   // Decision 212 ④: every child and every PR of the item is read from this Run's rows.
   const tasks = snapshotTasks(rows as FullTaskRow[], a.run);
