@@ -23,6 +23,9 @@ test("orchestrator.md has a start step that makes the session hold its own Run: 
   for (const want of ["orca orchestration run-current", "orca orchestration run-create", "orca orchestration run-use", "Dispatch"]) {
     has(s, want, "orchestrator.md 시작할 때");
   }
+  // The SessionStart hook tells any non-worker whose binding is gone to `run-use <earlier Run>`; creating a new Run strands the leads.
+  has(s, "run-use <id>", "orchestrator.md 시작할 때");
+  assert.ok(s.indexOf("run-use <id>") < s.indexOf("run-create"), "the restore case comes before run-create");
 });
 
 test("the orchestrate skill's orchestrator section points at the same start step", () => {
