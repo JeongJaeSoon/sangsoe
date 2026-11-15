@@ -274,6 +274,43 @@ test("280: a prompt Orca reported as driven into the session's terminal is not t
   assert.equal(wasDriven(events, TERM, said, Date.parse("2026-11-15T11:01:00.000Z")), false, "past the window the row no longer matches");
 });
 
+test("282: a driven text that reaches the session as a pasted block still matches, and a subagent's hand-back is not the owner's", async () => {
+  const TERM = "term_00000000-0000-4000-8000-000000000001";
+  const sent = "d001: yes. This is a long line Orca drove into the terminal.";
+  // The shape the 0.1.10 release smoke stored: blank lines, the tag with its id, the text, the closing tag with the same id.
+  const pasted = `\n\n<pasted_content id="44cc">\n${sent}\n</pasted_content id="44cc">\n`;
+  const start = async () => {
+    const o = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+    await hook(o, "session-start", { session_id: "o1", source: "startup", agent_type: "sangsoe:orchestrator" }, VERSION);
+    o.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });
+    return o;
+  };
+  const prompt = (o: SessionWorld, text: string, id = "p1") => recordHook("user-prompt-submit", o, { cwd: o.dir, session_id: "o1", prompt_id: id, prompt: text }, { terminal: TERM });
+  const counts = (o: SessionWorld) => [o.store.events({ type: "owner_action" }).length, o.store.events({ type: "decision_answered" }).length];
+
+  const driven = await start();
+  recordDriven(driven.store, { terminal: TERM, prompt: sent, inputKind: "driving" });
+  await prompt(driven, pasted);
+  assert.deepEqual(counts(driven), [0, 0], "the block's text is what Orca reported");
+
+  const typed = await start();
+  await prompt(typed, pasted);
+  assert.deepEqual(counts(typed), [1, 0], "a block nobody drove is the owner's paste (a paste answers no decision, as before)");
+
+  const mixed = await start();
+  recordDriven(mixed.store, { terminal: TERM, prompt: sent, inputKind: "driving" });
+  await prompt(mixed, `the owner typed this first\n${pasted}`);
+  assert.deepEqual(counts(mixed), [1, 0], "text around the block is the owner's: it is not the driven prompt");
+
+  const worker = createSessionWorld({ spec: "sangsoe-role: worker\nx", heldRun: TASK_RUN });
+  await hook(worker, "session-start", { session_id: "s1", source: "startup" }, VERSION);
+  const handBack = '<agent-message from="a014f09f46133cf74">\n[Subagent hand-back] The text below is the final report of a subagent this session delegated to.\n</agent-message>';
+  await hook(worker, "user-prompt-submit", { session_id: "s1", prompt_id: "p1", prompt: handBack });
+  assert.equal(worker.store.events({ type: "owner_action" }).length, 0);
+  assert.equal(classifyPrompt(handBack), "orca_nudge");
+  assert.equal(classifyPrompt("<agent-messages are a thing I want to ask about"), "owner", "only the tag itself");
+});
+
 test("only an undispatched session's line that starts with the number answers a decision (M2)", async () => {
   const open = (w: SessionWorld) => {
     w.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });

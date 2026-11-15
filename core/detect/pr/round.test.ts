@@ -176,6 +176,30 @@ test("a Task Orca reports cancelled is left as it is when its PR merges", async 
   assert.deepEqual(w.calls, []);
 });
 
+test("283: a Task its worker reported failed is closed when its PR merges; a failed Task whose result is cancelled is left", async () => {
+  // The 0.1.10 release smoke: land refused checks_missing, the worker reported failed, the PR merged later.
+  const w = world();
+  w.link(7, "task_item", "failed");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
+  w.merged(7, SHA);
+  const r = await w.round();
+  assert.deepEqual(r.acts.map((a) => [a.ok, a.detail]), [[true, "blocked → done"]]);
+  assert.deepEqual(w.calls, ["task-update task_item completed run=run_lead"]);
+  assert.ok(r.written.some((x) => x.type === "item_transition"));
+
+  const gone = world();
+  gone.link(7, "task_item", "failed");
+  const row = gone.tasks.get("task_item");
+  if (row) gone.tasks.set("task_item", { ...row, result: "cancelled: superseded by another item" });
+  gone.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  gone.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
+  gone.merged(7, SHA);
+  const left = await gone.round();
+  assert.deepEqual(left.acts.map((a) => [a.ok, a.detail]), [[true, "already cancelled"]]);
+  assert.deepEqual(gone.calls, []);
+});
+
 test("a released worker's Task is still found: the workspace's Dispatch comes from worker-list, and an owner's merge of it is linked", async () => {
   const w = world();
   w.link(7, "task_item", "blocked", "run_lead", true);

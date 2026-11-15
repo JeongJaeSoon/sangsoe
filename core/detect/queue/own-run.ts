@@ -139,8 +139,19 @@ export async function deliverOwnRun(deps: CoreDeps, run: string, now: string): P
     }
   }
 
-  const j = judgeQueue(input, DEFAULT_MONITOR_CONFIG);
-  const ready = readyKeys(input);
+  // Decision 284: count with the Tasks and gates as they stand after the re-calls, so an item a gate
+  // just freed is in this line. One more task-list, only when a gate was freed; unread, the line counts
+  // the earlier reading and the item comes at the next prompt as before.
+  let settled = input;
+  if (resolved.length > 0) {
+    const relisted = await deps.orca.taskList({ run, full: true });
+    const freedGates = new Set(resolved);
+    if (relisted.ok) {
+      const now2 = [...snapshotTasks(relisted.value as FullTaskRow[], run), ...others.snapshot.tasks];
+      settled = { orca: { tasks: now2, gates: gates.map((g) => (freedGates.has(g.id) ? { ...g, open: false } : g)) }, events: deps.store.events(), now };
+    }
+  }
+  const j = judgeQueue(settled, DEFAULT_MONITOR_CONFIG);  const ready = readyKeys(settled);
   const items: { type: Told; event: Planned; key: NotifiedKey }[] = [
     ...j.ready.flatMap((r) => {
       const key = ready.get(r.task);

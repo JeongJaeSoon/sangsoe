@@ -1,6 +1,7 @@
 import type { StoredEvent } from "../contract/index.ts";
 import { hashOf, mask } from "../session/mask.ts";
 import type { Store } from "../store/store.ts";
+import { unwrapPaste } from "./prompt.ts";
 
 /**
  * How long a driven prompt may wait in a busy session's queue before its UserPromptSubmit fires and
@@ -8,7 +9,8 @@ import type { Store } from "../store/store.ts";
  */
 export const DRIVEN_WINDOW_MS = 60 * 60_000;
 
-const hashOfPrompt = (prompt: string) => hashOf(mask(prompt.trim()));
+// The session may get the driven text as a pasted block (decision 282); both sides hash the text inside.
+const hashOfPrompt = (prompt: string) => hashOf(mask(unwrapPaste(prompt)));
 
 /**
  * Decision 280: one row per prompt Orca's `agent.prompt.before` hook reports. Orca calls that hook

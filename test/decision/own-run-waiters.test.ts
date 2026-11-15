@@ -15,7 +15,8 @@ const GATE = "gate_000000000001";
 const DISPATCH = "ctx_000000000001";
 const D = "d001";
 const NOW = "2026-11-15T12:00:00Z";
-const COUNTS = `sangsoe: Run ${RUN} — 🟢 준비됨 0 · 📅 기한 0 · ⚠️ trigger 불명 0 (새로 0건). 목록은 resource ready 와 brief 로 읽는다.`;
+/** `ready`: the Task a gate this prompt resolved was holding is counted in the same line (decision 284). */
+const counts = (ready = 0) => `sangsoe: Run ${RUN} — 🟢 준비됨 ${ready} · 📅 기한 0 · ⚠️ trigger 불명 0 (새로 ${ready}건). 목록은 resource ready 와 brief 로 읽는다.`;
 
 type TaskState = "waiting" | "running" | "closed" | "elsewhere";
 /** The waiter's gate: none recorded (it joined while its worker ran), still open, or resolved before this prompt. */
@@ -101,23 +102,27 @@ for (const [who, as] of Object.entries(ROLES)) {
         const calls = [
           "task-list",
           "gate-list",
-          // The re-call's own reads, what it does, and the gate-list that reads back what it resolved.
-          ...(recall ? ["task-list", ...(c.gate !== "none" ? ["gate-list"] : []), ...(resolve ? ["gate-resolve"] : []), ...(tell === "worker" ? ["send"] : []), ...(resolve ? ["gate-list"] : [])] : []),
+          // The re-call's own reads, what it does, the gate-list that reads back what it resolved, and
+          // the task-list that counts the freed item in this prompt's line (decision 284).
+          ...(recall ? ["task-list", ...(c.gate !== "none" ? ["gate-list"] : []), ...(resolve ? ["gate-resolve"] : []), ...(tell === "worker" ? ["send"] : []), ...(resolve ? ["gate-list", "task-list"] : [])] : []),
         ];
         assert.deepEqual(first.calls, calls, `${name(c)}: Orca calls of the first prompt`);
         const said = reason === "moot" ? `${D} 무효(moot)` : `${D}: yes`;
-        const line = `${COUNTS}${resolve ? ` 닫힌 결정 ${D} 의 게이트 1개를 풀었다.` : ""}${tell === "run" ? ` 닫힌 Task 가 기다리던 결정: ${said}.` : ""}`;
+        const line = `${counts(resolve && !c.carrier ? 1 : 0)}${resolve ? ` 닫힌 결정 ${D} 의 게이트 1개를 풀었다.` : ""}${tell === "run" ? ` 닫힌 Task 가 기다리던 결정: ${said}.` : ""}`;
         assert.deepEqual(first.lines, resolve || tell === "run" ? [line] : [], `${name(c)}: the line`);
         assert.deepEqual(first.resolved, resolve ? [GATE] : [], `${name(c)}: resolved`);
         if (c.gate !== "none") assert.equal(w.gates.get(GATE)?.status, resolve || c.gate === "resolved" ? "resolved" : "pending", `${name(c)}: the gate`);
         if (resolve) assert.equal(w.gates.get(GATE)?.resolution, reason === "moot" ? `MOOT ${D}: pr_closed:acme/api#4` : `${D}: yes`);
         assert.deepEqual(w.sends.map((s) => s.to), tell === "worker" ? [`dispatch:${DISPATCH}`] : [], `${name(c)}: mail`);
-        assert.deepEqual(w.store.events({ type: "notified" }).map((e) => e.dedupe_key), c.told || tell ? [keyOf(reason)] : [], `${name(c)}: notified rows`);
+        // The freed item's own ready row is this prompt's too (decision 284); the answer's row is what this table pins.
+        const freed = resolve && !c.carrier ? 1 : 0;
+        const answerRows = () => w.store.events({ type: "notified" }).filter((e) => !e.dedupe_key?.includes(":ready:"));
+        assert.deepEqual(answerRows().map((e) => e.dedupe_key), c.told || tell ? [keyOf(reason)] : [], `${name(c)}: notified rows`);
         for (const n of [2, 3]) {
           const later = await prompt(w);
           assert.deepEqual([later.calls, later.lines], [["task-list", "gate-list"], []], `${name(c)}: prompt ${n} makes the two reads and prints nothing`);
         }
-        assert.equal(w.store.events({ type: "notified" }).length, c.told || tell ? 1 : 0, `${name(c)}: no row after the first prompt`);
+        assert.equal(w.store.events({ type: "notified" }).length, (c.told || tell ? 1 : 0) + freed, `${name(c)}: no row after the first prompt`);
       }
     });
   }
@@ -131,8 +136,8 @@ for (const [who, as] of Object.entries(ROLES)) {
     w.store.append({ type: "decision_joined", source: "decision_open", dedupe_key: `decision_joined:${D}:${T2}`, payload: { decision: D, waiter: T2, run: RUN, gate: G2 } });
     as(w);
     const first = await prompt(w);
-    assert.deepEqual(first.calls, ["task-list", "gate-list", "task-list", "gate-list", "gate-resolve", "gate-list"], "no send: the closed Task's Run was told by the line");
-    assert.deepEqual(first.lines, [`${COUNTS} 닫힌 결정 ${D} 의 게이트 1개를 풀었다. 닫힌 Task 가 기다리던 결정: ${D}: yes.`]);
+    assert.deepEqual(first.calls, ["task-list", "gate-list", "task-list", "gate-list", "gate-resolve", "gate-list", "task-list"], "no send: the closed Task's Run was told by the line");
+    assert.deepEqual(first.lines, [`${counts(1)} 닫힌 결정 ${D} 의 게이트 1개를 풀었다. 닫힌 Task 가 기다리던 결정: ${D}: yes.`]);
     assert.deepEqual([w.gates.get(GATE)?.status, w.gates.get(G2)?.status], ["pending", "resolved"]);
     const later = await prompt(w);
     assert.deepEqual([later.calls, later.lines], [["task-list", "gate-list"], []]);

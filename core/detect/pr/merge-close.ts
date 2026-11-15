@@ -50,7 +50,13 @@ export async function closeMerged(
   const row = rows.find((x) => x.id === a.task);
   if (!row) return none(false, `${a.task} is not a Task of ${a.run}`);
   // The raw status: the snapshot folds statuses it does not list (Orca's "cancelled") into blocked.
-  if (isClosedTask(row.status)) return none(true, `already ${row.status}`);
+  // Decision 283: a Task its worker reported failed (not a cancellation) is closed by its PR's merge,
+  // which is the item's end whatever the worker said before it. A result that starts with
+  // `cancelled` is someone's cancellation, with or without a reason after it, and is left.
+  // (Orca keeps a worker's report as an object in `result`; a cancellation is a plain string.)
+  const cancelled = typeof row.result === "string" && /^cancelled\b/.test(row.result);
+  const failed = row.status === "failed" && !cancelled;
+  if (isClosedTask(row.status) && !failed) return none(true, `already ${row.status === "failed" ? "cancelled" : row.status}`);
   if (row.dispatchId) {
     const show = await d.orca.workerShow({ dispatch: row.dispatchId });
     if (!show.ok) return none(false, `worker-show ${row.dispatchId}: ${show.error.code}`);
@@ -61,7 +67,7 @@ export async function closeMerged(
   const tasks = snapshotTasks(rows as FullTaskRow[], a.run);
   const blockers = doneBlockers({ orca: { tasks, gates: [] }, events: d.events(), now: new Date(d.now()).toISOString() }, a.task);
   if (blockers.length > 0) return none(false, `done_blockers: ${blockers.join(" · ")}`);
-  const from = itemStateOf(row.status);
+  const from = failed ? "blocked" : itemStateOf(row.status);
   const u = await d.orca.taskUpdate({ id: a.task, status: "completed", result: `merged ${a.ref} as ${a.sha}`, run: a.run });
   if (!u.ok) return none(false, u.error.code === NO_SENDER_TERMINAL ? "left to the session that holds the Run: this process has no terminal" : `${u.error.code}: ${u.error.message}`);
   const planned: Planned[] =

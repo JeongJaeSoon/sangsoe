@@ -52,3 +52,20 @@ test("while it waits on the merge, only the PR's own alarms stand", () => {
 test("a completed Task with no PR reads done", () => {
   assert.equal(facts(world(), PLAIN)?.state, "done");
 });
+
+test("283: a failed Task says why, waits on the lead, and keeps its PR in the row after the merge", () => {
+  const failed = (input: ViewInput): ViewInput => ({
+    ...input,
+    orca: { ...input.orca, tasks: input.orca.tasks.map((t) => (t.id === PR_ITEM ? { ...t, status: "failed" as const, report: "land refused checks_missing on #21\nNo check ran on the head." } : t)) },
+  });
+  const open = facts(failed(world()), PR_ITEM);
+  assert.deepEqual([open?.state, open?.waitsOn, open?.pr], ["blocked", "lead", "acme/api#21"]);
+  assert.equal(open?.lastReason, "실패로 닫힘: land refused checks_missing on #21");
+
+  const merged = facts(failed(world((store) => store.append({ type: "pr_merged", source: "test", payload: { pr: "acme/api#21", merge_sha: "a".repeat(40) } }))), PR_ITEM);
+  assert.deepEqual([merged?.state, merged?.waitsOn, merged?.pr], ["blocked", "lead", "acme/api#21"], "the merged PR stays in the row until the Task is closed");
+  assert.equal(merged?.lastReason, "PR 은 머지됨: 이 Run 을 쥔 세션의 다음 프롬프트가 Task 를 닫는다");
+
+  const bare = facts({ ...world(), orca: { tasks: [{ id: PLAIN, runId: "run_a", status: "failed", deps: [] }], gates: [] } }, PLAIN);
+  assert.deepEqual([bare?.state, bare?.waitsOn, bare?.lastReason], ["blocked", "lead", "실패로 닫힘"], "no report: the row still says what happened");
+});
