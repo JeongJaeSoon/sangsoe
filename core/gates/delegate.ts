@@ -33,19 +33,22 @@ const SUB: Record<string, RegExp> = {
   sangsoe: /^pressure wait$/,
 };
 const PLAIN = new Set(["cd", "pwd", "jq", "head", "tail", "wc", "sort", "uniq", "grep", "date", "true"]);
+const SHIMS = new Set(["claude-teams", "agent-teams-tmux"]);
 
 function coordination(argv: readonly string[]): boolean {
   const [head, ...rest] = argv;
   if (!head) return true;
   if (PLAIN.has(head)) return true;
   // Decision 286: `cat` of files the Read tool would also give it, which is how a body file is sent
-  // (`--body "$(cat brief.md)"`). With no file it only copies stdin somewhere, which is a shell write.
+  // (`--body "$(cat brief.md)"`). With no file it only copies stdin somewhere. Where the output goes
+  // is not read here: the parser drops redirections, for `cat` as for `head` and the rest of PLAIN.
   if (head === "cat") {
     const files = rest.filter((a) => !a.startsWith("-"));
     return files.length > 0 && files.every((f) => READABLE.test(f));
   }
-  // Help and version print and act on nothing.
-  if (head === "orca" && rest.some((a) => a === "--help" || a === "--version")) return true;
+  // Help and version print and act on nothing, except under Orca's two team shims, which hand
+  // their arguments on to another program (read from the 1.4.259 CLI).
+  if (head === "orca" && !SHIMS.has(rest[0] ?? "") && rest.some((a) => a === "--help" || a === "--version")) return true;
   const sub = SUB[head];
   if (!sub) return false;
   const words = rest.filter((a) => !a.startsWith("-")).join(" ");

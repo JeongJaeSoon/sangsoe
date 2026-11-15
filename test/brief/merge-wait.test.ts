@@ -64,7 +64,20 @@ test("283: a failed Task says why, waits on the lead, and keeps its PR in the ro
 
   const merged = facts(failed(world((store) => store.append({ type: "pr_merged", source: "test", payload: { pr: "acme/api#21", merge_sha: "a".repeat(40) } }))), PR_ITEM);
   assert.deepEqual([merged?.state, merged?.waitsOn, merged?.pr], ["blocked", "lead", "acme/api#21"], "the merged PR stays in the row until the Task is closed");
-  assert.equal(merged?.lastReason, "PR 은 머지됨: 이 Run 을 쥔 세션의 다음 프롬프트가 Task 를 닫는다");
+  assert.equal(merged?.lastReason, "PR 은 머지됨: 워커가 끝나 있으면 이 Run 을 쥔 세션의 다음 프롬프트가 Task 를 닫는다");
+
+  // The line promises a close only where closeMerged makes one: a second PR of the item still open keeps the Task.
+  const second = facts(
+    failed(
+      world((store) => {
+        store.append({ type: "pr_opened", source: "test", payload: { pr: "acme/api#22", task: PR_ITEM } });
+        store.append({ type: "pr_merged", source: "test", payload: { pr: "acme/api#21", merge_sha: "a".repeat(40) } });
+      }),
+    ),
+    PR_ITEM,
+  );
+  assert.deepEqual([second?.state, second?.waitsOn, second?.pr], ["blocked", "lead", "acme/api#22"]);
+  assert.equal(second?.lastReason, "PR 은 머지됨, Task 는 남는다: open_pr: acme/api#22");
 
   const bare = facts({ ...world(), orca: { tasks: [{ id: PLAIN, runId: "run_a", status: "failed", deps: [] }], gates: [] } }, PLAIN);
   assert.deepEqual([bare?.state, bare?.waitsOn, bare?.lastReason], ["blocked", "lead", "실패로 닫힘"], "no report: the row still says what happened");

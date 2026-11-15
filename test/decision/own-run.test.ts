@@ -118,6 +118,37 @@ test("284: the item a resolved gate was holding is counted in the same line, not
   assert.deepEqual(again.lines, [], "nothing is left for the next prompt");
 });
 
+test("284: when the Tasks cannot be read again after the resolve, the line counts the earlier reading and the freed item comes at the next prompt", async () => {
+  const w = createWorld([
+    { id: T1, run: RUN, status: "pending" },
+    { id: T2, run: RUN, status: "pending" },
+  ]);
+  item(w, T1);
+  item(w, T2);
+  const d = await opened(w);
+  w.strict();
+  w.as(TIMER);
+  await decisionAnswer(w, { decision: d, answer: "yes", ownerAction: ownerSays(w.store, `${d} yes`), linkedBy: "button", callerRun: "" });
+
+  w.as({ run: RUN, terminal: true });
+  let freed = false;
+  const orca: typeof w.orca = {
+    ...w.orca,
+    gateResolve: async (a, o) => {
+      const r = await w.orca.gateResolve(a, o);
+      freed ||= r.ok;
+      return r;
+    },
+    taskList: async (a) => (freed ? { ok: false, error: { code: "timeout", message: "task-list timed out" } } : w.orca.taskList(a)),
+  };
+  const out = await deliverOwnRun({ store: w.store, orca }, RUN, NOW);
+  assert.ok("run" in out, JSON.stringify(out));
+  assert.deepEqual(out.lines, [`sangsoe: Run ${RUN} — 🟢 준비됨 1 · 📅 기한 0 · ⚠️ trigger 불명 0 (새로 1건). 목록은 resource ready 와 brief 로 읽는다. 닫힌 결정 ${d} 의 게이트 1개를 풀었다.`]);
+  const next = await deliverOwnRun(w, RUN, NOW);
+  assert.ok("run" in next);
+  assert.deepEqual(next.lines, [`sangsoe: Run ${RUN} — 🟢 준비됨 2 · 📅 기한 0 · ⚠️ trigger 불명 0 (새로 1건). 목록은 resource ready 와 brief 로 읽는다.`]);
+});
+
 test("274: ready, due and unclear items of the Run are one count line, once per transition", async () => {
   const w = createWorld([
     { id: T1, run: RUN, status: "pending" },

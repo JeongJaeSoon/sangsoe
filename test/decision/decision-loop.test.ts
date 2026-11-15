@@ -381,7 +381,8 @@ test("moot by closed Tasks: needs every non-carrier waiter closed, and calls no 
   const failed = await decisionMoot(w, input);
   assert.ok(!failed.ok);
   assert.equal(failed.refusal.code, "not_moot");
-  t2.result = "cancelled";
+  // Decision 288: a cancellation that carries its reason is a cancellation.
+  t2.result = "cancelled: superseded by another item";
   const r = await decisionMoot(w, input);
   assert.ok(r.ok);
   // Both workers ran at the open, so only the carrier holds a gate; it is freed, theirs never existed.

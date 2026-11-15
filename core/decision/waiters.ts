@@ -1,5 +1,5 @@
 import type { DecisionRow, StoredEvent } from "../contract/index.ts";
-import type { GateRow, OrcaAdapter, OrcaError, OrcaResult, TaskRow } from "../contract/orca.ts";
+import { type GateRow, isCancelledResult, type OrcaAdapter, type OrcaError, type OrcaResult, type TaskRow } from "../contract/orca.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
 import { decision as decisionView } from "../store/views/decision.ts";
 import type { Store } from "../store/store.ts";
@@ -83,7 +83,7 @@ export const isOpenGate = (g: Pick<GateRow, "status">): boolean => g.status === 
 // #schema); a plain `failed` Task may be started again, so it still waits. `cancelled` as a status is
 // accepted too until a recording shows which form Orca uses.
 export const isClosedTask = (t: Pick<TaskRow, "status" | "result">): boolean =>
-  t.status === "completed" || t.status === "cancelled" || (t.status === "failed" && t.result === "cancelled");
+  t.status === "completed" || t.status === "cancelled" || (t.status === "failed" && isCancelledResult(t.result));
 
 /**
  * Per-Run reads of one call, so a Run with several waiters is listed once. A failed read is an error,

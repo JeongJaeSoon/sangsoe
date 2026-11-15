@@ -121,7 +121,13 @@ test("answer_gate_unresolved (queue side): the round re-calls decision_answer, t
   assert.ok(!after.calls.some((c) => c.includes("decision_answer")), "delivered: nothing left to re-call");
   assert.equal(w.calls("orchestration gate-resolve").length, 1);
   // The Task the gate held is ready now, so this round tells its Run that; the handoff itself went once.
-  assert.equal(w.sends.filter((s) => /decision_answer/.test(s.body ?? "")).length, 1);
+  assert.deepEqual(
+    w.sends.map((s) => [s.to, /decision_answer/.test(s.body ?? "")]),
+    [
+      [`run:${RUN}`, true],
+      [`run:${RUN}`, false],
+    ],
+  );
 });
 
 test("answer_gate_unresolved: a handoff still unresolved past the wait is escalation_stale once, one tier up", async () => {

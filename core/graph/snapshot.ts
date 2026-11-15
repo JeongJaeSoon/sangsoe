@@ -1,4 +1,4 @@
-import type { OrcaAdapter, TaskRow } from "../contract/orca.ts";
+import { isCancelledResult, type OrcaAdapter, type TaskRow } from "../contract/orca.ts";
 import type { OrcaSnapshot, ViewTask, ViewTaskStatus } from "../contract/views.ts";
 
 // U1's LATER: TaskRow is not a ViewTask. `task-list --full` rows also carry `deps` (a JSON array, as a
@@ -21,7 +21,8 @@ export function resultFields(r: Pick<FullTaskRow, "result" | "completed_at">): P
   const report = obj ? [text(obj.subject), text(obj.body)].filter((x) => x !== undefined).join("\n") : "";
   const completedAt = text(r.completed_at);
   return {
-    ...(text(raw) ? { result: raw as string } : {}),
+    // Every view reads a cancellation as the one word, whatever reason follows it in Orca (decision 288).
+    ...(text(raw) ? { result: isCancelledResult(raw) ? "cancelled" : (raw as string) } : {}),
     ...(report ? { report } : {}),
     ...(completedAt ? { completedAt } : {}),
   };

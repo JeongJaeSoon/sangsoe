@@ -1,5 +1,5 @@
 import type { StoredEvent } from "../../contract/index.ts";
-import { ENDED_LIVENESS, NO_SENDER_TERMINAL, type OrcaAdapter, type TaskRow } from "../../contract/orca.ts";
+import { ENDED_LIVENESS, isCancelledResult, NO_SENDER_TERMINAL, type OrcaAdapter, type TaskRow } from "../../contract/orca.ts";
 import { canTransition } from "../../contract/transitions.ts";
 import { doneBlockers } from "../../graph/flow.ts";
 import { type FullTaskRow, snapshotTasks } from "../../graph/snapshot.ts";
@@ -54,8 +54,7 @@ export async function closeMerged(
   // which is the item's end whatever the worker said before it. A result that starts with
   // `cancelled` is someone's cancellation, with or without a reason after it, and is left.
   // (Orca keeps a worker's report as an object in `result`; a cancellation is a plain string.)
-  const cancelled = typeof row.result === "string" && /^cancelled\b/.test(row.result);
-  const failed = row.status === "failed" && !cancelled;
+  const failed = row.status === "failed" && !isCancelledResult(row.result);
   if (isClosedTask(row.status) && !failed) return none(true, `already ${row.status === "failed" ? "cancelled" : row.status}`);
   if (row.dispatchId) {
     const show = await d.orca.workerShow({ dispatch: row.dispatchId });

@@ -1,5 +1,6 @@
 import type { ItemReading, ItemStatusRow, ItemStatusView, StoredEvent, ViewInput, WaitsOn } from "../contract/index.ts";
 import { type Facts, foldFacts } from "../graph/facts.ts";
+import { doneBlockers } from "../graph/flow.ts";
 import { itemRef, prNode } from "../graph/nodes.ts";
 import { mergedItemMark } from "../verify/evidence.ts";
 import { type Hold, holdOf, retiredOf } from "../graph/ready.ts";
@@ -91,9 +92,14 @@ function stateOf(t: BriefTask, hold: Hold | null, held: ReturnType<typeof waiter
   return ready ? "ready" : "planned";
 }
 
-/** The 🚧 row of a failed Task: the first line of the report its worker left, or that its PR merged since. */
-function failedReason(t: BriefTask, merged: boolean): string {
-  if (merged) return "PR 은 머지됨: 이 Run 을 쥔 세션의 다음 프롬프트가 Task 를 닫는다";
+/**
+ * The 🚧 row of a failed Task: the first line of the report its worker left. Once its PR has merged
+ * the row says what `closeMerged` will do with it: `blockers` is the list that close reads. Whether
+ * the Task's worker still runs is not in this reading, so the line names that condition.
+ */
+function failedReason(t: BriefTask, merged: boolean, blockers: readonly string[]): string {
+  if (merged && blockers.length > 0) return `PR 은 머지됨, Task 는 남는다: ${blockers[0]}`;
+  if (merged) return "PR 은 머지됨: 워커가 끝나 있으면 이 Run 을 쥔 세션의 다음 프롬프트가 Task 를 닫는다";
   const line = (t.report ?? "").split("\n")[0]?.trim() ?? "";
   return line ? `실패로 닫힘: ${line}` : "실패로 닫힘";
 }
@@ -240,7 +246,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       whyOwner: str(x.why_owner),
       cmdHint: str(x.cmd_hint),
       reviewTrigger: str(x.review_trigger),
-      lastReason: failed ? failedReason(t, landed !== null) : str(transition.get(t.id)?.payload.reason),
+      lastReason: failed ? failedReason(t, landed !== null, landed !== null ? doneBlockers(input, t.id) : []) : str(transition.get(t.id)?.payload.reason),
       assignee: t.assignee ?? null,
       pr: prOpen.get(t.id) ?? (prWait ? (p?.prs[0] ?? null) : null) ?? landed,
       openDecisions,

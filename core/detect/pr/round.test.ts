@@ -198,6 +198,16 @@ test("283: a Task its worker reported failed is closed when its PR merges; a fai
   const left = await gone.round();
   assert.deepEqual(left.acts.map((a) => [a.ok, a.detail]), [[true, "already cancelled"]]);
   assert.deepEqual(gone.calls, []);
+
+  // A failed Task whose worker still runs is that worker's to close, as an open one is (decision 275).
+  const held = world();
+  held.link(7, "task_item", "failed", "run_lead", false, "live");
+  held.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  held.routes[CLOSED] = ok([listed(7, { merged_at: "2026-11-10T11:00:00Z" })]);
+  held.merged(7, SHA);
+  const kept = await held.round();
+  assert.deepEqual(kept.acts.map((a) => [a.ok, a.detail]), [[true, "left open: Dispatch ctx_task_item is live"]]);
+  assert.deepEqual(held.calls, []);
 });
 
 test("a released worker's Task is still found: the workspace's Dispatch comes from worker-list, and an owner's merge of it is linked", async () => {
