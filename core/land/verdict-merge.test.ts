@@ -245,6 +245,7 @@ test("fail closed: red or pending required checks, and no checks at all", async 
     [[{ name: "unit", required: false, state: "pass" }, { name: "lint", required: false, state: "fail" }], "checks_red:lint"],
     [[{ name: "unit", required: false, state: "pending" }], "checks_pending:unit"],
     [[], "checks_missing"],
+    [[{ name: "unit", required: true, state: "cancelled" }], "checks_cancelled:unit"],
   ];
   for (const [checks, want] of cases) {
     const h = harness({ gate: { ...GREEN, checks } });

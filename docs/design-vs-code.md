@@ -186,7 +186,7 @@
 | 리드 역할 | design.html §3 역할과 완료 판정 | changed (결정 94) | `claude-plugin/agents/lead.md:37`, `claude-plugin/agents/lead.md:22` | ready resource 를 읽고 `start_unit` 으로 시작 |
 | 워커 역할 | design.html §3 역할과 완료 판정 | implemented | `claude-plugin/agents/worker.md:23`, `core/gates/self-land.ts:60` | worker_done 한 번(결정 121·175) |
 | 스크립트 역할 GRAPH·REAPER | design.html §3 역할과 완료 판정 | implemented | `core/graph/edit.ts:104`, `core/reaper/round.ts:171` | 기본 설치의 REAPER 는 표시만(결정 174) |
-| land 판정 함수 | design.html §3 역할과 완료 판정 | implemented | `core/land/land.ts:189`, `core/land/land.ts:211` | 결정 158·204 |
+| land 판정 함수 | design.html §3 역할과 완료 판정 | implemented | `core/land/land.ts:189`, `core/land/land.ts:211` | 결정 158·204·319 (check 는 이름마다 최신 run 으로 판정: `core/land/github.ts` 의 `judgeRuns`) |
 | 당사자 원칙 넷 | design.html §3 역할과 완료 판정 | implemented | `claude-plugin/agents/worker.md:53`, `claude-plugin/agents/lead.md:39` | |
 | 감지기 | design.html §3 역할과 완료 판정 | implemented | `core/detect/pr/round.ts:149`, `core/detect/pr/round.ts:200` | 닫기는 머지 확인 뒤 하나뿐 |
 | 오너 | design.html §3 역할과 완료 판정 | implemented | `core/session/record.ts:81`, `core/owner/done.ts:36` | 채팅과 패널 버튼 모두 owner_action |

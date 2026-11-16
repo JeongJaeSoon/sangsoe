@@ -284,7 +284,7 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
     const state = pull.mergeable_state ?? "unknown";
     if (state !== "clean" && state !== "has_hooks") throw notMergeable(pr, state);
     // The rollup, not REST check runs: it also holds commit statuses.
-    greenChecks((await gateAt({ pr, head, readGate, gateFix })).checks, head);
+    greenChecks((await gateAt({ pr, head, readGate, gateFix })).checks, head, pr);
     return { ...base, action: "merge_approved", note: [...note, "approved and green at the head"].join("; ") };
   }
   const waitApproval = (why: string): LandValue => ({ ...base, action: "merge_on_approval", note: [...note, approval.why, why].join("; ") });
@@ -376,7 +376,7 @@ const OWN_CHECKS: Partial<Record<MergeCondition["id"], (gh: GhClient, a: OwnInpu
   required_review_and_ci: async (_gh, a) => {
     const by = verdictApproval(a.events, a.pr, a.head, a.pull);
     const gate = await gateAt(a);
-    greenChecks(gate.checks, a.head);
+    greenChecks(gate.checks, a.head, a.pr);
     return `all ${gate.checks.length} checks in the rollup passed at ${short(a.head)}; verdict by ${by} at ${short(a.head)}`;
   },
   up_to_date_or_queue: async (gh, a) => {
@@ -445,10 +445,19 @@ function notMergeable(pr: string, state: string): Refused {
 }
 
 /** Refuses unless `checks` is non-empty and every one finished as success, neutral or skipped. */
-function greenChecks(checks: PrGate["checks"], head: string): void {
+function greenChecks(checks: PrGate["checks"], head: string, pr: string): void {
   if (checks.length === 0) throw new Refused("checks_missing", "", `no check has reported on ${short(head)}`, "wait for CI to start, then land again");
   const red = checks.find((c) => c.state === "fail");
   if (red) throw new Refused("checks_red", red.name, `${red.name} failed at ${short(head)}`, "fix it, push, and have the new head reviewed");
+  const cancelled = checks.find((c) => c.state === "cancelled");
+  if (cancelled) {
+    throw new Refused(
+      "checks_cancelled",
+      cancelled.name,
+      `${cancelled.name} was cancelled at ${short(head)} and has no success`,
+      `re-run it (gh run list -R ${pr.split("#")[0]} --commit ${head} --status cancelled --json databaseId,workflowName, then gh run rerun -R ${pr.split("#")[0]} <databaseId>), wait for it to pass, then land again`,
+    );
+  }
   const pending = checks.find((c) => c.state === "pending");
   if (pending) throw new Refused("checks_pending", pending.name, `${pending.name} has not finished at ${short(head)}`, "wait for it, then land again");
 }
@@ -463,7 +472,7 @@ async function verdictGate(a: GateReader & { repo: string; pr: string; head: str
   }
   // GitHub naming no required check is read as every check being required.
   const required = gate.checks.filter((c) => c.required);
-  greenChecks(required.length > 0 ? required : gate.checks, a.head);
+  greenChecks(required.length > 0 ? required : gate.checks, a.head, a.pr);
   const method = gate.methods[0];
   if (!method) throw new Refused("merge_method_unreadable", "", `${a.repo} allows no merge method`, "allow a merge method in the repo's settings");
   return method;
