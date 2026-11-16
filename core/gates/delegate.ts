@@ -24,6 +24,10 @@ const TOOLS = new Set([
 ]);
 const READABLE = /\.(md|txt|json|jsonl|log)$/;
 const WRITABLE = /\.(md|txt)$/;
+// Decision 300: the output file Claude Code keeps for a background Bash of this session, e.g. the
+// `orca orchestration check --wait` that woke the orchestrator. Reading it is how the wake-up is read.
+const TASK_OUTPUT = /^\/(?:private\/)?(?:tmp|var\/folders\/[^/]+\/[^/]+\/T)\/claude-\d+\/[^/]+\/[^/]+\/tasks\/[^/]+\.output$/;
+const readable = (f: string) => READABLE.test(f) || (TASK_OUTPUT.test(f) && !f.split("/").includes(".."));
 
 const SUB: Record<string, RegExp> = {
   orca: /^(orchestration|worktree (list|show|ps|current)|terminal (list|read|show)|skills (get|list)|repo (list|show)|status)\b/,
@@ -44,7 +48,7 @@ function coordination(argv: readonly string[]): boolean {
   // is not read here: the parser drops redirections, for `cat` as for `head` and the rest of PLAIN.
   if (head === "cat") {
     const files = rest.filter((a) => !a.startsWith("-"));
-    return files.length > 0 && files.every((f) => READABLE.test(f));
+    return files.length > 0 && files.every(readable);
   }
   // Help and version print and act on nothing, except under Orca's two team shims, which hand
   // their arguments on to another program (read from the 1.4.259 CLI).
@@ -71,7 +75,7 @@ function allowed(call: ToolCall): boolean {
   if (call.tool === "ListMcpResourcesTool") return server === undefined || SANGSOE_SERVER.test(String(server));
   if (call.tool === "ReadMcpResourceTool") return SANGSOE_SERVER.test(String(server ?? ""));
   const file = String(call.input.file_path ?? call.input.path ?? "");
-  if (call.tool === "Read") return READABLE.test(file);
+  if (call.tool === "Read") return readable(file);
   if (call.tool === "Write" || call.tool === "Edit") return WRITABLE.test(file);
   if (call.tool === "Bash" || call.tool === "Monitor") {
     return parse(String(call.input.command ?? "")).commands.every((c) => coordination(unwrap(c.words).argv));
@@ -79,14 +83,41 @@ function allowed(call: ToolCall): boolean {
   return false;
 }
 
+// Decision 300: a refusal names the way on for the shape it refused. The close line is one constant so
+// the unit that closes a lead with no Dispatch can reword it in one place.
+export const CLOSE_ROUTE =
+  "To close a finished unit use the MCP tool unit_close {dispatch}, or `orca orchestration worker-stop` / `worker-release`; " +
+  "`orca terminal close` is not called directly.";
+const INTERPRETERS = /^(python[\d.]*|node|deno|bun|ruby|perl|php|lua)$/;
+
+function route(call: ToolCall): string {
+  if (call.tool !== "Bash" && call.tool !== "Monitor") return "";
+  const hints = new Set<string>();
+  for (const c of parse(String(call.input.command ?? "")).commands) {
+    const { argv } = unwrap(c.words);
+    const [head = "", ...rest] = argv;
+    if (coordination(argv)) continue;
+    const words = rest.filter((a) => !a.startsWith("-")).join(" ");
+    if (head === "orca" && words.startsWith("terminal close")) hints.add(CLOSE_ROUTE);
+    else if (head === "orca" && words.startsWith("terminal send"))
+      hints.add("Another session's terminal is not typed into. Answer it with `orca orchestration reply --id <message_id>` or message it with `orca orchestration send`.");
+    else if (INTERPRETERS.test(head)) hints.add(`Filter JSON with \`jq\`; ${head} is not coordination.`);
+    else if (head === "sangsoe") hints.add("Read the status table through the resource `brief` (ReadMcpResourceTool) instead of the sangsoe command.");
+    else if (head === "sed" || head === "awk") hints.add("Use `head`, `tail`, `grep` or `jq` to cut output.");
+  }
+  return [...hints].join(" ");
+}
+
 export const delegateGate: Gate = (call, facts) => {
   if (call.subagent || allowed(call) || facts.role() !== "orchestrator") return null;
+  const way = route(call);
   return {
     decision: "deny",
     gate: "delegate",
     reason:
       `[gate:delegate] The orchestrator coordinates and does not do the work itself: this ${call.tool} call is outside ` +
       "coordination. Hand it down: start a worker with the MCP tool start_unit, or give it to a subagent (Agent). " +
-      'A long message goes in a .md file written with the Write tool and sent as --body "$(cat <file>.md)".',
+      'A long message goes in a .md file written with the Write tool and sent as --body "$(cat <file>.md)".' +
+      (way ? ` ${way}` : ""),
   };
 };

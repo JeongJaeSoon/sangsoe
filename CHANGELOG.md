@@ -4,6 +4,8 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+- **`[gate:delegate]`: the orchestrator reads its own background wait's output file, and a refusal names the way on (300).** A task output file under the harness tmp opens for Read and `cat`. Closing a terminal, typing into one, interpreters, `sangsoe` commands and `sed` stay refused, and the reason now names `unit_close` / `worker-stop`, `orchestration reply` / `send`, `jq`, and the resource `brief`.
+
 - **Skill and agent texts: the seven lessons of the program's reflect (298).** Subagent and worker rules on how to search and report, scratch files, one test file per call, Edit and Write only; a status is not counted on to wake anyone, so urgent asks go as questions; `lineage_invalid` from a lead with no Task is asked, not retried; a restarted lead finds the earlier Run in the handoff and re-arms `check --wait`; `server_stale` clears only with a session restart.
 
 - **Records: the release smoke on installed 0.1.11 has no failure (297).** `docs/smoke-run.md` has the run: item 3 with both worker endings, item 5's line with a long prompt, items 6 and 8, the count after a resolved gate (284), an idle session (293) and the real panel's header (294) and start note (285) all pass. It also measures what 283 left open: a real Orca (1.4.259) takes `task-update --status completed` on a failed Task, so a Task its worker reported failed is closed once its PR is merged. Switch condition I2 has the four version cells for 0.1.11, and M3's re-measurement is no longer deferred.
