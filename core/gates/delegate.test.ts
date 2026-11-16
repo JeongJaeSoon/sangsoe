@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { evaluate } from "../core/gates/index.ts";
-import type { Facts } from "../core/gates/types.ts";
+import { evaluate } from "./index.ts";
+import type { Facts } from "./types.ts";
 
 // Decision 300: the four calls an orchestrator's own turn made and the gate refused (shapes rebuilt, not copied).
 const orchestrator: Facts = {
@@ -37,7 +37,7 @@ test("300 (a): only a task output file under the harness tmp is opened", () => {
   assert.equal(bash(`cat ${OUT} /work/acme/a.ts`).decision, "deny");
 });
 
-test("300 (b): orca terminal close stays refused and the refusal names unit_close and worker-stop", () => {
+test("300 (b): orca terminal close stays refused and the refusal names worker-release, unit_close and worker-stop", () => {
   const v = bash("orca terminal close --terminal term_abc");
   assert.equal(v.decision, "deny");
   assert.match(why(v), /unit_close/);
@@ -54,6 +54,7 @@ test("300 (c): an interpreter in a pipe stays refused and the refusal names jq a
   // The same wait read through jq is coordination.
   assert.equal(bash("orca orchestration check --run run_1 --json 2>&1 | jq '.messages'").decision, "none");
   for (const c of ["sangsoe brief", "sangsoe todo", "sed -n 1,4p a.txt"]) assert.equal(bash(c).decision, "deny", c);
+  assert.doesNotMatch(why(bash("sangsoe item set i1 --hold")), /resource `brief`/);
 });
 
 test("300 (d): typing into another terminal stays refused and the refusal names reply and send", () => {
