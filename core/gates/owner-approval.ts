@@ -29,8 +29,18 @@ export const ownerApprovalGate: Gate = (call) => {
   const text = String(call.input.command ?? "");
   const commands = parse(text).commands.map((c) => unwrap(c.words).argv);
   if (commands.some((argv) => argv.some((w, i) => w === "hook" && argv[i + 1] === "user-prompt-submit"))) return deny("Only Claude Code calls the prompt hook");
-  if (APPROVAL_SHAPE.test(text) && !commands.every((argv) => CARRIES.test(argv.slice(0, argv[0] === "orca" ? 3 : 1).join(" ")))) {
-    return deny("This command carries the owner's approval line somewhere other than a message to a session");
-  }
-  return null;
+  if (!APPROVAL_SHAPE.test(text)) return null;
+  const heads = commands.map((argv) => argv.slice(0, argv[0] === "orca" ? 3 : 1).join(" "));
+  const others = [...new Set(heads.filter((h) => !CARRIES.test(h)).map(name))];
+  if (others.length === 0) return null;
+  return deny(
+    `This command carries the owner's approval line somewhere other than a message to a session: ${others.join(", ")} ${others.length === 1 ? "is" : "are"} not a message to a session. ` +
+      "Pass the line up with `orca orchestration send|reply|ask` alone, with no pipe or redirection",
+  );
 };
+
+/** A command by its first words; never the line itself (decision 327). */
+function name(head: string): string {
+  if (head === "") return "a variable assignment";
+  return APPROVAL_SHAPE.test(head) ? "a command" : `\`${head}\``;
+}
