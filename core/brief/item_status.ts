@@ -42,8 +42,11 @@ export interface ItemFacts {
   readonly unclear: boolean;
   /** In progress and its worker_idle (decision 186) is newer than its last move: the 대기 line. */
   readonly idle: boolean;
-  /** 🟢 and the owner pressed 완료: the session that holds its Run closes it (decision 317). */
-  readonly pressed: boolean;
+  /**
+   * 🟢 and the owner pressed 완료: the session that holds its Run closes it (decision 317), unless
+   * `blocker` names what came to block it since the press.
+   */
+  readonly pressed: { readonly blocker: string | null } | null;
   readonly evidenceShort: boolean;
   /** Done, no evidence, but its PR has an act_on 0 review (decision 236); never also evidenceShort. */
   readonly reviewOnly: boolean;
@@ -233,6 +236,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       .filter(([type, seq]) => !(type === "worker_dead:auth" && turned > seq))
       .map(([type]) => type);
     const undelivered = own.filter((d) => d.undelivered).map((d) => d.decision);
+    const press = pressed.get(t.id);
     // Decision 236: a lead's item bundles its children's work and has no evidence of its own; a
     // short item whose PR has an act_on 0 review reads 리뷰만 있음 instead of 근거 부족.
     const evidenced = evidence.has(t.id) || ownsPr(t.id, prEvidence, prFacts);
@@ -267,7 +271,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       alarms: state === "done" || state === "cancelled" ? [] : standing,
       unclear: (unclear.get(t.id) ?? 0) > last,
       idle: state === "in_progress" && (idle.get(t.id) ?? 0) > last,
-      pressed: state === "ready" && pressed.has(t.id),
+      pressed: state === "ready" && press !== undefined ? { blocker: doneBlockers(input, t.id, { owner: true, ownerAction: press })[0] ?? null } : null,
       evidenceShort: lacking && !reviewOnly,
       reviewOnly,
       // A worker_done or a lead's task-update closes a Task with no item_transition (decision 175, S7).

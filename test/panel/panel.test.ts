@@ -5,7 +5,6 @@ import { test } from "node:test";
 import {
   type BriefInput,
   type BriefSnapshot,
-  closeOwnerDone,
   decisionMoot,
   decisionOpen,
   type OrcaAdapter,
@@ -28,7 +27,7 @@ import { panelHandlers, parseAct, STATUS_UNKNOWN } from "../../orca-plugin/panel
 import { STYLE } from "../../orca-plugin/panel/style.ts";
 import { back, current, down, drawnRowIds, type PanelView, renderStage, trail } from "../../orca-plugin/panel/view.ts";
 import { createWorld } from "../decision/world.ts";
-import { ownerWorld, RUN as OWNER_RUN } from "../owner/world.ts";
+import { ownerWorld, settlePressed } from "../owner/world.ts";
 
 const FIX = new URL("../fixtures/brief/", import.meta.url);
 const NOW = "2026-11-10T12:00:00.000Z";
@@ -291,7 +290,7 @@ test("PN4: 완료 → U14 ownerDone records the press on a 🟢 owner item for i
   assert.deepEqual(r.ok ? r.value : r, { status: "pending_close", label: "기록했다 — 그 Run 의 세션이 닫는다", item: mine });
   assert.equal(o.state("task_000000000010"), "ready", "decision 317: the panel's process closes nothing in Orca");
   assert.deepEqual(o.store.events({ type: "owner_action" }).map((e) => [e.source, e.payload.origin]), [["plugin:panel", "button"]]);
-  await closeOwnerDone({ orca: o.orca, store: o.store }, { run: OWNER_RUN, rows: [...o.tasks.values()], source: "UserPromptSubmit", now: o.now });
+  await settlePressed(o);
   assert.equal(o.state("task_000000000010"), "done", "the Run's session closes it");
   assert.equal(o.store.events({ type: "item_transition" })[0]?.payload.reason, "owner_done");
 
@@ -299,9 +298,9 @@ test("PN4: 완료 → U14 ownerDone records the press on a 🟢 owner item for i
   const v = o.item("task_000000000012", { who: "owner", verify: { kind: "pr_merged", pr: "acme/api#40" } });
   const pv = await core.act({ kind: "done", item: v });
   assert.deepEqual(pv.ok ? pv.value : pv, { status: "pending_close", label: "기록했다 — 그 Run 의 세션이 닫는다", item: v });
-  await closeOwnerDone({ orca: o.orca, store: o.store }, { run: OWNER_RUN, rows: [...o.tasks.values()], source: "UserPromptSubmit", now: o.now });
+  await settlePressed(o);
   assert.equal(o.state("task_000000000012"), "pending_verify");
-  // The label starts with the marker the brief draws for the same item after the press.
+  // Once closed, the brief draws the item with the ⏳ marker.
   const after = await core.brief({ item: v });
   const marker = after.ok && after.value.model.stage === 3 ? after.value.model.state : null;
   assert.equal(marker, "⏳");

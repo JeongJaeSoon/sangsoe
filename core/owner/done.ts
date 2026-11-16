@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { dedupeKey, EVENTS, type StoredEvent, type ViewInput } from "../contract/index.ts";
 import type { OrcaAdapter, TaskRow } from "../contract/orca.ts";
 import { doneBlockers } from "../graph/flow.ts";
-import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
 import type { Store } from "../store/store.ts";
 import { DONE_EVIDENCE, ownerMarks } from "./marks.ts";
@@ -10,8 +9,11 @@ import { isOwnerItem, OWNER_DEFAULTS, type OwnerConfig, type OwnerItemFacts } fr
 
 /** The evidence kind of a 완료 press that waits for the session holding the item's Run (decision 317). */
 export const DONE_REQUEST = "owner_act:done";
+/** The hook found the pressed Task closed by someone else: the press is spent. */
+const DONE_SETTLED = "owner_act:done_settled";
 /** Orca statuses of a Task still open and not taken by a worker. */
 const WAITING: ReadonlySet<string> = new Set(["pending", "ready"]);
+const CLOSED: ReadonlySet<string> = new Set(["completed", "failed", "cancelled"]);
 
 export interface OwnerDone {
   readonly task: string;
@@ -21,16 +23,17 @@ export interface OwnerDone {
 }
 
 /**
- * Every Task with a 완료 press no transition has followed → the owner_action seq of that press. The
- * close's item_transition consumes it, so an item reopened later waits for a new press.
+ * Every Task with a 완료 press not yet spent → the owner_action seq of that press. A press is spent by
+ * the next item_transition of its Task, or by the settle row the hook writes on finding the Task
+ * closed some other way, so an item reopened later waits for a new press.
  */
 export function ownerDoneRequests(events: readonly StoredEvent[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const e of events) {
     if (e.type === "item_transition") out.delete(String(e.payload.task));
-    else if (e.type === "evidence" && e.payload.kind === DONE_REQUEST && e.entity === "task" && e.entity_id && !out.has(e.entity_id)) {
-      out.set(e.entity_id, Number(/^owner_action (\d+)$/.exec(String(e.payload.observed))?.[1]));
-    }
+    if (e.type !== "evidence" || e.entity !== "task" || !e.entity_id) continue;
+    if (e.payload.kind === DONE_SETTLED) out.delete(e.entity_id);
+    else if (e.payload.kind === DONE_REQUEST && !out.has(e.entity_id)) out.set(e.entity_id, Number(/^owner_action (\d+)$/.exec(String(e.payload.observed))?.[1]));
   }
   return out;
 }
@@ -52,7 +55,14 @@ export async function ownerDone(
   if (f.state !== "ready") return refuse("not_ready", `${f.alias} is ${f.state}, not 🟢`, "only an open 🟢 owner item takes 완료");
   const { store } = ports;
   const pending = done({ task: f.task, alias: f.alias, status: "pending" as const });
-  if (ownerDoneRequests(store.events()).has(f.task)) return pending;
+  const blocked = (seq: number) => {
+    // Decision 212 ④: the press is the owner_action the owner gate asks for; any other blocker refuses.
+    const b = doneBlockers({ ...input, events: store.events() }, f.task, { owner: true, ownerAction: seq });
+    return b.length > 0 ? refuse("done_blocked", `${f.alias} cannot be ✅ yet: ${b.join(" · ")}`, "clear what blocks it, then press 완료 again") : null;
+  };
+  // Pressed again while it waits: nothing more is written, but a blocker that appeared since is said.
+  const waiting = ownerDoneRequests(store.events()).get(f.task);
+  if (waiting !== undefined) return blocked(waiting) ?? pending;
   const text = `완료 ${f.alias}`;
   const action = store.appendOwnerAction(
     {
@@ -64,9 +74,8 @@ export async function ownerDone(
     },
     text,
   );
-  // Decision 212 ④: the press is the owner_action the owner gate asks for; any other blocker refuses.
-  const blockers = doneBlockers({ ...input, events: store.events() }, f.task, { owner: true, ownerAction: action.seq });
-  if (blockers.length > 0) return refuse("done_blocked", `${f.alias} cannot be ✅ yet: ${blockers.join(" · ")}`, "clear what blocks it, then press 완료 again");
+  const refused = blocked(action.seq);
+  if (refused) return refused;
   store.append({
     type: "evidence",
     source: "plugin:panel",
@@ -80,25 +89,36 @@ export async function ownerDone(
 
 /**
  * Decision 317, from the prompt hook of the session that holds the Run (`deliverOwnRun`): each 완료
- * press on a Task of this Run that is still open is closed with this Run as caller. The blockers are
- * read again with the press's owner_action; one that appeared since keeps the request waiting. With
- * no verify the press is the evidence; with one the item reads ⏳ 검증 대기 until a probe sees it
- * (decision 181). A closed Task costs no call, so a second prompt does nothing. Returns the aliases closed.
+ * press on a Task of this Run is closed with this Run as caller while the item still reads 🟢 (`ready`,
+ * the reading the press required) and nothing blocks it with the press's owner_action. Anything else
+ * keeps the request waiting. A Task found closed some other way spends the press. With no verify the
+ * press is the evidence; with one the item reads ⏳ 검증 대기 until a probe sees it (decision 181).
+ * A closed Task costs no call, so a second prompt does nothing. Returns the aliases closed.
  */
 export async function closeOwnerDone(
   d: { readonly orca: Pick<OrcaAdapter, "taskUpdate">; readonly store: Pick<Store, "append" | "events"> },
-  a: { readonly run: string; readonly rows: readonly TaskRow[]; readonly source: string; readonly now: string },
+  a: { readonly run: string; readonly input: ViewInput; readonly rows: readonly TaskRow[]; ready(task: string): boolean; readonly source: string },
   cfg: Pick<OwnerConfig, "waitMinutes"> = OWNER_DEFAULTS,
 ): Promise<string[]> {
   const asks = ownerDoneRequests(d.store.events());
-  if (asks.size === 0) return [];
-  const tasks = snapshotTasks(a.rows as FullTaskRow[], a.run);
   const closed: string[] = [];
   for (const [task, action] of asks) {
-    // The press took a 🟢 reading, which GRAPH gives an Orca `pending` Task too (decision 147).
-    if (!WAITING.has(a.rows.find((r) => r.id === task)?.status ?? "")) continue;
+    const status = a.rows.find((r) => r.id === task)?.status;
+    if (status === undefined) continue;
+    if (CLOSED.has(status)) {
+      d.store.append({
+        type: "evidence",
+        source: a.source,
+        payload: { kind: DONE_SETTLED, observed: `owner_action ${action}, Task ${status}` },
+        entity: "task",
+        entity_id: task,
+        dedupe_key: dedupeKey(EVENTS.evidence, task, DONE_SETTLED, String(action)),
+      });
+      continue;
+    }
+    if (!WAITING.has(status) || !a.ready(task)) continue;
     const events = d.store.events();
-    if (doneBlockers({ orca: { tasks, gates: [] }, events, now: a.now }, task, { owner: true, ownerAction: action }).length > 0) continue;
+    if (doneBlockers({ ...a.input, events }, task, { owner: true, ownerAction: action }).length > 0) continue;
     const u = await d.orca.taskUpdate({ id: task, status: "completed", result: "owner_done", run: a.run });
     if (!u.ok) continue;
     d.store.append({
@@ -107,9 +127,9 @@ export async function closeOwnerDone(
       payload: { task, from: "ready", to: "done", reason: "owner_done" },
       entity: "task",
       entity_id: task,
-      dedupe_key: dedupeKey(EVENTS.item_transition, task, "owner_done"),
+      dedupe_key: dedupeKey(EVENTS.item_transition, task, "owner_done", String(action)),
     });
-    if (!ownerMarks({ events, now: a.now }, cfg).get(task)?.verify) {
+    if (!ownerMarks({ events, now: a.input.now }, cfg).get(task)?.verify) {
       d.store.append({
         type: "evidence",
         source: a.source,

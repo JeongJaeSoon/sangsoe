@@ -122,8 +122,14 @@ export function ownerWorld(): OwnerWorld {
  */
 export async function pressDone(w: OwnerWorld, task: string): Promise<Result<OwnerDone>> {
   const r = await ownerDone({ store: w.store }, w.input(), w.facts(), { task });
-  if (r.ok) await closeOwnerDone({ orca: w.orca, store: w.store }, { run: RUN, rows: [...w.tasks.values()], source: "UserPromptSubmit", now: w.now });
+  if (r.ok) await settlePressed(w);
   return r;
+}
+
+/** The prompt hook's side alone (decision 317): close what the owner pressed in this world's one Run. */
+export function settlePressed(w: OwnerWorld): Promise<string[]> {
+  const ready = new Set(w.facts().flatMap((f) => (f.state === "ready" ? [f.task] : [])));
+  return closeOwnerDone({ orca: w.orca, store: w.store }, { run: RUN, input: w.input(), rows: [...w.tasks.values()], ready: (t) => ready.has(t), source: "UserPromptSubmit" });
 }
 
 /** The owner's words as the UserPromptSubmit hook records them (U13 writes this row). */

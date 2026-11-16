@@ -189,9 +189,9 @@
 | land 판정 함수 | design.html §3 역할과 완료 판정 | implemented | `core/land/land.ts:189`, `core/land/land.ts:211` | 결정 158·204·319 (check 는 이름마다 최신 run 으로 판정: `core/land/github.ts` 의 `judgeRuns`) |
 | 당사자 원칙 넷 | design.html §3 역할과 완료 판정 | implemented | `claude-plugin/agents/worker.md:53`, `claude-plugin/agents/lead.md:39` | |
 | 감지기 | design.html §3 역할과 완료 판정 | implemented | `core/detect/pr/round.ts:149`, `core/detect/pr/round.ts:200` | 닫기는 머지 확인 뒤 하나뿐 |
-| 오너 | design.html §3 역할과 완료 판정 | implemented | `core/session/record.ts:81`, `core/owner/done.ts:57` | 채팅과 패널 버튼 모두 owner_action |
+| 오너 | design.html §3 역할과 완료 판정 | implemented | `core/session/record.ts:81`, `core/owner/done.ts:67` | 채팅과 패널 버튼 모두 owner_action |
 | 감지 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `core/session/record.ts:180`, `core/owner/probe.ts:157` | 사실·표지·close_suggested 만 |
-| 실행 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `core/session/record.ts:103`, `core/owner/done.ts:88` | 결정 173·181·317(패널의 완료는 그 Run 을 쥔 세션이 닫는다) |
+| 실행 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `core/session/record.ts:103`, `core/owner/done.ts:98` | 결정 173·181·317(패널의 완료는 그 Run 을 쥔 세션이 닫는다) |
 | 판단 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `claude-plugin/mcp/tools/decision_answer.ts:14`, `claude-plugin/agents/orchestrator.md:49` | 결정 179 |
 | 에이전트는 MCP 만 | design.html §3 호출 경로 규칙 | implemented | `claude-plugin/mcp/server.ts:38`, `test/judgment-layer.test.ts:62` | 예외 하나: `[gate:pressure]` 거부 뒤 백그라운드 `sangsoe pressure wait`(결정 256) |
 | plugin worker 의 코어 import | design.html §3 호출 경로 규칙 | implemented | `orca-plugin/core-link.ts:64` | 결정 132 |
@@ -364,7 +364,7 @@
 | 뷰 owner_action·item_extra·item·evidence·edge | design-appendix sqlite 스키마 | changed (결정 160) | `core/graph/facts.ts:1`, `core/brief/item_status.ts:222` | 이름 있는 함수 없이 같은 event 를 접는다 |
 | 뷰 decision·owner_todo·item_timeline·edge_ok·ready·flow_gap·group_brief·group_items·restart_due | design-appendix sqlite 스키마 | implemented | `core/store/views/decision.ts:11`, `core/graph/ready.ts:213` | restart_due 를 부르는 쪽은 G10 |
 | 뷰 item_status 의 🚨 orphan_extra | design-appendix sqlite 스키마 | missing | `core/brief/item_status.ts:222`, `core/contract/views.ts:90` | G24 — 주석에 이름만 있고 판정이 없다 |
-| 뷰 done_blockers | design-appendix sqlite 스키마 | implemented | `core/graph/flow.ts:311`, `core/detect/pr/round.ts:165`, `core/owner/done.ts:68`, `core/owner/done.ts:101`, `core/gates/done-blockers.ts:12` | Task 를 닫는 세 자리(pr-monitor 의 닫기, 패널의 완료, 역할 세션의 `task-update --status completed`)가 막는 것을 적어 거부한다(결정 212 ④). 패널의 완료는 누를 때와 그 Run 의 세션이 닫을 때 두 번 읽는다(결정 317) |
+| 뷰 done_blockers | design-appendix sqlite 스키마 | implemented | `core/graph/flow.ts:311`, `core/detect/pr/round.ts:165`, `core/owner/done.ts:60`, `core/owner/done.ts:121`, `core/gates/done-blockers.ts:12` | Task 를 닫는 세 자리(pr-monitor 의 닫기, 패널의 완료, 역할 세션의 `task-update --status completed`)가 막는 것을 적어 거부한다(결정 212 ④). 패널의 완료는 누를 때와 그 Run 의 세션이 닫을 때 두 번 읽는다(결정 317) |
 | 뷰 ask_due | design-appendix sqlite 스키마 | cut (결정 161) | `core/contract/views.ts:182` | 시그니처만. LATER 조건은 2절 N6 |
 | 소유 PR·Run·Task·게이트·대화 기록 | design-appendix 데이터 소유 | implemented | `core/detect/pr/round.ts:1`, `core/decision/open.ts:137` | |
 | 소유 부가 정보·간선·결정 키 | design-appendix 데이터 소유 | implemented | `core/store/schema.ts:111` | event 만 정본 |

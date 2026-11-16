@@ -113,7 +113,8 @@ test("317: the session that holds the Run closes the pressed Task with its Run, 
   const w = world();
   assert.ok((await w.press()).ok);
   const first = await w.prompt();
-  assert.deepEqual(first.calls, ["task-list", `task-update ${T} completed ${RUN}`, "task-list", "gate-list"]);
+  // gate-list comes first: the close needs the item's 🟢 reading, which open gates change.
+  assert.deepEqual(first.calls, ["task-list", "gate-list", `task-update ${T} completed ${RUN}`, "task-list"]);
   assert.equal(first.lines.length, 1);
   assert.match(first.lines[0] ?? "", / 오너가 완료를 누른 항목을 닫았다: i001\.$/);
   assert.deepEqual([w.tasks[0]?.status, w.tasks[0]?.result], ["completed", "owner_done"]);
@@ -153,7 +154,7 @@ test("317: an Orca `pending` Task that reads 🟢 is pressed and closed the same
   assert.equal(w.state(), "done");
 });
 
-test("317: a blocker that appears before the hook keeps the request waiting and the Task open", async () => {
+test("317: a blocker that appears before the hook keeps the request waiting and the Task open, and is said", async () => {
   const w = world();
   assert.ok((await w.press()).ok);
   w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/app#12", task: T } });
@@ -161,6 +162,46 @@ test("317: a blocker that appears before the hook keeps the request waiting and 
   assert.ok(!p.calls.some((c) => c.startsWith("task-update")));
   assert.equal(w.tasks[0]?.status, "ready");
   assert.equal(w.store.events({ type: "item_transition" }).length, 0);
+  const row = buildBrief(w.input()).inProgress.rows.find((r) => r.id === "i001");
+  assert.equal(row?.cells[3]?.text, "완료 기록됨, 막힘: open_pr: acme/app#12");
+  const again = await w.press();
+  assert.equal(again.ok ? null : again.refusal.code, "done_blocked", "a re-press says what blocks it");
+  assert.equal(w.store.events({ type: "evidence" }).filter((e) => e.payload.kind === "owner_act:done").length, 1);
+});
+
+test("317: an item that no longer reads 🟢 after the press (an edge added since) is not closed", async () => {
+  const w = world();
+  assert.ok((await w.press()).ok);
+  const P = "task_000000000002";
+  w.tasks.push({ id: P, run: RUN, status: "dispatched", title: "deploy" });
+  w.store.append({ type: "item_created", source: "item_create", payload: { task: P, alias: "i002", who: "lead:api", done_when: "deployed", owner_action: 0, run: RUN } });
+  w.store.append({ type: "edge_added", source: "GRAPH", payload: { pred: `item:${P}`, succ: `item:${T}`, kind: "deploys_after" }, dedupe_key: `edge:item%3A${P}:item%3A${T}:deploys_after` });
+  assert.equal(w.state(), "planned");
+  const p = await w.prompt();
+  assert.ok(!p.calls.some((c) => c.startsWith("task-update")), JSON.stringify(p.calls));
+  assert.equal(w.tasks[0]?.status, "ready");
+});
+
+test("317: a press is spent once its Task closes: reopened, the item waits for a new press", async () => {
+  // Closed by the hook, then reopened.
+  const a = world();
+  assert.ok((await a.press()).ok);
+  await a.prompt();
+  assert.equal(a.tasks[0]?.status, "completed");
+  a.tasks[0] = { ...(a.tasks[0] as Row), status: "ready" };
+  assert.ok(!(await a.prompt()).calls.some((c) => c.startsWith("task-update")), "no close without a new press");
+  assert.ok((await a.press()).ok);
+  assert.ok((await a.prompt()).calls.includes(`task-update ${T} completed ${RUN}`));
+  assert.equal(a.store.events({ type: "item_transition" }).length, 2, "the second close is its own row");
+
+  // Closed by someone else (a lead's own task-update writes no transition), then reopened.
+  const b = world();
+  assert.ok((await b.press()).ok);
+  b.tasks[0] = { ...(b.tasks[0] as Row), status: "completed" };
+  assert.ok(!(await b.prompt()).calls.some((c) => c.startsWith("task-update")));
+  b.tasks[0] = { ...(b.tasks[0] as Row), status: "ready" };
+  assert.ok(!(await b.prompt()).calls.some((c) => c.startsWith("task-update")), "the press was spent by the other close");
+  assert.deepEqual(ownerTodoFrom(b.input(), itemFacts(b.input())).map((r) => r.ref), ["i001"], "back on the owner's to-do");
 });
 
 test("317: with no session on the Run, brief and panel read the press as waiting on that Run's session", async () => {
@@ -194,4 +235,7 @@ test("317: a refusal's banner shows its code and, for Orca's, Orca's code and wh
   // An Orca code with no meaning listed still shows; a non-Orca refusal shows its own code.
   assert.match(strip(errorNote({ code: "orca_error", reason: "gate-list run_1: weird_new_code boom", fix: "x" })), /weird_new_code/);
   assert.match(strip(errorNote({ code: "not_ready", reason: "i001 is done, not 🟢", fix: "x" })), /not_ready/);
+  // A refused 완료 says what blocks it.
+  const blocked = strip(errorNote({ code: "done_blocked", reason: "i001 cannot be ✅ yet: open_pr: acme/app#12", fix: "x" }));
+  assert.match(blocked, /done_blocked · open_pr: 열린 PR 이 있다/);
 });

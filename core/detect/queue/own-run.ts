@@ -6,6 +6,7 @@ import { decisionMoot } from "../../decision/moot.ts";
 import { decisionStates, isClosedTask, isOpenGate, owed } from "../../decision/waiters.ts";
 import { foldFacts } from "../../graph/facts.ts";
 import { parseNode } from "../../graph/nodes.ts";
+import { itemFacts } from "../../brief/item_status.ts";
 import { closeOwnerDone } from "../../owner/done.ts";
 import { readyKeys } from "../../graph/notify-ready.ts";
 import { type FullTaskRow, readSnapshot, snapshotTasks } from "../../graph/snapshot.ts";
@@ -80,21 +81,36 @@ export async function deliverOwnRun(deps: CoreDeps, run: string, now: string): P
     for (const p of c.planned) deps.store.append(p);
     if (c.closed) merged.push(m.ref);
   }
-  // Decision 317: the owner's 완료 presses on this Run's Tasks, which the panel's process cannot close.
-  const pressed = await closeOwnerDone(deps, { run, rows: listedTasks.value, source: SOURCE, now });
-  if (merged.length + pressed.length > 0) {
+  if (merged.length > 0) {
     listedTasks = await deps.orca.taskList({ run, full: true });
     if (!listedTasks.ok) return { skipped: `task-list ${run}` };
   }
   const listed = await deps.orca.gateList({ run });
   if (!listed.ok) return { skipped: `gate-list ${run}` };
-  const events = deps.store.events();
-  const mine = new Map(listedTasks.value.map((t) => [t.id, t]));
-  // A Run that cannot be read leaves its Tasks out: the items waiting on them stay unknown.
-  const others = await readSnapshot(deps.orca, predecessorRuns(events, mine, run));
   const gates: ViewGate[] = listed.value.map((g) => ({ id: g.id, taskId: g.taskId ?? "", open: isOpenGate(g) }));
-  const tasks = [...snapshotTasks(listedTasks.value as FullTaskRow[], run), ...others.snapshot.tasks];
-  const input: ViewInput = { orca: { tasks, gates }, events, now };
+  // A Run that cannot be read leaves its Tasks out: the items waiting on them stay unknown.
+  const others = await readSnapshot(deps.orca, predecessorRuns(deps.store.events(), new Map(listedTasks.value.map((t) => [t.id, t])), run));
+  const view = (rows: readonly TaskRow[]): ViewInput => ({
+    orca: { tasks: [...snapshotTasks(rows as FullTaskRow[], run), ...others.snapshot.tasks], gates },
+    events: deps.store.events(),
+    now,
+  });
+  // Decision 317: the owner's 완료 presses on this Run's Tasks, which the panel's process cannot close.
+  // Only an item that still reads 🟢 is closed, as the press required; read only when a press waits.
+  const before = view(listedTasks.value);
+  let green: Set<string> | undefined;
+  const isGreen = (task: string) => {
+    green ??= new Set(itemFacts(before).flatMap((f) => (f.state === "ready" ? [f.task] : [])));
+    return green.has(task);
+  };
+  const pressed = await closeOwnerDone(deps, { run, input: before, rows: listedTasks.value, ready: isGreen, source: SOURCE });
+  if (pressed.length > 0) {
+    listedTasks = await deps.orca.taskList({ run, full: true });
+    if (!listedTasks.ok) return { skipped: `task-list ${run}` };
+  }
+  const input = view(listedTasks.value);
+  const { events } = input;
+  const mine = new Map(listedTasks.value.map((t) => [t.id, t]));
   const told = new Set(events.flatMap((e) => (e.type === "notified" && e.dedupe_key ? [e.dedupe_key] : [])));
   const inject = (key: NotifiedKey) =>
     deps.store.append({ type: "notified", source: SOURCE, target: key.target, dedupe_key: key.dedupe_key, payload: { msg_id: `inject:${run}`, to: `run:${run}`, msg_type: "status" } });

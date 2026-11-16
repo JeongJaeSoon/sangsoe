@@ -159,8 +159,19 @@ export const ERROR_LINE: Readonly<Record<string, string>> = {
   no_recommendation: "추천 답이 없다. 다른 답으로 답한다.",
   not_owner_item: "오너의 할 일이 아니다. 맡은 쪽이 닫는다.",
   not_ready: "지금 완료할 수 있는 할 일이 아니다.",
+  done_blocked: "막는 것이 있어 아직 완료할 수 없다.",
 };
 const ERROR_OTHER = "sangsoe 가 요청을 처리하지 못했다.";
+
+/** What each `doneBlockers` kind means (decision 212 ④); the done_blocked reason lists them as `<kind>: …`. */
+const BLOCKER_LINE: Readonly<Record<string, string>> = {
+  owner_gate: "오너의 누름이 필요하다",
+  flow_gap: "흐름에 빠진 단계가 있다",
+  open_child: "끝나지 않은 하위 항목이 있다",
+  open_pr: "열린 PR 이 있다",
+  closed_pr: "머지 없이 닫힌 PR 이 있다",
+};
+const BLOCKER = /\b(owner_gate|flow_gap|open_child|open_pr|closed_pr): /;
 
 /** What Orca's own error codes mean; a code not listed is shown bare. */
 const ORCA_CODE_LINE: Readonly<Record<string, string>> = {
@@ -176,12 +187,15 @@ export type Refusal = { code: string; reason: string; fix: string };
 export const errorLine = (r: Refusal): string => ERROR_LINE[r.code] ?? ERROR_OTHER;
 const errorTitle = (r: Refusal): string => [r.code, r.reason, r.fix].filter(Boolean).join(" · ");
 
-/** The refusal's code after its line, and for an orca_error Orca's code and what it means. */
+/**
+ * The refusal's code after its line; for an orca_error Orca's code and what it means, for a
+ * done_blocked the first blocker's kind and what it means.
+ */
 function errorText(r: Refusal): string {
   const orca = r.code === "orca_error" ? ORCA_CODE.exec(r.reason)?.[1] : undefined;
-  const meaning = orca ? ORCA_CODE_LINE[orca] : undefined;
-  const codes = [r.code, orca ? `Orca ${orca}${meaning ? `: ${meaning}` : ""}` : ""].filter(Boolean).join(" · ");
-  return `${errorLine(r)} (${codes})`;
+  const block = r.code === "done_blocked" ? BLOCKER.exec(r.reason)?.[1] : undefined;
+  const detail = orca ? `Orca ${orca}${ORCA_CODE_LINE[orca] ? `: ${ORCA_CODE_LINE[orca]}` : ""}` : block ? `${block}: ${BLOCKER_LINE[block]}` : "";
+  return `${errorLine(r)} (${[r.code, detail].filter(Boolean).join(" · ")})`;
 }
 const errorP = (r: Refusal, tail = ""): string => `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorText(r))}${tail}</p>`;
 
