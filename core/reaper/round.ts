@@ -9,9 +9,9 @@ import type { Appended, EventFilter } from "../store/store.ts";
 import { type Check, type BlockReason as CheckReason, evidenceInWorktree, openWork, preDelete } from "./checks.ts";
 import type { ReaperConfig, ReaperConfigRead } from "./config.ts";
 import { type DockerState, dockerState, sweepDocker } from "./docker.ts";
-import { branchOf, type Finished, judgeFinished, NO_TRACE, repoOf, withRemoteCase } from "./finished.ts";
+import { branchOf, type Finished, judgeFinished, NO_TRACE, namesCard, repoOf, withRemoteCase } from "./finished.ts";
 import { composeRunning, listening, readStacks, type Stacks } from "./live.ts";
-import { blockedKey, dockerHolds, goneRow, type Hold, holdEvents } from "./record.ts";
+import { blockedKey, dockerHolds, goneRow, type Hold, holdEvents, startedBySangsoe, startedCards } from "./record.ts";
 
 /**
  * The only Orca calls REAPER has: reads, the one removal, and closing a setup shell start_unit
@@ -313,7 +313,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   const unknown = new Set<string>();
   const workers = await allWorkers(d.orca);
   if (typeof workers === "string") rootFailed(workers);
-  else for (const w of workers) if (!settled(w) && w.workspace && byId.has(w.workspace)) marked.add(w.workspace);
+  else for (const w of workers) if (!settled(w)) for (const c of scope) if (namesCard(w.workspace, c)) marked.add(c.id);
 
   // Not a card removal, so mark-only rounds (by flag or by no config) close it too; a dry run does not,
   // nor does a round whose protect list could not be read.
@@ -339,7 +339,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   // Open-Task root (decision 177): an open Task or a live session keeps its card. Unreadable is unknown.
   if (typeof workers !== "string") {
     for (const c of scope) {
-      if (marked.has(c.id) || unknown.has(c.id) || !workers.some((w) => w.workspace === c.id)) continue;
+      if (marked.has(c.id) || unknown.has(c.id) || !workers.some((w) => namesCard(w.workspace, c))) continue;
       if (signal.aborted) break;
       const open = await openWork(c, workers, d.orca);
       if (open.ok) continue;
@@ -361,17 +361,11 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     }
     repos.set(repo, [...(repos.get(repo) ?? []), c]);
   }
-  // Decision 207: a repository counts as sangsoe's when a card sangsoe started or recorded is in it. An
-  // unreadable one fails the round closed; another owner's keeps its cards and says so once.
-  const started = new Set(d.events({ type: "unit_started" }).map((e) => String((e.payload as { worktree?: unknown }).worktree ?? "")));
-  const own = new Set(
-    d
-      .events({ type: "resource" })
-      .map((e) => e.payload as { kind: string; ref: string })
-      .filter((p) => p.kind === "worktree")
-      .map((p) => p.ref),
-  );
-  const managed = new Set(scope.filter((c) => started.has(c.id) || own.has(c.instanceId)).flatMap((c) => repoOf(c) ?? []));
+  // Decision 207: a repository counts as sangsoe's when a card sangsoe started or recorded is in it
+  // (decision 306: by its path too). An unreadable one fails the round closed; another owner's keeps
+  // its cards and says so once.
+  const own = startedCards(d.events);
+  const managed = new Set(scope.filter((c) => startedBySangsoe(own, c)).flatMap((c) => repoOf(c) ?? []));
   for (const [repo, cs] of repos) {
     const heads = await openPrHeads(d.gh, repo);
     if (!heads && managed.has(repo)) {
