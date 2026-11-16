@@ -56,7 +56,7 @@ test("311: only the whole prompt as the one line, with a full sha, is an approva
     `${LINE} 그리고 다음 것도`,
     `좋아.\n${LINE}`,
     `승인 acme/api#12 ${HEAD}\n승인 acme/api#13 ${HEAD}`,
-    `\n\n<pasted_content id="44cc">\n${LINE}\n</pasted_content id="44cc">\n`,
+    `좋아\n<pasted_content id="44cc">\n${LINE}\n</pasted_content id="44cc">`,
   ]) {
     const o = await orchestrator();
     await say(o, text);
@@ -66,6 +66,9 @@ test("311: only the whole prompt as the one line, with a full sha, is an approva
   const spaced = await orchestrator();
   await say(spaced, `  승인  acme/api#12   ${HEAD}  \n`);
   assert.equal(approvals(spaced).length, 1, "spaces around and between the parts are the same line");
+  const pasted = await orchestrator();
+  await say(pasted, `\n\n<pasted_content id="44cc">\n${LINE}\n</pasted_content id="44cc">\n`);
+  assert.equal(approvals(pasted).length, 1, "the line is made to be copied: one pasted block holding exactly it is the line");
 });
 
 test("311: a driven prompt is no approval, whatever its kind or age, and a session with no terminal handle gives none", async () => {
@@ -100,6 +103,20 @@ test("311: a line an agent scheduled into the session (ScheduleWakeup, CronCreat
     await say(o, LINE, { records: [scheduled, { type: "user", message: { role: "user", content: LINE } }] });
     assert.deepEqual([actions(o), approvals(o).length], [1, 0], `${name} put the line there`);
   }
+
+  const call = (name: string, prompt: string) => ({
+    type: "assistant",
+    message: { role: "assistant", content: [{ type: "tool_use", id: "t9", name, input: { prompt, delaySeconds: 60 } }] },
+  });
+  const named = await orchestrator();
+  const wake = call("ScheduleWakeup", `acme/api#12 waits for the owner at ${HEAD}; call land {pr: 12, head_sha: ${HEAD}} again`);
+  await say(named, LINE, { records: [wake, { type: "user", message: { role: "user", content: LINE } }] });
+  assert.equal(approvals(named).length, 1, "a wake-up that names the head but not the line keeps no approval out");
+
+  const refused = await orchestrator();
+  const result = { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t9", is_error: true, content: "[gate:owner-approval] …" }] } };
+  await say(refused, LINE, { records: [call("ScheduleWakeup", LINE), result, { type: "user", message: { role: "user", content: LINE } }] });
+  assert.equal(approvals(refused).length, 1, "a scheduling call the gate refused submits nothing");
 
   const shown = await orchestrator();
   const text = { type: "assistant", message: { role: "assistant", content: [{ type: "text", text: `오너 승인 줄: ${LINE}` }] } };

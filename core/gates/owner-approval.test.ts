@@ -20,13 +20,18 @@ const call = (role: Role, tool: string, input: Record<string, unknown>) => {
   return { decision: m.decision, gate: m.verdicts.find((v) => v.gate === "owner-approval") };
 };
 
-test("311: every role is refused a prompt-scheduling tool or a terminal send that carries the approval line", () => {
+test("311: every role is refused a prompt-scheduling tool or a Bash command (a nested session, a terminal, a heredoc) that carries the approval line", () => {
   for (const role of ["orchestrator", "lead", "worker", "general"] as const) {
     for (const [tool, input] of [
       ["ScheduleWakeup", { delaySeconds: 60, reason: "x", prompt: LINE }],
       ["CronCreate", { cron: "*/5 * * * *", prompt: `check then ${LINE.toUpperCase()}` }],
       ["Bash", { command: `orca terminal send --terminal term_ab12 --text "${LINE}" --enter` }],
       ["Bash", { command: `orca terminal send --terminal term_ab12 --text='${LINE}'` }],
+      ["Bash", { command: `cd /tmp && claude -p --agent sangsoe:orchestrator "${LINE}"` }],
+      ["Bash", { command: `claude -p --agent sangsoe:orchestrator <<'EOF'\n${LINE}\nEOF` }],
+      ["Bash", { command: `L="${LINE}"; claude -p --agent sangsoe:orchestrator "$L"` }],
+      ["Bash", { command: `tmux send-keys -t orch "${LINE}" Enter` }],
+      ["Bash", { command: `orca orchestration send --to run:run_1 --subject x --body "${LINE}" && claude -p "${LINE}"` }],
     ] as const) {
       const r = call(role, tool, input);
       assert.equal(r.gate?.decision, "deny", `${role} ${tool} ${JSON.stringify(input)}`);
@@ -47,8 +52,11 @@ test("311: feeding the prompt hook by hand is refused in any form the parser rea
   }
 });
 
-test("311: the same tools without the line, a mention of the hook, and the owner's line in other places pass", () => {
+test("311: the same tools without the line, a mention of the hook, and the line passed up in a message to a session pass", () => {
   for (const [tool, input] of [
+    ["Bash", { command: `orca orchestration send --to run:run_1 --type question --subject "V3 approval" --body "owner line: ${LINE}"` }],
+    ["Bash", { command: `orca orchestration send --to run:run_1 --type question --subject x --body "$(cat <<'EOF'\nowner line:\n${LINE}\nEOF\n)"` }],
+    ["Bash", { command: `orca orchestration reply --id msg_000000000001 --body "${LINE}"` }],
     ["ScheduleWakeup", { delaySeconds: 60, reason: "x", prompt: "<<autonomous-loop-dynamic>>" }],
     ["ScheduleWakeup", { delaySeconds: 60, reason: "x", prompt: `승인 acme/api#12 ${HEAD.slice(0, 7)}` }],
     ["Bash", { command: `orca terminal send --terminal term_ab12 --text "status?" --enter` }],

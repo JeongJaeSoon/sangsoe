@@ -5,7 +5,7 @@ import { advisorCalls } from "../models/spend.ts";
 import { readDecision } from "../decision/waiters.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { deliverOwnRun } from "../detect/queue/own-run.ts";
-import { type OwnerApprovalLine, parseApprovalLine } from "../owner/approval.ts";
+import { carriesApproval, type OwnerApprovalLine, parseApprovalLine } from "../owner/approval.ts";
 import { mayBeDriven, wasDriven } from "../owner/driven.ts";
 import { classifyPrompt } from "../owner/prompt.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
@@ -190,7 +190,7 @@ function ownerApproval(row: SessionRow, input: SessionHookInput, terminal: strin
   if (row.task || row.role !== "orchestrator") return null;
   const line = parseApprovalLine(input.prompt ?? "");
   if (!line || mayBeDriven(driven, terminal, input.prompt ?? "")) return null;
-  return scheduledWith(input.transcript_path, line.head_sha) === false ? line : null;
+  return scheduledWith(input.transcript_path, line.head_sha, (s) => carriesApproval(s, line.head_sha)) === false ? line : null;
 }
 
 /**
