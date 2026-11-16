@@ -5,6 +5,7 @@ import type { Exec, OrcaAdapter, WorkerRow, WorktreeRow } from "../contract/orca
 import type { Planned } from "../detect/monitor.ts";
 import type { GhClient } from "../gh/client.ts";
 import { settled } from "../recover/recover.ts";
+import { dropParentReadRules } from "../start/local-settings.ts";
 import type { Appended, EventFilter } from "../store/store.ts";
 import { type Check, type BlockReason as CheckReason, evidenceInWorktree, openWork, preDelete } from "./checks.ts";
 import type { ReaperConfig, ReaperConfigRead } from "./config.ts";
@@ -39,6 +40,8 @@ export type ReaperDeps = {
   sample(): LoadSample;
   /** The timer period. Absent: no round is judged a catch-up. */
   intervalMs?: number;
+  /** Takes a removed child's Read rules out of its parent's local settings (decision 310). Default edits the file. */
+  dropReadRules?: (parentPath: string, rules: readonly string[]) => void;
 };
 
 export type ReapOptions = {
@@ -181,6 +184,23 @@ async function closeReleasedShells(
     if (r.ok) closed.push(p.shell);
   }
   return closed;
+}
+
+/**
+ * Decision 310: the parent's Read rules for a worktree go with it. Best effort: a parent file that is
+ * gone or unreadable never fails the round.
+ */
+function dropChildReadRules(d: ReaperDeps, card: Pick<WorktreeRow, "id" | "path">): void {
+  for (const e of d.events({ type: "unit_started" })) {
+    const p = e.payload as { worktree?: string; parent?: string; read_rules?: string[] };
+    // By id or by path, as decision 306 names a card: a re-registered repository changes the id.
+    if (!namesCard(p.worktree, card) || !p.parent || !p.read_rules?.length) continue;
+    try {
+      (d.dropReadRules ?? dropParentReadRules)(p.parent, p.read_rules);
+    } catch {
+      // The rule then names a path that no longer exists.
+    }
+  }
 }
 
 type Sighting = { state: "seen" | "cleared"; round: number; at: number };
@@ -501,6 +521,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     if (rm.ok) {
       done("worktree", card.instanceId);
       reapedCards.add(card.instanceId);
+      dropChildReadRules(d, card);
     } else if (rm.error.code === "worktree_archive_hook_failed") block("worktree", card.instanceId, "archive_hook_failed");
     else r.unknown.push(`worktree:${card.instanceId}: rm ${rm.error.code}`);
   }

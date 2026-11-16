@@ -144,7 +144,9 @@ function harness(s: Setup = {}) {
   const named = (cmd: string) => fake.calls.filter((c) => c.slice(1, 3).join(" ") === cmd);
   /** Every local-settings write, in order: the worktree path and what went in. */
   const written: { path: string; settings: WorktreeSettings }[] = [];
-  return { fake, store, orca, called, named, written, signals: () => store.events({ type: "signal" }) };
+  /** Every parent Read-rule write and take-back (decision 310), in order. */
+  const reads: { op: "add" | "drop"; path: string; rules: readonly string[] }[] = [];
+  return { fake, store, orca, called, named, written, reads, signals: () => store.events({ type: "signal" }) };
 }
 
 const lead: Requester = { role: "lead", worktreeId: PARENT_TREE, taskId: "task_lead", runId: RUN };
@@ -170,6 +172,12 @@ const ports = (h: H, slots: () => number = () => 1, cwd = CALLER_CWD) => ({
   advisorSetting: () => true,
   writeSettings: (path: string, settings: WorktreeSettings) => {
     h.written.push({ path, settings });
+  },
+  parentRead: (path: string, rules: readonly string[]) => {
+    h.reads.push({ op: "add", path, rules });
+  },
+  dropParentRead: (path: string, rules: readonly string[]) => {
+    h.reads.push({ op: "drop", path, rules });
   },
   hookFile: () => false,
 });
@@ -477,7 +485,8 @@ test("worker_start_dispatched (2): enough depth → a Dispatch and no event", as
     worktreeId: CHILD_TREE,
     shell: SHELL,
     launch: { model: MODEL_CATALOG.find((c) => c.tier === worker.tier)?.alias, effort: worker.effort, route: "worktree_file" },
-    notes: [ADVISOR_FROM_WORKTREE],
+    // The recording's requester worktree is a main checkout (decision 310).
+    notes: [ADVISOR_FROM_WORKTREE, "부모가 저장소의 main checkout 이라 자식 읽기 규칙을 쓰지 않았다: 그 파일은 그 저장소의 모든 worktree 세션이 읽는다"],
   });
   assert.deepEqual(h.store.events().map((e) => e.type), ["item_created", "unit_started"], "the alias row and the row it started on");
   const ws = h.called("worker-start")[0] ?? [];
@@ -629,6 +638,66 @@ test("decision 202: the new worktree's local settings carry the row's advisor be
     request(),
   );
   assert.ok(out.kind === "started" && out.launch.route === "owner_setting", JSON.stringify(out));
+});
+
+test("decision 310: the parent worktree gets a Read rule for the child before its session starts, recorded for REAPER", async () => {
+  const PARENT_PATH = "/home/dev/src/api";
+  const RULE = `Read(/${CHILD_PATH}/**)`;
+  // The recording's parent is a main checkout; a lead's own worktree is a linked one.
+  const recorded = JSON.parse(readFileSync(new URL("../fake-orca/scenarios/local/worktree-list.json", import.meta.url), "utf8"));
+  recorded.result.worktrees[0].isMainWorktree = false;
+  const linked = { "worktree-list": () => ({ code: 0, stdout: JSON.stringify(recorded), stderr: "" }) };
+  const harness310 = (s: Setup = {}) => harness({ ...s, replies: { ...linked, ...s.replies } });
+  // A main checkout's local file reaches every worktree session of that repository: no rule there.
+  const main = harness();
+  const onMain = await start(main);
+  assert.ok(onMain.kind === "started" && onMain.notes.some((n) => n.includes("main checkout")), JSON.stringify(onMain));
+  assert.deepEqual(main.reads, []);
+  assert.equal(main.store.events({ type: "unit_started" })[0]?.payload.read_rules, undefined);
+  // An orchestrator outside every worktree has no parent file at all.
+  const outside = harness({ replies: { "worktree-list": ok({ worktrees: [], totalCount: 0, truncated: false, hostScope: { hostIds: ["local"], omittedHostIds: [] } }) } });
+  const noParent = await startUnit(ports(outside, () => 1, "/home/dev/elsewhere"), request({ requester: { role: "orchestrator", runId: RUN }, childRole: "lead", repo: "path:/home/dev/src/api" }));
+  assert.equal(noParent.kind, "started", JSON.stringify(noParent));
+  assert.deepEqual(outside.reads, []);
+  let readsAtStart = -1;
+  const h = harness310({
+    workerStart: () => {
+      readsAtStart = h.reads.length;
+      return ok({ dispatchId: "ctx_new", worktreeId: CHILD_TREE });
+    },
+  });
+  const out = await start(h);
+  assert.equal(out.kind, "started", JSON.stringify(out));
+  assert.equal(readsAtStart, 1, "the rule exists before the child's session");
+  assert.deepEqual(h.reads, [{ op: "add", path: PARENT_PATH, rules: [RULE] }]);
+  assert.ok(RULE.startsWith("Read(//"), "absolute: a single slash would anchor at the parent's working directory");
+  const row = h.store.events({ type: "unit_started" })[0]?.payload;
+  assert.equal(row?.parent, PARENT_PATH);
+  assert.deepEqual(row?.read_rules, [RULE]);
+  // A parent file that cannot take the rule (tracked in git, another host) is a note, never a failed start.
+  const refused = harness310();
+  const noted = await startUnit(
+    {
+      ...ports(refused),
+      parentRead: () => {
+        throw new Error(".claude/settings.local.json is tracked in this repository");
+      },
+    },
+    request(),
+  );
+  assert.ok(noted.kind === "started" && noted.notes.some((n) => n.includes("자식 읽기 규칙") && n.includes("tracked")), JSON.stringify(noted));
+  assert.equal(refused.store.events({ type: "unit_started" })[0]?.payload.read_rules, undefined, "nothing for REAPER to take back");
+  // A definite failed start removes the child worktree and takes its rule back with it.
+  const failed = harness310({ workerStart: () => fail("agent_failed") });
+  assert.equal((await start(failed)).kind, "refused");
+  assert.deepEqual(failed.reads, [
+    { op: "add", path: PARENT_PATH, rules: [RULE] },
+    { op: "drop", path: PARENT_PATH, rules: [RULE] },
+  ]);
+  // A start whose outcome is unknown keeps the worktree, so the rule stays until REAPER removes both.
+  const unknown = harness310({ workerStart: () => ({ code: 1, stdout: "", stderr: "socket closed" }) });
+  await start(unknown);
+  assert.deepEqual(unknown.reads.map((r) => r.op), ["add"]);
 });
 
 test("decision 202: a unit whose row budget is spent starts with the advisor off in its worktree file", async () => {
