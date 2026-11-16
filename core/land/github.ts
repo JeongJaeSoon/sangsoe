@@ -157,15 +157,18 @@ function checkRun(completed: boolean, conclusion: string | null | undefined, tim
 
 /**
  * Decision 319: the state of one check name from every run it had on the head. GitHub judges a name
- * by its latest run, and a cancelled latest run does not undo a success (a label event's concurrency
- * group cancels runs behind a good one). Cancelled with no success is its own state: it needs a re-run, not a fix.
+ * by its latest run, and a cancelled run does not count (a label event's concurrency group cancels
+ * runs behind a good one), so the latest run that is not cancelled decides. A name with only cancelled
+ * runs is its own state: it needs a re-run, not a fix.
  */
 export function judgeRuns(runs: CheckRun[]): CheckState {
-  const latest = [...runs].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).at(-1);
-  if (!latest?.completed) return "pending";
-  if (PASS.has(latest.conclusion)) return "pass";
-  if (latest.conclusion === "CANCELLED") return runs.some((r) => r.completed && r.conclusion === "SUCCESS") ? "pass" : "cancelled";
-  return "fail";
+  const decisive = [...runs]
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
+    .filter((r) => !(r.completed && r.conclusion === "CANCELLED"))
+    .at(-1);
+  if (!decisive) return "cancelled";
+  if (!decisive.completed) return "pending";
+  return PASS.has(decisive.conclusion) ? "pass" : "fail";
 }
 export type MergeMethod = "squash" | "merge" | "rebase";
 export type PrGate = {

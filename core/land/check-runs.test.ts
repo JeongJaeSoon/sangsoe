@@ -71,8 +71,13 @@ test("parsePrGate: only cancelled runs is its own state, not red", () => {
   assert.deepEqual(gate([run("CANCELLED", "2026-11-16T10:00:00Z"), run("CANCELLED", "2026-11-16T10:01:00Z")]), [{ name: "unit", required: true, state: "cancelled" }]);
 });
 
-test("parsePrGate: a cancelled run after a failure with no success is cancelled, not green", () => {
-  assert.deepEqual(gate([run("FAILURE", "2026-11-16T10:00:00Z"), run("CANCELLED", "2026-11-16T10:01:00Z")]), [{ name: "unit", required: true, state: "cancelled" }]);
+test("parsePrGate: a failure hides behind a later cancelled run: success, failure, cancelled is red", () => {
+  const runs = [run("SUCCESS", "2026-11-16T10:00:00Z"), run("FAILURE", "2026-11-16T10:05:00Z"), run("CANCELLED", "2026-11-16T10:10:00Z")];
+  assert.deepEqual(gate(runs), [{ name: "unit", required: true, state: "fail" }]);
+});
+
+test("parsePrGate: a failure then a cancelled run is red, as the failure is the latest that counts", () => {
+  assert.deepEqual(gate([run("FAILURE", "2026-11-16T10:00:00Z"), run("CANCELLED", "2026-11-16T10:01:00Z")]), [{ name: "unit", required: true, state: "fail" }]);
 });
 
 test("parsePrGate: a newer run still going is pending", () => {
@@ -115,4 +120,5 @@ test("approvedAndGreen reads the same judgement: successes then cancelled runs a
 test("approvedAndGreen: a latest failure or only cancelled runs are not green", async () => {
   assert.equal(await greenFor([rest("success", "2026-11-16T10:00:00Z"), rest("failure", "2026-11-16T10:01:00Z")]), false);
   assert.equal(await greenFor([rest("cancelled", "2026-11-16T10:00:00Z")]), false);
+  assert.equal(await greenFor([rest("success", "2026-11-16T10:00:00Z"), rest("failure", "2026-11-16T10:01:00Z"), rest("cancelled", "2026-11-16T10:02:00Z")]), false);
 });

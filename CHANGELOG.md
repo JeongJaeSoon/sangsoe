@@ -4,7 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
-- **`land` judges a check name by its latest run (319).** A head can carry several runs of one check name, for example two successes and three runs cancelled by a label event's concurrency group. `land` counted each cancelled run as a red check and refused an approved, clean PR with `checks_red`. It now takes each name's latest run (completion time, else start time), and a cancelled run after a success keeps the check green. A name with only cancelled runs is refused as `checks_cancelled`, whose fix names `gh run rerun`. The pr-monitor's approved-and-green test reads the same judgement.
+- **`land` judges a check name by its latest run (319).** A head can carry several runs of one check name, for example two successes and three runs cancelled by a label event's concurrency group. `land` counted each cancelled run as a red check and refused an approved, clean PR with `checks_red`. It now takes each name's latest run (completion time, else start time), and cancelled runs do not count, so a cancelled run after a success keeps the check green while a failure before the cancelled run still makes it red. A name with only cancelled runs is refused as `checks_cancelled`, whose fix names `gh run rerun`. The pr-monitor's approved-and-green test reads the same judgement.
 
 ## 0.1.12
 
