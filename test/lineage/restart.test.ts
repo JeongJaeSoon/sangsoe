@@ -72,6 +72,8 @@ type Setup = {
   launches?: Record<string, string>[];
   /** Bind through start_unit's real core on this fake Orca instead of a stub. */
   realBind?: boolean;
+  /** claude in the new terminal shows only in `worktree ps` at the terminal's pane, never as the row's agentIdentity. */
+  paneOnly?: boolean;
 };
 
 const RESTORED_TERM = "term_00000000-0000-4000-8000-0000000000r1";
@@ -139,6 +141,7 @@ function harness(s: Setup = {}) {
   };
   const restoredTerm = s.restored === "restart" ? NEW_TERM : RESTORED_TERM;
   let created = 0;
+  let newPaneUp = false;
   const callerRun = s.caller === undefined || s.caller === "orchestrator" ? ORCH_RUN : LEAD_RUN;
   const fake = createFakeOrca({
     replies: {
@@ -195,7 +198,22 @@ function harness(s: Setup = {}) {
         }),
       "worktree-ps": () =>
         ok({
-          worktrees: UNITS.map((u) => ({ worktreeId: u.tree, hostId: "local", repo: "api", path: pathOf(u.tree), branch: "b", isMainWorktree: false, isArchived: false, liveTerminalCount: 1, unverifiableTerminalCount: 0, status: "active", agents: [{ paneKey: u.pane, state: u.state, agentType: "claude", agentWait: null }] })),
+          worktrees: UNITS.map((u) => ({
+            worktreeId: u.tree,
+            hostId: "local",
+            repo: "api",
+            path: pathOf(u.tree),
+            branch: "b",
+            isMainWorktree: false,
+            isArchived: false,
+            liveTerminalCount: 1,
+            unverifiableTerminalCount: 0,
+            status: "active",
+            agents: [
+              { paneKey: u.pane, state: u.state, agentType: "claude", agentWait: null },
+              ...(u.tree === LEAD_TREE && newPaneUp && s.paneOnly ? [{ paneKey: "tabN:leafN", state: "done", agentType: "claude", agentWait: null }] : []),
+            ],
+          })),
           truncated: false,
         }),
       "terminal-list": (args: readonly string[]) => {
@@ -205,9 +223,14 @@ function harness(s: Setup = {}) {
           const [tabId, leafId] = u.pane.split(":");
           return { handle: u.terminal, tabId, leafId, agentIdentity: "claude", executionHostId: "local" };
         });
-        const restored = s.restored && tree === LEAD_TREE ? [{ handle: restoredTerm, tabId: "tabL", leafId: "leafL", agentIdentity: "claude", executionHostId: "local" }] : [];
-        // The new terminal shows claude from the second read on, unless claude never comes up.
-        const fresh = created > 0 ? [{ handle: NEW_TERM, executionHostId: "local", ...(created++ > 1 && s.listMs === undefined ? { agentIdentity: "claude" } : {}) }] : [];
+        // As measured on a restored session: the terminal row carries no agentIdentity; only `worktree ps` shows claude in its pane.
+        const restored = s.restored && tree === LEAD_TREE ? [{ handle: restoredTerm, tabId: "tabL", leafId: "leafL", executionHostId: "local" }] : [];
+        // The new terminal shows claude from the second read on, unless claude never comes up; with paneOnly only in `worktree ps`.
+        const shows = created > 1 && s.listMs === undefined;
+        created += created > 0 ? 1 : 0;
+        const fresh =
+          created > 0 ? [{ handle: NEW_TERM, executionHostId: "local", tabId: "tabN", leafId: "leafN", ...(shows && !s.paneOnly ? { agentIdentity: "claude" } : {}) }] : [];
+        newPaneUp = shows;
         return ok({ terminals: [...own, ...restored, ...(tree === LEAD_TREE ? fresh : [])], hostScope: { hostIds: ["local"], omittedHostIds: [] }, truncated: false });
       },
       "orchestration-worker-stop": () => (s.stop ? s.stop() : ok({ dispatchId: "ctx_lead", processAction: "closed_agent_terminal" })),
@@ -434,6 +457,14 @@ test("decision 330 (2): an idle child is stopped, resumed in a new terminal of i
   const text = out.lines.join("\n");
   assert.match(text, /✓ task_lead: Dispatch ctx_lead → ctx_new, 터미널 term_00000000-0000-4000-8000-0000000000n1/);
   assert.match(text, /✓ 이 세션: 새 터미널 term_00000000-0000-4000-8000-0000000000n2 이 pid 100 가 끝나기를 기다린다\n {4}오너: Orca 에서 이 세션의 터미널 term_orch 을 닫으면/);
+});
+
+test("decision 330 (2): claude counts as up in the new terminal when worktree ps shows it in that terminal's pane, with no agentIdentity", async () => {
+  const h = harness({ paneOnly: true });
+  const out = await restartSessions(h.ports, { task: "task_lead", dryRun: false });
+  assert.equal(out.code, 0, out.lines.join("\n"));
+  assert.equal(h.binds.length, 1);
+  assert.equal(h.binds[0]?.resume?.terminal, NEW_TERM);
 });
 
 test("decision 330 (2): a worker-stop Orca refuses opens no terminal and binds nothing", async () => {
