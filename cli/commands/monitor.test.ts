@@ -5,9 +5,9 @@ import { run } from "../main.ts";
 import { monitor } from "./monitor.ts";
 
 test("sangsoe monitor run <name> runs one round of the named monitor, dry run passed through", async () => {
-  const opened: { dryRun: boolean; dbPath?: string }[] = [];
+  const opened: { dryRun: boolean; dbPath?: string; oneShot: true }[] = [];
   let closed = 0;
-  const fake = (o: { dryRun: boolean; dbPath?: string }): MonitorRunner => {
+  const fake = (o: { dryRun: boolean; dbPath?: string; oneShot: true }): MonitorRunner => {
     opened.push(o);
     return {
       run: async (name) => ({ monitor: name, planned: [], written: [], unseen: [], calls: [], aborted: false, acts: [] }),
@@ -18,7 +18,7 @@ test("sangsoe monitor run <name> runs one round of the named monitor, dry run pa
   };
   const r = await monitor(["run", "chat"], { "dry-run": true, db: "/tmp/x.db" }, fake);
   assert.ok(r.ok && r.value.monitor === "chat");
-  assert.deepEqual(opened, [{ dryRun: true, dbPath: "/tmp/x.db" }]);
+  assert.deepEqual(opened, [{ dryRun: true, dbPath: "/tmp/x.db", oneShot: true }], "one round, so no pr cursor and no walk budget (decision 329)");
   assert.equal(closed, 1);
 });
 

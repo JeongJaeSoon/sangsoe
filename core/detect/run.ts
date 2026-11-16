@@ -10,7 +10,9 @@ import { VERSION } from "../version.ts";
 import { nullChatProvider } from "./chat/provider.ts";
 import { chatRound } from "./chat/round.ts";
 import {
+  type Act,
   DEFAULT_MONITOR_CONFIG,
+  type Flush,
   type MonitorDeps,
   type MonitorName,
   type MonitorReport,
@@ -20,14 +22,14 @@ import {
 } from "./monitor.ts";
 import { orcaRound } from "./orca/round.ts";
 import { readWatchConfig } from "./pr/config.ts";
-import { prRound } from "./pr/round.ts";
+import { prCursor, prRound } from "./pr/round.ts";
 import { queueRound, type StallReport, stallCheck } from "./queue/round.ts";
 import { hostRereadPending } from "../store/backup.ts";
 import { rereadHostRows } from "./rebuild.ts";
 import { resourceRound } from "./resource/round.ts";
 
 /** The one table both entrances run: the worker's timer rounds and `sangsoe monitor run <name>`. */
-export const MONITORS: Record<MonitorName, (d: MonitorDeps, signal: AbortSignal) => Promise<Reading>> = {
+export const MONITORS: Record<MonitorName, (d: MonitorDeps, signal: AbortSignal, flush?: Flush) => Promise<Reading>> = {
   orca: orcaRound,
   resource: resourceRound,
   chat: chatRound,
@@ -38,25 +40,38 @@ export const MONITORS: Record<MonitorName, (d: MonitorDeps, signal: AbortSignal)
 /**
  * One round: read and judge, append each planned event unless the round passed its cap, then run
  * the round's Orca writes in order, each followed by the events it returned. A dry run does neither.
+ * A round may hand parts over earlier through `flush` (pr-monitor: one PR's pass, decision 329).
+ * Before the cap a part's events are written and then all its acts run; past the cap its events are
+ * written and its acts are not, except the events an act `gates`, which wait with it, so a row that
+ * would stop its own act being judged again (`pr_ready_to_merge` and its wake) never lands alone.
  */
 export async function runMonitor(name: MonitorName, d: MonitorDeps, signal: AbortSignal = new AbortController().signal): Promise<MonitorReport> {
-  const { planned, unseen, acts = [], calls = [] } = await MONITORS[name](d, signal);
+  const planned: Planned[] = [];
   const written: Written[] = [];
+  const report: MonitorReport["acts"] = [];
   const write = (e: Planned) => {
     if (!d.append) return;
     const a = d.append(e);
     written.push({ type: e.type, dedupe_key: e.dedupe_key ?? null, seq: a.seq, inserted: a.inserted });
   };
-  const report: MonitorReport["acts"] = acts.map((a) => ({ what: a.what, ok: null, detail: "not run" }));
-  if (d.append && !signal.aborted) {
-    for (const e of planned) write(e);
-    for (const [i, act] of acts.entries()) {
-      if (signal.aborted) break;
+  const take = async (part: { planned: Planned[]; acts: Act[] }, writeEvents: boolean, wholePart: boolean) => {
+    planned.push(...part.planned);
+    const at = report.length;
+    report.push(...part.acts.map((a) => ({ what: a.what, ok: null, detail: "not run" })));
+    if (!d.append || !writeEvents) return;
+    const late = wholePart && signal.aborted;
+    const held = new Set(late ? part.acts.flatMap((a) => a.gates ?? []) : []);
+    for (const e of part.planned) if (!held.has(e.dedupe_key ?? "")) write(e);
+    if (late) return;
+    for (const [i, act] of part.acts.entries()) {
+      if (!wholePart && signal.aborted) break;
       const r = await act.run(d);
-      report[i] = { what: act.what, ok: r.ok, detail: r.detail };
+      report[at + i] = { what: act.what, ok: r.ok, detail: r.detail };
       for (const e of r.planned) write(e);
     }
-  }
+  };
+  const { planned: rest, unseen, acts = [], calls = [] } = await MONITORS[name](d, signal, (part) => take(part, true, true));
+  await take({ planned: rest, acts }, !signal.aborted, false);
   return { monitor: name, planned, written, unseen, calls, aborted: signal.aborted, acts: report };
 }
 
@@ -71,13 +86,15 @@ export type MonitorRunner = {
 
 /**
  * Real deps over one held store, opened again when its file changes (decision 191). `dryRun` reads
- * the store but never appends, writes to Orca nor calls a writing function.
+ * the store but never appends, writes to Orca nor calls a writing function. `oneShot` (the CLI's
+ * one round, under no cap) keeps no pr cursor, so its pr round reads every repository through.
  */
-export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: string } = {}): MonitorRunner {
+export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: string; oneShot?: boolean } = {}): MonitorRunner {
   const exec = nodeExec(30_000);
   const orca = createOrcaAdapter(exec);
   // One cache and one start time for the runner's life, so the budget carries from round to round.
   const ghCache = memoryGhCache();
+  const cursor = o.oneShot ? undefined : prCursor();
   const openedAt = Date.now();
   const held = holdStore(
     () => Store.open(o.dbPath ? { path: o.dbPath } : o.home ? { home: o.home } : {}),
@@ -96,6 +113,7 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
         ghBudget: () => ghCache.budget("core"),
         watch: () => readWatchConfig(o.home),
         tier: () => readLandConfig(o.home).tier,
+        ...(cursor ? { prCursor: cursor } : {}),
         coreVersion: VERSION,
       };
       return { deps, run: afterHostReread(deps, () => !o.dryRun && hostRereadPending(store.events({ type: "signal" }))) };
