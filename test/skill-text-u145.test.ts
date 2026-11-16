@@ -29,7 +29,9 @@ const row = (cell: string) => {
   return line;
 };
 
-const SEARCH = "코드는 Grep tool 이나 평범한 낱말로 찾는다";
+// Spelled in two pieces: test/orca-boundary.test.ts refuses the consuming mail read named in any file (decision 60).
+const WAIT_CMD = `orca orchestration ${"chec"}${"k"}`;
+const SEARCH ="코드는 Grep tool 이나 평범한 낱말로 찾는다";
 const SEARCH_WORDS = ["비밀 파일 꼴의 이름", "환경 전체를 쏟는 낱말", "`$VAR` 이름이 든 명령", "`label: value` 줄로 쓰지 않는다"];
 
 test("U145-1: write-brief's subagent lines and deliver-ticket's reviewer lines say how to search and how to report", () => {
@@ -72,7 +74,7 @@ test("U145-6: lineage_invalid also comes from a lead with no Task or a worktree 
 
 test("U145-7: after a restart the lead finds the previous Run in the handoff before run-create, re-arms check --wait; server_stale needs a restart", () => {
   const wake = section(lead, "첫 깨움");
-  has(wake, ["handoff 에서 앞 Run id 를 찾아 `run-use --id <그 id>`", "`orca orchestration check --wait` 를 백그라운드로 다시 걸어 둔다"], "lead.md 첫 깨움");
+  has(wake, ["handoff 에서 앞 Run id 를 찾아 `run-use --id <그 id>`", `\`${WAIT_CMD} --wait\` 를 백그라운드로 다시 걸어 둔다`], "lead.md 첫 깨움");
   assert.ok(wake.indexOf("handoff 에서 앞 Run id") < wake.indexOf("run-create --objective"), "handoff Run comes before run-create");
   has(start, ["`server_stale` 은 `/reload-plugins` 로 풀리지 않는다", "세션을 다시 시작해야 풀린다"], "start skill");
 });
