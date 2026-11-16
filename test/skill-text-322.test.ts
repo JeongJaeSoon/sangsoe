@@ -21,3 +21,10 @@ test("322: the orchestrate skill's restart section sends a resumed session throu
   const section = text.slice(text.indexOf("## 재시작"));
   for (const want of ["결정 322", "`resume`", "`start` skill 의 재시작 절", "claude --resume"]) assert.ok(section.includes(want), `orchestrate restart section lacks: ${want}`);
 });
+
+test("322: a cut-off resume call is retried with the same resume, in both result tables (decision 321's row)", () => {
+  const start = read("claude-plugin/skills/start/SKILL.md");
+  assert.ok(start.includes("`resume` 호출이었으면 같은 `task` 와 같은 `resume` 으로 다시 부른다"), "start result table");
+  const orchestrate = read("claude-plugin/skills/orchestrate/SKILL.md");
+  assert.ok(orchestrate.includes("`resume` 호출이었으면 같은 `resume` 도 그대로 넘긴다"), "orchestrate result table");
+});
