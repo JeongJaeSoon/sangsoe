@@ -13,4 +13,4 @@
 - `done.ts` — 패널 "완료" 버튼 함수(`ownerDone`: 누름과 대기 요청만 쓴다)와, 그 Run 을 쥔 세션의 hook 이 Task 를 닫는 `closeOwnerDone`(결정 317).
 - `extra.ts` — 항목의 `verify`·`cmd_hint` 를 `item_extra_set` 으로 적는 것과, 이미 있는 항목의 리드 묶음 · 보류 · trigger 를 바꾸는 `setItemExtra`(`sangsoe item set`, 결정 279).
 
-감지 층(hook·monitor)이 이 함수들을 부르고, 여기는 항목을 닫지 않는다. Task 를 닫는 것은 버튼 함수 하나이고, `verify` 가 있는 항목은 그 뒤에도 probe 가 통과할 때까지 ⏳ 검증 대기로 읽힌다.
+감지 층(hook·monitor)이 이 함수들을 부르고, 여기는 항목을 닫지 않는다. Task 를 닫는 것은 버튼이 남긴 대기 요청을 그 Run 을 쥔 세션의 hook 이 읽어 부르는 `closeOwnerDone` 하나이고(결정 317), `verify` 가 있는 항목은 그 뒤에도 probe 가 통과할 때까지 ⏳ 검증 대기로 읽힌다.
