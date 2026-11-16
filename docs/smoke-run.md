@@ -843,3 +843,16 @@ store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (1
 | `[gate:delegate]` 가 smoke 오케스트레이터를 두 번 막았다: `orca repo list` 에 `git remote get-url` 을 묶은 호출, 답장 뒤에 그 본문 파일 지우기를 묶은 호출 | 설계대로다(결정 286: 지나가는 것은 Orca 읽기와 본문 파일 보내기다). 묶은 것이 함께 거부됐다. 남은 본문 파일 둘은 실행 뒤에 치웠다 |
 | worker-release 뒤의 `unit_close` 가 `terminal_released` 로 거부됐다 | 설계대로다(Orca 가 이미 그 터미널을 풀고 있다, `core/unit/close.ts`) |
 | 패널은 Orca 의 상태 줄에서 먼저 열어야 눌렸다 | 적기만 했다 |
+
+### 0.1.12 의 릴리스 smoke 가 잴 것
+
+결정 315 ③ 이 정한 목록이다. 시험과 fixture 로만 본 것 가운데 이 판이 잴 것이고, 설치한 0.1.12 에서 실제 Orca 로 잰다. 이 밖에 결정 301 ⑦ · 302 ⑨ · 303 ⑤ · 307 ④ 등이 적은 재지 않은 것(예: `run:` 주소의 메시지, 3600000 ms 대기가 Orca 의 한도 안인지, `--agent` 없이 resume 한 세션의 agent_type, 실제 패널의 손 확인)은 이 목록에 없고, 보게 되면 함께 적는다.
+
+- 큰 Run 의 `[gate:done-blockers]`: `task-list --full` 이 몇 MB 인 Run 에서 워커의 worker_done 이 "읽지 못해" 로 막히지 않는지(결정 299).
+- 오케스트레이터가 자기 백그라운드 `check --wait` 의 출력 파일(`…/tasks/<id>.output`)을 Read 로 읽을 수 있는지(결정 300).
+- 보호를 읽지 못하는 저장소의 `land`: GitHub 이 `behind` 라 부를 때만 `behind_base` 인지, 승인된 PR 이 `merge_on_approval` 이 아니라 막은 조건(`not_mergeable`·`checks_pending` 등)을 말하는지(결정 304).
+- resume 한 Task 없는 리드(`--agent sangsoe:lead --resume`)의 SessionStart 에 앞 Run 의 `run-use` 줄이 오는지(결정 303).
+- 리드가 워커 worktree 의 `.scratch` 를 프롬프트 없이 Read 하는지: 부모 worktree 의 `.claude/settings.local.json` 에 `Read(//<자식>/**)` 가 더해지고, 실행 중인 리드가 그 규칙을 집는지와 REAPER 가 자식을 지울 때 그 문자열만 거두는지(결정 310. 실행 중 세션이 규칙을 집는다는 것은 Claude Code 설정 문서를 읽은 것이고 재지 않았다).
+- 오너 승인 줄로 V3 머지: 계정 하나인 저장소에서 `승인 <owner/repo>#<N> <full head sha>` 한 줄이 `owner_approval` 을 남기고 `land` 가 `merge_owner_approved` 로 머지하는지. 예약 tool(`ScheduleWakeup`·`CronCreate`)이 넣은 프롬프트가 UserPromptSubmit 을 거치는지, 게이트가 거부한 tool 호출의 결과가 transcript 에 오류로 남는지도 함께 본다(결정 311 ⑩).
+- resource `ready` 의 🟢 수가 brief 와 같은지, sangsoe 항목이 아닌 Orca Task 가 빠지는지(결정 314).
+- `run_stalled` 줄: 멈춘 코디네이터의 행이 실제로 생겼을 때 brief 1단계와 상태 표시줄 B 가 Run 마다 🚨 한 줄을 보이는지, 그 Run 을 쥔 세션이 움직이면 사라지는지(결정 309. 실제 행이 생길 때까지 못 잰다).
