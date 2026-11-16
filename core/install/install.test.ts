@@ -375,6 +375,12 @@ test("realHost.run passes env overrides to the child and removes a variable set 
   }
 });
 
+test("realHost.run reads output past the 1 MiB default of spawnSync", () => {
+  const r = realHost.run(process.execPath, ["-e", "process.stdout.write('x'.repeat(3 * 1024 * 1024))"]);
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.stdout.length, 3 * 1024 * 1024);
+});
+
 test("an unreadable Orca account list is a doctor warning and an install line, never taken as the same profile", async () => {
   const { host, calls } = fakeHost({ orcaHome: null });
   const r = await install(host, ROOT, online().ctx);

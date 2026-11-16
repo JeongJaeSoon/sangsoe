@@ -4,7 +4,9 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
-- **`[gate:delegate]`: the orchestrator reads its own background wait's output file, and a refusal names the way on (300).** A task output file under the harness tmp opens for Read and `cat`. Closing a terminal, typing into one, interpreters, `sangsoe` commands and `sed` stay refused, and the reason now names `unit_close` / `worker-stop`, `orchestration reply` / `send`, `jq`, and the resource `brief`.
+- **`[gate:delegate]`: the orchestrator reads its own background wait's output file, and a refusal names the way on (300).** A task output file under the harness tmp opens for Read and `cat`. Closing a terminal, typing into one, interpreters, `sangsoe` commands and `sed` stay refused, and the reason now names `worker-release` / `unit_close`, `orchestration reply` / `send`, `jq`, and the resource `brief`.
+
+- **`[gate:done-blockers]` no longer refuses a large Run's Task as unreadable (299).** `realHost.run` had no maxBuffer, so a few-MB `task-list --full` ended in ENOBUFS; it now reads up to 64 MiB and puts the error code in stderr. The refusal names why the read failed, and a Task nothing in the store names passes without asking Orca.
 
 - **Skill and agent texts: the seven lessons of the program's reflect (298).** Subagent and worker rules on how to search and report, scratch files, one test file per call, Edit and Write only; a status is not counted on to wake anyone, so urgent asks go as questions; `lineage_invalid` from a lead with no Task is asked, not retried; a restarted lead finds the earlier Run in the handoff and re-arms `check --wait`; `server_stale` clears only with a session restart.
 
