@@ -4,6 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+- **REAPER: a Dispatch that matches a card only by its path no longer finishes a card sangsoe did not start (313).** Decision 306's path match still lets such a Dispatch keep any card, but with no PR a card without `unit_started` is judged finished only by Dispatches under its exact id, so the timer round no longer removes it on an old repo id's success.
 - **A test now pins that the resource panel's load history is wired from the store (308).** `openResources` hands the stored load samples to the load part in one line, and no test called it; dropping that line left the panel quietly without history. `test/reaper/open-resources.test.ts` reads it through a scratch store. Tests only.
 - **The resource panel's keyboard focus no longer gets pulled back, and a 정리 result is no longer lost (307).** A press waiting for its button is dropped when focus moves anywhere else, cancelling the confirm in a stale view lands on 새로 고침 instead of body, and a failed reread after 정리 still shows what the 정리 did.
 

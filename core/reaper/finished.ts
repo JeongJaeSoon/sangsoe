@@ -50,8 +50,9 @@ export const NO_TRACE = "no PR and no Dispatch";
  * or closed is finished only when it carried the card's HEAD (same sha, or GitHub says HEAD is not
  * ahead of the PR head). With no PR, every Dispatch that ran in the card has settled and the last
  * one succeeded or was cancelled. Quiet is never a reason; whatever cannot be read is unknown.
+ * `started` is `startedBySangsoe` for the card.
  */
-export async function judgeFinished(card: WorktreeRow, gh: GhClient, workers: readonly WorkerRow[]): Promise<Finished> {
+export async function judgeFinished(card: WorktreeRow, gh: GhClient, workers: readonly WorkerRow[], started: boolean): Promise<Finished> {
   const repo = repoOf(card);
   if (!repo) return { state: "unknown", why: "not a GitHub repository" };
   if (!card.head) return { state: "unknown", why: "no HEAD on the card row" };
@@ -76,7 +77,13 @@ export async function judgeFinished(card: WorktreeRow, gh: GhClient, workers: re
     }
     return { state: "unknown", why: `compare: ${cmp.kind}` };
   }
-  const mine = workers.filter((w) => namesCard(w.workspace, card));
+  const wide = byDispatches(workers.filter((w) => namesCard(w.workspace, card)));
+  // Decision 313: a path-only match may keep any card, but finishes only one sangsoe started.
+  if (wide.state !== "finished" || started) return wide;
+  return byDispatches(workers.filter((w) => w.workspace === card.id));
+}
+
+function byDispatches(mine: readonly WorkerRow[]): Finished {
   if (mine.length === 0) return { state: "unknown", why: NO_TRACE };
   if (!mine.every(settled)) return { state: "unfinished", why: "a Dispatch has not settled" };
   // worker-list is newest first.
