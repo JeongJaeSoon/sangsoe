@@ -62,7 +62,8 @@ const CLI_CALL =
 test("agent bodies reach sangsoe through MCP, never through a shell command", () => {
   assert.match("run sangsoe review record --pr 3", CLI_CALL);
   assert.doesNotMatch("one sangsoe program", CLI_CALL);
-  for (const f of AGENTS) {
+  // Decision 324: the secretary carries no rules block (it starts no session) but reaches sangsoe the same way.
+  for (const f of [...AGENTS, "claude-plugin/agents/secretary.md"]) {
     const text = read(f);
     assert.doesNotMatch(text, CLI_CALL, `${f} names a sangsoe CLI command`);
     assert.doesNotMatch(text, /!`/, `${f} injects shell output`);

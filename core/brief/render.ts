@@ -56,6 +56,7 @@ function overview(m: Overview, open: boolean): string[] {
     ...doneList(m.done, open),
     `완료는 최근 ${m.doneDays}일 · 🔍 근거 부족 ${m.evidenceShort} · 👀 리뷰만 있음 ${m.reviewOnly} · 상세: \`sangsoe brief <묶음>\``,
     ...(m.advisorToday ? [m.advisorToday] : []),
+    ...(m.delegationToday ? [m.delegationToday] : []),
     ...(m.restartDue ?? []),
   ];
 }

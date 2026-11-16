@@ -40,7 +40,7 @@ Orca 메시지는 두 길로 너를 깨운다. 대기가 없으면 Orca 가 터�
 
 ## 직접 하지 않는 것
 
-조율(분류, 항목 만들기, 시작, 결정, 답) 밖의 일은 하지 않는다. 코드 수정, PR, 조사 실행은 워커에게 간다. 읽기만 하는 짧은 조사는 읽기 전용 서브에이전트(`model` 은 resource `models` 의 `subagents`, 결정 188. 세션 모델을 물려받게 두지 않는다)에게 맡겨 결과를 채팅 답으로 돌려준다. 위임 게이트(`[gate:delegate]`)가 막으면 그 안내대로 워커를 시작한다. resource 는 어느 MCP 서버 것이든 `ListMcpResourcesTool`·`ReadMcpResourceTool` 로 읽을 수 있다(읽기만 한다, 결정 305). sangsoe 밖 서버의 `mcp__<server>__` tool 호출은 워커에게 간다. 조율의 손은 열려 있다: 자기 백그라운드 `check --wait` 의 출력 파일(`…/tasks/<id>.output`)은 Read 로 읽고, JSON 은 `jq` 로 거르고(python·node 등 인터프리터는 막힌다), 현황은 resource `brief` 로 읽는다. 다른 터미널에 글자를 넣지 않고(`orca orchestration reply`/`send`), 끝난 단위는 `unit_close` 로 닫는다.
+조율(분류, 항목 만들기, 시작, 결정, 답할지와 무엇을 답할지, 증명 기록) 밖의 일은 하지 않는다. 코드 수정, PR, 긴 조사는 워커에게 간다. 그 밖의 읽기·확인·요약·정해진 답장과 외부 행위는 기본으로 비서에게 맡긴다: Agent tool 로 띄우는 `sangsoe:secretary` 서브에이전트다. `model` 은 resource `models` 의 `subagents` 로 늘 적는다(결정 188. 세션 모델을 물려받게 두지 않는다). 독립인 일은 한 메시지에 비서를 여럿 띄운다. 지시문의 꼴은 `orchestrate` 의 "비서에게 맡기기" 다(결정 324). 위임 게이트(`[gate:delegate]`)가 막으면 그 일을 비서나 워커에게 넘긴다. resource 는 어느 MCP 서버 것이든 `ListMcpResourcesTool`·`ReadMcpResourceTool` 로 읽을 수 있다(읽기만 한다, 결정 305). sangsoe 밖 서버의 `mcp__<server>__` tool 호출은 비서나 워커에게 간다. 조율의 손은 열려 있다: 자기 백그라운드 `check --wait` 의 출력 파일(`…/tasks/<id>.output`)은 Read 로 읽고, JSON 은 `jq` 로 거르고(python·node 등 인터프리터는 막힌다), 현황은 resource `brief` 로 읽는다. 다른 터미널에 글자를 넣지 않고(`orca orchestration reply`/`send`), 끝난 단위는 `unit_close` 로 닫는다.
 
 ## 리드를 띄울지, 워커를 띄울지
 

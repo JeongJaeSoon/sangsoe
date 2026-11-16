@@ -22,6 +22,7 @@ import {
   MODEL_POLICY as POLICY,
   MODEL_SOURCES as SOURCES,
   MODEL_STALE_DAYS as STALE_DAYS,
+  MODEL_SUBAGENTS as SUBAGENTS,
   MODEL_TIERS as TIERS,
   modelTable,
   resolveModel as resolve,
@@ -110,8 +111,17 @@ test("the copy patterns catch what they are meant to", () => {
   }
 });
 
+// Decision 324: the secretary is a subagent, so its row is the subagents table's judge alias, the model
+// it runs on when the principal's Agent call names none. Effort is the session's.
+test("the secretary's frontmatter model is the subagents judge alias", () => {
+  const head = /^---\n([\s\S]*?)\n---/.exec(read("claude-plugin/agents/secretary.md"))?.[1] ?? "";
+  const want = CATALOG.find((c) => c.tier === SUBAGENTS.judge)?.alias;
+  assert.ok(want);
+  assert.match(head, new RegExp(`^model: ${want}$`, "m"));
+});
+
 test("each agent's frontmatter model and effort are its role row's", () => {
-  for (const name of readdirSync(join(ROOT, "claude-plugin/agents")).filter((n) => n.endsWith(".md"))) {
+  for (const name of readdirSync(join(ROOT, "claude-plugin/agents")).filter((n) => n.endsWith(".md") && n !== "secretary.md")) {
     const role = name.replace(/\.md$/, "") as keyof typeof POLICY;
     const head = /^---\n([\s\S]*?)\n---/.exec(read(`claude-plugin/agents/${name}`))?.[1] ?? "";
     const want = CATALOG.find((c) => c.tier === POLICY[role]?.tier)?.alias;

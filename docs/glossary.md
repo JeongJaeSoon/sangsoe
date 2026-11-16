@@ -292,6 +292,7 @@
 | | 모델 도중 변경({from, to, reason}) | `model_changed` | — |
 | | 단위 시작 행: `start_unit` 이 고른 정책 행과 고른 까닭(kind·class·role), 모델·effort·advisor·전달 길·예산과 시작 때 쓴 호출 수(결정 200) | `unit_started` | — |
 | | advisor 호출 한 번: Stop hook 이 transcript 에서 읽은 advisor 의 모델과 토큰 수. 비용은 읽을 때 카탈로그 가격으로 계산한다(결정 200) | `advisor_used` | — |
+| | 오케스트레이터·리드의 직접 호출 하나: PostToolUse 가 그 세션 자기 턴의 tool 호출을 도구 이름과 함께 남긴다. 서브에이전트 안의 호출과 게이트가 막은 호출은 남지 않는다. 현황은 이 줄로 오늘의 위임 비율(서브에이전트 호출/직접 호출)을 보인다(결정 324) | `tool_called` | — |
 | | 신호 한 종류 묶음({kind}) | `signal` | — |
 | | `signal` 의 kind | `loss` · `wait` · `orchestrator_correction` · `main_flake` · `start_refused` | — |
 | | 시작 함수가 Dispatch 있는 세션을 열지 못해 시작을 거부함(결정 94). `reason` 은 `capability_missing` · `lineage_invalid` · `depth_exceeded` · `model_invalid`(advisor 짝이 맞지 않음, 결정 187) · `orca_error` · `no_dispatch` 중 하나다. 일이 들어간 세션은 없고, 시작을 요청한 세션이 그 일을 맡긴 쪽에 escalation 으로 올린다 | `start_refused` · `capability_missing` · `lineage_invalid` · `depth_exceeded` · `model_invalid` · `orca_error` · `no_dispatch` | `start_fallback`(결정 59 의 옛 이름. 결정 94 가 `start_refused` 로 바꿨다) |

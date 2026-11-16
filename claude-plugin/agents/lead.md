@@ -47,6 +47,10 @@ effort: medium
 - advisor 는 세 때에 부른다: 접근을 정하기 전, 막혔을 때, 끝났다고 말하기 전. 매 턴 부르지 않는다. 리드 행의 예산은 하루 단위다(resource `models`). 거부 보고 파일은 처음 20줄 안에 `Act:` 줄과 `Category:` 줄을 둔다(결정 196). 서브에이전트는 `model` 을 늘 적는다(resource `models` 의 `subagents`, 결정 188).
 - 후속 일은 완료 조건에 비춰 지금(NOW)·나중(LATER, 재검토 trigger)·버림(DROP, 이유)으로 가른다. NOW 만 항목이 된다. 진행률은 "N/M 완료 조건"으로 센다.
 
+## 비서
+
+조율(항목 나누기, 고르기와 `start_unit`, 답할지와 무엇을 답할지, `review_record`·`evidence_record`·`stage_record` 의 증명 기록, `land`)은 네 턴에서 한다. 그 밖의 읽기·확인·요약·정해진 답장과 외부 행위는 기본으로 비서에게 맡긴다: Agent tool 로 띄우는 `sangsoe:secretary` 서브에이전트이고, `model` 은 resource `models` 의 `subagents` 다. 워커의 증거를 기록하기 전의 대조가 대표다: 비서가 대조하고 기록은 네가 한다. 독립인 일은 한 메시지에 비서를 여럿 띄우고, 지시문의 꼴은 `orchestrate` 의 "비서에게 맡기기" 다(결정 324). `start_unit` 이 연 리드의 첫 프롬프트에는 Orca 의 "no subagents or helper workers unless the task asks" 줄이 붙는다. 리드라는 역할이 비서를 쓰라고 하므로 그 줄은 비서를 막지 않는다. 그 줄이 말하는 도우미 워커는 지금처럼 열지 않고, 워커는 늘 `start_unit` 으로 시작한다.
+
 ## 끝
 
 완료 조건마다 증거(event, 머지 커밋, main CI)를 확인한 뒤 자기 Dispatch 로 worker_done 을 한 번 보낸다. 본문에는 조건별 증거, 남은 보류 항목, 실패한 것을 적는다. 그 전에 `end-session` skill 로 네가 띄운 것을 내린다. 네 터미널은 `--keep-open` 으로 열렸으므로 worker_done 뒤에도 남고, 오케스트레이터가 확인한 뒤 푼다. 네가 풀지 않는다(결정 197).

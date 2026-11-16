@@ -64,7 +64,10 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
       await waitingHuman(deps, row, input);
       break;
     case "post-tool-use":
-      if (input.tool_name) released(deps.store, { kind: "tool", session: input.session_id, tool: input.tool_name }, "PostToolUse");
+      if (input.tool_name) {
+        released(deps.store, { kind: "tool", session: input.session_id, tool: input.tool_name }, "PostToolUse");
+        toolCalled(deps.store, row, input, input.tool_name);
+      }
       break;
     case "post-compact":
       compacted(deps.store, row, input);
@@ -208,6 +211,17 @@ function advisorUsed(store: Store, row: SessionRow, input: SessionHookInput): vo
       payload: { session: input.session_id, msg: c.key, model: c.model, input_tokens: c.input, output_tokens: c.output },
     });
   }
+}
+
+/** Decision 324: the coordinators' own calls, so the share they hand to a subagent can be read. */
+function toolCalled(store: Store, row: SessionRow, input: SessionHookInput, tool: string): void {
+  if ((row.role !== "orchestrator" && row.role !== "lead") || input.agent_id) return;
+  store.append({
+    type: "tool_called",
+    source: "PostToolUse",
+    ...(input.tool_use_id ? { dedupe_key: dedupeKey(EVENTS.tool_called, input.session_id, input.tool_use_id) } : {}),
+    payload: { session: input.session_id, role: row.role, tool },
+  });
 }
 
 function turnEnded(store: Store, row: SessionRow, input: SessionHookInput): void {

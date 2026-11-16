@@ -83,6 +83,8 @@ export interface Overview {
   readonly done: Table;
   /** Today's advisor calls and estimated cost (decision 200); absent on a day with none. */
   readonly advisorToday?: string;
+  /** Today's subagent calls over the direct calls of the orchestrator and leads (decision 324); absent on a day with none. */
+  readonly delegationToday?: string;
   /** Orchestrator and lead sessions restart_due names (design N1); absent when none. */
   readonly restartDue?: readonly string[];
   /** Runs whose Dispatch-less coordinator stopped and has not moved since (decision 309); absent when none. */

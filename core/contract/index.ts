@@ -68,6 +68,7 @@ import signal from "./events/signal.ts";
 import stage_recorded from "./events/stage_recorded.ts";
 import timer_stalled from "./events/timer_stalled.ts";
 import todo_due from "./events/todo_due.ts";
+import tool_called from "./events/tool_called.ts";
 import trigger_unclear from "./events/trigger_unclear.ts";
 import turn_ended from "./events/turn_ended.ts";
 import unit_closed from "./events/unit_closed.ts";
@@ -162,6 +163,7 @@ export const EVENTS = {
   stage_recorded,
   timer_stalled,
   todo_due,
+  tool_called,
   trigger_unclear,
   turn_ended,
   unit_closed,

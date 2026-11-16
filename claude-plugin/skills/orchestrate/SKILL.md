@@ -66,8 +66,19 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 - 시작하면 자기 Run 을 쥔다(`orchestrator.md` 의 "시작할 때"): SessionStart 줄이 `run-use --id <id>` 를 일렀으면 그 Run 을 다시 쥐고, 줄이 없으면 `run-current`, 비었으면 `run-create`(만든 Run 을 바로 쥔다).
 - 오너의 말은 `intake` skill 로 가른다.
 - 한 프로그램의 일은 그 리드에게만 보낸다. 리드의 워커에게 직접 지시하지 않는다.
-- 리드가 끝났다고 보고하면, 완료 조건별 증거를 읽기 전용 서브에이전트(`model` 은 resource `models` 의 `subagents.judge`)로 확인한 뒤에 오너에게 "끝났다"고 말한다. 그 지시문에는 `write-brief` 의 서브에이전트 지시문 두 줄을 넣는다.
+- 리드가 끝났다고 보고하면, 완료 조건별 증거를 비서(`model` 은 resource `models` 의 `subagents.judge`)로 대조한 뒤에 오너에게 "끝났다"고 말한다. 지시문은 아래 "비서에게 맡기기" 의 꼴이다.
 - 현황은 resource `brief` 를 그대로 보내고 판단 한 문장만 덧붙인다.
+
+## 비서에게 맡기기
+
+오케스트레이터와 리드에게 같다(결정 324). 네 턴에 남는 것은 조율이다: 가르기, 결정, `start_unit`, 답할지와 무엇을 답할지, 증명 기록(`review_record`·`evidence_record`·`stage_record`), `land`. 나머지 읽기·확인·요약·정해진 답장과 외부 행위는 기본으로 `sangsoe:secretary` 서브에이전트에게 맡긴다. 비서가 하지 않는 일과 보고 꼴은 그 정의(`agents/secretary.md`)에 있다.
+
+- `model` 을 늘 적는다: 대조·조회·수집은 resource `models` 의 `subagents.collect`, 판단이 섞인 조사·초안은 `subagents.judge` 다.
+- 서로 기대지 않는 일은 한 메시지에 비서를 여럿 띄운다. 일 하나에 비서 하나다.
+- 지시문에 확인할 값을 정확히 준다: "증거를 확인해" 가 아니라 주장마다 그 값(head sha, 출력 sha256, 시험 수, PR 번호). 보고 꼴(결과 표 OK/MISMATCH, 증거, 만든 것의 id, 남은 것 한 줄), 언어, 길이 상한을 적는다.
+- 지시문에 `write-brief` 의 서브에이전트 지시문 다섯 줄과 거부 문단을 통째로 넣는다.
+- 비서는 거부를 돌아가는 길이 아니다. `[gate:delegate]` 는 네가 직접 하는 것만 막으니 그 일을 비서에게 넘기는 것은 다른 길이 아니지만, 권한·분류기·hook·사람이 거부한 행위를 비서에게 다시 시키지 않는다. 비서의 결과가 거부를 알리면 네 길로 올린다.
+- 비서가 만든 것(예약 메시지·PR·댓글·파일·Orca 메시지)의 id 를 받아 둔다. 되돌리는 것도 그 id 로 한다.
 
 ## 결정과 오너
 

@@ -87,6 +87,7 @@ export const OWN_TYPES = [
   "stage_recorded",
   "timer_stalled",
   "todo_due",
+  "tool_called",
   "trigger_unclear",
   "turn_ended",
   "unit_closed",

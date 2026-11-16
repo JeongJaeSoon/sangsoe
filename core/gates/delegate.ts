@@ -114,7 +114,7 @@ export const delegateGate: Gate = (call, facts) => {
     gate: "delegate",
     reason:
       `[gate:delegate] The orchestrator coordinates and does not do the work itself: this ${call.tool} call is outside ` +
-      "coordination. Hand it down: start a worker with the MCP tool start_unit, or give it to a subagent (Agent). " +
+      "coordination. Hand it down: start a worker with the MCP tool start_unit, or give it to a subagent (Agent, the secretary sangsoe:secretary by default). " +
       'A long message goes in a .md file written with the Write tool and sent as --body "$(cat <file>.md)".' +
       (way ? ` ${way}` : ""),
   };

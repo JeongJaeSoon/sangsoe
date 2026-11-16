@@ -235,6 +235,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
 
   const decisions = decisionRows.length;
   const today = advisorToday(input);
+  const delegation = delegationToday(input);
   const restart = restartDueLines(input);
   const stalled = stalledCoordinatorLines(input.events, now);
   return {
@@ -253,6 +254,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     reviewOnly,
     done: doneTable(closed, foldFacts(input.events), doneDays),
     ...(today ? { advisorToday: today } : {}),
+    ...(delegation ? { delegationToday: delegation } : {}),
     ...(restart.length > 0 ? { restartDue: restart } : {}),
     ...(stalled.length > 0 ? { stalled } : {}),
   };
@@ -600,6 +602,26 @@ export function restartDueLines(input: BriefInput): string[] {
 function advisorToday(input: BriefInput): string | undefined {
   const s = spend(input.events.filter((e) => e.type === "advisor_used"), { day: localDay(new Date(input.now)) });
   return s.calls > 0 ? `오늘 ${spendText(s)}` : undefined;
+}
+
+// Decision 324: Agent is Claude Code's subagent tool; Task is its older name, as [gate:delegate] reads it.
+const SUBAGENT_TOOLS = new Set(["Agent", "Task"]);
+const DELEGATING_ROLES = [
+  ["orchestrator", "오케스트레이터"],
+  ["lead", "리드"],
+] as const;
+
+/** Decision 324: today's subagent calls over the direct calls of the orchestrator and leads; undefined on a day with none. */
+function delegationToday(input: BriefInput): string | undefined {
+  const day = localDay(new Date(input.now));
+  const calls = input.events.filter((e) => e.type === "tool_called" && localDay(new Date(e.ts)) === day);
+  const parts = DELEGATING_ROLES.flatMap(([role, label]) => {
+    const mine = calls.filter((e) => e.payload.role === role);
+    if (mine.length === 0) return [];
+    const handed = mine.filter((e) => SUBAGENT_TOOLS.has(String(e.payload.tool))).length;
+    return [`${label} ${handed}/${mine.length} (${Math.round((handed / mine.length) * 100)}%)`];
+  });
+  return parts.length > 0 ? `오늘 위임(서브에이전트 호출/직접 호출): ${parts.join(" · ")}` : undefined;
 }
 
 function chainText(type: string, p: Record<string, unknown>): string {

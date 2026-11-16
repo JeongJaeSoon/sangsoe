@@ -14,6 +14,9 @@ export interface SessionHookInput {
   readonly prompt?: string;
   readonly prompt_id?: string;
   readonly tool_name?: string;
+  readonly tool_use_id?: string;
+  /** Present when the call came from a subagent of this session. */
+  readonly agent_id?: string;
   readonly message?: string;
   readonly notification_type?: string;
   readonly trigger?: string;

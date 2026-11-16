@@ -8,6 +8,6 @@ Orca plugin 이 담지 못하는 것만 싣는다: hook · MCP 서버 · skill �
 | `hooks/` | 감지(기록 hook) · 막는 hook(게이트) | X |
 | `mcp/` | 실행: 에이전트가 코어를 부르는 유일한 입구 | X |
 | `skills/` | 판단: 판단 절차 · 오너 전용 현황 입구 | O |
-| `agents/` | 판단: 오케스트레이터 · 리드 · 워커 정의 | O |
+| `agents/` | 판단: 오케스트레이터 · 리드 · 워커 정의, 그리고 둘이 서브에이전트로 띄우는 비서(`secretary`, 결정 324) | O |
 
 매니페스트는 `.claude-plugin/plugin.json` 이고 마켓플레이스 파일은 저장소 뿌리의 `.claude-plugin/` 에 있다. hook 은 `sangsoe` CLI 를 부르는 command hook 이고, MCP 서버는 `core/index.ts` 를 import 한다.
