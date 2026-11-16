@@ -33,7 +33,7 @@ export type Facts = {
   /** A script file a command runs, so a start wrapped in a script is read too. */
   readScript(path: string): string | undefined;
   /** done_blockers of a Task over the store and its Run's task list (the bound Run without `run`). */
-  doneBlockers(task: string, run?: string): readonly string[] | undefined;
+  doneBlockers(task: string, run?: string): readonly string[] | { unread: string };
   /** The session is sangsoe's (decision 239): a sangsoe agent, started by sangsoe, or on a Task sangsoe made. */
   sangsoe(): boolean | undefined;
 };
