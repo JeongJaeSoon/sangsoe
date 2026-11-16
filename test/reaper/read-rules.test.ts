@@ -16,7 +16,7 @@ function parentWith(name: string, allow: string[]): string {
   return parent;
 }
 
-const allowIn = (parent: string) => JSON.parse(readFileSync(join(parent, LOCAL_SETTINGS), "utf8")).permissions.allow;
+const allowIn = (parent: string) => JSON.parse(readFileSync(join(parent, LOCAL_SETTINGS), "utf8")).permissions?.allow ?? [];
 
 test("decision 310: removing the child worktree takes its Read rule out of the parent's file, keeping the rest", async () => {
   const w = world();

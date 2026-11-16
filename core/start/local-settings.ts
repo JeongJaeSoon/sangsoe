@@ -140,6 +140,11 @@ export function dropParentReadRules(parent: string, rules: readonly string[]): b
   }
   const kept = found.allow.filter((r) => !(typeof r === "string" && rules.includes(r)));
   if (kept.length === found.allow.length) return false;
-  replaceFile(file, { ...(base as Record<string, unknown>), permissions: { ...found.permissions, allow: kept } });
+  // Emptied keys go too, so a parent file decision 310 alone touched reads as it did before.
+  const permissions: Record<string, unknown> = { ...found.permissions, allow: kept };
+  if (kept.length === 0) delete permissions.allow;
+  const doc: Record<string, unknown> = { ...(base as Record<string, unknown>), permissions };
+  if (Object.keys(permissions).length === 0) delete doc.permissions;
+  replaceFile(file, doc);
   return true;
 }

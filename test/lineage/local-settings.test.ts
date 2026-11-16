@@ -156,6 +156,16 @@ test("taking the rule back removes exactly that string and nothing else", (t) =>
   assert.deepEqual(JSON.parse(readFileSync(join(parent, LOCAL_SETTINGS), "utf8")), { advisorModel: "fable", permissions: { allow: ["Bash(npm test)", sibling] } });
   assert.equal(dropParentReadRules(parent, [mine]), false, "already gone");
   assert.equal(dropParentReadRules(join(parent, "gone"), [mine]), false, "no file");
+  // A file decision 310 alone touched reads byte for byte as before the add: no empty keys stay.
+  const before = `${JSON.stringify({ advisorModel: "fable" }, null, 2)}\n`;
+  writeFileSync(join(parent, LOCAL_SETTINGS), before);
+  addParentReadRules(parent, [mine]);
+  assert.equal(dropParentReadRules(parent, [mine]), true);
+  assert.equal(readFileSync(join(parent, LOCAL_SETTINGS), "utf8"), before);
+  // Other permissions keys stay when allow empties.
+  writeFileSync(join(parent, LOCAL_SETTINGS), JSON.stringify({ permissions: { allow: [mine], deny: ["Read(./.env)"] } }));
+  dropParentReadRules(parent, [mine]);
+  assert.deepEqual(JSON.parse(readFileSync(join(parent, LOCAL_SETTINGS), "utf8")), { permissions: { deny: ["Read(./.env)"] } });
   writeFileSync(join(parent, LOCAL_SETTINGS), "not json");
   assert.equal(dropParentReadRules(parent, [mine]), false);
   assert.equal(readFileSync(join(parent, LOCAL_SETTINGS), "utf8"), "not json", "an unreadable file is left as it is");
