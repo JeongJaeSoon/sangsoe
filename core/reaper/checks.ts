@@ -4,7 +4,7 @@ import type { StoredEvent } from "../contract/index.ts";
 import { ENDED_LIVENESS, type Exec, type OrcaAdapter, type TaskRow, type WorkerRow, type WorktreeRow } from "../contract/orca.ts";
 import { isClosedTask } from "../detect/pr/judge.ts";
 import type { GhClient } from "../gh/client.ts";
-import { branchOf, type Finished, repoOf } from "./finished.ts";
+import { branchOf, type Finished, namesCard, repoOf } from "./finished.ts";
 
 export type BlockReason =
   | "uncommitted"
@@ -34,14 +34,14 @@ export function inside(root: string, path: string): boolean {
  * (decision 177) and again just before the removal.
  */
 export async function openWork(
-  card: Pick<WorktreeRow, "id">,
+  card: Pick<WorktreeRow, "id" | "path">,
   workers: readonly WorkerRow[],
   orca: Pick<OrcaAdapter, "workerShow" | "taskList">,
 ): Promise<Check> {
   const runs = new Map<string, TaskRow[]>();
   const asked = new Set<string>();
   for (const w of workers) {
-    if (w.workspace !== card.id) continue;
+    if (!namesCard(w.workspace, card)) continue;
     const show = await orca.workerShow({ dispatch: w.dispatchId });
     if (!show.ok) return { ok: false, unknown: `worker-show ${w.dispatchId}: ${show.error.code}` };
     if (show.value.liveness === "live") return { ok: false, blocked: "session_alive" };

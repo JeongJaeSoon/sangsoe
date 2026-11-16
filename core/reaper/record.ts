@@ -1,8 +1,9 @@
 import { dedupeKey, eventDef, type StoredEvent } from "../contract/index.ts";
-import type { Exec } from "../contract/orca.ts";
+import type { Exec, WorktreeRow } from "../contract/orca.ts";
 import type { Result } from "../notify/result.ts";
 import { type Appended, type EventFilter, type NewEvent, Store } from "../store/store.ts";
 import { DOCKER_KINDS, type DockerKind, type DockerRef, isDockerKind } from "./docker.ts";
+import { pathOfId } from "./finished.ts";
 
 export type ResourceInput = { kind: string; ref: string; owner: string; action?: "created" | "released" };
 export type ResourceRecorded = { kind: string; ref: string; owner: string; action: string; seq: number; inserted: boolean };
@@ -55,6 +56,28 @@ export const holdEvents = (events: (f?: EventFilter) => StoredEvent[]) => [
   ...events({ type: "reap_done" }),
   ...events({ type: "reap_blocked" }),
 ];
+
+export type StartedCards = { ids: Set<string>; paths: Set<string>; instances: Set<string> };
+
+/**
+ * The cards start_unit made, by Orca id and by the path inside it (`<repoId>::<path>`): registering the
+ * repository again gives its cards a new repo id but the same path (decision 306).
+ */
+export function startedCards(events: (f: EventFilter) => readonly StoredEvent[]): StartedCards {
+  const ids = new Set(events({ type: "unit_started" }).map((e) => String((e.payload as { worktree?: unknown }).worktree ?? "")));
+  const paths = new Set([...ids].map(pathOfId).filter(Boolean));
+  // resource_record refuses kind worktree, so nothing writes these rows today.
+  const instances = new Set(
+    events({ type: "resource" })
+      .map((e) => e.payload as { kind?: string; ref?: string })
+      .filter((p) => p.kind === "worktree" && p.ref)
+      .map((p) => p.ref as string),
+  );
+  return { ids, paths, instances };
+}
+
+export const startedBySangsoe = (own: StartedCards, c: Pick<WorktreeRow, "id" | "path" | "instanceId">): boolean =>
+  own.ids.has(c.id) || own.paths.has(c.path) || own.instances.has(c.instanceId ?? "");
 
 /** Decision 240: what only its owner clears. Recorded so the owner sees it; REAPER never takes one. */
 export const OWNER_KINDS = ["checkout", "registration", "branch", "file", "process"] as const;

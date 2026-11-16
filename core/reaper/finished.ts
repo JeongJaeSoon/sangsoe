@@ -27,6 +27,16 @@ export async function withRemoteCase<C extends Pick<WorktreeRow, "projectId" | "
 
 export const branchOf = (card: Pick<WorktreeRow, "branch">) => card.branch.replace(/^refs\/heads\//, "");
 
+/** The path in an Orca worktree id (`<repoId>::<path>`), or "" when it has none. */
+export const pathOfId = (id: string): string => (id.includes("::") ? id.slice(id.indexOf("::") + 2) : "");
+
+/**
+ * Decision 306: a Dispatch's workspace names this card by its Orca id, or by the
+ * path in that id once the repository is registered again under a new repo id.
+ */
+export const namesCard = (worktreeId: string | undefined, card: Pick<WorktreeRow, "id" | "path">): boolean =>
+  !!worktreeId && (worktreeId === card.id || (pathOfId(worktreeId) !== "" && pathOfId(worktreeId) === card.path));
+
 export type Finished =
   | { state: "finished"; carried: boolean; pr: Pr | null }
   | { state: "unfinished"; why: string }
@@ -66,7 +76,7 @@ export async function judgeFinished(card: WorktreeRow, gh: GhClient, workers: re
     }
     return { state: "unknown", why: `compare: ${cmp.kind}` };
   }
-  const mine = workers.filter((w) => w.workspace === card.id);
+  const mine = workers.filter((w) => namesCard(w.workspace, card));
   if (mine.length === 0) return { state: "unknown", why: NO_TRACE };
   if (!mine.every(settled)) return { state: "unfinished", why: "a Dispatch has not settled" };
   // worker-list is newest first.
