@@ -64,7 +64,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 - 오너에게 묻는 것은 `decision_open` 하나로 한다: `subject`(`item:iNNN` 또는 `scope:<group>`), `question`(추천과 이유도 이 글에), `options`, 기다리는 Task 는 `waiters`(`{task, run}`, `run` 은 네 Run), 기다리는 Task 가 없으면 `carrier_run` 에 네 Run. 결정 키는 `subject` 와 `options` 다. 같은 결정 키가 닫혀 있으면 기존 답이 돌아오니 다시 묻지 않는다.
 - 답을 기다리는 동안 할 수 있는 일은 계속한다. 답이 없다고 기본값을 적용하지 않는다.
 - 오너의 답은 `decision_answer` 가 결정을 닫고, 게이트를 풀고, 기다리던 워커를 한 번 깨운다. 다시 불러도 같다.
-- 다른 세션에 보내는 Orca 메시지의 type 은 글의 모양이 아니라 다음 걸음으로 고른다(오너에게 묻는 것은 위의 `decision_open` 이다). 답을 기다릴 메시지는 question 이다("X 만 남았다, 끝나면 알려 달라"도 그렇다). Dispatch 가 있으면 `ask`, 없으면(오케스트레이터, Task 없는 리드) `send --type question`. 답을 기다리지 않는 보고만 status 다. status 는 어느 세션도 깨우지 않는다: 받는 쪽이 곧 행동해야 하는 것(go · ready · merged · 시간 창이 있는 알림)은 창이 끝나는 시각을 적은 `--type question` 으로 보낸다(Dispatch 가 있는 워커는 `ask`).
+- 다른 세션에 보내는 Orca 메시지의 type 은 글의 모양이 아니라 다음 걸음으로 고른다(오너에게 묻는 것은 위의 `decision_open` 이다). 답을 기다릴 메시지는 question 이다("X 만 남았다, 끝나면 알려 달라"도 그렇다). Dispatch 가 있으면 `ask`, 없으면(오케스트레이터, Task 없는 리드) `send --type question`. 답을 기다리지 않는 보고만 status 다. status 는 어느 세션도 깨우지 않는다: 받는 쪽이 곧 행동해야 하는 것(go · ready · merged · 시간 창이 있는 알림)은 창이 끝나는 시각을 적은 `--type question` 으로 보낸다(Dispatch 가 있으면 `ask`).
 
 ## 재시작
 
