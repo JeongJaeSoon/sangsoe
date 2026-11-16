@@ -82,6 +82,12 @@ type Setup = {
   dispatchShowFails?: boolean;
   /** terminal create in the orchestrator's worktree loses its answer. */
   selfCreateFails?: boolean;
+  /** Orca refuses terminal create in the orchestrator's worktree with an error it answered. */
+  selfCreateRefused?: boolean;
+  /** The run dies inside terminal create in the orchestrator's worktree (the caller's Bash timeout). */
+  selfCreateDies?: boolean;
+  /** The orchestrator's waiting terminal is gone from Orca's list (the owner closed it). */
+  selfGone?: boolean;
 };
 
 const RESTORED_TERM = "term_00000000-0000-4000-8000-0000000000r1";
@@ -248,14 +254,16 @@ function harness(s: Setup = {}) {
         const fresh =
           created > 0 ? [{ handle: NEW_TERM, executionHostId: "local", tabId: "tabN", leafId: "leafN", ...(shows && !s.paneOnly ? { agentIdentity: "claude" } : {}) }] : [];
         newPaneUp = shows;
-        const waiting = tree === PARENT_TREE && selfCreated ? [{ handle: SELF_TERM, tabId: "tabS", leafId: "leafS", executionHostId: "local" }] : [];
+        const waiting = tree === PARENT_TREE && selfCreated && !s.selfGone ? [{ handle: SELF_TERM, tabId: "tabS", leafId: "leafS", executionHostId: "local" }] : [];
         return ok({ terminals: [...own, ...restored, ...waiting, ...(tree === LEAD_TREE ? fresh : [])], hostScope: { hostIds: ["local"], omittedHostIds: [] }, truncated: false });
       },
       "orchestration-worker-stop": () => (s.stop ? s.stop() : ok({ dispatchId: "ctx_lead", processAction: "closed_agent_terminal" })),
       "terminal-create": (args: readonly string[]) => {
         if (flag(args, "worktree") === `id:${LEAD_TREE}`) created = 1;
         if (flag(args, "worktree") === `id:${PARENT_TREE}`) {
+          if (s.selfCreateDies) throw new Error("the run was killed inside terminal create");
           if (s.selfCreateFails) return { code: 1, stdout: "", stderr: "connection reset" };
+          if (s.selfCreateRefused) return fail("worktree_not_found");
           selfCreated = true;
         }
         return ok({ terminal: { handle: flag(args, "worktree") === `id:${PARENT_TREE}` ? SELF_TERM : NEW_TERM } });
@@ -491,6 +499,58 @@ test("decision 330 (review): the orchestrator's own waiting terminal is opened o
   assert.doesNotMatch(first.lines.join("\n"), /오너가 칠 한 줄/, "an unknown create hands out no second resume line");
   await restartSessions(lost.ports, { dryRun: false });
   assert.equal(lost.named("terminal create").filter((c) => flag(c, "worktree") === `id:${PARENT_TREE}`).length, 1);
+});
+
+const selfCreates = (h: ReturnType<typeof harness>) => h.named("terminal create").filter((c) => flag(c, "worktree") === `id:${PARENT_TREE}`).length;
+
+test("decision 330 (review 2): the waiting-terminal mark is a type of its own, so a core from before 330 still reads every row", async () => {
+  const h = harness();
+  await restartSessions(h.ports, { dryRun: false });
+  const own = h.store.events().filter((e) => e.source === "cli:restart");
+  assert.ok(own.length > 0);
+  // An older core checks a known type's payload and throws on a kind it does not list; a type it does not know passes.
+  assert.deepEqual(own.filter((e) => e.type === "signal"), []);
+  assert.ok(own.some((e) => e.type === "restart_self_wait" && e.subject === ORCH_SESSION));
+});
+
+test("decision 330 (review 2): a lost create after an opened terminal went away still holds back a third terminal", async () => {
+  const s: Setup = {};
+  const h = harness(s);
+  await restartSessions(h.ports, { dryRun: false });
+  s.selfGone = true;
+  s.selfCreateFails = true;
+  await restartSessions(h.ports, { dryRun: false });
+  s.selfCreateFails = false;
+  const third = await restartSessions(h.ports, { dryRun: false });
+  assert.equal(selfCreates(h), 2, "the closed terminal is opened again once; the lost one is not opened a third time");
+  assert.match(third.lines.join("\n"), /열었는지 모른다/);
+});
+
+test("decision 330 (review 2): a run that dies inside the create leaves a mark, and the next run opens no second terminal", async () => {
+  const s: Setup = { selfCreateDies: true };
+  const h = harness(s);
+  await assert.rejects(restartSessions(h.ports, { dryRun: false }));
+  s.selfCreateDies = false;
+  const again = await restartSessions(h.ports, { dryRun: false });
+  assert.equal(selfCreates(h), 1);
+  assert.match(again.lines.join("\n"), /열었는지 모른다/);
+});
+
+test("decision 330 (review 2): the unknown-outcome skip names the owner's one line for when no waiting terminal is listed", async () => {
+  const h = harness({ selfCreateFails: true });
+  await restartSessions(h.ports, { dryRun: false });
+  const again = await restartSessions(h.ports, { dryRun: false });
+  assert.match(again.lines.join("\n"), new RegExp(`없으면 /exit 뒤 이 터미널에서: '${CLAUDE}' '--resume' '${ORCH_SESSION}'`));
+});
+
+test("decision 330 (review 2): a create Orca refused is tried again on the next run", async () => {
+  const s: Setup = { selfCreateRefused: true };
+  const h = harness(s);
+  const first = await restartSessions(h.ports, { dryRun: false });
+  assert.match(first.lines.join("\n"), /오너가 칠 한 줄/);
+  s.selfCreateRefused = false;
+  await restartSessions(h.ports, { dryRun: false });
+  assert.equal(selfCreates(h), 2);
 });
 
 test("decision 330 (2): an idle child is stopped, resumed in a new terminal of its worktree once claude shows there, and bound back to its Task", async () => {
