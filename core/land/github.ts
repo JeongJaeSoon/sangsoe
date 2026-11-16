@@ -150,9 +150,9 @@ export type CheckState = "pass" | "pending" | "cancelled" | "fail";
 
 type CheckRun = { completed: boolean; conclusion: string; at: number };
 
-/** `at` is the completion time, else the start; a run with neither is the oldest if it finished and the newest if it has not. */
+/** `at` is the completion time, else the start (0 if neither). A run still going is always the newest: it may yet fail. */
 function checkRun(completed: boolean, conclusion: string | null | undefined, time: string | null | undefined): CheckRun {
-  return { completed, conclusion: (conclusion ?? "").toUpperCase(), at: Date.parse(time ?? "") || (completed ? 0 : Number.POSITIVE_INFINITY) };
+  return { completed, conclusion: (conclusion ?? "").toUpperCase(), at: completed ? Date.parse(time ?? "") || 0 : Number.POSITIVE_INFINITY };
 }
 
 /**
@@ -163,7 +163,8 @@ function checkRun(completed: boolean, conclusion: string | null | undefined, tim
  */
 export function judgeRuns(runs: CheckRun[]): CheckState {
   const decisive = [...runs]
-    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
+    // Equal times: the worse conclusion sorts last, so a failure is never hidden by a success listed after it.
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : Number(!PASS.has(a.conclusion)) - Number(!PASS.has(b.conclusion))))
     .filter((r) => !(r.completed && r.conclusion === "CANCELLED"))
     .at(-1);
   if (!decisive) return "cancelled";

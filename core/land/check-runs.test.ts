@@ -84,6 +84,18 @@ test("parsePrGate: a newer run still going is pending", () => {
   assert.deepEqual(gate([run("SUCCESS", "2026-11-16T10:00:00Z"), run(null, "2026-11-16T10:05:00Z", "unit", "IN_PROGRESS")]), [{ name: "unit", required: true, state: "pending" }]);
 });
 
+test("parsePrGate: a run still going that started before a success finished is pending", () => {
+  const going = { name: "unit", status: "IN_PROGRESS", conclusion: null, startedAt: "2026-11-16T10:03:00Z" };
+  const checks = gate([run("SUCCESS", "2026-11-16T10:05:00Z"), going]);
+  assert.deepEqual(checks, [{ name: "unit", required: true, state: "pending" }]);
+});
+
+test("parsePrGate: a failure and a success at the same second is red whatever the list order", () => {
+  const at = "2026-11-16T10:00:00Z";
+  assert.deepEqual(gate([run("FAILURE", at), run("SUCCESS", at)]), [{ name: "unit", required: true, state: "fail" }]);
+  assert.deepEqual(gate([run("SUCCESS", at), run("FAILURE", at)]), [{ name: "unit", required: true, state: "fail" }]);
+});
+
 test("parsePrGate: names are judged apart and keep their first-seen order", () => {
   const checks = gate([run("CANCELLED", "2026-11-16T10:00:00Z", "lint"), run("SUCCESS", "2026-11-16T10:00:00Z", "unit"), run("SUCCESS", "2026-11-16T10:01:00Z", "lint"), run("CANCELLED", "2026-11-16T10:02:00Z", "unit")]);
   assert.deepEqual(checks, [
