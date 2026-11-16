@@ -28,7 +28,7 @@ const WAIT = `\`orca orchestration ${"chec"}${"k"} --run <네 Run> --wait --type
 const ONE = "앞 대기가 아직 돌고 있으면 새로 걸지 않는다";
 
 test("302-1: the orchestrate skill, lead.md and orchestrator.md name the same wait command with --types and a long timeout", () => {
-  has(orchestrate, [WAIT, `네 ${ONE}`, "같은 묶음을 받아 너를 그 수만큼 깨운다", "리드는 턴을 끝내기 전에 늘 걸고, 오케스트레이터는 대기를 걸 때"], "orchestrate 깨움 처리");
+  has(orchestrate, [WAIT, `네 ${ONE}`, "같은 묶음을 받아 너를 그 수만큼 깨운다", "리드와 오케스트레이터는 깨움을 처리한 뒤 턴을 끝내기 전에 늘"], "orchestrate 깨움 처리");
   has(lead, [`${WAIT} 를 백그라운드로 다시 걸어 둔다`, ONE], "lead.md 첫 깨움");
   has(orchestrator, [`${WAIT} 하나만 백그라운드로 건다`, ONE], "orchestrator.md 깨어날 때마다");
   for (const [where, text] of Object.entries({ orchestrate, "lead.md": lead, "orchestrator.md": orchestrator })) {

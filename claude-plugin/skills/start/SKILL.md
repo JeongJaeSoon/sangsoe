@@ -69,6 +69,7 @@ alias 는 바깥 설정(`ANTHROPIC_DEFAULT_*_MODEL`)에 고정될 수 있다. �
 | `stopped` · `start_failed_3x` | 같은 Task 의 시작이 세 번 실패했다 | 다시 부르지 않는다. 위에 올린다 |
 | `ok: false`, `refusal.code` 가 거부 사유 | 시작하지 않았고, `start_refused` 신호로 이미 위에 보고됐다 | 같은 일을 다른 길로 시작하지 않는다. 원인이 Orca 설정이면 오너 몫이다 |
 | `ok: false`, `refusal.code` 가 `invalid_input` | 입력이 틀렸다 | `refusal.fix` 대로 고쳐 한 번 다시 부른다 |
+| 호출이 "거부" 로 돌아왔는데 사람이 거부하지 않았다(interrupt 문구) | 터미널에 들어온 Orca nudge 가 호출을 끊었다. 서버는 호출을 끝냈을 수 있다(결정 318·321) | 끊김으로 읽는다. 거부로 보고하지 않는다. Task id 를 알면 같은 Task 를 `task` 로 다시 부른다(같은 spec 을 다시 보내지 않는다). 모르면 같은 spec·title 로 한 번 다시 부른다: 결정 318 의 채택이 반쯤 만든 Task 를 받는다(`notes` 의 "채택:" 으로 확인) |
 
 거부 사유 여섯은 `capability_missing` · `lineage_invalid` · `depth_exceeded` · `orca_error` · `no_dispatch` · `model_invalid`(advisor 짝이 맞지 않는 모델 선택) 다. 어느 것도 "다시 해 보면 되는" 사유가 아니다. 부모는 같은 일을 자기 Run 에 새 Task 로 만들지도 않는다(같은 일의 원본이 둘이 된다).
 
