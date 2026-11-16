@@ -174,6 +174,9 @@ test("(6d) for a card sangsoe did not start, the Dispatches under its exact id d
   w.orca.workers.push(worker(c.id, { dispatchId: "ctx_exact_failed", state: "failed", outcome: "failed", liveness: "exited" }));
   await rounds(w, 3, 30);
   assert.deepEqual(w.orca.calls.filter((x) => x.startsWith("worktreeRm")), []);
+  const r = await w.round({ confirmed: [c.instanceId] });
+  assert.ok(r.unseen.includes(`not finished: ${c.instanceId}: last Dispatch ended failed`));
+  assert.deepEqual(w.orca.calls.filter((x) => x.startsWith("worktreeRm")), []);
 
   const t = world();
   const ok = pathOnlyDispatch(t, "foreign-exact", { started: false, state: "succeeded" });
