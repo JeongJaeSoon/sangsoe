@@ -278,8 +278,8 @@ async function restartOne(p: RestartPorts, caller: Caller, r: RestartRow): Promi
   const created = await orca.terminalCreate({ worktree: `id:${worktree}`, command: r.command as string, title: `restart ${task}` });
   if (!created.ok) {
     return fail(
-      `Dispatch ${r.dispatch} 는 멈췄고 터미널을 열지 못했다(${created.error.code})`,
-      `손으로 잇는 길: orca terminal create --worktree ${quote(`id:${worktree}`)} --command ${quote(r.command as string)}`,
+      `Dispatch ${r.dispatch} 는 멈췄고 터미널 생성이 실패로 읽혔다(${created.error.code}: ${created.error.message.slice(0, 200)})`,
+      `먼저 orca terminal list --worktree ${quote(`id:${worktree}`)} 로 claude 터미널이 이미 열렸는지 본다. 없으면: orca terminal create --worktree ${quote(`id:${worktree}`)} --command ${quote(r.command as string)}`,
       `그 뒤 ${resumeArgs}`,
     );
   }
