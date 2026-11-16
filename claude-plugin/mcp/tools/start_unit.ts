@@ -127,7 +127,7 @@ export default {
       },
       repo: {
         type: "string",
-        description: "The Orca repo selector (id:, name: or path:) the new worktree goes in, when it is not your own repo. Default: the repo item_create recorded, else yours.",
+        description: "The Orca repo selector (id:, name: or path:) the new worktree goes in, when it is not your own repo. Default: the repo item_create or an earlier start_unit recorded for the Task, else yours.",
       },
       taskId: {
         type: "string",
@@ -175,7 +175,7 @@ export default {
     const store = Store.open();
     const runId = typeof input.runId === "string" ? input.runId : "";
     try {
-      return await handle(input, { orca, store, slots: () => runSlots(orca, runId, DEFAULT_LIMIT), source: "mcp:start_unit" });
+      return await handle(input, { orca, store, slots: () => runSlots(orca, runId, DEFAULT_LIMIT, undefined, store), source: "mcp:start_unit" });
     } finally {
       store.close();
     }

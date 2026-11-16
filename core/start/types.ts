@@ -86,7 +86,14 @@ export type StartOutcome =
       notes: string[];
     }
   /** Not a refusal (decision 94): the Task stays as it is and the caller tries again later. */
-  | { kind: "waiting"; taskId: string; why: "not_ready" | "already_dispatched" | "no_capacity"; detail: string }
+  | {
+      kind: "waiting";
+      taskId: string;
+      why: "not_ready" | "already_dispatched" | "no_capacity";
+      detail: string;
+      /** Decision 318: `채택: <task>` when this call took an unstarted Task an earlier, cut-off call made. */
+      notes?: string[];
+    }
   /** T5: three failed starts on one Task; worker-start is not called again. */
   | { kind: "stopped"; taskId: string; why: "start_failed_3x" }
   | StartRefusal;
