@@ -74,6 +74,14 @@ type Setup = {
   realBind?: boolean;
   /** claude in the new terminal shows only in `worktree ps` at the terminal's pane, never as the row's agentIdentity. */
   paneOnly?: boolean;
+  /** The owner has a claude of their own open in the idle lead's worktree. */
+  ownerInLead?: boolean;
+  /** The idle lead starts a turn after the plan was read. */
+  busyAtStop?: boolean;
+  /** dispatch-show answers an error. */
+  dispatchShowFails?: boolean;
+  /** terminal create in the orchestrator's worktree loses its answer. */
+  selfCreateFails?: boolean;
 };
 
 const RESTORED_TERM = "term_00000000-0000-4000-8000-0000000000r1";
@@ -106,6 +114,8 @@ function harness(s: Setup = {}) {
     `  400     1 1-00:00:00 ${CLAUDE} --plugin-dir ${PLUGIN_DIR} --model m-small`,
     `  401   400 ${age(401)} node ${ENTRY}`,
     `  500     1 1-00:00:00 ${CLAUDE} --model m-small`,
+    // The owner's own claude, opened by hand in the idle lead's worktree, with no sangsoe server.
+    ...(s.ownerInLead ? [`  700     1 1-00:00:00 ${CLAUDE} --model m-small`] : []),
     `  501   500 ${age(501)} node ${ENTRY}`,
   ].join("\n");
   const cwd: Record<number, string> = {
@@ -118,6 +128,7 @@ function harness(s: Setup = {}) {
     400: pathOf(WORKER_TREE),
     401: pathOf(WORKER_TREE),
     500: "/home/dev/scratch",
+    700: pathOf(LEAD_TREE),
     501: "/home/dev/scratch",
   };
   let clock = NOW;
@@ -142,6 +153,8 @@ function harness(s: Setup = {}) {
   const restoredTerm = s.restored === "restart" ? NEW_TERM : RESTORED_TERM;
   let created = 0;
   let newPaneUp = false;
+  let psReads = 0;
+  let selfCreated = false;
   const callerRun = s.caller === undefined || s.caller === "orchestrator" ? ORCH_RUN : LEAD_RUN;
   const fake = createFakeOrca({
     replies: {
@@ -164,6 +177,7 @@ function harness(s: Setup = {}) {
       },
       "orchestration-run-list": () => ok({ runs: [{ id: ORCH_RUN }, { id: LEAD_RUN }, ...RUNS] }),
       "orchestration-dispatch-show": (args: readonly string[]) => {
+        if (s.dispatchShowFails) return fail("runtime_unavailable");
         const u = UNITS.find((x) => x.task === flag(args, "task"));
         if (!u) return fail("dispatch_not_found");
         if (u.task === "task_lead" && bound) return ok({ dispatch: { id: bound, run_id: u.run, task_id: u.task, status: "dispatched" } });
@@ -196,8 +210,10 @@ function harness(s: Setup = {}) {
               ? [{ id: "msg_h1", type: "handoff", subject: "handoff task_lead", body: "next", from: "x", to: "y", handled: false }]
               : [],
         }),
-      "worktree-ps": () =>
-        ok({
+      "worktree-ps": () => {
+        // The planning read is the first; with busyAtStop the idle lead has started a turn by any later read.
+        psReads++;
+        return ok({
           worktrees: UNITS.map((u) => ({
             worktreeId: u.tree,
             hostId: "local",
@@ -210,12 +226,13 @@ function harness(s: Setup = {}) {
             unverifiableTerminalCount: 0,
             status: "active",
             agents: [
-              { paneKey: u.pane, state: u.state, agentType: "claude", agentWait: null },
+              { paneKey: u.pane, state: u.task === "task_lead" && s.busyAtStop && psReads > 1 ? "working" : u.state, agentType: "claude", agentWait: null },
               ...(u.tree === LEAD_TREE && newPaneUp && s.paneOnly ? [{ paneKey: "tabN:leafN", state: "done", agentType: "claude", agentWait: null }] : []),
             ],
           })),
           truncated: false,
-        }),
+        });
+      },
       "terminal-list": (args: readonly string[]) => {
         clock += s.listMs ?? 0;
         const tree = (flag(args, "worktree") ?? "").replace(/^id:/, "");
@@ -231,11 +248,16 @@ function harness(s: Setup = {}) {
         const fresh =
           created > 0 ? [{ handle: NEW_TERM, executionHostId: "local", tabId: "tabN", leafId: "leafN", ...(shows && !s.paneOnly ? { agentIdentity: "claude" } : {}) }] : [];
         newPaneUp = shows;
-        return ok({ terminals: [...own, ...restored, ...(tree === LEAD_TREE ? fresh : [])], hostScope: { hostIds: ["local"], omittedHostIds: [] }, truncated: false });
+        const waiting = tree === PARENT_TREE && selfCreated ? [{ handle: SELF_TERM, tabId: "tabS", leafId: "leafS", executionHostId: "local" }] : [];
+        return ok({ terminals: [...own, ...restored, ...waiting, ...(tree === LEAD_TREE ? fresh : [])], hostScope: { hostIds: ["local"], omittedHostIds: [] }, truncated: false });
       },
       "orchestration-worker-stop": () => (s.stop ? s.stop() : ok({ dispatchId: "ctx_lead", processAction: "closed_agent_terminal" })),
       "terminal-create": (args: readonly string[]) => {
         if (flag(args, "worktree") === `id:${LEAD_TREE}`) created = 1;
+        if (flag(args, "worktree") === `id:${PARENT_TREE}`) {
+          if (s.selfCreateFails) return { code: 1, stdout: "", stderr: "connection reset" };
+          selfCreated = true;
+        }
         return ok({ terminal: { handle: flag(args, "worktree") === `id:${PARENT_TREE}` ? SELF_TERM : NEW_TERM } });
       },
       "orchestration-send": () => ok({ messageId: "msg_1" }),
@@ -260,6 +282,8 @@ function harness(s: Setup = {}) {
   const binds: StartRequest[] = [];
   const sleeps: number[] = [];
   const emitted: string[] = [];
+  /** What had been emitted when each bind ran. */
+  const bindSaw: string[][] = [];
   const ports: RestartPorts = {
     orca: createOrcaAdapter(fake.exec),
     store,
@@ -278,6 +302,7 @@ function harness(s: Setup = {}) {
       : {
           bind: async (req: StartRequest) => {
             binds.push(req);
+            bindSaw.push([...emitted]);
             return { kind: "resumed", taskId: "task_lead", dispatchId: "ctx_new", from: "ctx_lead", worktreeId: LEAD_TREE, terminal: NEW_TERM, notes: [] } as const;
           },
         }),
@@ -285,7 +310,7 @@ function harness(s: Setup = {}) {
   const named = (cmd: string) => fake.calls.filter((c) => c.slice(1, 1 + cmd.split(" ").length).join(" ") === cmd);
   const at = (cmd: string) => fake.calls.findIndex((c) => c.slice(1, 1 + cmd.split(" ").length).join(" ") === cmd);
   const orcaCalls = () => fake.calls.filter((c) => c[0] === "orca").map((c) => c.slice(1, 3).join(" "));
-  return { ports, fake, named, at, binds, sleeps, hostCalls, store, emitted, orcaCalls, clock: () => clock, restoredTerm };
+  return { ports, fake, named, at, binds, bindSaw, sleeps, hostCalls, store, emitted, orcaCalls, clock: () => clock, restoredTerm };
 }
 
 const leadCommand =
@@ -307,7 +332,8 @@ test("decision 330 (1): the dry run lists each stale session with its role, Task
   assert.ok(out.lines.includes(`    command: while kill -0 100 2>/dev/null; do sleep 1; done; '${CLAUDE}' '--resume' '${ORCH_SESSION}' '--agent' 'sangsoe:orchestrator'`), text);
   for (const w of WRITES) assert.equal(h.named(w).length, 0, `dry run calls no ${w}`);
   assert.equal(h.binds.length, 0);
-  assert.deepEqual(h.hostCalls, ["ps -ww -axo pid=,ppid=,etime=,args=", "lsof -a -d cwd -Fpn -p 101,201,301,401,501"]);
+  // One lsof for the servers and every claude: a worktree holding two claudes is not restarted.
+  assert.deepEqual(h.hostCalls, ["ps -ww -axo pid=,ppid=,etime=,args=", "lsof -a -d cwd -Fpn -p 101,201,301,401,501,100,200,300,400,500"]);
 });
 
 test("decision 330 (A): planning reads a bounded set of Orca calls and never walks every Run, for an orchestrator or a lead caller", async () => {
@@ -427,6 +453,44 @@ test("decision 330 (F): each line is emitted as it is made, the same lines the c
   const h = harness();
   const out = await restartSessions(h.ports, { dryRun: false });
   assert.deepEqual(h.emitted, out.lines);
+  assert.ok(h.bindSaw[0]?.includes("결과:"), "the plan was out before the first bind ran");
+});
+
+test("decision 330 (review): a worktree holding a second claude is not restarted: the stop could hit the wrong session", async () => {
+  const h = harness({ ownerInLead: true });
+  const out = await restartSessions(h.ports, { dryRun: false });
+  assert.match(out.lines.join("\n"), /pid 200 .*\n {4}→ skip: worktree 에 claude 가 2개 돈다/);
+  assert.equal(h.named("orchestration worker-stop").length, 0);
+});
+
+test("decision 330 (review): an agent that started a turn after the plan is not stopped", async () => {
+  const h = harness({ busyAtStop: true });
+  const out = await restartSessions(h.ports, { task: "task_lead", dryRun: false });
+  assert.equal(h.named("orchestration worker-stop").length, 0);
+  assert.match(out.lines.join("\n"), /– task_lead: 계획 뒤 턴을 시작했다\(agent working\): 건너뛴다/);
+});
+
+test("decision 330 (review): a caller whose Task start_unit started is refused when its Dispatch cannot be read, not taken for the orchestrator", async () => {
+  const h = harness({ caller: "worker", dispatchShowFails: true });
+  const out = await restartSessions(h.ports, { dryRun: false });
+  assert.equal(out.code, 1);
+  assert.match(out.lines[0] ?? "", /부른 세션의 Task task_w 를 확인하지 못했다/);
+  for (const w of WRITES) assert.equal(h.named(w).length, 0);
+});
+
+test("decision 330 (review): the orchestrator's own waiting terminal is opened once, and a create with a lost answer is not opened again", async () => {
+  const h = harness();
+  await restartSessions(h.ports, { dryRun: false });
+  const again = await restartSessions(h.ports, { dryRun: false });
+  const selfCreates = () => h.named("terminal create").filter((c) => flag(c, "worktree") === `id:${PARENT_TREE}`);
+  assert.equal(selfCreates().length, 1);
+  assert.match(again.lines.join("\n"), /pid 100 .*\n {4}→ skip: 이 세션을 기다리는 터미널 term_00000000-0000-4000-8000-0000000000n2 이 이미 있다/);
+
+  const lost = harness({ selfCreateFails: true });
+  const first = await restartSessions(lost.ports, { dryRun: false });
+  assert.doesNotMatch(first.lines.join("\n"), /오너가 칠 한 줄/, "an unknown create hands out no second resume line");
+  await restartSessions(lost.ports, { dryRun: false });
+  assert.equal(lost.named("terminal create").filter((c) => flag(c, "worktree") === `id:${PARENT_TREE}`).length, 1);
 });
 
 test("decision 330 (2): an idle child is stopped, resumed in a new terminal of its worktree once claude shows there, and bound back to its Task", async () => {
