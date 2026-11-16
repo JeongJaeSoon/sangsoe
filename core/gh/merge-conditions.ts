@@ -11,7 +11,8 @@ export type MergeConditionSource = "protection" | "own";
 export type MergeCondition = { id: MergeConditionId; ok: boolean; reason: string; source: MergeConditionSource };
 
 export type MergeConditions =
-  | { kind: "read"; autoMerge: boolean; conditions: MergeCondition[] }
+  /** `unreadable` names the settings that could not be read ("rulesets", "branch protection"); "" when both were. */
+  | { kind: "read"; autoMerge: boolean; conditions: MergeCondition[]; unreadable: string }
   | { kind: "rate_limited"; resetAt: number };
 
 type Rule = { type: string; parameters?: Record<string, unknown> };
@@ -96,7 +97,7 @@ export async function readMergeConditions(
   const paths = await protectedPathsCondition(gh, a);
   if ("kind" in paths) return paths;
   conditions.push(paths);
-  return { kind: "read", autoMerge: conditions.every((c) => c.ok), conditions };
+  return { kind: "read", autoMerge: conditions.every((c) => c.ok), conditions, unreadable };
 }
 
 async function protectedPathsCondition(
