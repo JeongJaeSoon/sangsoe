@@ -32,7 +32,7 @@ export const GENERATED_RULES: readonly { readonly rule: string; readonly source:
   { rule: "Bash(orca repo show:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca search:*)", source: "claude-plugin/skills/general/recall/SKILL.md" },
   { rule: "Bash(orca status:*)", source: "core/orca/commands.ts" },
-  { rule: "Bash(orca terminal close --terminal term_*)", source: "claude-plugin/agents/lead.md" },
+  { rule: "Bash(orca terminal close --terminal term_*)", source: "claude-plugin/skills/orchestrate/SKILL.md" },
   { rule: "Bash(orca terminal list:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca terminal read --terminal term_*)", source: "declared: owner order d142 (2026-11-15) names it; no sangsoe file runs it yet" },
   { rule: "Bash(orca terminal send --terminal term_*)", source: "core/orca/commands.ts" },

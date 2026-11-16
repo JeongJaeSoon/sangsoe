@@ -72,9 +72,9 @@ test("U145-6: lineage_invalid also comes from a lead with no Task or a worktree 
   has(section(lead, "깨어날 때마다"), want, "lead.md 깨어날 때마다");
 });
 
-test("U145-7: after a restart the lead finds the previous Run in the handoff before run-create, re-arms check --wait; server_stale needs a restart", () => {
+test("U145-7: after a restart the lead finds the previous Run in the handoff before run-create, re-arms the wait (decision 302's command); server_stale needs a restart", () => {
   const wake = section(lead, "첫 깨움");
-  has(wake, ["handoff 에서 앞 Run id 를 찾아 `run-use --id <그 id>`", `\`${WAIT_CMD} --wait\` 를 백그라운드로 다시 걸어 둔다`], "lead.md 첫 깨움");
+  has(wake, ["handoff 에서 앞 Run id 를 찾아 `run-use --id <그 id>`", `\`${WAIT_CMD} --run <네 Run> --wait `, "--json` 를 백그라운드로 다시 걸어 둔다"], "lead.md 첫 깨움");
   assert.ok(wake.indexOf("handoff 에서 앞 Run id") < wake.indexOf("run-create --objective"), "handoff Run comes before run-create");
   has(start, ["`server_stale` 은 `/reload-plugins` 로 풀리지 않는다", "세션을 다시 시작해야 풀린다"], "start skill");
 });
