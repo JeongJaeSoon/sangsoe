@@ -8,4 +8,6 @@ export default defineEvent("session_started", {
   effort: opt(str),
   /** Orca's path-free id of the worktree a session with no Task runs in (decision 273). */
   worktree: opt(str),
+  /** The Orca terminal handle the session ran in when the row was written (decision 333). */
+  terminal: opt(str),
 });

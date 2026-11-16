@@ -178,6 +178,9 @@ const ALLOWED = new Map<string, string>([
   // Decision 322: start_unit's resume row, built after design.html's last edit.
   ["event:unit_resumed:code-only", "322"],
   ["event-glossary:unit_resumed:code-only", "322"],
+  // Decision 333: the row a session that came back without --agent leaves when it takes its role.
+  ["event:session_continued:code-only", "333"],
+  ["event-glossary:session_continued:code-only", "333"],
 ]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };

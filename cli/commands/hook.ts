@@ -65,11 +65,14 @@ async function record(event: SessionHook, host: Host): Promise<Report> {
     const lines = await recordHook(event, { store, orca: createOrcaAdapter(nodeExec(HOOK_ORCA_MS)) }, input, {
       pluginVersion: pluginVersion(host),
       terminal: host.env.ORCA_TERMINAL_HANDLE,
+      agentDefinition: (role) => agentDefinition(host, role),
     });
     return { code: 0, lines };
   } catch (e) {
     process.stderr.write(`sangsoe hook ${event}: ${(e as Error).message}\n`);
-    return { code: 0, lines: [] };
+    // Decision 333: a prompt the hook could not record is said, not passed over; one line, no half injection.
+    const lines = event === "user-prompt-submit" ? [`sangsoe: 이 프롬프트를 기록하지 못했다(${(e as Error).message}). owner_action 이 남지 않았다.`] : [];
+    return { code: 0, lines };
   } finally {
     store?.close();
   }
@@ -83,6 +86,18 @@ function pluginVersion(host: Host): string | undefined {
   try {
     const v = (JSON.parse(host.readText(join(root, ".claude-plugin", "plugin.json"))) as { version?: unknown }).version;
     return typeof v === "string" ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The plugin's agent definition for a role without its frontmatter; undefined when it cannot be read. */
+function agentDefinition(host: Host, role: string): string | undefined {
+  const root = host.env.CLAUDE_PLUGIN_ROOT;
+  if (!root) return undefined;
+  try {
+    const body = host.readText(join(root, "agents", `${role}.md`)).replace(/^---\n[\s\S]*?\n---\n/, "").trim();
+    return body === "" ? undefined : body;
   } catch {
     return undefined;
   }

@@ -165,7 +165,12 @@ test("303: a session resumed in a folder Orca does not list gets back the Run it
   ]);
   assert.deepEqual(await lead("l2", "startup", "sangsoe:lead"), ["sangsoe-role: lead"], "another session in an unlisted folder is not handed that Run");
   assert.deepEqual(await lead("l1", "resume", "sangsoe:orchestrator"), ["sangsoe-role: orchestrator"], "the same id under another role is not handed the lead's Run");
-  assert.deepEqual(await lead("l1", "resume"), [], "no agent_type and no Dispatch: not a sangsoe session (decision 192)");
+  assert.deepEqual(
+    await lead("l1", "resume"),
+    ["sangsoe-role: lead", "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_lead"],
+    "decision 333: a resume without --agent keeps the role its own last recorded row named",
+  );
+  assert.deepEqual(await lead("l9", "resume"), [], "no row, no agent_type and no Dispatch: not a sangsoe session (decision 192)");
 });
 
 test("303: in a listed worktree a resumed session gets its own last Run before a newer one its role held there", async () => {

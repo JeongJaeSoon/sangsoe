@@ -113,13 +113,16 @@ test("333: a session that names its role with --agent keeps it; nothing is conti
 
 test("333: an answer or approval line in a session sangsoe does not know says why it was not recorded", async () => {
   const w = createSessionWorld({ dispatched: false, heldRun: null });
+  assert.deepEqual(await hook(w, "user-prompt-submit", { session_id: "u1", prompt_id: "p0", prompt: "d001: 첫째" }, T1), [], "no such decision: silent");
+  w.store.append({ type: "decision_opened", source: "t", dedupe_key: "decision:k1", payload: { decision: "d001", decision_key: "k1" } });
+  const before = w.store.events().length;
   for (const prompt of ["d001: 첫째", `승인 acme/api#12 ${"a".repeat(40)}`]) {
     const out = await hook(w, "user-prompt-submit", { session_id: "u1", prompt_id: "p1", prompt }, T1);
     assert.equal(out.length, 1, prompt);
     assert.match(out[0] ?? "", /owner_action 으로 남기지 않았다/);
   }
   assert.deepEqual(await hook(w, "user-prompt-submit", { session_id: "u1", prompt_id: "p2", prompt: "그냥 말" }, T1), [], "ordinary words in someone else's session: silent");
-  assert.equal(w.store.events().length, 0, "and nothing is written for it");
+  assert.equal(w.store.events().length, before, "and nothing is written for it");
 });
 
 test("333: a session whose SessionStart was never recorded (sangsoe enabled mid-session) is registered by its first prompt when agent_type names the role", async () => {

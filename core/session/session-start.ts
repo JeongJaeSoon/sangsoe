@@ -16,7 +16,14 @@ export interface SessionStartOptions {
   readonly pluginVersion?: string | undefined;
   /** The session's own Orca terminal handle (`ORCA_TERMINAL_HANDLE`), read by UserPromptSubmit (decision 280). */
   readonly terminal?: string | undefined;
+  /** The plugin's agent definition body for a role, injected when the role was taken without --agent (decision 333). */
+  readonly agentDefinition?: ((role: Role) => string | undefined) | undefined;
+  /** false: a later hook registers the session and prints nothing, so no handoff or answer is marked delivered. */
+  readonly deliver?: boolean;
 }
+
+/** Decision 333: the starts that carry on a session that ran before; `startup` is a new one (decision 192). */
+const CARRY_ON = new Set(["resume", "clear", "compact"]);
 
 /**
  * The SessionStart hook: finds out whether this is a session sangsoe started, records it, and returns
@@ -28,7 +35,20 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   const { store, orca } = deps;
   const declared = agentRole(input.agent_type);
   const loc = await locate(orca, input.cwd ?? "");
-  const role = declared ?? readRoleLine(loc?.spec);
+  let role = declared ?? readRoleLine(loc?.spec);
+  let worktree: Promise<string | undefined> | undefined;
+  const liveHere = () => (worktree ??= liveWorktree(orca, input.cwd));
+  let took: Took | undefined;
+  if (!role && !loc && CARRY_ON.has(input.source ?? "")) {
+    const t = await carriedOn(store, input.session_id, opts.terminal, liveHere);
+    if (t && "roles" in t) {
+      return [`sangsoe: 이 worktree 에서 앞서 돈 세션의 역할이 여럿(${t.roles.join(", ")})이라 역할을 잇지 않았다. --agent sangsoe:<role> 로 다시 띄운다.`];
+    }
+    if (t) {
+      role = t.role;
+      took = t;
+    }
+  }
   if (!role) {
     // Only a Task sangsoe made is its to flag; a Dispatch another tool started is left alone (decisions 46, 192).
     if (!loc || !store.events({ type: "item_created" }).some((e) => e.entity_id === loc.task)) return [];
@@ -46,30 +66,49 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   const current = await orca.runCurrent();
   const held = current.ok && typeof current.value.runId === "string" && current.value.runId !== "" ? current.value.runId : undefined;
   // A session with no Task is told apart from another of its role by where it runs (decision 273).
-  const here = !loc && role !== "worker" ? await liveWorktree(orca, input.cwd) : undefined;
-  const before = previous(deps, role, loc, here, input.session_id);
+  const here = !loc && role !== "worker" ? await liveHere() : undefined;
+  const before = previous(deps, role, loc, here, took ? [input.session_id, took.from] : [input.session_id]);
   store.append({
     type: "session_started",
     source: SOURCE,
     ...(loc ? { entity: "task", entity_id: loc.task, subject: `run:${loc.run}` } : {}),
     ...(held ? { target: `run:${held}` } : {}),
     dedupe_key: dedupeKey(EVENTS.session_started, input.session_id, input.source ?? "startup"),
-    payload: { session: input.session_id, role, model: input.model ?? "unknown", ...(here ? { worktree: here } : {}) },
+    payload: {
+      session: input.session_id,
+      role,
+      model: input.model ?? "unknown",
+      ...(here ? { worktree: here } : {}),
+      ...(opts.terminal ? { terminal: opts.terminal } : {}),
+    },
   });
+  if (took && took.by !== "session") {
+    store.append({
+      type: "session_continued",
+      source: SOURCE,
+      dedupe_key: dedupeKey(EVENTS.session_continued, input.session_id, input.source ?? "startup"),
+      payload: { from: took.from, to: input.session_id, by: took.by },
+    });
+  }
 
   const lines = [`${roleLine(role)}${loc ? ` · Task ${loc.task} · Dispatch ${loc.dispatch} · Run ${loc.run}` : ""}`];
+  const definition = took ? opts.agentDefinition?.(role) : undefined;
+  if (definition) lines.push(definition);
   if (loc) lines.push(...unitRowLines(store, loc.task));
   const run = held ?? before;
   if (held) lines.push(`Run ${held} 을 쥐고 있다(run-current).`);
   else if (before && role !== "worker") lines.push(`run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id ${before}`);
   // Every read comes before the first `notified` row, so a failure while reading marks nothing delivered.
   // A session with a Dispatch saved its handoff in that Dispatch's Run under its Task (handoff_save).
-  const handoff = loc
-    ? await lastHandoff(deps, loc.run, input.session_id, handoffSubject(loc.task))
-    : run
-      ? await lastHandoff(deps, run, input.session_id, "handoff")
-      : undefined;
-  const late = loc ? lateAnswers(deps, loc.task, input.session_id) : [];
+  const deliver = opts.deliver !== false;
+  const handoff = !deliver
+    ? undefined
+    : loc
+      ? await lastHandoff(deps, loc.run, input.session_id, handoffSubject(loc.task))
+      : run
+        ? await lastHandoff(deps, run, input.session_id, "handoff")
+        : undefined;
+  const late = loc && deliver ? lateAnswers(deps, loc.task, input.session_id) : [];
   if (handoff) lines.push(...handoff());
   if (opts.pluginVersion && opts.pluginVersion !== VERSION) {
     lines.push(`sangsoe 버전 어긋남: Claude Code plugin ${opts.pluginVersion} ≠ 코어 ${VERSION}. 오너에게 sangsoe install 을 알린다.`);
@@ -100,13 +139,47 @@ type Delivery = () => string[];
  * alone would hand a new orchestrator in another worktree someone else's Run; a worktree that cannot
  * be read names none.
  */
-function previous(deps: CoreDeps, role: Role, loc: Located | undefined, here: string | undefined, session: string): string | undefined {
+function previous(deps: CoreDeps, role: Role, loc: Located | undefined, here: string | undefined, sessions: readonly string[]): string | undefined {
   const events = deps.store.events({ type: "session_started" });
   const last = (rows: SessionRow[]) => rows.reverse().find((r) => r.heldRun)?.heldRun;
   if (loc) return last(events.map(toSessionRow).filter((r) => r.task === loc.task));
-  // A worker takes no Run back, and must not use up its Run's handoff.
-  const own = role === "worker" ? undefined : last(events.filter((e) => e.payload.session === session).map(toSessionRow).filter((r) => r.task === undefined && r.role === role));
+  // A worker takes no Run back, and must not use up its Run's handoff. A session carried on from
+  // another (decision 333) takes that one's Run as its own.
+  const own =
+    role === "worker"
+      ? undefined
+      : last(events.filter((e) => sessions.includes(String(e.payload.session))).map(toSessionRow).filter((r) => r.task === undefined && r.role === role));
   return own ?? last(events.map(toSessionRow).filter((r) => r.task === undefined && r.role === role && here !== undefined && r.worktree === here));
+}
+
+/** Whose role a session that came back without --agent takes, and how it was found (decision 333). */
+type Took = { role: Role; from: string; by: "session" | "terminal" | "worktree" };
+
+/**
+ * Decision 333: the session that ran before this one, among rows with no Task: this same session id
+ * (a resume, in any terminal), else the last session in this Orca terminal (a /clear), else the
+ * sessions in this Orca worktree (a resume under a new id in a new terminal), only while they all had
+ * one role. Two roles in one worktree name none: a lead taken for the orchestrator would answer
+ * decisions (decision 173).
+ */
+async function carriedOn(
+  store: CoreDeps["store"],
+  session: string,
+  terminal: string | undefined,
+  liveHere: () => Promise<string | undefined>,
+): Promise<Took | { roles: Role[] } | undefined> {
+  const rows = store.events({ type: "session_started" }).filter((e) => e.entity !== "task");
+  const took = (e: (typeof rows)[number] | undefined, by: Took["by"]): Took | undefined =>
+    e ? { role: e.payload.role as Role, from: String(e.payload.session), by } : undefined;
+  const own = took(rows.findLast((e) => e.payload.session === session), "session");
+  if (own) return own;
+  const inTerminal = terminal ? took(rows.findLast((e) => e.payload.terminal === terminal), "terminal") : undefined;
+  if (inTerminal) return inTerminal;
+  const here = await liveHere();
+  if (!here) return undefined;
+  const there = rows.filter((e) => e.payload.worktree === here);
+  const roles = [...new Set(there.map((e) => e.payload.role as Role))];
+  return roles.length > 1 ? { roles } : took(there.at(-1), "worktree");
 }
 
 async function lastHandoff(deps: CoreDeps, run: string, session: string, subject: string): Promise<Delivery | undefined> {

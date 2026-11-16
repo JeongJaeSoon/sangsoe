@@ -62,6 +62,7 @@
 {"type":"plugin_approved","source":"plugin approve","payload":{"key":"local.sangsoe","version":"0.1.0","fingerprint":"ap1-0000","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","at":1000}}
 {"type":"run_stalled","source":"orca-monitor","payload":{"run":"run_1"}}
 {"type":"session_started","source":"SessionStart","payload":{"session":"sess-1","role":"worker","tier":"standard","model":"model-x","effort":"high"}}
+{"type":"session_continued","source":"SessionStart","payload":{"from":"sess-1","to":"sess-2","by":"terminal"}}
 {"type":"signal","source":"lead:api","payload":{"kind":"main_flake","reason":"rerun passed"}}
 {"type":"stage_recorded","source":"lead:api","payload":{"pr":"acme/api#12","stage":"dev","sha":"d4e5f6a"}}
 {"type":"timer_stalled","source":"timer-watch","payload":{"kind":"reaper","reason":"last timer round older than 3 intervals"}}

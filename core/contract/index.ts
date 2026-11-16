@@ -63,6 +63,7 @@ import review_commented from "./events/review_commented.ts";
 import review_replied from "./events/review_replied.ts";
 import review_verdict from "./events/review_verdict.ts";
 import run_stalled from "./events/run_stalled.ts";
+import session_continued from "./events/session_continued.ts";
 import session_started from "./events/session_started.ts";
 import signal from "./events/signal.ts";
 import stage_recorded from "./events/stage_recorded.ts";
@@ -158,6 +159,7 @@ export const EVENTS = {
   review_replied,
   review_verdict,
   run_stalled,
+  session_continued,
   session_started,
   signal,
   stage_recorded,

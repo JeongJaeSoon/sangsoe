@@ -110,8 +110,21 @@ test("a recording hook fails open: unreadable input or no Orca exits 0 and injec
   for (const input of ["not json", "{}", JSON.stringify({ cwd: "/" })]) {
     assert.deepEqual(Object.values(hook(home, input, ["hook", "session-start"])).slice(0, 2), [0, ""]);
   }
-  const r = hook(home, JSON.stringify({ session_id: "s1", cwd: home, prompt: "d001 yes" }), ["hook", "user-prompt-submit"]);
+  const r = hook(home, JSON.stringify({ session_id: "s1", cwd: home, prompt: "go on" }), ["hook", "user-prompt-submit"]);
   assert.deepEqual([r.code, r.stdout], [0, ""]);
+  // Decision 333: an approval line there is not recorded, and says so.
+  const d = hook(home, JSON.stringify({ session_id: "s1", cwd: home, prompt: `승인 acme/api#12 ${"c".repeat(40)}` }), ["hook", "user-prompt-submit"]);
+  assert.deepEqual([d.code, /owner_action 으로 남기지 않았다/.test(d.stdout)], [0, true], d.stdout);
+});
+
+test("333: a prompt the hook cannot record says so in one line and still exits 0", () => {
+  const home = join(scratchDir("sangsoe-hook-"), "not-a-dir");
+  writeFileSync(home, "");
+  const r = hook(home, JSON.stringify({ session_id: "s1", cwd: "/", prompt: "d001 yes" }), ["hook", "user-prompt-submit"]);
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, /^sangsoe: 이 프롬프트를 기록하지 못했다\(.+\)\. owner_action 이 남지 않았다\.$/);
+  assert.equal(r.stdout.split("\n").length, 1);
+  assert.deepEqual(Object.values(hook(home, JSON.stringify({ session_id: "s1", cwd: "/" }), ["hook", "stop"])).slice(0, 2), [0, ""], "other hooks stay silent");
 });
 
 test("--replay measures the fixture and exits 0 only with no false positive or negative", () => {

@@ -7,10 +7,10 @@ import type { CoreDeps } from "../notify/result.ts";
 import { deliverOwnRun } from "../detect/queue/own-run.ts";
 import { carriesApproval, type OwnerApprovalLine, parseApprovalLine } from "../owner/approval.ts";
 import { mayBeDriven, wasDriven } from "../owner/driven.ts";
-import { classifyPrompt } from "../owner/prompt.ts";
+import { classifyPrompt, unwrapPaste } from "../owner/prompt.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
 import type { Store } from "../store/store.ts";
-import { liveWorktree } from "./locate.ts";
+import { agentRole, liveWorktree } from "./locate.ts";
 import { hashOf, mask, summarize } from "./mask.ts";
 import { type SessionHookInput, type SessionRow, sessionOf } from "./session.ts";
 import { sessionStart, type SessionStartOptions } from "./session-start.ts";
@@ -37,14 +37,23 @@ export type SessionHook = (typeof SESSION_HOOKS)[number];
  */
 export async function recordHook(event: SessionHook, deps: CoreDeps, input: SessionHookInput, opts: SessionStartOptions = {}): Promise<string[]> {
   if (event === "session-start") return sessionStart(deps, input, opts);
-  const row = sessionOf(deps.store, input.session_id);
-  if (!row) return [];
+  let row = sessionOf(deps.store, input.session_id);
+  const registered: string[] = [];
+  // Decision 333: a session whose SessionStart was never recorded (sangsoe enabled mid-session, a start
+  // that failed) is registered by its first later hook that names the role the way SessionStart would.
+  // Not from a subagent's hook, whose agent_type is the subagent's, nor from PostToolUse, which subagents share.
+  if (!row && event !== "post-tool-use" && !input.agent_id && agentRole(input.agent_type)) {
+    const lines = await sessionStart(deps, { ...input, source: "late" }, { ...opts, deliver: event === "user-prompt-submit" });
+    if (event === "user-prompt-submit") registered.push(...lines);
+    row = sessionOf(deps.store, input.session_id);
+  }
+  if (!row) return event === "user-prompt-submit" ? notRecorded(deps.store, input.prompt ?? "") : [];
   switch (event) {
     case "user-prompt-submit": {
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
-      await ownerSaid(deps, row, input, opts.terminal);
+      const why = await ownerSaid(deps, row, input, opts.terminal);
       // Decision 274: this prompt's context gets the Run's one count line; Claude Code injects the stdout.
-      return ownRun(deps, row, input);
+      return [...registered, ...why, ...(await ownRun(deps, row, input))];
     }
     case "stop": {
       await recordShellInputs(deps, row, input.session_id, input.transcript_path);
@@ -143,14 +152,18 @@ const ANSWER_SHAPE = /^\s*(d\d{3,})\b/;
  * decision; it links through U8's decision_answer (linked_by=hook). A dispatched session's prompt can
  * be another session's message, so it never answers.
  */
-async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInput, terminal: string | undefined): Promise<void> {
+async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInput, terminal: string | undefined): Promise<string[]> {
   const text = input.prompt ?? "";
-  if (classifyPrompt(text) !== "owner") return;
+  if (classifyPrompt(text) !== "owner") return [];
   // Decision 280: text Orca reported as driven into this terminal was typed by no person. No row: it
   // answers no decision, marks no wait as the owner's, and is no owner_action a tool could cite.
   const driven = deps.store.events({ type: "prompt_driven" });
-  if (wasDriven(driven, terminal, text, Date.now())) return;
-  const approval = ownerApproval(row, input, terminal, driven);
+  if (wasDriven(driven, terminal, text, Date.now())) {
+    return weighty(deps.store, text) ? [`sangsoe: Orca 가 이 터미널에 밀어 넣은 글(prompt_driven)이라 ${NOT_RECORDED}`] : [];
+  }
+  const checked = ownerApproval(row, input, terminal, driven);
+  const approval = checked && "pr" in checked ? checked : null;
+  const why = checked && "reason" in checked ? [`sangsoe: 이 줄을 승인으로 남기지 않았다(owner_action 으로는 남겼다): ${checked.reason}.`] : [];
   const masked = mask(text);
   const key = dedupeKey(EVENTS.owner_action, input.session_id, input.prompt_id ?? hashOf(`${masked}\n${tail(input.transcript_path).length}`));
   const action = deps.store.appendOwnerAction(
@@ -170,27 +183,64 @@ async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
     masked,
     approval ?? undefined,
   );
+  if (!action.inserted) return [];
   // The orchestrator is the owner's session; a lead or worker whose Dispatch locate() missed is not.
-  if (!action.inserted || row.task || row.role !== "orchestrator") return;
+  if (row.task || row.role !== "orchestrator") return why;
   const named = [...new Set(text.match(DECISION_NO) ?? [])];
   const d = named.length === 1 ? ANSWER_SHAPE.exec(text)?.[1] : undefined;
-  if (!d || !readDecision(deps.store, d)) return;
+  if (!d || !readDecision(deps.store, d)) return why;
   const current = await deps.orca.runCurrent();
   const callerRun = current.ok && typeof current.value.runId === "string" ? current.value.runId : "";
   // A refusal (an owner_action already used, a moot close) is the record's answer; the hook stays silent.
   await decisionAnswer(deps, { decision: d, answer: masked, ownerAction: action.seq, linkedBy: "hook", callerRun });
+  return why;
+}
+
+const NOT_RECORDED = "이 결정 답·승인 줄을 owner_action 으로 남기지 않았다";
+
+/**
+ * An approval line, or a line that starts with a decision the store has: the prompts whose loss blocks
+ * something, so their loss is said (decision 333). Any other session's words that happen to start
+ * with a dNNN stay silent.
+ */
+function weighty(store: Store, text: string): boolean {
+  if (parseApprovalLine(text) !== null) return true;
+  const d = ANSWER_SHAPE.exec(unwrapPaste(text))?.[1];
+  return d !== undefined && readDecision(store, d) !== undefined;
+}
+
+/**
+ * Decision 333: a prompt in a session with no session_started row writes nothing (decision 192). An
+ * answer or an approval line there says so, since the owner typed it to be recorded; other words stay silent.
+ */
+function notRecorded(store: Store, text: string): string[] {
+  if (classifyPrompt(text) !== "owner" || !weighty(store, text)) return [];
+  return [
+    `sangsoe: 이 세션은 sangsoe 의 기록(session_started)이 없어 ${NOT_RECORDED}. 오너에게 알린다: 오케스트레이터를 claude --agent sangsoe:orchestrator 로 다시 띄운 뒤(같은 대화는 --resume <id>) 그 줄을 다시 친다.`,
+  ];
 }
 
 /**
  * Decision 311: the approval line in the orchestrator's own session, holding no Dispatch, that no one
  * but the owner can have put there. Each test fails closed: a terminal Orca may have driven it into,
- * a scheduling tool that carried its head, a transcript that cannot be read.
+ * a scheduling tool that carried its head, a transcript that cannot be read. An approval line that
+ * fails one gets the reason (decision 333); any other prompt gets null.
  */
-function ownerApproval(row: SessionRow, input: SessionHookInput, terminal: string | undefined, driven: readonly StoredEvent[]): OwnerApprovalLine | null {
-  if (row.task || row.role !== "orchestrator") return null;
+function ownerApproval(
+  row: SessionRow,
+  input: SessionHookInput,
+  terminal: string | undefined,
+  driven: readonly StoredEvent[],
+): OwnerApprovalLine | { reason: string } | null {
   const line = parseApprovalLine(input.prompt ?? "");
-  if (!line || mayBeDriven(driven, terminal, input.prompt ?? "")) return null;
-  return scheduledWith(input.transcript_path, line.head_sha, (s) => carriesApproval(s, line.head_sha)) === false ? line : null;
+  if (!line) return null;
+  if (row.task || row.role !== "orchestrator") return { reason: `오케스트레이터 세션이 아니다(${row.role}${row.task ? `, Task ${row.task}` : ""})` };
+  if (!terminal) return { reason: "이 세션의 Orca 터미널 handle(ORCA_TERMINAL_HANDLE)이 없다" };
+  if (mayBeDriven(driven, terminal, input.prompt ?? "")) return { reason: "이 터미널에 같은 글을 Orca 가 밀어 넣은 기록(prompt_driven)이 있다" };
+  const scheduled = scheduledWith(input.transcript_path, line.head_sha, (s) => carriesApproval(s, line.head_sha));
+  if (scheduled === null) return { reason: "transcript 를 읽지 못했다" };
+  if (scheduled) return { reason: "이 세션이 이 head 를 실은 ScheduleWakeup·CronCreate 를 불렀다" };
+  return line;
 }
 
 /**

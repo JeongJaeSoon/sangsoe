@@ -11,6 +11,8 @@ export interface SessionHookInput {
   readonly source?: string;
   readonly model?: string;
   readonly agent_type?: string;
+  /** Set when the hook fires inside a subagent: agent_type is then the subagent's, not the session's. */
+  readonly agent_id?: string;
   readonly prompt?: string;
   readonly prompt_id?: string;
   readonly tool_name?: string;
