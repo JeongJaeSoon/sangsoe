@@ -175,6 +175,9 @@ const ALLOWED = new Map<string, string>([
   ["event:owner_approval:code-only", "311"],
   ["event-glossary:owner_approval:code-only", "311"],
   ["gate:owner-approval:code-only", "311"],
+  // Decision 322: start_unit's resume row, built after design.html's last edit.
+  ["event:unit_resumed:code-only", "322"],
+  ["event-glossary:unit_resumed:code-only", "322"],
   // Decision 329: a pr-monitor round that stopped with watched repositories left.
   ["event:monitor_round_truncated:code-only", "329"],
   ["event-glossary:monitor_round_truncated:code-only", "329"],

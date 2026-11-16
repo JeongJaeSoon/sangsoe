@@ -67,6 +67,8 @@ export const ORCA_POLICY: Readonly<Record<string, Entry>> = {
   // Starts belong to the start gate (decision 94); a session opens another session through start_unit only.
   "orchestration worker-start": { kind: "deny", why: "starts go through start_unit and its gate (decision 94)" },
   "worktree create": { kind: "deny", why: "starts go through start_unit and its gate (decision 94)" },
+  "orchestration worker-abandon": { kind: "deny", why: "start_unit's resume abandons the Dispatch it replaces; Orca: unverifiable alone never authorizes an abandon (decision 322)" },
+  "terminal create": { kind: "deny", why: "runs any command in a new terminal; its one use is the resume a person asked for, asked each time (decision 322)" },
   "agent launch": { kind: "deny", why: "launch agents are forbidden; start_unit is the only start (decision 94)" },
   // Deletes, resets and close-alls.
   "worktree rm": { kind: "deny", why: "deletes a worktree; the REAPER checks first (decisions 62, 86)" },
