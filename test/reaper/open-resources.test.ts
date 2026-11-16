@@ -5,8 +5,7 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { test } from "node:test";
-import { openResources } from "../../core/reaper/open.ts";
-import { Store } from "../../core/index.ts";
+import { openResources, Store } from "../../core/index.ts";
 import { scratchDir } from "../scratch.ts";
 
 test("openResources' load part carries the stored samples as history, oldest first", async () => {
