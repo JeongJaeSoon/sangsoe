@@ -96,6 +96,7 @@ test("graphRead (brief's port): edges from both homes in task ids, a critical pa
   w.task("t_a", "run_a");
   w.task("t_b", "run_a", ["t_a"]);
   w.task("t_c", "run_a");
+  for (const [t, a] of [["t_a", "i001"], ["t_b", "i002"], ["t_c", "i003"]] as const) bindItem(w, t, a);
   assert.ok(addEdgeTo(w, await w.snapshot(), { pred: "item:t_b", succ: "item:t_c", kind: "after" }).ok);
   const input = await w.input();
   assert.deepEqual(graphRead.edges(input), [

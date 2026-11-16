@@ -145,6 +145,8 @@ test("precheck_blocks_send: the send item stays 📅 until the precheck is ✅; 
   const v = createGraphWorld();
   v.task("t_pre", "run_a");
   v.task("t_send", "run_a", ["t_pre"]);
+  bindItem(v, "t_pre", "i062");
+  bindItem(v, "t_send", "i063");
   v.complete("t_pre");
   assert.deepEqual(await readyIds(v), ["t_send"]);
 });
