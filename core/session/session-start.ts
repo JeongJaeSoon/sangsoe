@@ -104,7 +104,8 @@ function previous(deps: CoreDeps, role: Role, loc: Located | undefined, here: st
   const events = deps.store.events({ type: "session_started" });
   const last = (rows: SessionRow[]) => rows.reverse().find((r) => r.heldRun)?.heldRun;
   if (loc) return last(events.map(toSessionRow).filter((r) => r.task === loc.task));
-  const own = last(events.filter((e) => e.payload.session === session).map(toSessionRow).filter((r) => r.task === undefined && r.role === role));
+  // A worker takes no Run back, and must not use up its Run's handoff.
+  const own = role === "worker" ? undefined : last(events.filter((e) => e.payload.session === session).map(toSessionRow).filter((r) => r.task === undefined && r.role === role));
   return own ?? last(events.map(toSessionRow).filter((r) => r.task === undefined && r.role === role && here !== undefined && r.worktree === here));
 }
 
