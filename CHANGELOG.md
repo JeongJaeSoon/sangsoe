@@ -4,6 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+- **A test now pins that the resource panel's load history is wired from the store (308).** `openResources` hands the stored load samples to the load part in one line, and no test called it; dropping that line left the panel quietly without history. `test/reaper/open-resources.test.ts` reads it through a scratch store. Tests only.
 - **The resource panel's keyboard focus no longer gets pulled back, and a 정리 result is no longer lost (307).** A press waiting for its button is dropped when focus moves anywhere else, cancelling the confirm in a stale view lands on 새로 고침 instead of body, and a failed reread after 정리 still shows what the 정리 did.
 
 - **REAPER: a card sangsoe started stays sangsoe's after its repository is registered again in Orca (306).** Ownership now matches the path inside `unit_started.worktree` as well as the whole `<repoId>::<path>` id, so the owner's 정리 list, the panel's candidates and decision 207's fail-closed open-PR read keep such a card; a path that only shares a prefix never matches. The open-Task and live-session checks find a Dispatch Orca still lists under the old id the same way, so they can only block more; with no PR, that Dispatch's outcome now decides whether the card is finished, as it does for a card never re-registered.
