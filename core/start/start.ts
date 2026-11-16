@@ -302,7 +302,8 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     requester = { ...requester, worktreeId: innermost.id };
   } else {
     // Orca refuses new-child outside a managed worktree, so one outside every worktree names a repo (decision 197).
-    if (!(req.repo ?? ("id" in req.task ? storedRepo(store, req.task.id) : undefined))) return refuse("lineage_invalid", "worktree 밖의 오케스트레이터는 대상 저장소(repo)를 밝힌다: 새 worktree 를 둘 곳이 없다");
+    // A resume makes no worktree, so it needs no repo (decision 322).
+    if (!req.resume && !(req.repo ?? ("id" in req.task ? storedRepo(store, req.task.id) : undefined))) return refuse("lineage_invalid", "worktree 밖의 오케스트레이터는 대상 저장소(repo)를 밝힌다: 새 worktree 를 둘 곳이 없다");
   }
 
   // ③ depth_exceeded: only when the setting was read; otherwise the receipt decides (⑤).
@@ -371,7 +372,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     }
   }
   // Decision 318: kept with the Task, so a restart by id alone lands in the same repo.
-  if (req.repo && storedRepo(store, taskId) !== req.repo) {
+  if (req.repo && !req.resume && storedRepo(store, taskId) !== req.repo) {
     store.append({ type: "item_extra_set", source, payload: { task: taskId, repo: req.repo }, entity: "task", entity_id: taskId });
   }
   const repo = req.repo ?? storedRepo(store, taskId) ?? parentRepo;
@@ -409,6 +410,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       target: req.resume,
       specRole,
       dispatchOf: (r) => findKey(r, DISPATCH_KEYS),
+      write: (first, again) => write(orca, first, again),
       refuse: (reason, detail) => refuse(reason, detail, taskId),
       failed: failedAttempt,
     });

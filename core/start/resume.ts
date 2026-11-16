@@ -1,4 +1,4 @@
-import type { OrcaAdapter, Receipt, TaskRow } from "../contract/orca.ts";
+import type { OrcaAdapter, OrcaResult, Receipt, TaskRow, WriteOptions } from "../contract/orca.ts";
 import { settled } from "../recover/recover.ts";
 import type { RefusalReason, ResumeTarget, StartOutcome, StartPorts, StartRefusal } from "./types.ts";
 
@@ -17,16 +17,26 @@ export type ResumeContext = {
   specRole: (spec: unknown) => { first: string; role: string };
   /** The Dispatch id in a worker-start receipt, read as a first start reads it. */
   dispatchOf: (receipt: Receipt) => string | undefined;
+  /** Decision 60's write: a lost response is replayed through request-show, as a first start's is. */
+  write: (first: Promise<OrcaResult<Receipt>>, again: (o: WriteOptions) => Promise<OrcaResult<Receipt>>) => Promise<OrcaResult<Receipt>>;
   refuse: (reason: RefusalReason, detail: string) => Promise<StartRefusal>;
   /** A refusal that counts toward T5, as a failed worker-start does. */
   failed: (reason: RefusalReason, detail: string) => Promise<StartRefusal>;
 };
 
+/** Orca's own refusal is definite; a lost answer or an unparsed exit may still have taken effect (Orca's recovery guide). */
+function unknownOutcome(r: OrcaResult<Receipt>): boolean {
+  if (r.ok) return false;
+  const code = r.error.code;
+  return r.requestId !== undefined || ["response_lost", "request_absent", "unexpected_shape"].includes(code) || code.startsWith("exit_");
+}
+
 /**
  * Decision 322: the session someone re-opened with `claude --resume` in a new terminal goes back on
  * its own Task. Everything that can refuse is read before anything changes; then the old Dispatch is
  * abandoned (Orca's fence for a session it cannot see), the Task reopened, and the terminal bound with
- * `worker-start --terminal`. A second call after a partial one finds the old Dispatch settled and goes on.
+ * `worker-start --terminal`. A second call after a partial one finds the old Dispatch settled and goes on;
+ * one after a bind that went through finds the Task's Dispatch on this terminal and changes nothing.
  */
 export async function resumeUnit(c: ResumeContext): Promise<StartOutcome> {
   const { orca, store, taskId, target } = c;
@@ -58,6 +68,14 @@ export async function resumeUnit(c: ResumeContext): Promise<StartOutcome> {
   if (!old.ok) return no(`옛 Dispatch ${from} 의 워커를 읽지 못했다 (${old.error.code})`);
   if (old.value.workspace !== tree) return no(`옛 Dispatch ${from} 의 worktree(${old.value.workspace ?? "없음"})가 ${tree} 가 아니다`);
   const wasSettled = settled(old.value);
+  if (!wasSettled && old.value.terminal === target.terminal) {
+    // The Task's Dispatch already holds this terminal: an earlier resume bound it, or the caller named the old one.
+    const done = store.events({ type: "unit_resumed" }).findLast((e) => e.entity_id === taskId && e.payload.dispatch === from);
+    if (done && done.payload.terminal === target.terminal && done.payload.session === target.sessionId) {
+      return { kind: "resumed", taskId, dispatchId: from, from: String(done.payload.from), worktreeId: tree, terminal: target.terminal, notes: ["이미 묶였다"] };
+    }
+    return no(`Task ${taskId} 의 Dispatch ${from} 가 이미 터미널 ${target.terminal} 을 쥐고 있다: 묶을 것이 없다`);
+  }
   if (!wasSettled && old.value.liveness === "live") return no(`옛 Dispatch ${from} 의 세션이 아직 살아 있다(liveness live): 같은 세션을 두 터미널에 두지 않는다`);
 
   const terms = await orca.terminalList({ worktree: `id:${tree}` });
@@ -66,24 +84,34 @@ export async function resumeUnit(c: ResumeContext): Promise<StartOutcome> {
 
   const notes: string[] = [];
   if (!wasSettled) {
-    const fenced = await orca.workerAbandon({ dispatch: from });
-    if (!fenced.ok) return c.refuse("orca_error", `옛 Dispatch ${from} 를 abandon 하지 못했다 (${fenced.error.code}): 아무것도 바꾸지 않았다`);
+    const fenced = await c.write(orca.workerAbandon({ dispatch: from }), (o) => orca.workerAbandon({ dispatch: from }, o));
+    if (!fenced.ok) {
+      const what = unknownOutcome(fenced) ? "결과를 알 수 없다: worker-show 로 그 Dispatch 를 읽고 같은 resume 을 다시 부른다" : "아무것도 바꾸지 않았다";
+      return c.refuse("orca_error", `옛 Dispatch ${from} 를 abandon 하지 못했다 (${fenced.error.code}): ${what}`);
+    }
     const after = await orca.workerShow({ dispatch: from });
-    if (!after.ok || !settled(after.value)) return c.refuse("orca_error", `옛 Dispatch ${from} 가 abandon 뒤에도 끝나지 않았다 (${after.ok ? after.value.state : after.error.code})`);
+    if (!after.ok || !settled(after.value)) {
+      return c.refuse("orca_error", `옛 Dispatch ${from} 를 abandon 했지만 끝난 것으로 읽히지 않는다 (${after.ok ? after.value.state : after.error.code}): Task 는 건드리지 않았다`);
+    }
     notes.push(`abandon: ${from}`);
   }
   const left = `옛 Dispatch ${from} 는 abandon 되었다. 터미널 ${target.terminal} 은 그대로 둔다`;
   const now = await orca.taskList({ run: c.run });
-  const status = now.ok ? now.value.find((t) => t.id === taskId)?.status : undefined;
-  if (status !== "ready") {
+  if (!now.ok) return c.refuse("orca_error", `Task ${taskId} 의 상태를 다시 읽지 못했다 (${now.error.code}). ${left}`);
+  if (now.value.find((t) => t.id === taskId)?.status !== "ready") {
     const reopened = await orca.taskUpdate({ id: taskId, status: "ready", run: c.run });
     if (!reopened.ok) return c.refuse("orca_error", `Task ${taskId} 를 ready 로 되돌리지 못했다 (${reopened.error.code}). ${left}`);
   }
 
   // No agent, model or effort: Orca takes none of them with --terminal, and the session keeps its own.
-  const started = await orca.workerStart({ task: taskId, worktree: { existing: `id:${tree}` }, run: c.run, terminal: target.terminal });
+  // --keep-open as on every start: in an existing worktree Orca would release the terminal at worker_done.
+  const args = { task: taskId, worktree: { existing: `id:${tree}` }, run: c.run, terminal: target.terminal, keepOpen: true } as const;
+  const started = await c.write(orca.workerStart(args), (o) => orca.workerStart(args, o));
   if (!started.ok) {
-    return c.failed("orca_error", `worker-start --terminal 실패 (${started.error.code}: ${started.error.message}). ${left}, Task 는 ready 라 resume 없는 start_unit 으로도 시작할 수 있다`);
+    const next = unknownOutcome(started)
+      ? "묶였는지 알 수 없다: 같은 resume 을 다시 부르면 이 터미널을 쥔 Dispatch 를 찾는다. resume 없는 start_unit 은 부르지 않는다"
+      : "Task 는 ready 다";
+    return c.failed("orca_error", `worker-start --terminal 실패 (${started.error.code}: ${started.error.message}). ${left}. ${next}`);
   }
   let dispatch = c.dispatchOf(started.value);
   if (!dispatch) {
