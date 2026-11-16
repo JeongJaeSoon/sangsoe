@@ -27,6 +27,6 @@ test("321-1: the orchestrator re-arms the wait by default before ending a turn, 
 
 test("321-2: a tool call that comes back as a refusal nobody gave is a cut, and start_unit retries the same Task", () => {
   for (const [where, text] of Object.entries({ "orchestrate": orchestrate, "start": start })) {
-    has(text, ["사람이 거부하지 않았", "interrupt", "끊김으로 읽는다", "`task` 로 다시 부른다", "같은 spec 을 다시 보내지 않는다"], `${where} 결과 표`);
+    has(text, ["사람이 거부하지 않았", "interrupt", "끊김으로 읽는다", "Task id 를 알", "`task` 로 다시 부른다", "같은 spec 을 다시 보내지 않는다", "모르면 같은 spec·title 로 한 번 다시 부른다", "\"채택:\""], `${where} 결과 표`);
   }
 });

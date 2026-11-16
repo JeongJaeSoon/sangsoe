@@ -49,7 +49,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 | 프롬프트에 붙은 한 줄 `sangsoe: Run <id> — 🟢 준비됨 N · 📅 기한 N · ⚠️ trigger 불명 N (새로 M건)` | 네 Run 을 쥔 세션의 hook 이 붙인 줄이다(결정 274). Orca 메시지가 아니라서 `check` 로 읽을 것이 없다. 🟢 는 시작할 항목, 📅 는 날짜가 된 오너 항목이라 오너에게 가져가고, ⚠️ 는 스크립트가 읽지 못한 trigger 라 그 조건이 왔는지 네가 판단한다. 줄 끝의 "게이트 N개를 풀었다" · "닫힌 Task 가 기다리던 결정" · "머지된 PR 의 Task 를 닫았다" 는 hook 이 이미 한 일이다(결정 275). 목록은 resource `ready` 와 `brief` 로 읽는다 | `start_unit`(`start` skill) |
 | `close_suggested` | 증거가 그 오너 항목의 완료를 보이나. 보이면 오너에게 완료 버튼을 누를 항목이라고 알린다. 오너 항목은 오너가 닫는다. 오너가 먼저 누른 항목은 ⏳ 검증 대기라 이 제안이 오지 않고 probe 가 통과하면 저절로 ✅ 로 읽힌다(결정 181) | — |
 | `main_red` | 머지한 PR 의 당사자에게 원인 좁히기를 맡긴다. 동결 중에는 `main_fix` 만 land 된다 | `start_unit` 또는 Orca `send` |
-| MCP tool 호출이 "거부" 로 돌아왔는데 사람이 거부하지 않았다(interrupt 문구) | 끊김이다. 거부 보고가 아니다(결정 321). 끊김으로 읽는다. `start_unit` 이면 같은 Task 를 `task` 로 다시 부른다(같은 spec 을 다시 보내지 않는다, 결정 318) | `start_unit` |
+| MCP tool 호출이 "거부" 로 돌아왔는데 사람이 거부하지 않았다(interrupt 문구) | 끊김이다. 거부 보고가 아니다(결정 321). 끊김으로 읽는다. `start_unit` 이면 Task id 를 알 때 같은 Task 를 `task` 로 다시 부른다(같은 spec 을 다시 보내지 않는다). 모르면 같은 spec·title 로 한 번 다시 부른다(결정 318 의 채택, `notes` 의 "채택:" 으로 확인) | `start_unit` |
 | `worker_dead`·`worker_stuck` | 같은 Task 를 다시 시작할지(`start_unit` 의 `task`), 멈출지 | `start_unit` |
 
 ## 리드: 프로그램을 끝까지
