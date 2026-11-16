@@ -86,8 +86,8 @@ function allowed(call: ToolCall): boolean {
 // Decision 300: a refusal names the way on for the shape it refused. The close line is one constant so
 // the unit that closes a lead with no Dispatch can reword it in one place.
 export const CLOSE_ROUTE =
-  "To close a finished unit use the MCP tool unit_close {dispatch}, or `orca orchestration worker-stop` / `worker-release`; " +
-  "`orca terminal close` is not called directly.";
+  "To close a finished unit use `orca orchestration worker-release`, then the MCP tool unit_close {dispatch} if the terminal stays retained; " +
+  "`worker-stop` is for a worker that must be stopped while it runs. `orca terminal close` is not called directly.";
 const INTERPRETERS = /^(python[\d.]*|node|deno|bun|ruby|perl|php|lua)$/;
 
 function route(call: ToolCall): string {
@@ -102,7 +102,7 @@ function route(call: ToolCall): string {
     else if (head === "orca" && words.startsWith("terminal send"))
       hints.add("Another session's terminal is not typed into. Answer it with `orca orchestration reply --id <message_id>` or message it with `orca orchestration send`.");
     else if (INTERPRETERS.test(head)) hints.add(`Filter JSON with \`jq\`; ${head} is not coordination.`);
-    else if (head === "sangsoe") hints.add("Read the status table through the resource `brief` (ReadMcpResourceTool) instead of the sangsoe command.");
+    else if (head === "sangsoe" && /^(brief|todo)\b/.test(words)) hints.add("Read the status table through the resource `brief` (ReadMcpResourceTool) instead of the sangsoe command.");
     else if (head === "sed" || head === "awk") hints.add("Use `head`, `tail`, `grep` or `jq` to cut output.");
   }
   return [...hints].join(" ");
