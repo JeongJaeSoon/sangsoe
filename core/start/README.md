@@ -6,7 +6,7 @@ sangsoe 가 여는 모든 세션은 `startUnit` 하나를 지난다(결정 94 (�
 | 결과 | 언제 | 남기는 것 |
 |---|---|---|
 | `started` | Dispatch 가 있는 워커가 떴다 | 없음(Orca 가 원본) |
-| `waiting` | Task 가 `ready` 가 아니거나 `capacity` 가 모자람 | 없음(거부가 아니다) |
+| `waiting` | Task 가 `ready` 가 아니거나 `capacity` 가 모자람 | `signal`{`wait`, reason} 을 Task · 원인마다 한 행(dedupe, 결정 318). 거부가 아니라 escalation 은 없고 T5 도 세지 않는다 |
 | `refused` | 여섯 사유 중 하나(아래 순서로 판정) | `signal`{`start_refused`, reason} 한 줄 + 부모에게 escalation 한 통. `worker-start` 를 Orca 가 분명히 거절했고(JSON `ok:false`, request id·Dispatch 없음) setup 스크립트가 없고 만든 worktree 의 터미널이 기록한 셸뿐이면 그 셸을 닫고 `worktree rm` 한다. 결과를 모르거나 setup 이 있거나 다른 터미널이 있으면 아무것도 닫지 않고 worktree 와 셸을 detail 에 적는다(결정 202) |
 
 부모 읽기 규칙(결정 310): 새 worktree 의 설정 파일을 쓴 뒤, 요청자 worktree 의 `.claude/settings.local.json` 의 `permissions.allow` 에 `Read(//<새 worktree>/**)` 를 더한다(`addParentReadRules`, 같은 검사로 커밋된 파일·다른 호스트는 쓰지 않고 notes 에 적는다. 요청자 worktree 가 main checkout 이면 그 저장소의 모든 worktree 세션이 그 파일을 읽으므로 쓰지 않는다). 쓴 부모 경로와 규칙은 `unit_started.parent`·`read_rules` 로 남고, REAPER 가 그 worktree 를 지울 때·분명히 실패한 시작이 지울 때 그 문자열만 거둔다. 쓰기 규칙과 `additionalDirectories` 는 쓰지 않는다.
@@ -24,5 +24,7 @@ setup 셸(결정 202): `worktree create` 는 agent 없이도 셸 하나를 연�
 새 Task 의 spec 첫 줄은 역할 줄 `sangsoe-role: <lead|worker>` 다(결정 46, `ROLE_LINE_PREFIX`). SessionStart hook 이 이 줄로 역할을 붙이고, 리드는 그때 자기 Run 을 만든다. Orca 는 spec 을 고치지 못하므로, 기존 Task 는 첫 줄이 `childRole` 의 역할 줄일 때만 시작하고 아니면 `lineage_invalid` 로 거부한다(`task-list --full` 로 읽는다). 리드 항목은 `item_create` 에 `role: lead` 를 밝혀 만든다. `/goal` 줄은 `worker-start` 세션에서 걸리지 않는다(docs/test-outcomes.md).
 
 T5(결정 84 ④): 시작 함수는 Task 상태를 먼저 읽어 `dispatched` 인 Task 를 다시 시작하지 않고, 같은 Task 의 시작 시도 실패(`worker-start` 오류와 `no_dispatch`)를 event 로 세어 세 번째에 `loop_detected` 를 쓰고 그 뒤로는 Orca 를 부르지 않는다. 시작 전 읽기 실패는 세지 않는다.
+
+끊긴 호출(결정 318): MCP 서버는 클라이언트가 끊은 호출도 끝까지 처리한다. 그래서 spec 으로 만드는 시작은 task-create 앞에서, 같은 Run 에 같은 task-create 인자의 `item_created.spec_hash` 를 가진 Task 가 `unit_started` 없이 Orca `ready` 로 남았으면 그것을 채택하고 notes 에 `채택: <task>` 를 적는다. 후보가 있을 때만 `task-list` 를 읽고, 읽지 못하면 `orca_error` 다. spec 과 함께 받은 `repo` 는 `item_extra_set` 으로 남아 id 만 준 재시작이 같은 저장소로 간다. `runSlots` 는 끝난 Dispatch(`settled()`)와 store 에 `worker_done` 이 있는 Dispatch 를 자리로 세지 않는다. 옛 고아를 찾는 읽기 질의는 결정 318 ⑤ 에 있다.
 
 `checkLineage` 는 회귀 시나리오 `unit_lineage_complete` 의 판정이다: 시작한 단위마다 Dispatch·워커·새 worktree 를 읽어 한 사슬인지(Dispatch 가 그 Task 의 것이고 기대한 Run 에 있음, 워커가 그 Dispatch 의 것, worktree 의 `parentWorktreeId` 가 기대한 부모. `new-top-level` 단위는 부모를 기대하지 않고 Run 만 본다, 결정 197) 보고, 하나라도 없거나 어긋나면 실패.

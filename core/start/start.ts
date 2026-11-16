@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { advisorSetting } from "../checks/model-table.ts";
 import { REQUIRED_CAPABILITIES } from "../checks/orca-capabilities.ts";
+import { dedupeKey, EVENTS } from "../contract/index.ts";
 import type { OrcaAdapter, OrcaResult, Receipt, TaskRow, WriteOptions } from "../contract/orca.ts";
 import type { ViewInput, ViewTask } from "../contract/views.ts";
 import { foldFacts } from "../graph/facts.ts";
@@ -323,6 +325,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   // The Task: an existing one, or a new one with its deps and the child's role line first.
   let taskId: string;
   let alias: string | undefined;
+  const notes: string[] = [];
   if ("id" in req.task) {
     taskId = req.task.id;
   } else {
@@ -333,20 +336,40 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       ...(t.title ? { title: t.title } : {}),
       ...(t.deps ? { deps: t.deps } : {}),
     };
-    const made = await write(orca, orca.taskCreate(args), (o) => orca.taskCreate(args, o));
-    if (!made.ok) return refuse("orca_error", `task-create 실패 (${made.error.code}: ${made.error.message})`);
-    const id = findKey(made.value, TASK_KEYS) ?? (isObject(made.value.task) ? findKey(made.value.task, ["id"]) : undefined);
-    if (!id) return refuse("orca_error", "task-create 영수증에 Task id 가 없다");
-    taskId = id;
-    // Bound like item_create's, so a decision on this Task has its `item:iNNN` subject (decision 197).
-    alias = store.allocate("i");
-    store.append({
-      type: "item_created",
-      source,
-      payload: { task: id, alias, who: requester.role === "orchestrator" ? "orchestrator" : `${requester.role}:${requester.runId}`, done_when: "spec 의 완료 조건", owner_action: 0, run: requester.runId },
-      entity: "task",
-      entity_id: id,
-    });
+    const specHash = createHash("sha256").update(JSON.stringify([args.spec, args.title ?? null, args.deps ?? []])).digest("hex");
+    const orphan = await orphanTask(orca, store, requester.runId, specHash);
+    if (orphan === "unreadable") return refuse("orca_error", "같은 spec 으로 만든 Task 가 있는데 그 Orca 상태를 읽지 못했다: 새 Task 를 또 만들지 않는다");
+    if (orphan) {
+      ({ task: taskId, alias } = orphan);
+      notes.push(`채택: ${taskId}`);
+    } else {
+      const made = await write(orca, orca.taskCreate(args), (o) => orca.taskCreate(args, o));
+      if (!made.ok) return refuse("orca_error", `task-create 실패 (${made.error.code}: ${made.error.message})`);
+      const id = findKey(made.value, TASK_KEYS) ?? (isObject(made.value.task) ? findKey(made.value.task, ["id"]) : undefined);
+      if (!id) return refuse("orca_error", "task-create 영수증에 Task id 가 없다");
+      taskId = id;
+      // Bound like item_create's, so a decision on this Task has its `item:iNNN` subject (decision 197).
+      alias = store.allocate("i");
+      store.append({
+        type: "item_created",
+        source,
+        payload: {
+          task: id,
+          alias,
+          who: requester.role === "orchestrator" ? "orchestrator" : `${requester.role}:${requester.runId}`,
+          done_when: "spec 의 완료 조건",
+          owner_action: 0,
+          run: requester.runId,
+          spec_hash: specHash,
+        },
+        entity: "task",
+        entity_id: id,
+      });
+    }
+  }
+  // Decision 318: kept with the Task, so a restart by id alone lands in the same repo.
+  if (req.repo && storedRepo(store, taskId) !== req.repo) {
+    store.append({ type: "item_extra_set", source, payload: { task: taskId, repo: req.repo }, entity: "task", entity_id: taskId });
   }
   const repo = req.repo ?? storedRepo(store, taskId) ?? parentRepo;
 
@@ -372,18 +395,28 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   };
 
   // Ready and capacity: not refusals, the caller waits. An unreadable one is not "no room".
+  // Decision 318: a wait still leaves one row per Task and cause, so a caller cut off mid-call can be traced.
+  const wait = (why: "not_ready" | "already_dispatched" | "no_capacity", detail: string): StartOutcome => {
+    store.append({
+      type: "signal",
+      source,
+      payload: { kind: "wait", reason: why },
+      subject: detail.slice(0, 500),
+      entity: "task",
+      entity_id: taskId,
+      actor: requester.role,
+      dedupe_key: dedupeKey(EVENTS.signal, taskId, "wait", why),
+    });
+    return { kind: "waiting", taskId, why, detail, ...(notes.length ? { notes } : {}) };
+  };
   const tasks = await orca.taskList({ run: requester.runId, full: true });
   if (!tasks.ok) return refuse("orca_error", `task-list 실패 (${tasks.error.code})`, taskId);
   const task = tasks.value.find((t) => t.id === taskId) as (TaskRow & { spec?: unknown }) | undefined;
-  if (task?.status === "dispatched") {
-    return { kind: "waiting", taskId, why: "already_dispatched", detail: "이미 Dispatch 된 Task 는 다시 시작하지 않는다(T5)" };
-  }
-  if (task?.status !== "ready") {
-    return { kind: "waiting", taskId, why: "not_ready", detail: task ? `Task 상태 ${task.status}` : "Run 의 Task 목록에 없다" };
-  }
+  if (task?.status === "dispatched") return wait("already_dispatched", "이미 Dispatch 된 Task 는 다시 시작하지 않는다(T5)");
+  if (task?.status !== "ready") return wait("not_ready", task ? `Task 상태 ${task.status}` : "Run 의 Task 목록에 없다");
   // Orca releases deps at the predecessor's worker_done, before its PR merges: GRAPH has the last word (decision 178).
   const held = graphHold(tasks.value as FullTaskRow[], requester.runId, store.events(), taskId);
-  if (held) return { kind: "waiting", taskId, why: "not_ready", detail: held };
+  if (held) return wait("not_ready", held);
   // SessionStart takes the role from the spec's first line, and Orca cannot rewrite a spec: an
   // existing Task written for another role would start this child as that role.
   // Read as SessionStart's readRoleLine reads it (core/session imports this module, so not shared).
@@ -401,7 +434,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   } catch (err) {
     return refuse("orca_error", `capacity 를 읽지 못했다 (${(err as Error).message})`, taskId);
   }
-  if (free <= 0) return { kind: "waiting", taskId, why: "no_capacity", detail: `빈 자리 ${free}` };
+  if (free <= 0) return wait("no_capacity", `빈 자리 ${free}`);
 
   // ④ orca_error
   const orcaFlag = choice.advisor ? await orcaTakesAdvisor(orca) : false;
@@ -424,7 +457,6 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   // A lost answer may still have made it: the name lets the starter find it in `worktree list`.
   if (!made.ok) return failedAttempt("orca_error", `worktree create 실패 (${made.error.code}: ${made.error.message}), 요청한 이름: ${name}`);
   const tree = made.value;
-  const notes: string[] = [];
   const shell = await setupShell(orca, tree, ports.hookFile ?? ((p) => existsSync(join(p, "orca.yaml"))));
   if (shell.note) notes.push(shell.note);
   let plan = launch(choice, { orcaFlag, ownerSetting: false, worktreeFile: true, spent });
@@ -595,6 +627,31 @@ async function removeFailed(orca: OrcaAdapter, tree: string, shell: string | und
   }
   const rm = await orca.worktreeRm({ worktree: `id:${tree}` });
   return rm.ok ? null : `남은 worktree: ${tree} (worktree rm 실패: ${rm.error.code})`;
+}
+
+/**
+ * Decision 318: the Task an earlier start_unit made from the same task-create args on this Run and
+ * never started, newest first, while Orca still calls it ready. A client that cut the call off lost
+ * only the answer; the server ran on. Rows with no hash (item_create's, or older) are never taken.
+ * Orca is read only when there is a candidate.
+ */
+async function orphanTask(
+  orca: OrcaAdapter,
+  store: Pick<StartPorts["store"], "events">,
+  run: string,
+  specHash: string,
+): Promise<{ task: string; alias: string } | "unreadable" | null> {
+  const started = new Set(store.events({ type: "unit_started" }).map((e) => e.entity_id));
+  const candidates = store
+    .events({ type: "item_created" })
+    .filter((e) => e.payload.run === run && e.payload.spec_hash === specHash && !started.has(e.payload.task as string))
+    .reverse();
+  if (candidates.length === 0) return null;
+  const r = await orca.taskList({ run });
+  if (!r.ok) return "unreadable";
+  const ready = new Set(r.value.filter((t) => t.status === "ready").map((t) => t.id));
+  const hit = candidates.find((e) => ready.has(e.payload.task as string));
+  return hit ? { task: hit.payload.task as string, alias: hit.payload.alias as string } : null;
 }
 
 /** The target repo item_create recorded for this Task, the latest one. */
