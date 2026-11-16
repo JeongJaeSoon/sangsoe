@@ -46,13 +46,13 @@ test("300 (b): orca terminal close stays refused and the refusal names worker-re
 });
 
 test("300 (c): an interpreter in a pipe stays refused and the refusal names jq and the brief resource", () => {
-  const v = bash(`orca orchestration check --run run_1 --json 2>&1 | python3 -c "import sys"; sangsoe brief 2>&1 | sed -n 1,4p`);
+  const v = bash(`orca status --json 2>&1 | python3 -c "import sys"; sangsoe brief 2>&1 | sed -n 1,4p`);
   assert.equal(v.decision, "deny");
   assert.match(why(v), /`jq`/);
   assert.match(why(v), /resource `brief`/);
   assert.match(why(v), /head/);
   // The same wait read through jq is coordination.
-  assert.equal(bash("orca orchestration check --run run_1 --json 2>&1 | jq '.messages'").decision, "none");
+  assert.equal(bash("orca status --json 2>&1 | jq '.messages'").decision, "none");
   for (const c of ["sangsoe brief", "sangsoe todo", "sed -n 1,4p a.txt"]) assert.equal(bash(c).decision, "deny", c);
   assert.doesNotMatch(why(bash("sangsoe item set i1 --hold")), /resource `brief`/);
 });

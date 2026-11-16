@@ -25,7 +25,7 @@ const TOOLS = new Set([
 const READABLE = /\.(md|txt|json|jsonl|log)$/;
 const WRITABLE = /\.(md|txt)$/;
 // Decision 300: the output file Claude Code keeps for a background Bash of this session, e.g. the
-// `orca orchestration check --wait` that woke the orchestrator. Reading it is how the wake-up is read.
+// mail wait that woke the orchestrator. Reading it is how the wake-up is read.
 const TASK_OUTPUT = /^\/(?:private\/)?(?:tmp|var\/folders\/[^/]+\/[^/]+\/T)\/claude-\d+\/[^/]+\/[^/]+\/tasks\/[^/]+\.output$/;
 const readable = (f: string) => READABLE.test(f) || (TASK_OUTPUT.test(f) && !f.split("/").includes(".."));
 
@@ -99,7 +99,7 @@ function route(call: ToolCall): string {
     if (coordination(argv)) continue;
     const words = rest.filter((a) => !a.startsWith("-")).join(" ");
     if (head === "orca" && words.startsWith("terminal close")) hints.add(CLOSE_ROUTE);
-    else if (head === "orca" && words.startsWith("terminal send"))
+    else if (head === "orca" && /^terminal\s+send\b/.test(words))
       hints.add("Another session's terminal is not typed into. Answer it with `orca orchestration reply --id <message_id>` or message it with `orca orchestration send`.");
     else if (INTERPRETERS.test(head)) hints.add(`Filter JSON with \`jq\`; ${head} is not coordination.`);
     else if (head === "sangsoe" && /^(brief|todo)\b/.test(words)) hints.add("Read the status table through the resource `brief` (ReadMcpResourceTool) instead of the sangsoe command.");
