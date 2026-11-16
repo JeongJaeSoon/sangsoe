@@ -147,6 +147,33 @@ test("273: a session resumed with claude --resume in the same worktree gets the 
   assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_orch");
 });
 
+test("303: a session resumed in a folder Orca does not list gets back the Run it last held itself; no one else does", async () => {
+  // dispatched false and no ps rows: no Task, and Orca names no worktree for this folder.
+  const w = createSessionWorld({ dispatched: false, heldRun: null });
+  const lead = (session: string, source: string, agent_type?: string) =>
+    hook(w, "session-start", { session_id: session, source, ...(agent_type ? { agent_type } : {}) }, VERSION);
+  await lead("l1", "startup", "sangsoe:lead");
+  w.heldRun = "run_old";
+  await hook(w, "user-prompt-submit", { session_id: "l1", prompt_id: "p1", prompt: "go" });
+  w.heldRun = "run_lead";
+  await hook(w, "user-prompt-submit", { session_id: "l1", prompt_id: "p2", prompt: "go" });
+
+  w.heldRun = null;
+  assert.deepEqual(await lead("l1", "resume", "sangsoe:lead"), [
+    "sangsoe-role: lead",
+    "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_lead",
+  ]);
+  assert.deepEqual(await lead("l2", "startup", "sangsoe:lead"), ["sangsoe-role: lead"], "another session in an unlisted folder is not handed that Run");
+  assert.deepEqual(await lead("l1", "resume"), [], "no agent_type and no Dispatch: not a sangsoe session (decision 192)");
+});
+
+test("303: a worker resumed after its Run binding is gone still gets no re-hold line", async () => {
+  const w = createSessionWorld({ spec: "sangsoe-role: worker\nx", heldRun: "run_x" });
+  await hook(w, "session-start", { session_id: "k1", source: "startup" }, VERSION);
+  w.heldRun = null;
+  assert.deepEqual(await hook(w, "session-start", { session_id: "k1", source: "resume" }, VERSION), [`sangsoe-role: worker · Task ${TASK} · Dispatch ${DISPATCH} · Run ${TASK_RUN}`]);
+});
+
 test("273: an orchestrator in another worktree, or one whose worktree cannot be read, is not handed that Run", async () => {
   const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
   w.psRows = [psRow(w.dir, "inst_a")];

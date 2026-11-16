@@ -7,7 +7,7 @@ import type { Role } from "../start/types.ts";
 import { VERSION } from "../version.ts";
 import { handoffSubject } from "./handoff.ts";
 import { agentRole, type Located, liveWorktree, locate, readRoleLine } from "./locate.ts";
-import { type SessionHookInput, toSessionRow } from "./session.ts";
+import { type SessionHookInput, type SessionRow, toSessionRow } from "./session.ts";
 
 const SOURCE = "SessionStart";
 
@@ -47,7 +47,7 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   const held = current.ok && typeof current.value.runId === "string" && current.value.runId !== "" ? current.value.runId : undefined;
   // A session with no Task is told apart from another of its role by where it runs (decision 273).
   const here = !loc && role !== "worker" ? await liveWorktree(orca, input.cwd) : undefined;
-  const before = previous(deps, role, loc, here);
+  const before = previous(deps, role, loc, here, input.session_id);
   store.append({
     type: "session_started",
     source: SOURCE,
@@ -94,14 +94,18 @@ function unitRowLines(store: CoreDeps["store"], task: string): string[] {
 type Delivery = () => string[];
 
 /**
- * The Run an earlier session of the same Task held. Without a Task: the Run an earlier session of the
- * same role held in the same Orca worktree (decision 273). The role alone would hand a new
- * orchestrator in another worktree someone else's Run; a worktree that cannot be read names none.
+ * The Run an earlier session of the same Task held. Without a Task: the Run this same session held
+ * last (a resume keeps the session id, also in a folder Orca does not list, decision 303), else the
+ * Run an earlier session of the same role held in the same Orca worktree (decision 273). The role
+ * alone would hand a new orchestrator in another worktree someone else's Run; a worktree that cannot
+ * be read names none.
  */
-function previous(deps: CoreDeps, role: Role, loc: Located | undefined, here: string | undefined): string | undefined {
-  const rows = deps.store.events({ type: "session_started" }).map(toSessionRow);
-  const same = rows.filter((r) => (loc ? r.task === loc.task : r.task === undefined && r.role === role && here !== undefined && r.worktree === here));
-  return same.reverse().find((r) => r.heldRun)?.heldRun;
+function previous(deps: CoreDeps, role: Role, loc: Located | undefined, here: string | undefined, session: string): string | undefined {
+  const events = deps.store.events({ type: "session_started" });
+  const last = (rows: SessionRow[]) => rows.reverse().find((r) => r.heldRun)?.heldRun;
+  if (loc) return last(events.map(toSessionRow).filter((r) => r.task === loc.task));
+  const own = last(events.filter((e) => e.payload.session === session).map(toSessionRow).filter((r) => r.task === undefined && r.role === role));
+  return own ?? last(events.map(toSessionRow).filter((r) => r.task === undefined && r.role === role && here !== undefined && r.worktree === here));
 }
 
 async function lastHandoff(deps: CoreDeps, run: string, session: string, subject: string): Promise<Delivery | undefined> {

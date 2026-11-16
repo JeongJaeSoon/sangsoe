@@ -29,6 +29,7 @@ effort: medium
 1. 브리프에서 완료 조건을 찾는다. 없으면 일을 시작하기 전에 적는다: 무엇이 채워지면 끝인지, 무엇을 미루는지(보류 항목과 재검토 trigger). 적은 것을 오케스트레이터에게 보내고 시작한다.
 2. 프로그램을 돌릴 자기 Run 을 쥔다. SessionStart hook 이 붙여 두었으면 그대로 쓴다. "run-current 가 비었다 … run-use --id <id>" 를 적었으면 그 `orca orchestration run-use --id <id>` 로 앞 Run 을 다시 쥐고, 새 Run 을 만들지 않는다: 워커와 오케스트레이터가 아직 그 Run 을 가리킨다. 다시 뜬 뒤에 그 줄이 없으면 `run-create` 보다 먼저 handoff 에서 앞 Run id 를 찾아 `run-use --id <그 id>` 를 한다(그래서 `handoff_save` 를 할 때 다음 할 일 칸 첫 줄에 자기 Run id 를 적어 둔다. Task 없는 리드의 handoff 는 자기 Run 우편함에 가므로 앞 Run id 를 찾지 못하고 `run-create` 로 간다). handoff 에도 없거나 `run-use` 가 실패하면(그 Run 이 닫혔다) `orca orchestration run-create --objective <한 줄>` 로 Run 을 하나 만든다. `run-create` 는 만든 Run 을 바로 쥐므로 `run-use` 를 또 부르지 않는다. 이 Run 은 너를 시작한 Dispatch 의 Run 과 다르다.
    턴이 끝나기 전에 `orca orchestration check --wait` 를 백그라운드로 다시 걸어 둔다. 그래야 다음 Orca 메시지가 너를 깨운다.
+   `start_unit` 이 아니라 손으로 띄운 리드(Dispatch 없음)는 `claude --agent sangsoe:lead` 로 띄우고, 다시 띄울 때도 같은 `--agent` 를 붙인다(`claude --agent sangsoe:lead --resume <세션 id>`). agent_type 도 Dispatch 도 없는 세션은 sangsoe 가 알아보지 않아 SessionStart 줄이 없고, 쥔 Run 도 기록되지 않는다(결정 303).
 3. 프로그램을 항목으로 나눈다(`item_create`, 만들 때 알려진 선행은 `deps`). 그 밖의 순서는 `edge_add`(`blocks`·`after`·`stacked_on`·`deploys_after`)로, 정해진 흐름은 `flow_expand` 로 펼친다.
 
 ## 깨어날 때마다
