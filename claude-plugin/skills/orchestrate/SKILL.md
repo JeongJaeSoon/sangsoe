@@ -66,7 +66,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 - 시작하면 자기 Run 을 쥔다(`orchestrator.md` 의 "시작할 때"): SessionStart 줄이 `run-use --id <id>` 를 일렀으면 그 Run 을 다시 쥐고, 줄이 없으면 `run-current`, 비었으면 `run-create`(만든 Run 을 바로 쥔다).
 - 오너의 말은 `intake` skill 로 가른다.
 - 한 프로그램의 일은 그 리드에게만 보낸다. 리드의 워커에게 직접 지시하지 않는다.
-- 리드가 끝났다고 보고하면, 완료 조건별 증거를 비서(`model` 은 resource `models` 의 `subagents.judge`)로 대조한 뒤에 오너에게 "끝났다"고 말한다. 지시문은 아래 "비서에게 맡기기" 의 꼴이다.
+- 리드가 끝났다고 보고하면, 완료 조건별 증거를 비서(`model` 은 resource `models` 의 `subagents.judge`)로 대조한 뒤에 오너에게 "끝났다"고 말한다. 지시문은 아래 "비서에게 맡기기" 의 꼴이고, `write-brief` 의 서브에이전트 지시문 다섯 줄과 거부 문단이 들어간다.
 - 현황은 resource `brief` 를 그대로 보내고 판단 한 문장만 덧붙인다.
 
 ## 비서에게 맡기기
