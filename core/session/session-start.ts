@@ -20,6 +20,8 @@ export interface SessionStartOptions {
   readonly agentDefinition?: ((role: Role) => string | undefined) | undefined;
   /** false: a later hook registers the session and prints nothing, so no handoff or answer is marked delivered. */
   readonly deliver?: boolean;
+  /** The hook that writes the row when it is not SessionStart, so the row says which hook ran. */
+  readonly writer?: string;
 }
 
 /** Decision 333: the starts that carry on a session that ran before; `startup` is a new one (decision 192). */
@@ -70,7 +72,7 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
   const before = previous(deps, role, loc, here, took ? [input.session_id, took.from] : [input.session_id]);
   store.append({
     type: "session_started",
-    source: SOURCE,
+    source: opts.writer ?? SOURCE,
     ...(loc ? { entity: "task", entity_id: loc.task, subject: `run:${loc.run}` } : {}),
     ...(held ? { target: `run:${held}` } : {}),
     dedupe_key: dedupeKey(EVENTS.session_started, input.session_id, input.source ?? "startup"),

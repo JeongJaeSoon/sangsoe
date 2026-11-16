@@ -132,6 +132,7 @@ test("333: a session whose SessionStart was never recorded (sangsoe enabled mid-
   const rows = w.store.events({ type: "session_started" }).filter((e) => e.payload.session === "r1");
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.payload.role, "orchestrator");
+  assert.equal(rows[0]?.source, "UserPromptSubmit", "the row names the hook that wrote it, not SessionStart");
   assert.equal(said(w, "r1"), 1);
   await hook(w, "user-prompt-submit", { session_id: "r1", agent_type: "sangsoe:orchestrator", prompt_id: "p2", prompt: "다음" }, T1);
   assert.equal(said(w, "r1"), 2);
@@ -141,7 +142,10 @@ test("333: a session whose SessionStart was never recorded (sangsoe enabled mid-
 test("333: a Stop in a session never recorded registers it too when agent_type names the role", async () => {
   const w = createSessionWorld({ dispatched: false, heldRun: null });
   await hook(w, "stop", { session_id: "r2", agent_type: "sangsoe:lead" }, T1);
-  assert.equal(w.store.events({ type: "session_started" }).filter((e) => e.payload.session === "r2").length, 1);
+  assert.deepEqual(
+    w.store.events({ type: "session_started" }).filter((e) => e.payload.session === "r2").map((e) => e.source),
+    ["Stop"],
+  );
   assert.equal(w.store.events({ type: "turn_ended" }).filter((e) => e.payload.session === "r2").length, 1);
 });
 

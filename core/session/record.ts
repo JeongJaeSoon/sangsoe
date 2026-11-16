@@ -29,6 +29,17 @@ export const SESSION_HOOKS = [
 ] as const;
 export type SessionHook = (typeof SESSION_HOOKS)[number];
 
+const HOOK_NAMES: Record<SessionHook, string> = {
+  "session-start": "SessionStart",
+  "user-prompt-submit": "UserPromptSubmit",
+  stop: "Stop",
+  "stop-failure": "StopFailure",
+  notification: "Notification",
+  "post-tool-use": "PostToolUse",
+  "post-compact": "PostCompact",
+  "session-end": "SessionEnd",
+};
+
 /**
  * One recording hook call. Returns the lines to print: SessionStart and UserPromptSubmit print (their
  * stdout is injected context; UserPromptSubmit at most the Run's one count line, decision 274); every
@@ -43,7 +54,7 @@ export async function recordHook(event: SessionHook, deps: CoreDeps, input: Sess
   // that failed) is registered by its first later hook that names the role the way SessionStart would.
   // Not from a subagent's hook, whose agent_type is the subagent's, nor from PostToolUse, which subagents share.
   if (!row && event !== "post-tool-use" && !input.agent_id && agentRole(input.agent_type)) {
-    const lines = await sessionStart(deps, { ...input, source: "late" }, { ...opts, deliver: event === "user-prompt-submit" });
+    const lines = await sessionStart(deps, { ...input, source: "late" }, { ...opts, deliver: event === "user-prompt-submit", writer: HOOK_NAMES[event] });
     if (event === "user-prompt-submit") registered.push(...lines);
     row = sessionOf(deps.store, input.session_id);
   }
