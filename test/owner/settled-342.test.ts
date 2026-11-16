@@ -64,6 +64,17 @@ test("a bare number is not joined to a merge nobody tied to the owner: another r
   assert.equal(acts(w).length, 0, "one merge by the owner: that is the line's PR");
 });
 
+test("a bare number also joins a merge whose plain actor is a login pr-monitor has tied to the owner elsewhere", () => {
+  const w = ownerWorld();
+  line(w, "gh pr merge 192");
+  merged(w, "acme/app#192", later(T0, 5), "acme-owner");
+  w.at(later(T0, 10));
+  assert.equal(acts(w).length, 1, "no owner: row anywhere yet: the login is not known as the owner's");
+  merged(w, "acme/app#300");
+  w.at(later(T0, 10));
+  assert.equal(acts(w).length, 0);
+});
+
 test("the same line typed three times leaves together, and `gh pr close` reads pr_closed, not pr_merged", () => {
   const w = ownerWorld();
   for (const m of [0, 1, 2]) line(w, "gh pr merge 31", later(T0, m));

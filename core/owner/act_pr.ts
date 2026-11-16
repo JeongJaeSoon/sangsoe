@@ -48,14 +48,16 @@ export function settledByFact(events: readonly StoredEvent[], act: string, ts: s
   const p = actPr(act);
   if (!p) return false;
   const type = p.verb === "merge" ? "pr_merged" : "pr_closed";
+  const owners = new Set(events.flatMap((e) => (e.actor?.startsWith("owner:") ? [e.actor.slice("owner:".length).toLowerCase()] : [])));
   const near = new Set<string>();
   for (const e of events) {
     if (e.type !== type) continue;
     const pr = String(e.payload.pr);
     const [repo, n] = pr.split("#");
     if (Number(n) !== p.number || (p.repo !== null && repo !== p.repo)) continue;
-    // A bare number names no repo, so only a merge pr-monitor tied to the owner (actor owner:<login>) can be theirs.
-    if (p.repo === null && !(e.actor ?? "").startsWith("owner:")) continue;
+    // A bare number names no repo, so only a merge by the owner can be theirs: pr-monitor's actor owner:<login>, or the plain login
+    // of an owner it has tied elsewhere (a land the owner's token merged carries no owner: prefix).
+    if (p.repo === null && !owners.has((e.actor ?? "").replace(/^owner:/, "").toLowerCase())) continue;
     const at = Date.parse(typeof e.payload.merged_at === "string" ? e.payload.merged_at : e.ts);
     if (Math.abs(at - Date.parse(ts)) <= windowMs) near.add(pr);
   }
