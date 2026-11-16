@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { graphRead, judgeQueue, readiness, Store, type ViewInput, type ViewTask } from "../../core/index.ts";
+import { graphRead, itemFacts, judgeQueue, readiness, Store, type ViewInput, type ViewTask } from "../../core/index.ts";
 import { readyText } from "../../claude-plugin/mcp/resources/ready.ts";
-import { itemFacts } from "../../core/index.ts";
 
 // Decision 314: an Orca Task with no item_created row is not a sangsoe item. ready, the waiting list
 // and the item_ready keys read items only, as the brief does.
