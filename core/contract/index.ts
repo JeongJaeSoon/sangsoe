@@ -59,6 +59,7 @@ import refusal_report from "./events/refusal_report.ts";
 import resource from "./events/resource.ts";
 import resource_adopted from "./events/resource_adopted.ts";
 import resource_leak from "./events/resource_leak.ts";
+import restart_self_wait from "./events/restart_self_wait.ts";
 import review_ask_sent from "./events/review_ask_sent.ts";
 import review_commented from "./events/review_commented.ts";
 import review_replied from "./events/review_replied.ts";
@@ -155,6 +156,7 @@ export const EVENTS = {
   resource,
   resource_adopted,
   resource_leak,
+  restart_self_wait,
   review_ask_sent,
   review_commented,
   review_replied,

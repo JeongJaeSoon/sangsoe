@@ -56,6 +56,7 @@
 {"type":"resource","source":"worker:u1","payload":{"action":"created","kind":"compose","owner":"worker:u1","ref":"acme-api-verify"}}
 {"type":"resource_adopted","source":"REAPER","payload":{"kind":"worktree","ref":"wt_8","basis":"card list"}}
 {"type":"resource_leak","source":"resource-monitor","payload":{"kind":"process","ref":"pid 4242"}}
+{"type":"restart_self_wait","source":"cli:restart","target":"term_1","payload":{"pid":4242,"outcome":"opened"}}
 {"type":"review_ask_sent","source":"review_ask_record","payload":{"pr":"acme/api#12","reviewer":"octocat"}}
 {"type":"review_commented","source":"pr-monitor","payload":{"pr":"acme/api#12","reviewer":"octocat"}}
 {"type":"review_replied","source":"pr-monitor","payload":{"pr":"acme/api#12","by":"worker:u1"}}

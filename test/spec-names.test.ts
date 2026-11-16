@@ -183,6 +183,8 @@ const ALLOWED = new Map<string, string>([
   ["event-glossary:monitor_round_truncated:code-only", "329"],
   // Decision 330: the coordinator's restart of stale sessions, built after design.html's last edit.
   ["cli:restart:code-only", "330"],
+  ["event:restart_self_wait:code-only", "330"],
+  ["event-glossary:restart_self_wait:code-only", "330"],
 ]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };

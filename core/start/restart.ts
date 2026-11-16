@@ -367,12 +367,13 @@ export async function planRestart(p: RestartPorts, o: { task?: string }): Promis
         rows.push(skip(`이 명령을 부른 세션이다: ${launch.problem ?? (session ? "worktree 를 찾지 못했다" : `Run ${run} 의 ${caller.role} 세션 id 가 store 에 없다`)}`, { role: caller.role }));
         continue;
       }
-      const waiting = await waitingFor(s.ppid, session, tree);
+      const r = withRecorded(p.store, session, launch);
+      const command = resumeCommand(s.ppid, r.launch, session, r.configDir);
+      const waiting = await waitingFor(s.ppid, session, tree, command);
       if (waiting) {
         rows.push(skip(waiting, { role: caller.role, session }));
         continue;
       }
-      const r = withRecorded(p.store, session, launch);
       rows.push({
         ...base,
         flags: r.launch.flags,
@@ -382,7 +383,7 @@ export async function planRestart(p: RestartPorts, o: { task?: string }): Promis
         session,
         action: "self",
         why: "이 명령을 부른 세션: 새 터미널이 이 세션이 끝나기를 기다렸다가 이어 띄운다",
-        command: resumeCommand(s.ppid, r.launch, session, r.configDir),
+        command,
       });
       continue;
     }
@@ -418,17 +419,20 @@ export async function planRestart(p: RestartPorts, o: { task?: string }): Promis
    * Why no second terminal is opened for the caller's own session: an earlier run already opened one
    * that still waits, or opened one whose answer was lost. undefined when none was tried.
    */
-  async function waitingFor(pid: number, session: string, tree: string): Promise<string | undefined> {
-    const tried = p.store
-      .events({ type: "signal" })
-      .filter((e) => e.payload.kind === "restart_self" && e.payload.reason === String(pid) && e.subject === session);
-    if (tried.length === 0) return undefined;
-    const handles = tried.flatMap((e) => (e.target ? [e.target] : []));
-    const list = await orca.terminalList({ worktree: `id:${tree}` });
-    const open = list.ok ? handles.find((h) => list.value.rows.some((t) => t.handle === h)) : undefined;
-    if (open) return `이 세션을 기다리는 터미널 ${open} 이 이미 있다: 오너가 이 세션의 터미널을 닫으면 이어 띄운다`;
-    if (handles.length > 0 && list.ok) return undefined;
-    return `앞 실행이 이 세션을 기다리는 터미널을 열었는지 모른다: orca terminal list --worktree ${quote(`id:${tree}`)} 에 그 터미널이 있으면 이 세션의 터미널만 닫는다`;
+  async function waitingFor(pid: number, session: string, tree: string, command: string): Promise<string | undefined> {
+    const last = p.store
+      .events({ type: "restart_self_wait" })
+      .filter((e) => e.payload.pid === pid && e.subject === session)
+      .at(-1);
+    if (!last || last.payload.outcome === "refused") return undefined;
+    if (last.payload.outcome === "opened" && last.target) {
+      const list = await orca.terminalList({ worktree: `id:${tree}` });
+      if (list.ok && list.value.rows.some((t) => t.handle === last.target)) {
+        return `이 세션을 기다리는 터미널 ${last.target} 이 이미 있다: 오너가 이 세션의 터미널을 닫으면 이어 띄운다`;
+      }
+      if (list.ok) return undefined;
+    }
+    return `앞 실행이 이 세션을 기다리는 터미널을 열었는지 모른다: orca terminal list --worktree ${quote(`id:${tree}`)} 에 그 터미널이 있으면 이 세션의 터미널만 닫는다. 없으면 ${ownLine(command)}`;
   }
 
   /** One Task's session: restarted when its Dispatch is open, bound alone when it already runs again. */
@@ -570,25 +574,34 @@ async function restartOne(p: RestartPorts, caller: Caller, r: RestartRow, say: S
   return bindOne(p, caller, r, terminal, say);
 }
 
+/** What the owner types when no terminal can wait for the caller's session. */
+const ownLine = (command: string) => `/exit 뒤 이 터미널에서: ${command.slice(command.indexOf("done; ") + "done; ".length)}`;
+
 async function restartSelf(p: RestartPorts, r: RestartRow, say: Say): Promise<boolean> {
+  // Marked before the create, so a run killed inside it still holds back a second waiting terminal.
+  const mark = (outcome: "trying" | "opened" | "refused", terminal?: string) =>
+    p.store.append({
+      type: "restart_self_wait",
+      source: "cli:restart",
+      payload: { pid: r.claudePid, outcome },
+      subject: r.session as string,
+      ...(terminal ? { target: terminal } : {}),
+    });
+  mark("trying");
   const created = await p.orca.terminalCreate({ worktree: `id:${r.worktree}`, command: r.command as string, title: `restart ${r.role}` });
-  // A terminal that may be open marks this session as waited on, so a later run opens no second one.
-  const mark = (terminal?: string) =>
-    p.store.append({ type: "signal", source: "cli:restart", payload: { kind: "restart_self", reason: String(r.claudePid) }, subject: r.session as string, ...(terminal ? { target: terminal } : {}) });
   if (!created.ok) {
     if (unknownOutcome(created)) {
-      mark();
       say(
         `  ✗ 이 세션: 새 터미널을 열었는지 알 수 없다(${created.error.code})`,
         `    orca terminal list --worktree ${quote(`id:${r.worktree}`)} 에 기다리는 터미널이 있으면 이 세션의 터미널만 닫는다. 다시 부르지 않는다`,
       );
       return false;
     }
-    const ownLine = `/exit 뒤 이 터미널에서: ${r.command?.slice(r.command.indexOf("done; ") + "done; ".length)}`;
-    say(`  ✗ 이 세션: Orca 가 새 터미널을 거부했다(${created.error.code})`, `    오너가 칠 한 줄: ${ownLine}`);
+    mark("refused");
+    say(`  ✗ 이 세션: Orca 가 새 터미널을 거부했다(${created.error.code})`, `    오너가 칠 한 줄: ${ownLine(r.command as string)}`);
     return false;
   }
-  mark(created.value.handle);
+  mark("opened", created.value.handle);
   say(
     `  ✓ 이 세션: 새 터미널 ${created.value.handle} 이 pid ${r.claudePid} 가 끝나기를 기다린다`,
     `    오너: Orca 에서 이 세션의 터미널${p.self.terminal ? ` ${p.self.terminal}` : ""} 을 닫으면(결정 301) 새 터미널이 세션을 이어 띄운다`,

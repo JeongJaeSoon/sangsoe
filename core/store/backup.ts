@@ -81,6 +81,7 @@ export const OWN_TYPES = [
   "resource",
   "resource_adopted",
   "resource_leak",
+  "restart_self_wait",
   "review_ask_sent",
   "review_verdict",
   "session_started",
