@@ -58,7 +58,7 @@ test("U145-4: files change through Edit and Write, generated files through their
   has(worker, ["파일은 Edit·Write tool 로만 바꾼다", "생성 파일은 그 생성기로만", "파일을 바꾸는 Bash 호출은 그것만 하고, 읽기·시험과 한 호출에 잇지 않는다"], "worker.md");
 });
 
-test("U145-5: status wakes no session; what the receiver must act on soon goes as a question with the window's end", () => {
+test("U145-5: a status is not counted on to wake the receiver; what the receiver must act on soon goes as a question with the window's end", () => {
   const want = ["status 가 받는 쪽을 깨운다고 기대하지 않는다", "go · ready · merged · 시간 창이 있는 알림", "창이 끝나는 시각을 적은 `--type question`"];
   const owner = section(read("claude-plugin/skills/orchestrate/SKILL.md"), "결정과 오너").trimEnd();
   assert.ok(owner.split("\n").at(-1)?.includes("status 가 받는 쪽을 깨운다고 기대하지 않는다"), "the sentence closes the section");
