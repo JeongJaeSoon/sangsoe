@@ -4,8 +4,8 @@ import { dedupeKey, eventDef, type EventType, type StoredEvent } from "../contra
 import type { Exec, OrcaAdapter, WorkerRow, WorktreeRow } from "../contract/orca.ts";
 import type { Planned } from "../detect/monitor.ts";
 import type { GhClient } from "../gh/client.ts";
-import { dropParentReadRules } from "../start/local-settings.ts";
 import { settled } from "../recover/recover.ts";
+import { dropParentReadRules } from "../start/local-settings.ts";
 import type { Appended, EventFilter } from "../store/store.ts";
 import { type Check, type BlockReason as CheckReason, evidenceInWorktree, openWork, preDelete } from "./checks.ts";
 import type { ReaperConfig, ReaperConfigRead } from "./config.ts";
@@ -190,10 +190,11 @@ async function closeReleasedShells(
  * Decision 310: the parent's Read rules for a worktree go with it. Best effort: a parent file that is
  * gone or unreadable never fails the round.
  */
-function dropChildReadRules(d: ReaperDeps, worktreeId: string): void {
+function dropChildReadRules(d: ReaperDeps, card: Pick<WorktreeRow, "id" | "path">): void {
   for (const e of d.events({ type: "unit_started" })) {
     const p = e.payload as { worktree?: string; parent?: string; read_rules?: string[] };
-    if (p.worktree !== worktreeId || !p.parent || !p.read_rules?.length) continue;
+    // By id or by path, as decision 306 names a card: a re-registered repository changes the id.
+    if (!namesCard(p.worktree, card) || !p.parent || !p.read_rules?.length) continue;
     try {
       (d.dropReadRules ?? dropParentReadRules)(p.parent, p.read_rules);
     } catch {
@@ -520,7 +521,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
     if (rm.ok) {
       done("worktree", card.instanceId);
       reapedCards.add(card.instanceId);
-      dropChildReadRules(d, card.id);
+      dropChildReadRules(d, card);
     } else if (rm.error.code === "worktree_archive_hook_failed") block("worktree", card.instanceId, "archive_hook_failed");
     else r.unknown.push(`worktree:${card.instanceId}: rm ${rm.error.code}`);
   }

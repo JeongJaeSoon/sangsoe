@@ -38,6 +38,23 @@ test("decision 310: removing the child worktree takes its Read rule out of the p
   assertNeverForbidden(w);
 });
 
+test("decision 310: a card whose repository was re-registered is matched by path, as decision 306 names it", async () => {
+  const w = world();
+  const c = finishedCard(w, "moved");
+  const rule = `Read(/${c.path}/**)`;
+  const parent = parentWith("moved", [rule]);
+  w.store.append({
+    type: "unit_started",
+    source: "mcp:start_unit",
+    entity: "task",
+    entity_id: "task_moved",
+    payload: { kind: "worker", picked_by: "role", model: "m", effort: "medium", route: "none", budget: 0, budget_per: "unit", used: 0, worktree: `repo-old::${c.path}`, parent, read_rules: [rule] },
+  });
+  await rounds(w, 3, 30);
+  assert.equal(w.orca.calls.filter((x) => x.startsWith("worktreeRm")).length, 1);
+  assert.deepEqual(allowIn(parent), []);
+});
+
 test("decision 310: a card that stays keeps its parent's rule, and a dry run changes nothing", async () => {
   for (const dry of [false, true]) {
     const w = world();

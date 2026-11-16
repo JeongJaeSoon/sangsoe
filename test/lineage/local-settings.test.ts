@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -159,4 +159,20 @@ test("taking the rule back removes exactly that string and nothing else", (t) =>
   writeFileSync(join(parent, LOCAL_SETTINGS), "not json");
   assert.equal(dropParentReadRules(parent, [mine]), false);
   assert.equal(readFileSync(join(parent, LOCAL_SETTINGS), "utf8"), "not json", "an unreadable file is left as it is");
+});
+
+test("a parent file whose permissions are not the shape Claude Code reads is refused untouched, not overwritten", (t) => {
+  const { parent } = parentWorktree(t);
+  mkdirSync(join(parent, ".claude"));
+  for (const body of ['{"permissions":{"allow":"Bash(npm test)"}}', '{"permissions":["x"]}', '["x"]']) {
+    writeFileSync(join(parent, LOCAL_SETTINGS), body);
+    assert.throws(() => addParentReadRules(parent, ["Read(//x/**)"]), /not (an array|an object|a JSON object)/, body);
+    assert.equal(dropParentReadRules(parent, ["Read(//x/**)"]), false, body);
+    assert.equal(readFileSync(join(parent, LOCAL_SETTINGS), "utf8"), body);
+  }
+  // The write goes through a temporary file renamed over the old one: nothing else is left in .claude.
+  writeFileSync(join(parent, LOCAL_SETTINGS), "{}");
+  addParentReadRules(parent, ["Read(//x/**)"]);
+  dropParentReadRules(parent, ["Read(//x/**)"]);
+  assert.deepEqual(readdirSync(join(parent, ".claude")), ["settings.local.json"]);
 });

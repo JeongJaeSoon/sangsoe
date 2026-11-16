@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { WorktreeSettings } from "../models/index.ts";
 
@@ -88,11 +88,23 @@ export function childReadRules(child: string): string[] {
   return [...out];
 }
 
-const allowOf = (doc: Record<string, unknown>): { permissions: Record<string, unknown>; allow: unknown[] } => {
-  const permissions = typeof doc.permissions === "object" && doc.permissions !== null ? { ...(doc.permissions as Record<string, unknown>) } : {};
-  const allow = Array.isArray(permissions.allow) ? [...permissions.allow] : [];
-  return { permissions, allow };
-};
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** The file's `permissions.allow`; throws on a shape it would otherwise overwrite and lose. */
+function allowOf(doc: unknown): { permissions: Record<string, unknown>; allow: unknown[] } {
+  if (!isRecord(doc)) throw new Error(`${LOCAL_SETTINGS} is not a JSON object`);
+  if (doc.permissions !== undefined && !isRecord(doc.permissions)) throw new Error(`${LOCAL_SETTINGS} permissions is not an object`);
+  const permissions = { ...((doc.permissions as Record<string, unknown> | undefined) ?? {}) };
+  if (permissions.allow !== undefined && !Array.isArray(permissions.allow)) throw new Error(`${LOCAL_SETTINGS} permissions.allow is not an array`);
+  return { permissions, allow: [...((permissions.allow as unknown[] | undefined) ?? [])] };
+}
+
+/** Whole or not at all: a running Claude Code session watches this file and must never read half of it. */
+function replaceFile(file: string, doc: Record<string, unknown>): void {
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(doc, null, 2)}\n`);
+  renameSync(tmp, file);
+}
 
 /**
  * Decision 310: adds `rules` to the parent worktree's own local settings, keeping every other key;
@@ -103,7 +115,7 @@ export function addParentReadRules(parent: string, rules: readonly string[]): vo
   const { file, base } = openLocalSettings(parent);
   const { permissions, allow } = allowOf(base);
   for (const r of rules) if (!allow.includes(r)) allow.push(r);
-  writeFileSync(file, `${JSON.stringify({ ...base, permissions: { ...permissions, allow } }, null, 2)}\n`);
+  replaceFile(file, { ...base, permissions: { ...permissions, allow } });
 }
 
 /**
@@ -112,16 +124,16 @@ export function addParentReadRules(parent: string, rules: readonly string[]): vo
  */
 export function dropParentReadRules(parent: string, rules: readonly string[]): boolean {
   const file = join(parent, LOCAL_SETTINGS);
-  let base: Record<string, unknown>;
+  let base: unknown;
+  let found: ReturnType<typeof allowOf>;
   try {
-    base = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    base = JSON.parse(readFileSync(file, "utf8"));
+    found = allowOf(base);
   } catch {
     return false;
   }
-  if (typeof base !== "object" || base === null || Array.isArray(base)) return false;
-  const { permissions, allow } = allowOf(base);
-  const kept = allow.filter((r) => !(typeof r === "string" && rules.includes(r)));
-  if (kept.length === allow.length) return false;
-  writeFileSync(file, `${JSON.stringify({ ...base, permissions: { ...permissions, allow: kept } }, null, 2)}\n`);
+  const kept = found.allow.filter((r) => !(typeof r === "string" && rules.includes(r)));
+  if (kept.length === found.allow.length) return false;
+  replaceFile(file, { ...(base as Record<string, unknown>), permissions: { ...found.permissions, allow: kept } });
   return true;
 }

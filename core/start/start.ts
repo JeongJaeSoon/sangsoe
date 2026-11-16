@@ -442,9 +442,13 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
   }
   // Decision 310: the parent session reads its child's worktree (evidence under .scratch/) without a
   // prompt; reads only, and taken back when the child worktree is removed.
-  const parentPath = requester.worktreeId ? rows.find((w) => w.id === requester.worktreeId)?.path : undefined;
+  const parentRow = requester.worktreeId ? rows.find((w) => w.id === requester.worktreeId) : undefined;
+  // Claude Code reads a main checkout's local file in every worktree session of that repository.
+  const parentPath = parentRow && !parentRow.isMainWorktree ? parentRow.path : undefined;
   let readRules: string[] | undefined;
-  if (parentPath) {
+  if (parentRow?.isMainWorktree) {
+    notes.push("부모가 저장소의 main checkout 이라 자식 읽기 규칙을 쓰지 않았다: 그 파일은 그 저장소의 모든 worktree 세션이 읽는다");
+  } else if (parentPath) {
     try {
       const rules = childReadRules(tree.path);
       (ports.parentRead ?? addParentReadRules)(parentPath, rules);
