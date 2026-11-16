@@ -89,7 +89,8 @@ test("the delegate gate lets the orchestrator read each sangsoe resource its age
       assert.notEqual(verdict("ReadMcpResourceTool", { server, uri }), "deny", `${uri}: read denied`);
     }
   }
-  assert.equal(verdict("ReadMcpResourceTool", { server: "plugin:other:x", uri: "other://doc" }), "deny");
+  assert.notEqual(verdict("ReadMcpResourceTool", { server: "plugin:other:x", uri: "other://doc" }), "deny", "decision 305: any server");
+  assert.equal(verdict("mcp__other__write_doc", {}), "deny");
 });
 
 test("only the owner-only skills inject CLI output, and the model cannot invoke them", () => {

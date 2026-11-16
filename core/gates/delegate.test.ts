@@ -69,3 +69,17 @@ test("300: a refusal with no named shape keeps only the general way on", () => {
   assert.equal(v.decision, "deny");
   assert.doesNotMatch(why(v), /unit_close|`jq`|orchestration reply/);
 });
+
+test("305: the orchestrator lists and reads resources of any server", () => {
+  for (const server of ["plugin:other:x", "claude.ai Some", "plugin:sangsoe:sangsoe"]) {
+    assert.equal(run("ListMcpResourcesTool", { server }).decision, "none", `${server}: list`);
+    assert.equal(run("ReadMcpResourceTool", { server, uri: "other://doc" }).decision, "none", `${server}: read`);
+  }
+  assert.equal(run("ListMcpResourcesTool", {}).decision, "none");
+});
+
+test("305: calling another server's tool stays refused", () => {
+  for (const tool of ["mcp__other__write_doc", "mcp__claude_ai_Some__search", "mcp__plugin_other_x__update"]) {
+    assert.equal(run(tool, {}).decision, "deny", tool);
+  }
+});
