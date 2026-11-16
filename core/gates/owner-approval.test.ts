@@ -50,6 +50,9 @@ test("327: the refusal names each command that is not a message to a session, by
     [`orca terminal send --terminal term_ab12 --text "${LINE}" --enter`, ["`orca terminal send`"], []],
     [`cd /tmp && ${NESTED} "${LINE}" | tee out.txt`, ["`cd`", "`claude`", "`tee`"], []],
     [`L="${LINE}"; ${NESTED} "$L"`, ["a variable assignment", "`claude`"], []],
+    [`echo ok; "$(printf %s '${LINE}')"`, ["`echo`", "a command"], ["a variable assignment"]],
+    [`"${LINE}"`, ["a command"], []],
+    [`nohup; ${NESTED} "${LINE}"`, ["a command", "`claude`"], ["a variable assignment"]],
   ] as const) {
     const reason = call("lead", "Bash", { command }).gate?.reason ?? "";
     for (const n of named) assert.ok(reason.includes(n), `${n} in ${reason}`);
