@@ -179,6 +179,18 @@ const within = (dir: string, root: string) => dir === trim(root) || dir.startsWi
 
 const paneKeyOf = (t: TerminalRow) => (t.orphaned === true ? t.recordedPaneKey : t.tabId && t.leafId ? `${t.tabId}:${t.leafId}` : undefined);
 
+/**
+ * The claude agent `worktree ps` shows in this terminal's pane. A session Orca restored, or one a
+ * terminal create started, carries no `agentIdentity` on its terminal row (measured 2026-11-17), so
+ * the row's identity alone misses it.
+ */
+function claudeIn(t: TerminalRow, ps: WorktreePsRow[] | undefined, worktree: string): { state?: string } | undefined {
+  const key = paneKeyOf(t);
+  const agent = key ? ps?.find((r) => r.worktreeId === worktree)?.agents.find((a) => a.paneKey === key && a.agentType === "claude") : undefined;
+  if (agent) return { state: agent.state };
+  return t.agentIdentity ? {} : undefined;
+}
+
 /** The agent state `worktree ps` shows for one terminal; a reason string when it cannot tell. */
 async function agentState(orca: OrcaAdapter, ps: WorktreePsRow[] | undefined, worktree: string, terminal: string): Promise<{ state: string } | { unknown: string }> {
   if (!ps) return { unknown: "worktree ps 를 다 읽지 못했다" };
@@ -418,10 +430,17 @@ export async function planRestart(p: RestartPorts, o: { task?: string }): Promis
     }
     const terms = await orca.terminalList({ worktree: `id:${tree}` });
     if (!terms.ok || terms.value.truncated) return skip("터미널 목록을 다 읽지 못했다", { role, session });
-    const agents = terms.value.rows.filter((t) => t.agentIdentity && t.handle !== w.value.terminal);
+    const rows = await ps();
+    const agents = terms.value.rows.flatMap((t) => {
+      const seen = t.handle === w.value.terminal ? undefined : claudeIn(t, rows, tree);
+      return seen ? [{ t, state: seen.state }] : [];
+    });
     const [only] = agents;
-    if (!only || agents.length !== 1) return skip(`옛 터미널 말고 agent 가 붙은 터미널이 ${agents.length}개다: 하나일 때 묶는다`, { role, session });
-    return [{ ...base, ...ids, role, session, terminal: only.handle, action: "bind", why: `옛 Dispatch 가 끝났고 세션이 터미널 ${only.handle} 에서 이미 다시 떠 있다: 묶기만 한다` }];
+    if (!only || agents.length !== 1) return skip(`옛 터미널 말고 claude 가 보이는 터미널이 ${agents.length}개다: 하나일 때 묶는다`, { role, session });
+    const handle = only.t.handle;
+    return [
+      { ...base, ...ids, role, session, terminal: handle, ...(only.state ? { state: only.state } : {}), action: "bind", why: `옛 Dispatch 가 끝났고 세션이 터미널 ${handle} 에서 이미 다시 떠 있다: 묶기만 한다` },
+    ];
   }
 }
 
@@ -439,7 +458,12 @@ async function waitAgent(p: RestartPorts, worktree: string, terminal: string): P
   const end = now() + AGENT_WAIT_MS;
   for (;;) {
     const list = await p.orca.terminalList({ worktree: `id:${worktree}` });
-    if (list.ok && list.value.rows.some((t) => t.handle === terminal && t.agentIdentity)) return true;
+    const row = list.ok ? list.value.rows.find((t) => t.handle === terminal) : undefined;
+    if (row?.agentIdentity) return true;
+    if (row) {
+      const ps = await p.orca.worktreePs({ limit: 1000 });
+      if (ps.ok && claudeIn(row, ps.value.rows, worktree)) return true;
+    }
     if (now() >= end) return false;
     await sleep(POLL_MS);
   }
