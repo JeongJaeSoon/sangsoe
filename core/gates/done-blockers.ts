@@ -19,8 +19,8 @@ export const doneBlockersGate: Gate = (call, facts) => {
     const task = option(argv, "--id");
     if (!task) continue;
     const blockers = facts.doneBlockers(task, option(argv, "--run"));
-    if (blockers === undefined) {
-      return verdict(`${task} 의 완료 조건(done_blockers)을 읽지 못해(저장소나 Orca task-list) 닫을 수 있는지 확인할 수 없다. 다시 시도하거나 리드에게 알린다.`);
+    if ("unread" in blockers) {
+      return verdict(`${task} 의 완료 조건(done_blockers)을 읽지 못해 닫을 수 있는지 확인할 수 없다: ${blockers.unread}. 원인을 고치기 전에는 같은 호출이 같은 이유로 막히니, 이 이유를 리드에게 알린다.`);
     }
     if (blockers.length > 0) return verdict(`${task} 는 아직 ✅ 로 닫을 수 없다: ${blockers.join(" · ")}`);
   }

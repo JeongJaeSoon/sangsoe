@@ -21,9 +21,9 @@ export type ReplayCounts = { lines: number; deny: number; pass: number; falsePos
 
 export const REPLAY_CWD = "/work/acme";
 
-export function blockersOf(f: LineFacts, task: string): string[] | undefined {
+export function blockersOf(f: LineFacts, task: string): string[] | { unread: string } {
   const b = f.blockers?.[task];
-  return b === null ? undefined : (b ?? []);
+  return b === null ? { unread: "replayed as unread" } : (b ?? []);
 }
 
 function factsOf(line: Line): Facts {

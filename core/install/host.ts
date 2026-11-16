@@ -19,6 +19,10 @@ export type Host = {
   nodeVersion: string;
 };
 
+// Matches core/orca/exec.ts: `orca orchestration task-list --full` of a large Run is a few MB, and the
+// 1 MiB default ends such a read with ENOBUFS.
+const MAX_BUFFER = 64 * 1024 * 1024;
+
 export const realHost: Host = {
   run(cmd, args, env, timeoutMs) {
     let childEnv: NodeJS.ProcessEnv | undefined;
@@ -29,8 +33,11 @@ export const realHost: Host = {
         else childEnv[k] = v;
       }
     }
-    const r = spawnSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: childEnv, ...(timeoutMs ? { timeout: timeoutMs } : {}) });
-    if (r.error) return { code: 127, stdout: "", stderr: r.error.message };
+    const r = spawnSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: childEnv, maxBuffer: MAX_BUFFER, ...(timeoutMs ? { timeout: timeoutMs } : {}) });
+    if (r.error) {
+      const code = (r.error as NodeJS.ErrnoException).code;
+      return { code: 127, stdout: "", stderr: code && !r.error.message.includes(code) ? `${code}: ${r.error.message}` : r.error.message };
+    }
     return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
   },
   exists: existsSync,

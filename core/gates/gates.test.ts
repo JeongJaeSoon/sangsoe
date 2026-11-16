@@ -137,7 +137,7 @@ test("load, open PRs and scripts are read only when a gate needs them", () => {
     load: () => read({ level: "ok", reasons: [] }),
     ownOpenPrs: () => read(undefined),
     readScript: () => read(undefined),
-    doneBlockers: () => read(undefined),
+    doneBlockers: () => read({ unread: "x" }),
     sangsoe: () => read(undefined),
   };
   for (const command of ["ls -la", "git status", "npm test", "sed -n '1,5p' a.ts | head"]) {
