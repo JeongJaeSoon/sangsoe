@@ -5,6 +5,7 @@ Decision numbers refer to `docs/decisions.md`.
 ## Unreleased
 
 - **The panel's 완료 now closes the owner item (317).** Orca takes no `task-update` from the plugin's process, so the button used to leave the item open behind a banner that said Orca had not answered. The press is now recorded with a waiting request, the panel says `기록했다 — 그 Run 의 세션이 닫는다`, and the next prompt of the session that holds the item's Run closes the Task with that Run and writes the transition and, with no verify, the evidence. Until then the item leaves the owner's to-do and its row reads `완료 기록됨: 그 Run 의 세션이 닫는다(대기)`. A Run no session holds keeps the request waiting. A refusal banner now shows the refusal code in its text, and for an `orca_error` Orca's own code and what it means. Takes effect for the panel after re-approval, and for the hook with the upgrade.
+- **`land` judges a check name by its latest run (319).** A head can carry several runs of one check name, for example two successes and three runs cancelled by a label event's concurrency group. `land` counted each cancelled run as a red check and refused an approved, clean PR with `checks_red`. It now takes each name's latest run (completion time, else start time), and cancelled runs do not count, so a cancelled run after a success keeps the check green while a failure before the cancelled run still makes it red. A name with only cancelled runs is refused as `checks_cancelled`, whose fix names `gh run rerun`. The pr-monitor's approved-and-green test reads the same judgement.
 
 ## 0.1.12
 
