@@ -1,12 +1,12 @@
 # sangsoe
 
-Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.12`; what changed is in `CHANGELOG.md`.
+Orchestration for Claude Code sessions on Orca. The current stable release is `v0.1.13`; what changed is in `CHANGELOG.md`.
 
 ## Install
 
 macOS with Homebrew, Claude Code, Orca and an authenticated `gh`. Run these in order, in a terminal or each on a Claude Code `!` line (step 3 says what changes there).
 
-1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. Newer Homebrew refuses a formula from a third-party tap until you trust it, and the install may stop with ``Error: Refusing to load formula jeongjaesoon/tap/sangsoe from untrusted tap jeongjaesoon/tap.`` (seen for the pre-release formula; the stable one differs only in the name). Trusting is your decision, because it sets what Homebrew will install from this tap: run ``brew trust --formula jeongjaesoon/tap/sangsoe`` (the refusal also offers `brew trust jeongjaesoon/tap` for the whole tap) and repeat the install. Then `sangsoe --version` prints `sangsoe <version>`, for example `sangsoe 0.1.12`. With the pre-release formula `sangsoe-rc` installed, run Uninstall first: the install refuses while `sangsoe-rc` is there.
+1. `brew install JeongJaeSoon/tap/sangsoe`, then `sangsoe --version`. Newer Homebrew refuses a formula from a third-party tap until you trust it, and the install may stop with ``Error: Refusing to load formula jeongjaesoon/tap/sangsoe from untrusted tap jeongjaesoon/tap.`` (seen for the pre-release formula; the stable one differs only in the name). Trusting is your decision, because it sets what Homebrew will install from this tap: run ``brew trust --formula jeongjaesoon/tap/sangsoe`` (the refusal also offers `brew trust jeongjaesoon/tap` for the whole tap) and repeat the install. Then `sangsoe --version` prints `sangsoe <version>`, for example `sangsoe 0.1.13`. With the pre-release formula `sangsoe-rc` installed, run Uninstall first: the install refuses while `sangsoe-rc` is there.
 2. `sangsoe install` registers and enables the Claude Code plugin, registers the Orca plugin, then runs `sangsoe doctor`. It is safe to re-run. On a first install it prints:
 
    ```
