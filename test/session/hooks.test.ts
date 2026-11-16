@@ -136,6 +136,17 @@ test("273: a session records the Run it takes after it starts, once, at the firs
   assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_orch");
 });
 
+test("273: a session resumed with claude --resume in the same worktree gets the re-hold line", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: null });
+  w.psRows = [psRow(w.dir, "inst_a")];
+  await orchestratorStart(w, "o1");
+  w.heldRun = "run_orch";
+  await hook(w, "user-prompt-submit", { session_id: "o1", prompt_id: "p1", prompt: "go" });
+  w.heldRun = null;
+  const lines = await hook(w, "session-start", { session_id: "o1", source: "resume", agent_type: "sangsoe:orchestrator" }, VERSION);
+  assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_orch");
+});
+
 test("273: an orchestrator in another worktree, or one whose worktree cannot be read, is not handed that Run", async () => {
   const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
   w.psRows = [psRow(w.dir, "inst_a")];

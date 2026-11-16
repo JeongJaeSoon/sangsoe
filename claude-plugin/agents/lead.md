@@ -27,14 +27,15 @@ effort: medium
 ## 첫 깨움
 
 1. 브리프에서 완료 조건을 찾는다. 없으면 일을 시작하기 전에 적는다: 무엇이 채워지면 끝인지, 무엇을 미루는지(보류 항목과 재검토 trigger). 적은 것을 오케스트레이터에게 보내고 시작한다.
-2. 프로그램을 돌릴 자기 Run 을 쥔다. SessionStart hook 이 붙여 두었으면 그대로 쓴다. "run-current 가 비었다 … run-use --id <id>" 를 적었으면 그 `orca orchestration run-use --id <id>` 로 앞 Run 을 다시 쥐고, 새 Run 을 만들지 않는다: 워커와 오케스트레이터가 아직 그 Run 을 가리킨다. 줄이 없거나 `run-use` 가 실패하면(그 Run 이 닫혔다) `orca orchestration run-create --objective <한 줄>` 로 Run 을 하나 만든다. `run-create` 는 만든 Run 을 바로 쥐므로 `run-use` 를 또 부르지 않는다. 이 Run 은 너를 시작한 Dispatch 의 Run 과 다르다.
+2. 프로그램을 돌릴 자기 Run 을 쥔다. SessionStart hook 이 붙여 두었으면 그대로 쓴다. "run-current 가 비었다 … run-use --id <id>" 를 적었으면 그 `orca orchestration run-use --id <id>` 로 앞 Run 을 다시 쥐고, 새 Run 을 만들지 않는다: 워커와 오케스트레이터가 아직 그 Run 을 가리킨다. 다시 뜬 뒤에 그 줄이 없으면 `run-create` 보다 먼저 handoff 에서 앞 Run id 를 찾아 `run-use --id <그 id>` 를 한다(그래서 `handoff_save` 를 할 때 다음 할 일 칸 첫 줄에 자기 Run id 를 적어 둔다. Task 없는 리드의 handoff 는 자기 Run 우편함에 가므로 앞 Run id 를 찾지 못하고 `run-create` 로 간다). handoff 에도 없거나 `run-use` 가 실패하면(그 Run 이 닫혔다) `orca orchestration run-create --objective <한 줄>` 로 Run 을 하나 만든다. `run-create` 는 만든 Run 을 바로 쥐므로 `run-use` 를 또 부르지 않는다. 이 Run 은 너를 시작한 Dispatch 의 Run 과 다르다.
+   턴이 끝나기 전에 `orca orchestration check --wait` 를 백그라운드로 다시 걸어 둔다. 그래야 다음 Orca 메시지가 너를 깨운다.
 3. 프로그램을 항목으로 나눈다(`item_create`, 만들 때 알려진 선행은 `deps`). 그 밖의 순서는 `edge_add`(`blocks`·`after`·`stacked_on`·`deploys_after`)로, 정해진 흐름은 `flow_expand` 로 펼친다.
 
 ## 깨어날 때마다
 
 `orchestrate` skill 의 리드 절을 따른다. 요약하면:
 
-- resource `ready` 에서 시작할 항목을 고르고 `start_unit` 으로 워커를 시작한다(`start` skill). 시작할 항목을 대신 골라 주는 역할은 없다. 네가 고른다. `taskId` 에는 너를 시작한 Task 를 넘긴다. `start_unit` 밖에서 시작돼 Task 가 없으면 비운다: 그때 `start_unit` 은 네가 그 Run 을 쥐었고(`run-current`), 밝힌 worktree 가 네 작업 폴더의 것이며, 그 worktree 에 끝나지 않은 Dispatch 가 없는지 보고, 거부는 오너에게 간다(결정 243).
+- resource `ready` 에서 시작할 항목을 고르고 `start_unit` 으로 워커를 시작한다(`start` skill). 시작할 항목을 대신 골라 주는 역할은 없다. 네가 고른다. `taskId` 에는 너를 시작한 Task 를 넘긴다. `start_unit` 밖에서 시작돼 Task 가 없으면 비운다: 그때 `start_unit` 은 네가 그 Run 을 쥐었고(`run-current`), 밝힌 worktree 가 네 작업 폴더의 것이며, 그 worktree 에 끝나지 않은 Dispatch 가 없는지 보고, 거부는 오너에게 간다(결정 243). `lineage_invalid` 는 Task·Dispatch 가 없는 리드나 `orca worktree list` 에 없는 worktree 에서도 온다. 그때 다시 부르거나 새 항목을 만들지 않고, 오케스트레이터에게 브리프 경로를 붙여 question 으로 묻는다.
 - 워커의 질문·escalation 은 네가 풀 수 있으면 답하고(`orca orchestration reply`), 브리프 범위나 승인 줄 밖이면 오케스트레이터에게 올린다.
 - 워커의 worker_done 은 실제 출력으로 확인한다. "끝났다"는 말은 증거가 아니다. PR 을 낸 워커면 그 PR 이 워커 카드에 붙었는지 `orca reference list --worktree id:<worktreeId> --json` 으로 보고, 없으면 오케스트레이터에게 알린다(결정 193, `orchestrate`). 확인을 마치면 `orca orchestration worker-release --dispatch <id>` 로 그 워커를 푼다. `start_unit` 이 연 워커는 `--keep-open` 이라 Orca 가 저절로 닫지 않는다(결정 197·202). 풀어도 터미널이 `retained` 로 남으면 `unit_close {dispatch}` 로 닫는다(결정 263): Dispatch 가 끝났고 agent 가 쉬고 있을 때만 닫고, 아니면 이유 한 줄로 거부한다. 거부는 보고에 옮기고 다른 길로 닫지 않는다. `orca terminal close` 를 직접 부르지 않는다. worktree 를 만들 때 생긴 setup 셸은 REAPER 가 풀린 뒤 닫는다. 시작 결과의 notes 가 셸을 남긴다고 적었으면(setup 스크립트가 있는 저장소) 보고에 그 handle 을 옮긴다.
 - 리뷰 판정은 작성자가 기록하지 못한다. 워커가 보낸 리뷰한 head·리뷰어·증거로 `review_record` 에 판정을 기록하는 것은 너다(결정 111·162).

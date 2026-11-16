@@ -25,6 +25,7 @@ export const ORCA_POLICY: Readonly<Record<string, Entry>> = {
   "orchestration send": { kind: "allow" },
   "orchestration reply": { kind: "allow" },
   "orchestration inbox": { kind: "allow" },
+  "orchestration check": { kind: "deny", why: "a consuming mail read hides mail from the agent it belongs to (decision 60): the session reads its own mail, sangsoe rules no such read" },
   "orchestration run-create": { kind: "allow" },
   "orchestration run-use": { kind: "allow" },
   "orchestration task-list": { kind: "allow" },

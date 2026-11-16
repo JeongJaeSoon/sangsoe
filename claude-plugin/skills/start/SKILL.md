@@ -70,6 +70,10 @@ alias 는 바깥 설정(`ANTHROPIC_DEFAULT_*_MODEL`)에 고정될 수 있다. �
 
 거부 사유 여섯은 `capability_missing` · `lineage_invalid` · `depth_exceeded` · `orca_error` · `no_dispatch` · `model_invalid`(advisor 짝이 맞지 않는 모델 선택) 다. 어느 것도 "다시 해 보면 되는" 사유가 아니다. 부모는 같은 일을 자기 Run 에 새 Task 로 만들지도 않는다(같은 일의 원본이 둘이 된다).
 
+`lineage_invalid` 는 항목의 역할 줄이 맞지 않을 때만 오지 않는다. Task·Dispatch 가 없는 리드가 부르거나, 밝힌 worktree 가 `orca worktree list` 에 없을 때도 온다. 그때 다시 부르지 않고 새 항목을 만들지 않는다. 오케스트레이터에게 브리프 경로를 붙여 question 으로 묻는다.
+
+`server_stale` 은 `/reload-plugins` 로 풀리지 않는다. 세션을 다시 시작해야 풀린다.
+
 ## 깊이가 모자랄 때
 
 오케스트레이터는 리드를 시작하기 전에 Orca 의 중첩 워커 깊이 설정을 확인한다. 리드 아래에 워커를 열 수 없으면(깊이 2 미만) 리드 대신 그 프로그램을 자기 Run 의 워커로 돌린다. 설정을 읽지 못했으면 리드를 시작하고, 리드의 첫 워커 시작 결과가 판정한다(`no_dispatch` 면 거부 보고가 올라온다).
