@@ -48,6 +48,20 @@ export type StartRequest = {
    * requester's own repo. Required when the requester names no worktree (decision 197).
    */
   repo?: string;
+  /**
+   * Decision 322: bind a session someone re-opened with `claude --resume` back to `task` (an existing
+   * one) instead of opening a new one. The caller opened `terminal` in the Task's own worktree.
+   */
+  resume?: ResumeTarget;
+};
+
+export type ResumeTarget = {
+  /** The worktree start_unit made for the Task. */
+  worktreeId: string;
+  /** The Claude Code session id the terminal resumed; SessionStart recorded it under the Task. */
+  sessionId: string;
+  /** The Orca terminal handle running that session. */
+  terminal: string;
 };
 
 /** Orca's repo selector forms that `worker-start --repo` takes. */
@@ -94,6 +108,8 @@ export type StartOutcome =
       /** Decision 318: `채택: <task>` when this call took an unstarted Task an earlier, cut-off call made. */
       notes?: string[];
     }
+  /** Decision 322: the resumed session is bound to `dispatchId`; `from` is the Dispatch it held before. */
+  | { kind: "resumed"; taskId: string; dispatchId: string; from: string; worktreeId: string; terminal: string; notes: string[] }
   /** T5: three failed starts on one Task; worker-start is not called again. */
   | { kind: "stopped"; taskId: string; why: "start_failed_3x" }
   | StartRefusal;

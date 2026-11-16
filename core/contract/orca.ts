@@ -345,7 +345,8 @@ export interface OrcaAdapter {
      */
     a: {
       task: string;
-      agent: string;
+      /** Absent with `terminal`: Orca binds the agent already running there (decision 322). */
+      agent?: string;
       worktree: WorkerPlacement;
       run?: string;
       model?: string;
@@ -353,9 +354,12 @@ export interface OrcaAdapter {
       advisor?: string;
       keepOpen?: boolean;
       repo?: string;
+      terminal?: string;
     },
     o?: WriteOptions,
   ): Promise<OrcaResult<Receipt>>;
+  /** Fences and settles a Dispatch without claiming its process stopped; closes nothing (decision 322). */
+  workerAbandon(a: { dispatch: string }, o?: WriteOptions): Promise<OrcaResult<Receipt>>;
   workerShow(a: { dispatch: string }): Promise<OrcaResult<WorkerShow>>;
   workerList(a: { run?: string; limit?: number; cursor?: string }): Promise<OrcaResult<LocalRows<WorkerRow>>>;
   dispatchShow(a: { task: string }): Promise<OrcaResult<DispatchRow>>;

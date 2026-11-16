@@ -77,4 +77,4 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 ## 재시작
 
-압축이 잦으면(`restart_due`) `handoff_save` 로 다음 할 일·기다리는 답·답 없는 질문·회신 경로를 남긴다. 리드가 다시 뜨면 자기 Run 을 `run-use` 로 다시 쥔다. 리드는 오케스트레이터의 Run 을 쥐지 않는다. handoff 에 없는 앞 세션의 말은 `orca search "<구절>" --scope conversation --sort newest --json` 으로 찾는다. `orca search --index-status` 가 켜짐(`enabled: true`)이 아니면 찾지 않는다. 대화 파일을 직접 읽지 않는다(결정 193).
+압축이 잦으면(`restart_due`) `handoff_save` 로 다음 할 일·기다리는 답·답 없는 질문·회신 경로를 남긴다. Task 를 쥔 리드나 워커를 새 터미널에서 `claude --resume` 으로 다시 띄웠으면 그 세션을 `start_unit` 의 `resume` 으로 원래 Task 에 다시 묶는다(`start` skill 의 재시작 절, 결정 322): 리드는 오케스트레이터가, 워커는 그 워커를 띄운 쪽이 묶는다. 묶지 않은 채 새 Task 를 만들거나 resume 없이 다시 시작하지 않는다. 리드가 다시 뜨면 자기 Run 을 `run-use` 로 다시 쥔다. 리드는 오케스트레이터의 Run 을 쥐지 않는다. handoff 에 없는 앞 세션의 말은 `orca search "<구절>" --scope conversation --sort newest --json` 으로 찾는다. `orca search --index-status` 가 켜짐(`enabled: true`)이 아니면 찾지 않는다. 대화 파일을 직접 읽지 않는다(결정 193).

@@ -319,10 +319,12 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
             advisor: a.advisor,
             "keep-open": a.keepOpen,
             repo: a.repo,
+            terminal: a.terminal,
           },
         },
         o,
       ),
+    workerAbandon: (a, o) => run("workerAbandon", { flags: { dispatch: a.dispatch } }, o),
     workerShow: (a) => shaped("workerShow", isObject, { flags: { dispatch: a.dispatch } }),
     workerList: (a) =>
       local("workerList", "workers", "host", "dispatchId", { flags: { run: a.run, limit: a.limit, cursor: a.cursor } }),

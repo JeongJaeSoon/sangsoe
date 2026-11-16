@@ -16,6 +16,7 @@ import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
 import { shownWorktree } from "./lineage.ts";
 import { addParentReadRules, childReadRules, dropParentReadRules, writeLocalSettings } from "./local-settings.ts";
+import { resumeUnit } from "./resume.ts";
 import { type NewTask, REPO_SELECTOR, type RefusalReason, type Role, type StartOutcome, type StartPorts, type StartRefusal, type StartRequest } from "./types.ts";
 
 type Json = Record<string, unknown>;
@@ -156,7 +157,7 @@ function firstPrompt(role: Role, t: NewTask): string {
  * The one path that opens a session (decision 94): lineage and depth → task-create --deps →
  * ready and capacity → worktree create (the parent's child) → its setup shell and local settings →
  * `unit_started` (decisions 200, 202) → worker-start --task <id> --worktree id:<it> --keep-open →
- * Dispatch read back.
+ * Dispatch read back. With `resume` it binds a re-opened session to its Task instead (decision 322, resume.ts).
  * A refusal writes one `signal{start_refused}` and escalates to whoever handed the requester its work.
  */
 export async function startUnit(ports: StartPorts, req: StartRequest): Promise<StartOutcome> {
@@ -322,6 +323,8 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       : null;
   if (badPair) return refuse("model_invalid", `${choice.kind}: ${badPair}`);
 
+  if (req.resume && !("id" in req.task)) return refuse("lineage_invalid", "resume 는 있는 Task 를 이어 간다: task 에 그 Task id 를 준다");
+
   // The Task: an existing one, or a new one with its deps and the child's role line first.
   let taskId: string;
   let alias: string | undefined;
@@ -393,6 +396,23 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     }
     return out;
   };
+
+  // Decision 322: one session replaces one, so a resume neither waits on capacity nor makes a worktree.
+  if (req.resume) {
+    return resumeUnit({
+      orca,
+      store,
+      source,
+      taskId,
+      run: requester.runId,
+      childRole: req.childRole,
+      target: req.resume,
+      specRole,
+      dispatchOf: (r) => findKey(r, DISPATCH_KEYS),
+      refuse: (reason, detail) => refuse(reason, detail, taskId),
+      failed: failedAttempt,
+    });
+  }
 
   // Ready and capacity: not refusals, the caller waits. An unreadable one is not "no room".
   // Decision 318: a wait still leaves one row per Task and cause, so a caller cut off mid-call can be traced.
