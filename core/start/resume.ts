@@ -25,7 +25,7 @@ export type ResumeContext = {
 };
 
 /** Orca's own refusal is definite; a lost answer or an unparsed exit may still have taken effect (Orca's recovery guide). */
-function unknownOutcome(r: OrcaResult<Receipt>): boolean {
+export function unknownOutcome(r: OrcaResult<unknown>): boolean {
   if (r.ok) return false;
   const code = r.error.code;
   return r.requestId !== undefined || ["response_lost", "request_absent", "unexpected_shape"].includes(code) || code.startsWith("exit_");

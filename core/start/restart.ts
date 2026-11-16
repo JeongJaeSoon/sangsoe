@@ -7,6 +7,7 @@ import { handoffSubject } from "../session/handoff.ts";
 import { agentRole, readRoleLine } from "../session/locate.ts";
 import type { SessionLaunch } from "../session/session-start.ts";
 import type { Store } from "../store/store.ts";
+import { unknownOutcome } from "./resume.ts";
 import { startUnit } from "./start.ts";
 import type { Role, StartOutcome, StartRequest } from "./types.ts";
 
@@ -254,14 +255,17 @@ async function findCaller(p: RestartPorts, claude: Proc | undefined, run: string
   const task = started?.entity_id;
   const taskRun = typeof started?.payload.run === "string" ? started.payload.run : undefined;
   if (task && taskRun) {
+    // A worker has no --agent either (Orca starts it without one): a read that fails here refuses rather than letting it pass as an orchestrator.
     const d = await p.orca.dispatchShow({ task });
-    if (d.ok && d.value.status === "dispatched" && !d.value.completed_at) {
+    if (!d.ok) return { error: `부른 세션의 Task ${task} 를 확인하지 못했다(dispatch-show ${d.error.code}): 다시 부른다` };
+    if (d.value.status === "dispatched" && !d.value.completed_at) {
       const specs = await specsIn(p.orca, taskRun);
       if (!specs) return { error: `부른 세션의 Task ${task} 를 읽지 못했다(task-list --run ${taskRun})` };
       const role = readRoleLine(specs.get(task));
       if (!role) return { error: `부른 세션의 Task ${task} 에 역할 줄이 없다` };
       return { role, run, task, ...(tree ? { worktree: tree } : {}) };
     }
+    if (!declared) return { error: `부른 세션의 worktree 는 Task ${task} 의 것인데 그 Dispatch 가 열려 있지 않다(${d.value.status}): 역할을 모른다` };
   }
   const role = declared ?? "orchestrator";
   // A lead with no Task names its worktree as start_unit asks (decision 243); an orchestrator leaves it to start_unit.
@@ -331,7 +335,11 @@ export async function planRestart(p: RestartPorts, o: { task?: string }): Promis
     return entry !== undefined && isStale(x.startedAt, entry, p.installed);
   });
   if (servers.length === 0) return { caller, rows: [] };
-  const dirs = workingDirs(host, servers.map((s) => s.pid));
+  // Every claude's folder too: a worktree with a second claude (the owner's own, say) is not restarted,
+  // since its stop and the new terminal's wait could hit the wrong process.
+  const claudes = procs.filter(isClaude);
+  const dirs = workingDirs(host, [...servers.map((s) => s.pid), ...claudes.map((c) => c.pid)]);
+  const claudesIn = (tree: string) => claudes.filter((c) => innermost(dirs.get(c.pid))?.id === tree).length;
   const held = await dispatchesIn(orca, run);
   if (!held) return { error: `Run ${run} 의 워커 목록을 읽지 못했다(worker-list --run)` };
   const specs = await specsIn(orca, run);
@@ -357,6 +365,11 @@ export async function planRestart(p: RestartPorts, o: { task?: string }): Promis
       const session = lastSession(p.store, { run, role: caller.role });
       if (!session || !tree || launch.problem) {
         rows.push(skip(`이 명령을 부른 세션이다: ${launch.problem ?? (session ? "worktree 를 찾지 못했다" : `Run ${run} 의 ${caller.role} 세션 id 가 store 에 없다`)}`, { role: caller.role }));
+        continue;
+      }
+      const waiting = await waitingFor(s.ppid, session, tree);
+      if (waiting) {
+        rows.push(skip(waiting, { role: caller.role, session }));
         continue;
       }
       const r = withRecorded(p.store, session, launch);
@@ -392,9 +405,31 @@ export async function planRestart(p: RestartPorts, o: { task?: string }): Promis
       rows.push(skip(`Dispatch ${w.dispatchId} 의 터미널을 읽지 못했다`, { role, ...ids }));
       continue;
     }
+    const count = claudesIn(tree);
+    if (count !== 1) {
+      rows.push(skip(`worktree 에 claude 가 ${count}개 돈다: 어느 것이 이 Task 의 세션인지 모른다`, { role, ...ids }));
+      continue;
+    }
     rows.push(await restartRow(base, launch, { role, ...ids, terminal: w.terminal }));
   }
   return { caller, rows };
+
+  /**
+   * Why no second terminal is opened for the caller's own session: an earlier run already opened one
+   * that still waits, or opened one whose answer was lost. undefined when none was tried.
+   */
+  async function waitingFor(pid: number, session: string, tree: string): Promise<string | undefined> {
+    const tried = p.store
+      .events({ type: "signal" })
+      .filter((e) => e.payload.kind === "restart_self" && e.payload.reason === String(pid) && e.subject === session);
+    if (tried.length === 0) return undefined;
+    const handles = tried.flatMap((e) => (e.target ? [e.target] : []));
+    const list = await orca.terminalList({ worktree: `id:${tree}` });
+    const open = list.ok ? handles.find((h) => list.value.rows.some((t) => t.handle === h)) : undefined;
+    if (open) return `이 세션을 기다리는 터미널 ${open} 이 이미 있다: 오너가 이 세션의 터미널을 닫으면 이어 띄운다`;
+    if (handles.length > 0 && list.ok) return undefined;
+    return `앞 실행이 이 세션을 기다리는 터미널을 열었는지 모른다: orca terminal list --worktree ${quote(`id:${tree}`)} 에 그 터미널이 있으면 이 세션의 터미널만 닫는다`;
+  }
 
   /** One Task's session: restarted when its Dispatch is open, bound alone when it already runs again. */
   async function planTask(task: string): Promise<RestartRow[]> {
@@ -506,6 +541,13 @@ async function restartOne(p: RestartPorts, caller: Caller, r: RestartRow, say: S
   const task = r.task as string;
   const worktree = r.worktree as string;
   const again = `sangsoe restart --task ${task}`;
+  // The plan read the state minutes ago at worst (each restart before this one may wait 90 seconds).
+  const ps = await orca.worktreePs({ limit: 1000 });
+  const now = await agentState(orca, ps.ok && !ps.value.truncated ? ps.value.rows : undefined, worktree, r.terminal as string);
+  if (!("state" in now) || !AT_REST.has(now.state)) {
+    say(`  – ${task}: 계획 뒤 ${"state" in now ? `턴을 시작했다(agent ${now.state})` : `쉬는지 알 수 없게 됐다(${now.unknown})`}: 건너뛴다. 쉴 때 ${again}`);
+    return true;
+  }
   const stopped = await orca.workerStop({ dispatch: r.dispatch as string });
   if (!stopped.ok) {
     say(`  ✗ ${task}: worker-stop ${r.dispatch} 실패(${stopped.error.code}): 세션을 다시 띄우지 않았다. worker-show 로 그 Dispatch 를 읽고 다시 부른다`);
@@ -530,11 +572,23 @@ async function restartOne(p: RestartPorts, caller: Caller, r: RestartRow, say: S
 
 async function restartSelf(p: RestartPorts, r: RestartRow, say: Say): Promise<boolean> {
   const created = await p.orca.terminalCreate({ worktree: `id:${r.worktree}`, command: r.command as string, title: `restart ${r.role}` });
-  const ownLine = `/exit 뒤 이 터미널에서: ${r.command?.slice(r.command.indexOf("done; ") + "done; ".length)}`;
+  // A terminal that may be open marks this session as waited on, so a later run opens no second one.
+  const mark = (terminal?: string) =>
+    p.store.append({ type: "signal", source: "cli:restart", payload: { kind: "restart_self", reason: String(r.claudePid) }, subject: r.session as string, ...(terminal ? { target: terminal } : {}) });
   if (!created.ok) {
-    say(`  ✗ 이 세션: 새 터미널을 열지 못했다(${created.error.code})`, `    오너가 칠 한 줄: ${ownLine}`);
+    if (unknownOutcome(created)) {
+      mark();
+      say(
+        `  ✗ 이 세션: 새 터미널을 열었는지 알 수 없다(${created.error.code})`,
+        `    orca terminal list --worktree ${quote(`id:${r.worktree}`)} 에 기다리는 터미널이 있으면 이 세션의 터미널만 닫는다. 다시 부르지 않는다`,
+      );
+      return false;
+    }
+    const ownLine = `/exit 뒤 이 터미널에서: ${r.command?.slice(r.command.indexOf("done; ") + "done; ".length)}`;
+    say(`  ✗ 이 세션: Orca 가 새 터미널을 거부했다(${created.error.code})`, `    오너가 칠 한 줄: ${ownLine}`);
     return false;
   }
+  mark(created.value.handle);
   say(
     `  ✓ 이 세션: 새 터미널 ${created.value.handle} 이 pid ${r.claudePid} 가 끝나기를 기다린다`,
     `    오너: Orca 에서 이 세션의 터미널${p.self.terminal ? ` ${p.self.terminal}` : ""} 을 닫으면(결정 301) 새 터미널이 세션을 이어 띄운다`,
