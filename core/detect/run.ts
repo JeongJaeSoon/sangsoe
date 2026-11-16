@@ -40,10 +40,10 @@ export const MONITORS: Record<MonitorName, (d: MonitorDeps, signal: AbortSignal,
 /**
  * One round: read and judge, append each planned event unless the round passed its cap, then run
  * the round's Orca writes in order, each followed by the events it returned. A dry run does neither.
- * A round may hand parts over earlier through `flush` (pr-monitor: one PR's pass, decision 329). A
- * part is written whole: before the cap its events and then all its acts, past the cap its events
- * only when it has no act, so an event that gates its own act (`pr_ready_to_merge` and its wake)
- * never lands without it and the round after judges both again.
+ * A round may hand parts over earlier through `flush` (pr-monitor: one PR's pass, decision 329).
+ * Before the cap a part's events are written and then all its acts run; past the cap its events are
+ * written and its acts are not, except the events an act `gates`, which wait with it, so a row that
+ * would stop its own act being judged again (`pr_ready_to_merge` and its wake) never lands alone.
  */
 export async function runMonitor(name: MonitorName, d: MonitorDeps, signal: AbortSignal = new AbortController().signal): Promise<MonitorReport> {
   const planned: Planned[] = [];
@@ -59,7 +59,10 @@ export async function runMonitor(name: MonitorName, d: MonitorDeps, signal: Abor
     const at = report.length;
     report.push(...part.acts.map((a) => ({ what: a.what, ok: null, detail: "not run" })));
     if (!d.append || !writeEvents) return;
-    for (const e of part.planned) write(e);
+    const late = wholePart && signal.aborted;
+    const held = new Set(late ? part.acts.flatMap((a) => a.gates ?? []) : []);
+    for (const e of part.planned) if (!held.has(e.dedupe_key ?? "")) write(e);
+    if (late) return;
     for (const [i, act] of part.acts.entries()) {
       if (!wholePart && signal.aborted) break;
       const r = await act.run(d);
@@ -67,8 +70,7 @@ export async function runMonitor(name: MonitorName, d: MonitorDeps, signal: Abor
       for (const e of r.planned) write(e);
     }
   };
-  const flush: Flush = (part) => take(part, !signal.aborted || part.acts.length === 0, true);
-  const { planned: rest, unseen, acts = [], calls = [] } = await MONITORS[name](d, signal, flush);
+  const { planned: rest, unseen, acts = [], calls = [] } = await MONITORS[name](d, signal, (part) => take(part, true, true));
   await take({ planned: rest, acts }, !signal.aborted, false);
   return { monitor: name, planned, written, unseen, calls, aborted: signal.aborted, acts: report };
 }

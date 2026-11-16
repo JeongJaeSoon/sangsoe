@@ -25,6 +25,11 @@ export type Act = {
    * the loss from going out twice (decision 184).
    */
   wake?: true;
+  /**
+   * Dedupe keys of events in the same round whose row would stop this act from being judged again
+   * (`pr_ready_to_merge` and its wake). Past the cap those events are held back with the act (decision 329).
+   */
+  gates?: string[];
   run(d: MonitorDeps): Promise<{ ok: boolean; detail: string; planned: Planned[] }>;
 };
 

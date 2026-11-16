@@ -88,26 +88,28 @@ const WORKER_PAGES = 3;
 
 /**
  * Dispatches by workspace id, from `worker-list` (newest first): a released worker leaves no agent row.
- * null when no page could be read.
+ * `whole` is false when a page could not be read.
  */
-export async function dispatchesByWorkspace(d: MonitorDeps): Promise<Map<string, string[]> | null> {
+export async function dispatchesByWorkspace(d: MonitorDeps): Promise<Workers> {
   const out = new Map<string, string[]>();
   let cursor: string | undefined;
   for (let page = 0; page < WORKER_PAGES; page++) {
     const r = await d.orca.workerList({ limit: 100, ...(cursor ? { cursor } : {}) });
-    if (!r.ok) return page === 0 ? null : out;
+    if (!r.ok) return { byWorkspace: out, whole: false };
     for (const w of r.value.rows) if (w.workspace) out.set(w.workspace, [...(out.get(w.workspace) ?? []), w.dispatchId]);
     cursor = r.value.nextCursor;
     if (!cursor) break;
   }
-  return out;
+  return { byWorkspace: out, whole: true };
 }
+
+type Workers = { byWorkspace: Map<string, string[]>; whole: boolean };
 
 /**
  * Orca's `reference find <url>` is the link (decision 80 N7). A live agent's mailbox names its
  * Dispatch; once the worker is released the workspace's Dispatches come from `worker-list`.
  */
-export async function linkOf(d: MonitorDeps, url: string, workers: () => Promise<Map<string, string[]> | null>): Promise<Link | null> {
+export async function linkOf(d: MonitorDeps, url: string, workers: () => Promise<Workers>): Promise<Link | null> {
   const found = await d.orca.referenceFind({ query: url, limit: 20 });
   if (!found.ok) return null;
   const matches = Array.isArray(found.value.matches) ? (found.value.matches as Record<string, unknown>[]) : [];
@@ -125,9 +127,9 @@ export async function linkOf(d: MonitorDeps, url: string, workers: () => Promise
     }
     const ws = str((m.workspace as Record<string, unknown> | undefined)?.id);
     if (dispatches.size === before && ws) {
-      const byWs = await workers();
-      if (!byWs) whole = false;
-      for (const id of byWs?.get(ws) ?? []) dispatches.add(id);
+      const listed = await workers();
+      if (!listed.whole) whole = false;
+      for (const id of listed.byWorkspace.get(ws) ?? []) dispatches.add(id);
     }
   }
   const tasks = new Map<string, LinkedTask>();
@@ -424,6 +426,8 @@ async function readyToMerge(r: Reads, repo: string, p: ListedPull, link: Link | 
   if (!task || !lead) return void r.unseen.push(`owning lead of ${ref}`);
   r.acts.push({
     what: `notify run:${lead} ${ref} ready to merge`,
+    // The row ends the judgment above, so it is written only with this wake (decision 329).
+    gates: [key("pr_ready_to_merge", ref, p.head.sha)],
     wake: true,
     run: async (d) => {
       const n = await sendNotice(d, {
@@ -527,7 +531,7 @@ type Walk = {
   skip: boolean;
   level: string;
   signal: AbortSignal;
-  workers: () => Promise<Map<string, string[]> | null>;
+  workers: () => Promise<Workers>;
   hand: () => Promise<void>;
 };
 
@@ -558,7 +562,7 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal, flush?: Flush
   const scope = JSON.stringify([watch.authors, watch.linkedOnly, watch.owners]);
   if (cursor.watch !== scope) cursor.settled.clear();
   cursor.watch = scope;
-  let byWorkspace: Promise<Map<string, string[]> | null> | undefined;
+  let byWorkspace: Promise<Workers> | undefined;
   const workers = () => {
     byWorkspace ??= dispatchesByWorkspace(d);
     return byWorkspace;
@@ -637,7 +641,7 @@ async function walkRepo(w: Walk, repo: string, until: number): Promise<boolean> 
     else cursor.settled.delete(ref);
     // Each PR is handed over as one part, so its events and the acts they gate are written together.
     await w.hand();
-    // Past the cap the part may have been withheld: the next walk starts at this PR.
+    // Past the cap the PR's acts did not run: the next walk starts at this PR.
     if (w.signal.aborted) return false;
   }
   cursor.resume.delete(repo);

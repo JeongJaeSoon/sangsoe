@@ -124,7 +124,7 @@ test("329: a round the cap cuts still writes the PR it judged with no Orca write
   assert.deepEqual({ done: cut?.repos_done, left: cut?.repos_left }, { done: 0, left: 11 });
 });
 
-test("329: past the cap a PR whose pass has an Orca write is withheld whole and judged first next round", async () => {
+test("329: past the cap a PR's Orca write waits for the next round, which starts at that PR", async () => {
   const f = fleet({ orcaMs: 100_000 });
   // No Orca link, a workspace on its branch: the round adds the reference.
   f.refs.delete(f.url("acme/app-01", 900));
@@ -134,16 +134,26 @@ test("329: past the cap a PR whose pass has an Orca write is withheld whole and 
   cap.done();
   assert.equal(r.aborted, true);
   assert.deepEqual(r.acts.map((a) => a.ok), [null], "the act is listed, not run");
-  assert.deepEqual(f.rows("pr_opened"), [], "nor is the event it came with written");
+  assert.ok(f.rows("pr_opened").some((e) => e.payload.pr === "acme/app-01#900"), "the event it gates nothing for is written");
   assert.equal(f.calls("reference add"), 0);
   assert.equal(f.rows("monitor_round_truncated").length, 1);
+  assert.equal(cursor.resume.get("acme/app-01"), "acme/app-01#900");
 
   f.delays({ orcaMs: 700 });
   const next = f.capped();
   await runMonitor("pr", { ...f.deps, prCursor: cursor }, next.signal);
   next.done();
   assert.equal(f.charges.find((c) => c.stage === "reference add")?.repo, "acme/app-01");
-  assert.ok(f.rows("pr_opened").some((e) => e.payload.pr === "acme/app-01#900"));
+});
+
+test("329: a settled open PR is read again once a land names it", async () => {
+  const { f, round } = runner({ repos: 1, trackedIn: [], merged: 0 });
+  await round();
+  const quiet = await round();
+  assert.equal(f.calls("reference find", quiet.from), 0, "the five untracked open PRs are settled");
+  f.store.append({ type: "land_requested", source: "land", payload: { pr: "acme/app-01#502", head_sha: "0".repeat(40), reason: "merge_on_approval" } });
+  const after = await round();
+  assert.equal(f.calls("reference find", after.from), 1);
 });
 
 test("329: the cursor is not trusted while a lost database waits for its reread", async () => {

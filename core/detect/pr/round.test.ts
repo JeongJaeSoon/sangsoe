@@ -744,6 +744,37 @@ test("329: a cap that fires after pr_ready_to_merge is judged withholds the row 
   assert.ok(w.calls.some((c) => c.startsWith("send run:run_lead_c")), "the lead is woken on the next round");
 });
 
+test("329: review rows judged before the cap are written past it, though their ETag is saved and the wake waits", async () => {
+  const w = world();
+  w.link(12, "task_c", "blocked", "run_lead_c");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#12", task: "task_c", base: "main", head_sha: HEAD } });
+  w.store.append({ type: "verify_tier_set", source: "pr-monitor", payload: { pr: "acme/api#12", head_sha: HEAD, computed: "V1", effective: "V1", actor: "pr-monitor", accepted: true, reason: "x" } });
+  w.routes[OPEN] = ok([listed(12)]);
+  w.routes[`repos/${REPO}/pulls/12/comments?sort=created&direction=desc&per_page=100`] = ok([{ id: 501, user: { login: "bob" }, created_at: "2026-11-10T11:30:00Z" }]);
+  const ctl = new AbortController();
+  let cut = true;
+  const inner = w.deps.gh as GhClient;
+  const tagged = new Set<string>();
+  // Like core/gh/client.ts: the tag is saved when the 200 is read, and a later conditional read is a 304.
+  const gh: GhClient = {
+    get: async <T>(path: string, o?: { conditional?: boolean }) => {
+      if (o?.conditional && tagged.has(path)) return { kind: "not_modified" } as GhResponse<T>;
+      const res = await inner.get<T>(path, o);
+      if (o?.conditional && res.kind === "ok") tagged.add(path);
+      if (cut && path.includes("/comments?")) ctl.abort();
+      return res;
+    },
+  };
+  const cursor = prCursor();
+  const first = await runMonitor("pr", { ...w.deps, gh, prCursor: cursor }, ctl.signal);
+  assert.equal(first.aborted, true);
+  assert.deepEqual(w.rows("review_commented").map((e) => e.dedupe_key?.split(":").at(-1)), ["501"], "written past the cap");
+  assert.deepEqual(first.acts.map((a) => a.ok), [null], "the wake did not run");
+  cut = false;
+  await runMonitor("pr", { ...w.deps, gh, prCursor: cursor });
+  assert.ok(w.calls.some((c) => c.startsWith("send dispatch:ctx_task_c") || c.startsWith("send run:run_lead_c")), "the next round sends the wake from the stored row");
+});
+
 test("329: a merged PR whose Dispatch Orca could not show is read again, and closed once it can", async () => {
   const w = world();
   w.link(7, "task_item", "blocked");
