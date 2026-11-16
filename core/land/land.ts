@@ -19,6 +19,7 @@ import {
   readLabels,
   readPull,
 } from "./github.ts";
+import type { ReferencePort } from "./reference.ts";
 import { lastBaseChange, rereviewItem, verdictsSinceBase } from "./rereview.ts";
 
 // The land judgment (decisions 72, 79, 81, 85; appendix #role-cards): one function for the dry
@@ -39,7 +40,8 @@ export type LandValue = {
   merge_method?: MergeMethod;
 };
 export type LandRefusal = { code: string; reason: string; fix: string };
-export type LandOutcome = { ok: true; value: LandValue } | { ok: false; refusal: LandRefusal };
+/** `notes`: what land did beside the judgment and could not finish (decision 323: the card reference). */
+export type LandOutcome = { ok: true; value: LandValue; notes?: string[] } | { ok: false; refusal: LandRefusal; notes?: string[] };
 
 export type LandStore = {
   events(): StoredEvent[];
@@ -75,6 +77,8 @@ export type LandDeps = {
   config: () => LandConfig;
   mergeNow?: MergeNowPort;
   prGate?: PrGatePort;
+  /** Decision 323; without it land attaches nothing. */
+  reference?: ReferencePort;
 };
 
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -126,9 +130,19 @@ export async function land(input: LandInput, deps: LandDeps): Promise<LandOutcom
   const repo = input.repo;
   const pr = `${repo.toLowerCase()}#${input.pr}`;
   let head: string | undefined;
+  let headRef: string | undefined;
+  // Decision 323: the first look at a PR is the author's, so the author's card gets the PR then.
+  const events = store.events();
+  const first = !events.some((e) => (e.type === "land_requested" || e.type === "land_failed") && e.payload.pr === pr);
+  const noted = async (o: LandOutcome): Promise<LandOutcome> => {
+    if (!first || input.dryRun || !headRef || !deps.reference) return o;
+    const note = await deps.reference({ repo, pr: input.pr, headRef }).catch((e) => `card reference: not attached (${e instanceof Error ? e.message : String(e)})`);
+    return note ? { ...o, notes: [note] } : o;
+  };
   try {
-    const value = await judge({ ...input, repo }, pr, deps, store.events(), (sha) => {
-      head = sha;
+    const value = await judge({ ...input, repo }, pr, deps, events, (pull) => {
+      head = pull.head.sha;
+      headRef = pull.head.ref;
     });
     if (!input.dryRun) {
       if (value.action !== "merge_on_approval") {
@@ -147,22 +161,22 @@ export async function land(input: LandInput, deps: LandDeps): Promise<LandOutcom
       }[value.action];
       store.append({ type: "land_requested", source: "land", payload: { pr, head_sha: value.head_sha, ...(reason ? { reason } : {}) } });
     }
-    return { ok: true, value };
+    return await noted({ ok: true, value });
   } catch (e) {
     if (!(e instanceof Refused)) throw e;
     if (!input.dryRun) store.append({ type: "land_failed", source: "land", needs: "action", payload: { pr, ...(head ? { head_sha: head } : {}), reason: e.token } });
-    return { ok: false, refusal: { code: e.code, reason: `${e.token} — ${e.why}`, fix: e.fix } };
+    return await noted({ ok: false, refusal: { code: e.code, reason: `${e.token} — ${e.why}`, fix: e.fix } });
   } finally {
     store.close();
   }
 }
 
-async function judge(input: LandInput, pr: string, deps: LandDeps, events: readonly StoredEvent[], sawHead: (sha: string) => void): Promise<LandValue> {
+async function judge(input: LandInput, pr: string, deps: LandDeps, events: readonly StoredEvent[], sawPull: (pull: Pull) => void): Promise<LandValue> {
   const { gh } = deps;
   const { repo } = input;
   const pull = must(await readPull(gh, repo, input.pr), "pr_unreadable", `check that ${pr} exists and gh is logged in`);
   const head = pull.head.sha;
-  sawHead(head);
+  sawPull(pull);
   if (pull.state !== "open" || pull.draft) {
     const state = pull.merged ? "merged" : pull.draft ? "draft" : pull.state;
     throw new Refused("pr_not_open", state, `${pr} is ${state}`, pull.draft ? "mark the PR ready for review, then land" : "nothing to land");

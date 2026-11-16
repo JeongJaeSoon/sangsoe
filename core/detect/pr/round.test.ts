@@ -634,3 +634,14 @@ test("no watch setting or no gh client: the round reads nothing", async () => {
   assert.deepEqual((await w.round({ watch: () => null })).unseen, ["watch.repos setting"]);
   assert.deepEqual((await w.round({}, ["gh"])).unseen, ["gh client"]);
 });
+
+test("323: a PR merged before any open round saw it still gets its branch workspace's reference, once per round's worktree list", async () => {
+  const w = world();
+  w.routes[CLOSED] = ok([listed(40, { merged_at: "2026-11-10T11:00:00Z" }), listed(41, { merged_at: "2026-11-10T11:01:00Z" })]);
+  w.merged(40, SHA);
+  w.merged(41, SHA2);
+  w.worktrees.push({ id: "repo1::/w/40", projectId: `github:${REPO}`, branch: "refs/heads/feature-40", isArchived: false, displayName: "card 40" });
+  const r = await w.round();
+  assert.deepEqual(w.calls, [`reference add ${url(40)} id:repo1::/w/40`], "#41 has no workspace; no task-update, the PR is still unrecorded");
+  assert.deepEqual(r.acts.map((a) => a.ok), [true]);
+});

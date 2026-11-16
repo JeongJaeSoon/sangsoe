@@ -618,3 +618,41 @@ test("238: land holds a screen PR's ui evidence to the repository's rule, and on
   assert.doesNotMatch(await reasonOf({ [REPO]: rule }, JSON.stringify({ surface: "orca-panel", first_read_ms: 900, scrolls: 0, hscroll: 0 })), /evidence_missing/);
   assert.doesNotMatch(await reasonOf({ "acme/other": rule }), /evidence_missing/, "another repository's rule does not apply");
 });
+
+test("323: the first land of a PR, whatever it answers, asks for its head branch's card to hold the PR; later lands and dry runs do not", async () => {
+  const withRef = (extra: Record<string, unknown> = {}) => routes({ pull: { head: { sha: HEAD, ref: "feature-12", repo: { full_name: REPO } }, ...extra } });
+  const asked: unknown[] = [];
+  const hook = (h: Harness, note: string | null = null) => {
+    h.deps.reference = async (a) => {
+      asked.push(a);
+      return note;
+    };
+  };
+
+  const refused = harness(withRef());
+  hook(refused);
+  const first = await land(input(), refused.deps);
+  assert.ok(!first.ok && first.refusal.code === "review_missing", JSON.stringify(first));
+  assert.deepEqual(asked, [{ repo: REPO, pr: 12, headRef: "feature-12" }], "a refusal is a first sight too");
+  assert.equal(first.notes, undefined);
+  await land(input(), refused.deps);
+  assert.equal(asked.length, 1, "a land_failed row means the PR was seen");
+
+  const merged = harness(withRef());
+  ready(merged.store);
+  hook(merged, "card reference: not attached (selector_not_found)");
+  const second = await land(input(), merged.deps);
+  assert.ok(second.ok, JSON.stringify(second));
+  assert.deepEqual(second.notes, ["card reference: not attached (selector_not_found)"]);
+  assert.equal(asked.length, 2);
+
+  const dry = harness(withRef());
+  hook(dry);
+  await land(input({ dryRun: true }), dry.deps);
+  assert.equal(asked.length, 2, "a dry run writes nothing, Orca included");
+
+  const none = harness(routes());
+  hook(none);
+  await land(input(), none.deps);
+  assert.equal(asked.length, 2, "a head without a branch name asks nothing");
+});
