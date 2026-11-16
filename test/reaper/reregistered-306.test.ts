@@ -132,6 +132,60 @@ test("(3d) with no PR, the last Dispatch under the old id judges the card: a fai
   assert.deepEqual(r.reaped, []);
 });
 
+// Decision 313: a path-only Dispatch match may keep a card but finishes only a card sangsoe started.
+function pathOnlyDispatch(w: ReturnType<typeof world>, name: string, o: { started: boolean; state: string }) {
+  const repo = makeRepo(name);
+  const c = card(name, repo, { id: `repo-new::${repo.path}`, repoId: "repo-new" }) as WorktreeRow & { instanceId: string };
+  w.orca.cards.push(c);
+  if (o.started) started(w.store, `repo-old::${repo.path}`);
+  w.gh.known.add(repo.head);
+  w.orca.workers.push(worker(`repo-old::${repo.path}`, { dispatchId: `ctx_${name}`, state: o.state, outcome: o.state, liveness: "exited" }));
+  return c;
+}
+
+test("(6) the timer round does not take a card sangsoe did not start on a succeeded Dispatch that names only its path", async () => {
+  const w = world();
+  const c = pathOnlyDispatch(w, "foreign-path", { started: false, state: "succeeded" });
+  const last = await rounds(w, 3, 30);
+  assert.deepEqual(last.targets, []);
+  assert.deepEqual(w.orca.calls.filter((x) => x.startsWith("worktreeRm")), []);
+  assert.ok(last.unseen.includes(`finished? ${c.instanceId}: no PR and no Dispatch`));
+});
+
+test("(6b) the same card sangsoe started under the old id is finished by that Dispatch and goes, as decision 306 has it", async () => {
+  const w = world();
+  const c = pathOnlyDispatch(w, "started-path", { started: true, state: "succeeded" });
+  const last = await rounds(w, 2, 30);
+  assert.deepEqual(last.targets, [c.instanceId]);
+  assert.deepEqual(w.orca.calls.filter((x) => x.startsWith("worktreeRm")), [`worktreeRm id:${c.id}`]);
+});
+
+test("(6c) a failed Dispatch that names only the path still keeps a card sangsoe did not start, even when the owner confirms", async () => {
+  const w = world();
+  const c = pathOnlyDispatch(w, "foreign-failed", { started: false, state: "failed" });
+  const r = await w.round({ confirmed: [c.instanceId] });
+  assert.deepEqual(w.orca.calls.filter((x) => x.startsWith("worktreeRm")), []);
+  assert.ok(r.unseen.includes(`not finished: ${c.instanceId}: last Dispatch ended failed`));
+});
+
+test("(6d) for a card sangsoe did not start, the Dispatches under its exact id decide: an older failed one outweighs a newer path-only success", async () => {
+  const w = world();
+  const c = pathOnlyDispatch(w, "foreign-mixed", { started: false, state: "succeeded" });
+  w.orca.workers.push(worker(c.id, { dispatchId: "ctx_exact_failed", state: "failed", outcome: "failed", liveness: "exited" }));
+  await rounds(w, 3, 30);
+  assert.deepEqual(w.orca.calls.filter((x) => x.startsWith("worktreeRm")), []);
+  const r = await w.round({ confirmed: [c.instanceId] });
+  assert.ok(r.unseen.includes(`not finished: ${c.instanceId}: last Dispatch ended failed`));
+  assert.deepEqual(w.orca.calls.filter((x) => x.startsWith("worktreeRm")), []);
+
+  const t = world();
+  const ok = pathOnlyDispatch(t, "foreign-exact", { started: false, state: "succeeded" });
+  t.orca.workers.splice(0, 1, worker(ok.id, { dispatchId: "ctx_exact_ok", state: "succeeded", liveness: "exited" }));
+  const last = await rounds(t, 2, 30);
+  assert.deepEqual(last.targets, [ok.instanceId], "an exact-id success finishes it, as before decision 306");
+  assert.deepEqual(t.orca.calls.filter((x) => x.startsWith("worktreeRm")), [`worktreeRm id:${ok.id}`]);
+});
+
 test("(4) a card sangsoe did not start stays out: another path, a path that only shares a prefix, the main worktree", async () => {
   const store = Store.open({ path: ":memory:" });
   started(store, "repo-old::/w/task_a");
