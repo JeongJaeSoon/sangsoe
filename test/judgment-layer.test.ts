@@ -69,7 +69,7 @@ test("agent bodies reach sangsoe through MCP, never through a shell command", ()
   }
 });
 
-test("the delegate gate lets the orchestrator read each sangsoe resource its agent text names", () => {
+test("the delegate gate lets the orchestrator read each sangsoe resource its agent text names, any server's resources, and still not another server's tools", () => {
   // Claude Code names a plugin's server `plugin:<plugin name>:<.mcp.json key>` (appendix #mcp).
   const plugin = (JSON.parse(read("claude-plugin/.claude-plugin/plugin.json")) as { name: string }).name;
   const servers = Object.keys((JSON.parse(read("claude-plugin/.mcp.json")) as { mcpServers: object }).mcpServers);
