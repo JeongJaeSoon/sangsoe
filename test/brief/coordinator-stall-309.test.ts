@@ -97,6 +97,29 @@ test("a worker of that Run, or another Run's coordinator, ending a turn does not
   assert.match(r.text, LINE);
 });
 
+test("only the Run a session holds now counts, read from target, never subject", () => {
+  const moved = read(
+    input((p, at) => {
+      started(p, "sess_lead", "lead", "run_l", at(300));
+      // The same session took another Run since: its turns are that Run's.
+      started(p, "sess_lead", "lead", "run_x", at(100));
+      stalled(p, "run_l", at(45));
+      turn(p, "sess_lead", at(10));
+    }),
+  );
+  assert.match(moved.text, LINE);
+
+  const tasked = read(
+    input((p, at) => {
+      // A lead with a Task lives in the orchestrator's Run (subject) and holds none yet.
+      started(p, "sess_tasked", "lead", null, at(200), "run_l");
+      stalled(p, "run_l", at(45));
+      turn(p, "sess_tasked", at(10));
+    }),
+  );
+  assert.match(tasked.text, LINE);
+});
+
 test("a worker run_stalled (no coordinator) and a stall older than 24 hours show nothing", () => {
   const r = read(
     input((p, at) => {
