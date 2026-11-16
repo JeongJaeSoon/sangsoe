@@ -1,5 +1,6 @@
 import { capacity, judgeLoad, type LoadSample, sampleLoad } from "../capacity/capacity.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
+import { settled } from "../recover/recover.ts";
 import type { Store } from "../store/store.ts";
 import { findKey, roleLine } from "./start.ts";
 
@@ -45,10 +46,21 @@ export async function createItem(orca: OrcaAdapter, store: Pick<Store, "append" 
   return { ok: true, task, alias };
 }
 
-/** Free slots on a Run: live workers against `limit`, with the one load judgment (decision 83). */
-export async function runSlots(orca: OrcaAdapter, run: string, limit: number, sample: LoadSample = sampleLoad()): Promise<number> {
+/**
+ * Free slots on a Run: live workers against `limit`, with the one load judgment (decision 83).
+ * Decision 318: a Dispatch that has finished, by Orca's state or by a worker_done the store holds
+ * (a READY-WAIT unit waits on merge approval only), holds no slot.
+ */
+export async function runSlots(
+  orca: OrcaAdapter,
+  run: string,
+  limit: number,
+  sample: LoadSample = sampleLoad(),
+  store?: Pick<Store, "events">,
+): Promise<number> {
   const w = await orca.workerList({ run, limit: 100 });
   if (!w.ok) throw new Error(`worker-list ${w.error.code}`);
-  const live = w.value.rows.filter((r) => r.liveness === "live" && r.state !== "settled").length;
+  const done = new Set(store?.events({ type: "worker_done" }).map((e) => e.entity_id) ?? []);
+  const live = w.value.rows.filter((r) => r.liveness === "live" && !settled(r) && !done.has(r.dispatchId)).length;
   return capacity({ live, limit, level: judgeLoad(sample).level });
 }

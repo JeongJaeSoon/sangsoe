@@ -10,4 +10,9 @@ export default defineEvent("item_created", {
   done_when: str,
   owner_action: int,
   run: opt(orcaId),
+  /**
+   * Decision 318: sha256 of the task-create args start_unit sent (spec with its role line, title,
+   * deps), so a retry of a call the client cut off adopts the Task instead of making another.
+   */
+  spec_hash: opt(str),
 });

@@ -504,11 +504,11 @@ test("worker_start_dispatched (3): setting unread and no Dispatch → not a succ
 
 // ---- not refusals: wait ----
 
-test("a Task that is not ready waits, and nothing is written", async () => {
+test("a Task that is not ready waits, and writes only its alias row and its wait (decision 318)", async () => {
   const h = harness({ newTaskStatus: "pending" });
   const out = await start(h);
   assert.equal(out.kind === "waiting" && out.why, "not_ready");
-  assert.deepEqual(h.store.events().map((e) => e.type), ["item_created"], "only the new Task's alias row");
+  assert.deepEqual(h.store.events().map((e) => [e.type, e.payload.kind]), [["item_created", undefined], ["signal", "wait"]]);
   assert.equal(h.called("worker-start").length, 0);
 });
 
@@ -840,7 +840,7 @@ test("decision 178: a Task Orca released at its predecessor's worker_done waits 
   const held = await start(h, request({ task: { id: NEW_TASK } }));
   assert.equal(held.kind === "waiting" && held.why, "not_ready");
   assert.equal(h.called("worker-start").length, 0);
-  assert.equal(h.signals().length, 0, "a wait is not a refusal");
+  assert.equal(h.signals().filter((e) => e.payload.kind === "start_refused").length, 0, "a wait is not a refusal");
 
   h.store.append({ type: "pr_merged", source: "test", payload: { pr: "acme/api#41", merge_sha: "a".repeat(40) } });
   assert.equal((await start(h, request({ task: { id: NEW_TASK } }))).kind, "started");
@@ -1406,4 +1406,127 @@ test("decision 197: MCP start_unit takes repo and lets only an orchestrator leav
   assert.equal(flag(o.named("worktree create")[0] ?? [], "repo"), TARGET);
   assert.ok(!(o.named("worktree create")[0] ?? []).includes("--parent-worktree"), "top-level: no parent worktree");
   assert.equal(flag(o.called("worker-start")[0] ?? [], "worktree"), CHILD_SELECTOR);
+});
+
+// ---- decision 318: a start the client cut off leaves no orphan Task ----
+
+const waits = (h: H) => h.signals().filter((e) => e.payload.kind === "wait");
+
+test("decision 318 (1): a spec retry adopts the Task an interrupted call left ready and unstarted, alias and all", async () => {
+  // The first call's answer is lost after task-create; it waited on capacity and started nothing.
+  const h = harness();
+  assert.equal((await start(h, request(), () => 0)).kind, "waiting");
+  const again = await start(h);
+  assert.equal(again.kind, "started", JSON.stringify(again));
+  assert.equal(h.called("task-create").length, 1, "no second Task");
+  assert.equal(h.store.events({ type: "item_created" }).length, 1, "no second alias");
+  assert.equal(again.kind === "started" && again.alias, "i001");
+  assert.ok(again.kind === "started" && again.notes.includes(`채택: ${NEW_TASK}`), JSON.stringify(again));
+  // Once it started (unit_started), the same spec is a new unit.
+  await start(h);
+  assert.equal(h.called("task-create").length, 2);
+
+  // An adopted Task that waits again says so too.
+  const w = harness();
+  await start(w, request(), () => 0);
+  const waited = await start(w, request(), () => 0);
+  assert.equal(waited.kind, "waiting");
+  assert.deepEqual(waited.kind === "waiting" && waited.notes, [`채택: ${NEW_TASK}`]);
+  assert.equal(w.called("task-create").length, 1);
+});
+
+test("decision 318 (1): not adopted: another spec, title or deps, another Run, a row with no hash, a Task Orca does not call ready", async () => {
+  const seeded = (over: Partial<StartRequest>) => {
+    const h = harness();
+    return { h, first: start(h, request(over), () => 0) };
+  };
+  for (const over of [{ task: { spec: "another thing", title: "thing", deps: ["task_000000000002"] } }, { task: { spec: "do the thing", title: "other", deps: ["task_000000000002"] } }, { task: { spec: "do the thing", title: "thing" } }]) {
+    const { h, first } = seeded(over);
+    await first;
+    await start(h);
+    assert.equal(h.called("task-create").length, 2, JSON.stringify(over));
+  }
+  // The row of another Run, and an older row with no hash (item_create's, or one from before 318).
+  const src = harness();
+  await start(src, request(), () => 0);
+  const row = src.store.events({ type: "item_created" })[0];
+  assert.ok(row && typeof row.payload.spec_hash === "string", "start_unit records the hash");
+  const { spec_hash: _hash, ...noHash } = row.payload;
+  for (const payload of [{ ...row.payload, run: ORCH_RUN }, noHash]) {
+    const h = harness();
+    h.store.append({ type: "item_created", source: "test", payload: payload as never, entity: "task", entity_id: NEW_TASK });
+    await start(h);
+    assert.equal(h.called("task-create").length, 1, JSON.stringify(payload));
+  }
+  // item_create's Tasks wait unstarted on purpose: no hash, never adopted.
+  const made = harness();
+  await itemCreate({ runId: RUN, spec: "do the thing", title: "thing", deps: ["task_000000000002"], who: "lead:api", doneWhen: "merged" }, { orca: made.orca, store: made.store as never });
+  assert.equal(made.store.events({ type: "item_created" })[0]?.payload.spec_hash, undefined);
+  await start(made);
+  assert.equal(made.called("task-create").length, 2);
+  // Orca no longer calls it ready (completed, failed, dispatched): a new Task.
+  const done = harness({ newTaskStatus: "completed" });
+  await start(done);
+  await start(done);
+  assert.equal(done.called("task-create").length, 2);
+});
+
+test("decision 318 (1): a candidate whose Orca state cannot be read refuses instead of making a second Task", async () => {
+  const h = harness({ taskList: () => fail("runtime_unavailable") });
+  assert.equal((await start(h)).kind, "refused");
+  const again = await start(h);
+  assert.equal(again.kind === "refused" && again.reason, "orca_error");
+  assert.equal(h.called("task-create").length, 1);
+});
+
+test("decision 318 (2): every wait leaves one signal{wait} per Task and cause; the same cause again adds none, and T5 does not count it", async () => {
+  const cases: [string, H, () => number][] = [
+    ["not_ready", harness({ newTaskStatus: "pending" }), () => 1],
+    ["already_dispatched", harness({ newTaskStatus: "dispatched" }), () => 1],
+    ["no_capacity", harness(), () => 0],
+  ];
+  for (const [why, h, slots] of cases) {
+    for (let i = 0; i < 2; i++) assert.equal((await start(h, request({ task: { id: NEW_TASK } }), slots)).kind, "waiting");
+    const rows = waits(h);
+    assert.equal(rows.length, 1, why);
+    assert.deepEqual(rows[0]?.payload, { kind: "wait", reason: why });
+    assert.equal(rows[0]?.entity_id, NEW_TASK);
+    assert.equal(rows[0]?.target, null, "not a start attempt");
+  }
+  // Three waits are not three failures.
+  const h = harness();
+  for (let i = 0; i < 3; i++) await start(h, request({ task: { id: NEW_TASK } }), () => 0);
+  assert.equal((await start(h, request({ task: { id: NEW_TASK } }))).kind, "started");
+  await start(h, request({ task: { id: NEW_TASK } }), () => 0);
+  assert.equal(waits(h).length, 1, "no_capacity again: still one row");
+});
+
+test("decision 318 (2): the merge hold of decision 178 leaves its wait row too", async () => {
+  const rows = () =>
+    ok({
+      tasks: [
+        { id: "task_pred", status: "completed", title: "p", deps: "[]" },
+        { id: NEW_TASK, status: "ready", title: "t", deps: JSON.stringify(["task_pred"]), spec: "sangsoe-role: worker\nbrief" },
+      ],
+    });
+  const h = harness({ taskList: rows });
+  h.store.append({ type: "pr_opened", source: "test", payload: { pr: "acme/api#41", task: "task_pred" } });
+  await start(h, request({ task: { id: NEW_TASK } }));
+  assert.deepEqual(waits(h).map((e) => e.payload.reason), ["not_ready"]);
+});
+
+test("decision 318 (3): a repo given with a spec stays with the Task, so a restart by task alone needs no repo", async () => {
+  const h = harness({ existingRole: "lead" });
+  const first = await startUnit(ports(h, () => 0, "/"), request({ requester: plainFolder, childRole: "lead", repo: TARGET }));
+  assert.equal(first.kind, "waiting", JSON.stringify(first));
+  assert.deepEqual(h.store.events({ type: "item_extra_set" }).map((e) => e.payload), [{ task: NEW_TASK, repo: TARGET }]);
+  const again = await startUnit(ports(h, () => 1, "/"), request({ requester: plainFolder, childRole: "lead", task: { id: NEW_TASK } }));
+  assert.equal(again.kind, "started", JSON.stringify(again));
+  assert.equal(flag(h.named("worktree create")[0] ?? [], "repo"), TARGET);
+  // The same repo named again is not written twice; the requester's own repo (none given) is not written.
+  await startUnit(ports(h, () => 0, "/"), request({ requester: plainFolder, childRole: "lead", task: { id: NEW_TASK }, repo: TARGET }));
+  assert.equal(h.store.events({ type: "item_extra_set" }).length, 1);
+  const mine = harness();
+  await start(mine, request(), () => 0);
+  assert.equal(mine.store.events({ type: "item_extra_set" }).length, 0);
 });

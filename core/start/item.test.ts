@@ -36,3 +36,15 @@ test("runSlots: live workers against the limit; the recorded Run has one live wo
   assert.equal(await runSlots(orca, "run_000000000001", 3, { load5: 1, cpus: 8 }), 2);
   assert.equal(await runSlots(orca, "run_000000000001", 3, { load5: 40, cpus: 8 }), 0);
 });
+
+test("decision 318 (4): a unit that sent worker_done (READY-WAIT included) holds no slot, whatever Orca's row still says", async () => {
+  const row = (dispatchId: string, state: string) => ({ dispatchId, taskId: `task_${dispatchId}`, state, liveness: "live", workspace: "w", host: "local" });
+  const workers = [row("ctx_a", "ready"), row("ctx_b", "succeeded"), row("ctx_c", "ready")];
+  const fake = createFakeOrca({ replies: { "orchestration-worker-list": { ok: true, result: { workers, scope: { source: "flag" } } } } });
+  const orca = createOrcaAdapter(fake.exec);
+  const store = Store.open({ path: ":memory:" });
+  store.append({ type: "worker_done", source: "orca-monitor", payload: { dispatch: "ctx_c", task: "task_ctx_c" }, entity: "dispatch", entity_id: "ctx_c" });
+  // Only ctx_a counts: ctx_b is Orca's finished state, ctx_c's worker_done reached the store first.
+  assert.equal(await runSlots(orca, "run_1", 2, { load5: 1, cpus: 8 }, store), 1);
+  assert.equal(await runSlots(orca, "run_1", 2, { load5: 1, cpus: 8 }), 0, "without the store, ctx_c still counts");
+});

@@ -175,7 +175,7 @@ export default {
     const store = Store.open();
     const runId = typeof input.runId === "string" ? input.runId : "";
     try {
-      return await handle(input, { orca, store, slots: () => runSlots(orca, runId, DEFAULT_LIMIT), source: "mcp:start_unit" });
+      return await handle(input, { orca, store, slots: () => runSlots(orca, runId, DEFAULT_LIMIT, undefined, store), source: "mcp:start_unit" });
     } finally {
       store.close();
     }
