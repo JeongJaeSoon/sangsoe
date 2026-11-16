@@ -14,7 +14,8 @@ export type Planned = NewEvent<Exclude<EventType, StoreOnlyType>>;
 
 /**
  * An Orca write a round decided on (pr-monitor's Task close, `reference add`, a wake through notify).
- * `runMonitor` runs it after the planned events are appended, never on a dry run or past the cap, and
+ * `runMonitor` runs it after the planned events are appended, never on a dry run nor once the cap has
+ * passed before its part is handed over (a handed part's acts run to the end, decision 329), and
  * appends the events it returns (the `item_transition` that follows a `task-update`).
  */
 export type Act = {
@@ -41,7 +42,8 @@ export type Reading = { planned: Planned[]; unseen: string[]; acts?: Act[]; call
 
 /**
  * Hands part of a round to `runMonitor` before the round ends (decision 329): its events are
- * written at once, past the cap too, and its acts run in order unless the cap has passed.
+ * written at once, past the cap too except those its acts `gate`, and its acts run in order unless
+ * the cap has passed.
  */
 export type Flush = (part: { planned: Planned[]; acts: Act[] }) => Promise<void>;
 
