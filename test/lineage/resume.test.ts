@@ -40,6 +40,8 @@ type Setup = {
   terminals?: string[];
   abandon?: () => ExecResult;
   workerStart?: () => ExecResult;
+  /** worker-start binds the terminal but its answer never arrives (no JSON). */
+  bindThenLose?: boolean;
 };
 
 function harness(s: Setup = {}) {
@@ -102,6 +104,7 @@ function harness(s: Setup = {}) {
       "orchestration-worker-start": () => {
         if (s.workerStart) return s.workerStart();
         started = true;
+        if (s.bindThenLose) return { code: 1, stdout: "", stderr: "connection reset" };
         return ok({ dispatchId: NEW });
       },
       "terminal-list": (args: readonly string[]) =>
@@ -199,7 +202,11 @@ test("decision 322 (1): a worker re-opened in a new terminal is bound back to it
   assert.equal(rows[0]?.entity_id, TASK);
   assert.deepEqual(rows[0]?.payload, { dispatch: NEW, from: OLD, session: SESSION, terminal: NEW_TERM, worktree: CHILD_TREE, run: RUN });
   assert.equal(h.store.events({ type: "unit_started" }).length, 1, "a resume is not a new start");
-  assert.equal(h.store.events({ type: "signal" }).length, 0);
+  // Only the intent row written before the bind; no refusal.
+  assert.deepEqual(
+    h.store.events({ type: "signal" }).map((e) => [e.payload.kind, e.payload.reason, e.target, e.subject]),
+    [["resume_bind", OLD, NEW_TERM, SESSION]],
+  );
 });
 
 test("decision 322 (1): a second call after an abandon that went through does not abandon again; a ready Task is not reopened", async () => {
@@ -225,7 +232,23 @@ test("decision 322 (1): a call after a bind that went through changes nothing; t
 
   const old = harness();
   seed(old);
-  refusedBeforeAbandon(old, await startUnit(ports(old), request({ resume: { ...resume, terminal: OLD_TERM } })), "lineage_invalid", /쥐고/);
+  refusedBeforeAbandon(old, await startUnit(ports(old), request({ resume: { ...resume, terminal: OLD_TERM } })), "lineage_invalid", /옛 Dispatch/);
+});
+
+test("decision 322 (1): a bind whose answer was lost is found and recorded by the retry the refusal advises", async () => {
+  const h = harness({ bindThenLose: true });
+  seed(h);
+  const first = await startUnit(ports(h), request());
+  assert.equal(first.kind === "refused" && first.reason, "orca_error", JSON.stringify(first));
+  assert.match(first.kind === "refused" ? first.detail : "", /알 수 없다/);
+  assert.equal(h.store.events({ type: "unit_resumed" }).length, 0);
+
+  const again = await startUnit(ports(h), request());
+  assert.equal(again.kind, "resumed", JSON.stringify(again));
+  assert.deepEqual(again.kind === "resumed" && [again.dispatchId, again.from], [NEW, OLD]);
+  assert.equal(h.called("worker-start").length, 1, "not bound twice");
+  assert.equal(h.called("worker-abandon").length, 1);
+  assert.deepEqual(h.store.events({ type: "unit_resumed" }).map((e) => [e.payload.dispatch, e.payload.from]), [[NEW, OLD]]);
 });
 
 test("decision 322 (2): another Task's worktree or session, an unknown session, or a terminal outside the worktree is refused before anything changes", async () => {
@@ -284,7 +307,10 @@ test("decision 322 (2): a failed bind after the abandon says the Task is left re
   assert.equal(h.called("worker-abandon").length, 1);
   assert.equal(h.store.events({ type: "unit_resumed" }).length, 0);
   // A failed bind is a start attempt: T5 counts it.
-  assert.deepEqual(h.store.events({ type: "signal" }).map((e) => e.target), ["worker-start"]);
+  assert.deepEqual(
+    h.store.events({ type: "signal" }).filter((e) => e.payload.kind === "start_refused").map((e) => e.target),
+    ["worker-start"],
+  );
 
   // An answer Orca never gave (no JSON) may still have bound the terminal: no plain start is suggested.
   const lost = harness({ workerStart: () => ({ code: 1, stdout: "", stderr: "connection reset" }) });

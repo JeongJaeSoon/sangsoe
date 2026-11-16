@@ -74,7 +74,22 @@ export async function resumeUnit(c: ResumeContext): Promise<StartOutcome> {
     if (done && done.payload.terminal === target.terminal && done.payload.session === target.sessionId) {
       return { kind: "resumed", taskId, dispatchId: from, from: String(done.payload.from), worktreeId: tree, terminal: target.terminal, notes: ["이미 묶였다"] };
     }
-    return no(`Task ${taskId} 의 Dispatch ${from} 가 이미 터미널 ${target.terminal} 을 쥐고 있다: 묶을 것이 없다`);
+    // A bind whose answer was lost left only its intent row: this is that bind, so it is recorded now.
+    const intent = store
+      .events({ type: "signal" })
+      .findLast((e) => e.entity_id === taskId && e.payload.kind === "resume_bind" && e.target === target.terminal && e.subject === target.sessionId);
+    if (intent && typeof intent.payload.reason === "string" && intent.payload.reason !== from) {
+      const before = intent.payload.reason;
+      store.append({
+        type: "unit_resumed",
+        source: c.source,
+        entity: "task",
+        entity_id: taskId,
+        payload: { dispatch: from, from: before, session: target.sessionId, terminal: target.terminal, worktree: tree, run: c.run },
+      });
+      return { kind: "resumed", taskId, dispatchId: from, from: before, worktreeId: tree, terminal: target.terminal, notes: ["이미 묶였다"] };
+    }
+    return no(`터미널 ${target.terminal} 은 Task ${taskId} 의 옛 Dispatch ${from} 가 쥔 것이다: resume 한 세션이 도는 새 터미널의 handle 을 준다`);
   }
   if (!wasSettled && old.value.liveness === "live") return no(`옛 Dispatch ${from} 의 세션이 아직 살아 있다(liveness live): 같은 세션을 두 터미널에 두지 않는다`);
 
@@ -106,6 +121,15 @@ export async function resumeUnit(c: ResumeContext): Promise<StartOutcome> {
   // No agent, model or effort: Orca takes none of them with --terminal, and the session keeps its own.
   // --keep-open as on every start: in an existing worktree Orca would release the terminal at worker_done.
   const args = { task: taskId, worktree: { existing: `id:${tree}` }, run: c.run, terminal: target.terminal, keepOpen: true } as const;
+  store.append({
+    type: "signal",
+    source: c.source,
+    payload: { kind: "resume_bind", reason: from },
+    subject: target.sessionId,
+    entity: "task",
+    entity_id: taskId,
+    target: target.terminal,
+  });
   const started = await c.write(orca.workerStart(args), (o) => orca.workerStart(args, o));
   if (!started.ok) {
     const next = unknownOutcome(started)
