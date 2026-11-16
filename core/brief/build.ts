@@ -10,6 +10,7 @@ import { graphRead } from "../graph/read.ts";
 import { groupBriefFrom } from "./group.ts";
 import { type ItemFacts, itemFacts, OTHERS, rank } from "./item_status.ts";
 import { ownerTodoFrom } from "./owner_todo.ts";
+import { stalledCoordinatorLines } from "./stalled.ts";
 import { localShort } from "./time.ts";
 import type {
   BriefInput,
@@ -235,6 +236,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
   const decisions = decisionRows.length;
   const today = advisorToday(input);
   const restart = restartDueLines(input);
+  const stalled = stalledCoordinatorLines(input.events, now);
   return {
     stage: 1,
     now,
@@ -252,6 +254,7 @@ export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview
     done: doneTable(closed, foldFacts(input.events), doneDays),
     ...(today ? { advisorToday: today } : {}),
     ...(restart.length > 0 ? { restartDue: restart } : {}),
+    ...(stalled.length > 0 ? { stalled } : {}),
   };
 }
 
