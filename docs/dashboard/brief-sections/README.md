@@ -46,7 +46,7 @@
 
 brief 는 store 의 event 와 Orca 스냅샷 하나만 읽는다(결정 12 · 89, `BriefInput`). 아래 "출처" 는 그 event 를 누가 쓰는지다. 오른쪽 넷은 그 행이 어느 절에, 누구 이름으로, 무엇을 다음으로, 언제부터 나오는지다. 상태·다음 칸의 글은 시안에 찍히는 글 그대로다. "리드" 는 `lead:<이름>` 이고, 리드가 없는 항목이면 `오케스트레이터` 다.
 
-**먼저 맞는 규칙이 이긴다.** 한 사실에 규칙 여럿이 맞으면 이 차례로 본다: R26 → R25 → R15–R21 → R24 → R7 · R7′ → R9 → R14 → R8 → R10–R13 → R4–R6 → R22–R23 → R1. 그래서 살아 있는 워커의 PR 에 변경 요청이 오면 R4 가 아니라 R9 이고, 완료 Task 의 열린 PR(`itemFacts` 가 `waitsOn` 을 reviewer 로 읽는다)은 R6–R9 가 R10 보다 먼저 본다.
+**먼저 맞는 규칙이 이긴다.** 한 사실에 규칙 여럿이 맞으면 이 차례로 본다: R26 → R25 → R15–R21 → R24 → R9 → R14 → R7 · R7′ → R8 → R10–R13 → R4–R6 → R22–R23 → R1. 그래서 살아 있는 워커의 PR 에 변경 요청이 오면 R4 가 아니라 R9 이고, 승인을 기다리는 PR 이라도 변경 요청이나 빨간 CI 가 있으면 R7 · R7′ 의 `승인 대기` · `승인 줄 치기` 가 아니라 R9 · R14 다(land 의 판정 경로도 그때는 거부한다). 또 완료 Task 의 열린 PR(`itemFacts` 가 `waitsOn` 을 reviewer 로 읽는다)은 R6–R9 가 R10 보다 먼저 본다.
 
 | # | 사실(출처) | 조건 | 절 | 누가 | 상태·다음 | 언제부터 |
 |---|---|---|---|---|---|---|
@@ -57,7 +57,7 @@ brief 는 store 의 event 와 Orca 스냅샷 하나만 읽는다(결정 12 · 89
 | R5 | 항목 `pending_verify` (결정 181) | — | 진행 중 | 리드 | `검증 probe 대기` | 상태가 된 때 |
 | R6 | 완료 Task 의 열린 PR (`holdOf` by=pr, open) | R7 · R8 · R9 · R14 가 아님 | 진행 중 | 리드 | `CI·머지 대기` | 상태가 된 때 |
 | R7 | 같은 PR 의 `land_requested{reason: merge_on_approval, waits: owner}` (land) | 같은 head 에 `owner_approval` 이 아직 없음 | 확인·대응 필요 | **오너** | `승인 줄 치기` (원문 목록에 그 줄 전문) | `land_requested` |
-| R7′ | 같은 PR 의 `land_requested{reason: merge_on_approval}`, `waits` 가 owner 가 아님 | GitHub 승인 전 | 다른 사람 대응 대기 | 의뢰받은 리뷰어(R8 에서), 없으면 `리뷰어` | `승인 대기` | `land_requested` |
+| R7′ | 같은 PR 의 `land_requested{reason: merge_on_approval}`, `waits` 가 owner 가 아님(`waits` 가 없는 옛 행도 여기) | 그 head 에 `pr_ready_to_merge` 가 아직 없음 | 다른 사람 대응 대기 | 의뢰받은 리뷰어(R8 에서), 없으면 `리뷰어` | `승인 대기` | `land_requested` |
 | R8 | 같은 PR 의 `review_ask_sent{reviewer}` (review_ask_record tool) · `pr_review_requested{reviewer}` (pr-monitor) | 그 뒤 그 리뷰어의 `review_verdict` · `pr_changes_requested` · `review_commented` 가 없고, `pr_ready_to_merge` · `pr_merged` 도 없음 | 다른 사람 대응 대기 | 그 리뷰어. `reviewer` 가 없는 팀 의뢰면 `리뷰어` | `리뷰 대기`, 독촉(`reminder`)이 있으면 `리뷰 대기 · 독촉 N회` | 첫 의뢰 |
 | R9 | 같은 PR 의 `pr_changes_requested` · `review_commented` (pr-monitor) | 결정 198 · 201 의 🚨 규칙 그대로: 항목이 움직이거나 작성자의 `review_replied` 가 더 새로우면 끝 | 확인·대응 필요 | 살아 있는 worker, 없으면 리드 | `리뷰 변경 요청 반영` · `리뷰 코멘트에 답` | 그 event |
 | R10 | 항목 `blocked`, `waits_on` = reviewer · infra | — | 다른 사람 대응 대기 | 리뷰어 이름(R8 에서), 없으면 `리뷰어` · `인프라` | 리드가 적은 이유 | 상태가 된 때 |
@@ -82,14 +82,14 @@ brief 는 store 의 event 와 Orca 스냅샷 하나만 읽는다(결정 12 · 89
 
 **새로 필요한 칸 둘.** (가) R7 을 R7′ 과 가르려면 `land_requested` 가 무엇을 기다리는지 적어야 한다. 지금 `merge_on_approval` 은 두 경우를 한 꼴로 쓴다: `verdict_merge_repos` 밖의 PR 은 아무 GitHub 승인을 기다리고, 안의 V3 · 보호 경로 PR 만 오너의 승인 줄을 기다린다(`core/land/land.ts` 의 `waitApproval`). 그래서 `land_requested` 에 `waits: "owner" | "approval"` 을 더한다. 그 행만으로는 brief 가 설정과 등급을 알 수 없다. (나) §4 결함 4 의 `item_extra_set.smoke`. 그 밖의 누가 · 절은 이미 있는 event 와 칸으로 정해진다.
 
-**알려진 빈 곳.** GitHub 승인은 리뷰어마다 event 가 없다(pr-monitor 는 `merge_on_approval` PR 에만 `pr_ready_to_merge` 를 쓴다). 그래서 승인됐지만 아직 초록이 아닌 PR 은 R8 에서 `리뷰 대기` 로 남는다. 승인 event 를 더하는 것은 Pull Request 탭 설계가 다룬다(LATER, trigger 는 그 설계의 시작).
+**알려진 빈 곳.** GitHub 승인은 리뷰어마다 event 가 없다(pr-monitor 는 `merge_on_approval` PR 에만 `pr_ready_to_merge` 를 쓴다). 그래서 승인됐지만 아직 초록이 아닌 PR 은 R8 에서 `리뷰 대기`, R7′ 에서 `승인 대기` 로 남는다(`pr_ready_to_merge` 는 승인과 초록이 함께일 때만 온다). 승인 event 를 더하는 것은 Pull Request 탭 설계가 다룬다(LATER, trigger 는 그 설계의 시작).
 
 ## 4. 관찰한 결함 여덟을 설계로 접기
 
 | # | 결함 | 이 설계의 규칙 |
 |---|---|---|
 | 1 | 성공한 오너 `!` 줄이 열린 행으로 남는다. 재시도로 같은 PR 이 셋이다 | 그 줄이 가리키는 PR 에 그 줄보다 뒤의 `pr_merged` 나 `pr_closed` 가 있으면 행이 빠진다. 같은 PR 의 줄 여럿은 가장 새 것 하나다. 남는 것은 R20 이고, 누가는 오케스트레이터다. `!` 줄을 항목에 잇는 쪽(`core/owner/link.ts`)을 고치는 것은 별 항목이다. brief 는 보이는 규칙만 갖는다 |
-| 2 | 대화로 답한 결정이 열린 채 남는다 | R16: 오너의 말이 `dNNN` 으로 시작하면 그 행의 누가가 오케스트레이터로 바뀌고 `decision_answer 기록` 을 다음으로 보인다. brief 는 답을 지어내지 않는다. 같은 턴에 `decision_answer` 를 부르게 하는 것은 orchestrate skill 의 별 항목(D11)이다 |
+| 2 | 대화로 답한 결정이 열린 채 남는다 | R16: 오너의 말이 `dNNN` 으로 시작하면 그 행의 누가가 오케스트레이터로 바뀌고 `대화로 답함 → 기록`(곧 `decision_answer` 로 기록)을 다음으로 보인다. brief 는 답을 지어내지 않는다. 같은 턴에 `decision_answer` 를 부르게 하는 것은 orchestrate skill 의 별 항목(D11)이다 |
 | 3 | 일이 끝난 보류 항목이 ⏸️ 로 남는다 | R24: 증거가 끝났다고 말하면 앞으로 할 것에서 빠지고 확인·대응 필요에 닫기 행으로 나온다. 닫는 것은 그 행의 누가다. sangsoe 는 이것을 닫지 않는다(자동으로 닫는 것은 pr-monitor 의 머지 확인 하나다: 결정 76 ⑥ · 84 ①) |
 | 4 | 시험 probe 항목이 오너 brief 에 🟢 로 나온다 | `item_extra_set.smoke: true`(새 칸, `item_create` 와 `sangsoe item set` 의 `smoke` 입력)인 항목은 R26 이다. 표에도 수에도 없다. "probe" 는 이미 verify probe(결정 181)의 이름이라 칸 이름으로 쓰지 않는다. 이미 만든 시험 항목은 `sangsoe item set <iNNN> --smoke` 로 표시한다 |
 | 5 | 칸이 잘려 결정과 항목을 못 읽는다 | §2 의 원문 목록. 패널은 같은 목록과 칸의 `title` |
@@ -106,7 +106,7 @@ brief 는 store 의 event 와 Orca 스냅샷 하나만 읽는다(결정 12 · 89
 - **오늘의 "내가 할 일 N" 과 다른 점.** 지금 `ownerTodoFrom` 은 결정 · 오너 항목 · 터미널 입력 · 전달 안 된 답(`undelivered_answer`)을 센다(`core/owner/todo.ts`). `오너 차례` 는 그 가운데 전달 안 된 답을 빼고(R17, 다시 보내는 것은 오케스트레이터다) R7 · R21 · R14 의 `worker_dead:auth` 를 더한다. R16 으로 넘어간 결정도 빠진다
 - `sangsoe todo` 는 확인·대응 필요에서 누가가 오너인 행만 그리고, 머리 수는 `오너 차례` 다
 - 확인·대응 필요의 절 제목은 `확인·대응 필요 9 (오너 4)` 다
-- **상태 표시줄 B**(결정 92 ⑤ · 170 · 219 · 309 ②). 지금은 `🚧 막힌 것 · 결정 N · 🔄 진행 중 · 🚨 N · ♻️` 이다(`core/brief/panel.ts` `statusBarItem`). 바꾼 뒤는 `오너 N · 확인 M · 🔄 K · 🚨 N · ♻️` 이다. `오너` 는 `오너 차례`, `확인` 은 확인·대응 필요 전체, `🔄` 는 진행 중 절의 수다. `🚨 N`(결정 309 ②)과 `♻️`(restart_due)는 그대로다. 위험 톤은 `오너` 가 0 이 아니거나 🚨 가 있을 때다. `🚧` 와 `결정` 항목은 없어진다. 막힌 것은 확인·대응 필요와 대기로 나뉘었고, 결정은 `오너` 에 들었다. 누르면 진행 상황 탭이 `오너` 칩을 켠 채로 열린다
+- **상태 표시줄 B**(결정 92 ⑤ · 170 · 219 · 309 ②). 지금은 `🚧 막힌 것 · 결정 N · 🔄 진행 중 · 🚨 N · ♻️` 이다(`core/brief/panel.ts` `statusBarItem`). 바꾼 뒤는 `오너 N · 확인 M · 🔄 K · 🚨 N · ♻️` 이다. `오너` 는 `오너 차례`, `확인` 은 확인·대응 필요 전체, `🔄` 는 진행 중 절의 수다. `🚨 N`(결정 309 ②)과 `♻️`(restart_due)는 그대로다. 위험 톤은 `오너` 가 0 이 아니거나, 🚨 가 있거나, ♻️(restart_due)가 있을 때다. 지금의 `🚧` 조건만 빠진다. `🚧` 와 `결정` 항목은 없어진다. 막힌 것은 확인·대응 필요와 대기로 나뉘었고, 결정은 `오너` 에 들었다. 누르면 진행 상황 탭이 `오너` 칩을 켠 채로 열린다
 
 꼬리 줄: `상세: sangsoe brief <절>(done · doing · waiting · action · next) · sangsoe brief <묶음>`. PR 상태가 얼마나 새로운지는 따로 적지 않는다. pr-monitor 는 바뀐 것이 있을 때만 행을 쓰고 라운드마다 남기는 event 가 없어서, brief 의 입력(event 와 스냅샷)만으로는 마지막으로 읽은 때를 알 수 없다. 예외 하나: 가장 새 `rate_limited{kind: github}` 의 `reset_at` 이 아직 오지 않았으면 꼬리 줄 앞에 `⚠️ GitHub 한도: PR 상태가 <감지 시각> 뒤로 멈춤, <풀리는 시각> 에 풀림` 을 단다. 라운드 시각을 보이고 싶으면 pr-monitor 가 라운드마다 행을 하나 써야 한다(LATER, trigger 는 오너가 PR 상태가 낡았다고 짚을 때).
 
