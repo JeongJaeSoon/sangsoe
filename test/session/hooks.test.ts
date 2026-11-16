@@ -147,6 +147,48 @@ test("273: a session resumed with claude --resume in the same worktree gets the 
   assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_orch");
 });
 
+test("303: a session resumed in a folder Orca does not list gets back the Run it last held itself; no one else does", async () => {
+  // dispatched false and no ps rows: no Task, and Orca names no worktree for this folder.
+  const w = createSessionWorld({ dispatched: false, heldRun: null });
+  const lead = (session: string, source: string, agent_type?: string) =>
+    hook(w, "session-start", { session_id: session, source, ...(agent_type ? { agent_type } : {}) }, VERSION);
+  await lead("l1", "startup", "sangsoe:lead");
+  w.heldRun = "run_old";
+  await hook(w, "user-prompt-submit", { session_id: "l1", prompt_id: "p1", prompt: "go" });
+  w.heldRun = "run_lead";
+  await hook(w, "user-prompt-submit", { session_id: "l1", prompt_id: "p2", prompt: "go" });
+
+  w.heldRun = null;
+  assert.deepEqual(await lead("l1", "resume", "sangsoe:lead"), [
+    "sangsoe-role: lead",
+    "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_lead",
+  ]);
+  assert.deepEqual(await lead("l2", "startup", "sangsoe:lead"), ["sangsoe-role: lead"], "another session in an unlisted folder is not handed that Run");
+  assert.deepEqual(await lead("l1", "resume", "sangsoe:orchestrator"), ["sangsoe-role: orchestrator"], "the same id under another role is not handed the lead's Run");
+  assert.deepEqual(await lead("l1", "resume"), [], "no agent_type and no Dispatch: not a sangsoe session (decision 192)");
+});
+
+test("303: in a listed worktree a resumed session gets its own last Run before a newer one its role held there", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_mine" });
+  w.psRows = [psRow(w.dir, "inst_a")];
+  await orchestratorStart(w, "o1");
+  w.heldRun = "run_newer";
+  await orchestratorStart(w, "o2");
+  w.heldRun = null;
+  const lines = await hook(w, "session-start", { session_id: "o1", source: "resume", agent_type: "sangsoe:orchestrator" }, VERSION);
+  assert.equal(lines[1], "run-current 가 비었다. 자기 Run 을 다시 쥔다: orca orchestration run-use --id run_mine");
+});
+
+test("303: a worker with no Task resumed after its Run binding is gone gets no line and leaves the Run's handoff", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_x" });
+  const worker = (source: string) => hook(w, "session-start", { session_id: "k1", source, agent_type: "sangsoe:worker" }, VERSION);
+  await worker("startup");
+  w.heldRun = null;
+  w.mail.push({ id: "msg_h", type: "handoff", body: "for the Run's own session", run: "run_x" });
+  assert.deepEqual(await worker("resume"), ["sangsoe-role: worker"]);
+  assert.equal(w.store.events({ type: "notified" }).length, 0, "the handoff is not used up");
+});
+
 test("273: an orchestrator in another worktree, or one whose worktree cannot be read, is not handed that Run", async () => {
   const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
   w.psRows = [psRow(w.dir, "inst_a")];

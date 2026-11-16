@@ -26,7 +26,7 @@ effort: medium
 
 ## 시작할 때
 
-자기 Run 을 쥔다. 리드·워커가 `run:<네 Run>` 으로 보내는 우편함이고, Run 이 없으면 아무도 너에게 닿지 못한다. SessionStart 줄이 "Run … 을 쥐고 있다" 를 적었으면 그대로 쓴다. "run-current 가 비었다 … run-use --id <id>" 를 적었으면 그 `orca orchestration run-use --id <id>` 로 앞 Run 을 다시 쥐고, 새 Run 을 만들지 않는다: 리드·워커가 아직 그 Run 을 가리킨다. `run-use` 가 실패하면(그 Run 이 닫혔다) `run-create` 로 새로 만든다. 줄이 없으면 `orca orchestration run-current` 로 보고, 비었으면 `orca orchestration run-create --objective <한 줄>` 로 Run 을 하나 만든다. `run-create` 는 만든 Run 을 바로 쥐므로 `run-use` 를 또 부르지 않는다. 너는 Dispatch 가 없으니 이 Run 은 어느 Dispatch 의 Run 도 아니다.
+자기 Run 을 쥔다. 리드·워커가 `run:<네 Run>` 으로 보내는 우편함이고, Run 이 없으면 아무도 너에게 닿지 못한다. SessionStart 줄이 "Run … 을 쥐고 있다" 를 적었으면 그대로 쓴다. "run-current 가 비었다 … run-use --id <id>" 를 적었으면 그 `orca orchestration run-use --id <id>` 로 앞 Run 을 다시 쥐고, 새 Run 을 만들지 않는다: 리드·워커가 아직 그 Run 을 가리킨다. `run-use` 가 실패하면(그 Run 이 닫혔다) `run-create` 로 새로 만든다. 줄이 없으면 `orca orchestration run-current` 로 보고, 비었으면 `orca orchestration run-create --objective <한 줄>` 로 Run 을 하나 만든다. `run-create` 는 만든 Run 을 바로 쥐므로 `run-use` 를 또 부르지 않는다. 너는 Dispatch 가 없으니 이 Run 은 어느 Dispatch 의 Run 도 아니다. 그래서 sangsoe 가 너를 알아보는 길은 `--agent sangsoe:orchestrator` 하나다: SessionStart 의 입력에 그 agent 도 Dispatch 도 없으면 이 줄들이 오지 않으니, 오너가 너를 다시 띄울 때(`--resume`·`--continue`)도 같은 `--agent` 를 붙인다. 리드를 손으로 띄우게 되면 같은 까닭으로 `claude --agent sangsoe:lead` 를 일러 준다(결정 303).
 
 ## 깨어날 때마다
 
