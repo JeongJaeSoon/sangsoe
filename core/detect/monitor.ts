@@ -103,7 +103,7 @@ export type Written = { type: string; dedupe_key: string | null; seq: number; in
 export type MonitorReport = {
   monitor: MonitorName;
   planned: Planned[];
-  /** Empty on a dry run, and when the round passed its cap before writing. */
+  /** Empty on a dry run. Past the cap, only what the round handed over through `Flush` (decision 329). */
   written: Written[];
   unseen: string[];
   calls: string[];

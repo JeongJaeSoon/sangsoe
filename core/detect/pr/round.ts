@@ -172,10 +172,12 @@ async function onMerged(r: Reads, repo: string, p: ListedPull, link: Link | null
     const done = (r.rows.get("item_transition") ?? []).some((e) => e.payload.task === task && e.payload.to === "done");
     const sha = str(rowsOf(r, "pr_merged", ref).at(-1)?.payload.merge_sha);
     const run = task ? runOf(r.d, task, linked) : undefined;
-    if (task && run && sha && !done) {
-      const status = await taskStatus(r.d, { task, run });
-      if (status && !isClosedTask(status)) r.acts.push(closeTask(ref, sha, task, run));
-    }
+    if (!task || done) return;
+    // Named as unseen so the pass is not settled (decision 329): the close is still owed.
+    if (!run || !sha) return void r.unseen.push(`close of ${ref}: ${run ? "no merge sha" : `no Run for ${task}`}`);
+    const status = await taskStatus(r.d, { task, run });
+    if (status === null) r.unseen.push(`status of ${task}`);
+    else if (!isClosedTask(status)) r.acts.push(closeTask(ref, sha, task, run));
     return;
   }
   const confirm = await mergeConfirm(r.d.gh as NonNullable<MonitorDeps["gh"]>, repo, p.number);
@@ -513,10 +515,11 @@ type Walk = { r: Reads; cursor: PrCursor; skip: boolean; level: string; signal: 
  * an item is Orca's `reference find`, never a copy. Writes events, and one kind of item change: the
  * merged PR's Task goes `completed`, as an act after `pr_merged` (decision 84 ①).
  *
- * Decision 329: with `flush`, the walk keeps to `WALK_BUDGET_MS`, splits it among the repositories
- * left, hands each repository's events and acts over when it ends, and starts the next round with
- * the repositories it did not finish. A round that stops with repositories left writes
- * `monitor_round_truncated`. Without `flush` (the host reread) it reads every repository at once.
+ * Decision 329: with `flush`, each repository's events and acts are handed over when it ends. With
+ * `flush` and `d.prCursor` (the plugin's runner) the walk also keeps to `WALK_BUDGET_MS`, splits it
+ * among the repositories left, and starts the next round with the repositories it did not finish.
+ * A round that stops with repositories left writes `monitor_round_truncated`. Without `flush` (the
+ * host reread) it reads every repository and returns everything at once.
  */
 export async function prRound(d: MonitorDeps, signal: AbortSignal, flush?: Flush): Promise<Reading> {
   const conditional = !hostRereadPending(d.events({ type: "signal" }));
@@ -526,8 +529,9 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal, flush?: Flush
   if (!watch || watch.repos.length === 0) return { planned: [], unseen: ["watch.repos setting"] };
   r.watch = watch;
   for (const t of TYPES) r.rows.set(t, d.events({ type: t }));
-  // The settled marks were judged against rows a lost database no longer has (decision 184).
-  if (!conditional) d.prCursor?.settled.clear();
+  // The cursor was judged against rows a lost database no longer has (decision 184): the reread
+  // starts every repository from its first PR.
+  if (!conditional && d.prCursor) Object.assign(d.prCursor, prCursor());
   const cursor = d.prCursor ?? prCursor();
   let byWorkspace: Promise<Map<string, string[]>> | undefined;
   const workers = () => {
@@ -539,7 +543,8 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal, flush?: Flush
     if (flush) await flush({ planned: r.planned.splice(0), acts: r.acts.splice(0) });
   };
   const started = d.now();
-  const deadline = flush ? started + WALK_BUDGET_MS : Number.POSITIVE_INFINITY;
+  // Only a runner with memory keeps the budget: a one-shot round would walk the same first minute every time.
+  const deadline = flush && d.prCursor ? started + WALK_BUDGET_MS : Number.POSITIVE_INFINITY;
   const order = [...cursor.left.filter((x) => watch.repos.includes(x)), ...watch.repos.filter((x) => !cursor.left.includes(x))];
   const done: string[] = [];
   let limited = false;

@@ -9,6 +9,8 @@ import { nullChatProvider } from "../chat/provider.ts";
 import { DEFAULT_MONITOR_CONFIG, type MonitorDeps } from "../monitor.ts";
 import { runMonitor } from "../run.ts";
 import type { WatchConfig } from "./config.ts";
+import { key } from "./judge.ts";
+import { prCursor } from "./round.ts";
 
 const REPO = "acme/api";
 const NOW = Date.parse("2026-11-10T12:00:00Z");
@@ -633,6 +635,84 @@ test("no watch setting or no gh client: the round reads nothing", async () => {
   const w = world();
   assert.deepEqual((await w.round({ watch: () => null })).unseen, ["watch.repos setting"]);
   assert.deepEqual((await w.round({}, ["gh"])).unseen, ["gh client"]);
+});
+
+/** A round with a runner's cursor, counting `reference find` calls. */
+function withCursor(w: ReturnType<typeof world>) {
+  const cursor = prCursor();
+  const finds: string[] = [];
+  const referenceFind = async (a: { query: string; limit?: number }) => {
+    finds.push(a.query);
+    return w.deps.orca.referenceFind(a);
+  };
+  const orca = { ...w.deps.orca, referenceFind } as OrcaAdapter;
+  return { finds, round: () => w.round({ orca, prCursor: cursor }) };
+}
+
+const UPDATED = "2026-11-10T11:00:00Z";
+
+test("329: a merged PR whose Task is closed is not looked up again until GitHub shows it changed", async () => {
+  const w = world();
+  w.link(7, "task_item", "blocked");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  const pr: Record<string, unknown> = listed(7, { merged_at: UPDATED, updated_at: UPDATED });
+  w.routes[CLOSED] = ok([pr]);
+  w.merged(7, SHA);
+  const c = withCursor(w);
+  const first = await c.round();
+  assert.deepEqual(first.written.map((x) => x.type), ["pr_merged", "item_transition"]);
+  await c.round();
+  assert.equal(c.finds.length, 2, "the round after the close still looks, and finds nothing owed");
+  await c.round();
+  assert.equal(c.finds.length, 2, "then it is settled");
+  pr.updated_at = "2026-11-10T11:30:00Z";
+  await c.round();
+  assert.equal(c.finds.length, 3, "a change on GitHub reads it again");
+});
+
+test("329: a close Orca refused is still owed, so the merged PR is looked up and the close listed every round", async () => {
+  const w = world();
+  w.link(7, "task_item", "blocked");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: UPDATED, updated_at: UPDATED })]);
+  w.merged(7, SHA);
+  w.refuseWrites();
+  const c = withCursor(w);
+  for (let i = 1; i <= 3; i++) {
+    const r = await c.round();
+    assert.deepEqual(r.acts.map((a) => a.what), ["task-update task_item completed (acme/api#7 merged)"], `round ${i}`);
+  }
+  assert.equal(c.finds.length, 3);
+});
+
+test("329: a Task status Orca could not read is not settled", async () => {
+  const w = world();
+  w.link(7, "task_item", "blocked");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  w.store.append({ type: "pr_merged", source: "pr-monitor", dedupe_key: key("pr_merged", "acme/api#7"), payload: { pr: "acme/api#7", merge_sha: SHA } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: UPDATED, updated_at: UPDATED })]);
+  const orca = { ...w.deps.orca, taskList: async () => ({ ok: false, error: { code: "runtime_error", message: "" } }) } as unknown as OrcaAdapter;
+  const cursor = prCursor();
+  for (let i = 0; i < 2; i++) {
+    const r = await w.round({ orca, prCursor: cursor });
+    assert.ok(r.unseen.includes("status of task_item"), `round ${i + 1}`);
+  }
+  assert.equal(cursor.settled.size, 0);
+});
+
+test("329: decision 323's reference add is followed by the close on the next round, not settled in between", async () => {
+  const w = world();
+  w.routes[CLOSED] = ok([listed(40, { merged_at: UPDATED, updated_at: UPDATED })]);
+  w.merged(40, SHA);
+  w.worktrees.push({ id: "repo1::/w/40", projectId: `github:${REPO}`, branch: "refs/heads/feature-40", isArchived: false, displayName: "card 40", head: HEAD });
+  const c = withCursor(w);
+  await c.round();
+  assert.deepEqual(w.calls, [`reference add ${url(40)} id:repo1::/w/40`]);
+  // Orca now links the card to the PR and its Task.
+  w.link(40, "task_40", "blocked");
+  const next = await c.round();
+  assert.equal(c.finds.length, 2);
+  assert.deepEqual(next.written.map((x) => x.type), ["pr_opened", "pr_merged", "item_transition"]);
 });
 
 test("323: a PR merged before any open round saw it still gets the reference of the workspace on its branch at its head, and no other", async () => {

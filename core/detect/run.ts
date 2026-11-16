@@ -81,14 +81,15 @@ export type MonitorRunner = {
 
 /**
  * Real deps over one held store, opened again when its file changes (decision 191). `dryRun` reads
- * the store but never appends, writes to Orca nor calls a writing function.
+ * the store but never appends, writes to Orca nor calls a writing function. `oneShot` (the CLI's
+ * one round, under no cap) keeps no pr cursor, so its pr round reads every repository through.
  */
-export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: string } = {}): MonitorRunner {
+export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: string; oneShot?: boolean } = {}): MonitorRunner {
   const exec = nodeExec(30_000);
   const orca = createOrcaAdapter(exec);
   // One cache and one start time for the runner's life, so the budget carries from round to round.
   const ghCache = memoryGhCache();
-  const cursor = prCursor();
+  const cursor = o.oneShot ? undefined : prCursor();
   const openedAt = Date.now();
   const held = holdStore(
     () => Store.open(o.dbPath ? { path: o.dbPath } : o.home ? { home: o.home } : {}),
@@ -107,7 +108,7 @@ export function openMonitors(o: { dryRun?: boolean; dbPath?: string; home?: stri
         ghBudget: () => ghCache.budget("core"),
         watch: () => readWatchConfig(o.home),
         tier: () => readLandConfig(o.home).tier,
-        prCursor: cursor,
+        ...(cursor ? { prCursor: cursor } : {}),
         coreVersion: VERSION,
       };
       return { deps, run: afterHostReread(deps, () => !o.dryRun && hostRereadPending(store.events({ type: "signal" }))) };

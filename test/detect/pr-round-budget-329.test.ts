@@ -24,7 +24,8 @@ const truncation = (r: MonitorReport) => r.planned.find((e) => e.type === "monit
 test("329: eleven repositories on a slow gh, one round under the 90 s cap writes what it found", async () => {
   const f = fleet();
   const cap = f.capped();
-  const r = await runMonitor("pr", f.deps, cap.signal);
+  // The plugin's runner, which keeps a cursor between rounds.
+  const r = await runMonitor("pr", { ...f.deps, prCursor: prCursor() }, cap.signal);
   cap.done();
   assert.ok(r.written.length > 0, `the round wrote nothing (aborted ${r.aborted}, ${f.now() - cap.start} ms)`);
   assert.ok(
@@ -122,6 +123,37 @@ test("329: the cursor is not trusted while a lost database waits for its reread"
   f.store.append({ type: "signal", source: "store", payload: { kind: "store_rebuilt" } });
   const after = await round();
   assert.equal(f.calls("reference find", after.from), 35, "every PR is looked up again");
+});
+
+test("329: a reread starts each repository from its first PR, not where a cut walk stopped", async () => {
+  const { f, cursor, round } = runner();
+  await round();
+  assert.ok(cursor.resume.has("acme/app-01"), "the first round left app-01 mid-walk");
+  const asked: string[] = [];
+  const referenceFind = async (a: { query: string; limit?: number }) => {
+    asked.push(a.query);
+    return f.deps.orca.referenceFind(a);
+  };
+  const orca = { ...f.deps.orca, referenceFind };
+  f.store.append({ type: "signal", source: "store", payload: { kind: "store_rebuilt" } });
+  await runMonitor("pr", { ...f.deps, orca: orca as typeof f.deps.orca, prCursor: cursor });
+  assert.equal(asked[0], f.url("acme/app-01", 900));
+});
+
+test("329: main CI is still read on a round whose walk was cut", async () => {
+  const { f, round } = runner();
+  f.store.append({ type: "pr_merged", source: "pr-monitor", dedupe_key: "pr_merged:acme%2Fapp-05#120", payload: { pr: "acme/app-05#120", merge_sha: "c".repeat(40), merged_at: "2026-11-17T11:00:00Z" } });
+  const { r, from } = await round();
+  assert.ok(truncation(r));
+  assert.equal(f.calls("main CI", from), 1);
+});
+
+test("329: a one-shot round (the CLI, no cursor and no cap) reads every repository through and is not cut", async () => {
+  const f = fleet();
+  const r = await runMonitor("pr", f.deps);
+  assert.equal(truncation(r), undefined);
+  assert.deepEqual(f.rows("pr_opened").map((e) => e.payload.pr), ["acme/app-01#900", "acme/app-11#900"]);
+  assert.equal(f.calls("reference find"), 11 * 35 + 2);
 });
 
 test("329: a dry run lists what the round would write, and writes nothing", async () => {
