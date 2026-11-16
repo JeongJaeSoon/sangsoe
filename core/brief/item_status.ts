@@ -5,6 +5,7 @@ import { itemRef, prNode } from "../graph/nodes.ts";
 import { mergedItemMark } from "../verify/evidence.ts";
 import { type Hold, holdOf, retiredOf, triggerKind } from "../graph/ready.ts";
 import { waiterReading } from "../decision/held.ts";
+import { ownerDoneRequests } from "../owner/done.ts";
 import { countsAsEvidence } from "../owner/marks.ts";
 import { decision } from "../store/views/decision.ts";
 import { graphRead } from "../graph/read.ts";
@@ -41,6 +42,8 @@ export interface ItemFacts {
   readonly unclear: boolean;
   /** In progress and its worker_idle (decision 186) is newer than its last move: the 대기 line. */
   readonly idle: boolean;
+  /** 🟢 and the owner pressed 완료: the session that holds its Run closes it (decision 317). */
+  readonly pressed: boolean;
   readonly evidenceShort: boolean;
   /** Done, no evidence, but its PR has an act_on 0 review (decision 236); never also evidenceShort. */
   readonly reviewOnly: boolean;
@@ -196,6 +199,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
   const prFacts = foldFacts(input.events);
   const decisions = decision(input);
   const ready = new Set(graph.ready(input).map((r) => r.task));
+  const pressed = ownerDoneRequests(input.events);
   const out: ItemFacts[] = [];
   for (const t of input.orca.tasks as readonly BriefTask[]) {
     const c = created.get(t.id);
@@ -263,6 +267,7 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       alarms: state === "done" || state === "cancelled" ? [] : standing,
       unclear: (unclear.get(t.id) ?? 0) > last,
       idle: state === "in_progress" && (idle.get(t.id) ?? 0) > last,
+      pressed: state === "ready" && pressed.has(t.id),
       evidenceShort: lacking && !reviewOnly,
       reviewOnly,
       // A worker_done or a lead's task-update closes a Task with no item_transition (decision 175, S7).

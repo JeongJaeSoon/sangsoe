@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { evaluate, type Host, hostFacts, ownerDone, Store } from "../../core/index.ts";
-import { ownerWorld, RUN } from "../owner/world.ts";
+import { evaluate, type Host, hostFacts, Store } from "../../core/index.ts";
+import { ownerWorld, pressDone, RUN } from "../owner/world.ts";
 
 // G23 (decision 212 ④): done_blockers refuse a close at the panel's 완료 and at a role session's own
 // `task-update --status completed` (pr-monitor's close is in core/detect/pr/round.test.ts).
@@ -13,7 +13,7 @@ test("완료 on an owner item whose PR is still open is refused with the blocker
   w.item(T, { who: "owner" });
   w.store.append({ type: "item_extra_set", source: "test", payload: { task: T, exec_by: "owner" }, entity: "task", entity_id: T });
   w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#8", task: T } });
-  const r = await ownerDone({ orca: w.orca, store: w.store }, w.input(), w.facts(), { task: T });
+  const r = await pressDone(w, T);
   assert.ok(!r.ok);
   assert.equal(r.refusal.code, "done_blocked");
   assert.match(r.refusal.reason, /open_pr: acme\/api#8/);
@@ -21,7 +21,7 @@ test("완료 on an owner item whose PR is still open is refused with the blocker
   assert.equal(w.tasks.get(T)?.status, "ready", "no task-update");
 
   w.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#8", merge_sha: "abc1234" } });
-  const again = await ownerDone({ orca: w.orca, store: w.store }, w.input(), w.facts(), { task: T });
+  const again = await pressDone(w, T);
   assert.ok(again.ok, JSON.stringify(again));
   assert.equal(w.tasks.get(T)?.status, "completed");
 });
@@ -33,7 +33,7 @@ test("a PR closed unmerged and replaced by a merged PR of the same task does not
   w.store.append({ type: "pr_closed", source: "pr-monitor", payload: { pr: "acme/api#5" } });
   w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: T } });
   w.store.append({ type: "pr_merged", source: "pr-monitor", payload: { pr: "acme/api#7", merge_sha: "abc1234" } });
-  const r = await ownerDone({ orca: w.orca, store: w.store }, w.input(), w.facts(), { task: T });
+  const r = await pressDone(w, T);
   assert.ok(r.ok, JSON.stringify(r));
 });
 

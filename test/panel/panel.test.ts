@@ -5,6 +5,7 @@ import { test } from "node:test";
 import {
   type BriefInput,
   type BriefSnapshot,
+  closeOwnerDone,
   decisionMoot,
   decisionOpen,
   type OrcaAdapter,
@@ -27,7 +28,7 @@ import { panelHandlers, parseAct, STATUS_UNKNOWN } from "../../orca-plugin/panel
 import { STYLE } from "../../orca-plugin/panel/style.ts";
 import { back, current, down, drawnRowIds, type PanelView, renderStage, trail } from "../../orca-plugin/panel/view.ts";
 import { createWorld } from "../decision/world.ts";
-import { ownerWorld } from "../owner/world.ts";
+import { ownerWorld, RUN as OWNER_RUN } from "../owner/world.ts";
 
 const FIX = new URL("../fixtures/brief/", import.meta.url);
 const NOW = "2026-11-10T12:00:00.000Z";
@@ -276,7 +277,7 @@ test("PN4 live: 다른 답 sends the typed words to the Run holding the gate", a
   assert.equal(w.sends[0]?.to, `run:${RUN}`);
 });
 
-test("PN4: 완료 → U14 ownerDone closes a 🟢 owner item in Orca and the store; anything else is refused", async () => {
+test("PN4: 완료 → U14 ownerDone records the press on a 🟢 owner item for its Run's session to close; anything else is refused", async () => {
   const o = ownerWorld();
   const mine = o.item("task_000000000010", { who: "owner" });
   const theirs = o.item("task_000000000011", { who: "acme-bot" });
@@ -287,15 +288,18 @@ test("PN4: 완료 → U14 ownerDone closes a 🟢 owner item in Orca and the sto
   assert.equal(o.store.events({ type: "owner_action" }).length, 0, "a refused 완료 records nothing");
 
   const r = await core.act({ kind: "done", item: mine });
-  assert.deepEqual(r.ok ? r.value : r, { status: "done", label: "✅ 완료", item: mine });
-  assert.equal(o.state("task_000000000010"), "done");
+  assert.deepEqual(r.ok ? r.value : r, { status: "pending_close", label: "기록했다 — 그 Run 의 세션이 닫는다", item: mine });
+  assert.equal(o.state("task_000000000010"), "ready", "decision 317: the panel's process closes nothing in Orca");
   assert.deepEqual(o.store.events({ type: "owner_action" }).map((e) => [e.source, e.payload.origin]), [["plugin:panel", "button"]]);
+  await closeOwnerDone({ orca: o.orca, store: o.store }, { run: OWNER_RUN, rows: [...o.tasks.values()], source: "UserPromptSubmit", now: o.now });
+  assert.equal(o.state("task_000000000010"), "done", "the Run's session closes it");
   assert.equal(o.store.events({ type: "item_transition" })[0]?.payload.reason, "owner_done");
 
-  // Decision 181: a to-do with a verify answers pending_verify, and the panel shows that, not done.
+  // Decision 181: a to-do with a verify reads ⏳ once the Run's session closes it.
   const v = o.item("task_000000000012", { who: "owner", verify: { kind: "pr_merged", pr: "acme/api#40" } });
   const pv = await core.act({ kind: "done", item: v });
-  assert.deepEqual(pv.ok ? pv.value : pv, { status: "pending_verify", label: "⏳ 검증 대기", item: v });
+  assert.deepEqual(pv.ok ? pv.value : pv, { status: "pending_close", label: "기록했다 — 그 Run 의 세션이 닫는다", item: v });
+  await closeOwnerDone({ orca: o.orca, store: o.store }, { run: OWNER_RUN, rows: [...o.tasks.values()], source: "UserPromptSubmit", now: o.now });
   assert.equal(o.state("task_000000000012"), "pending_verify");
   // The label starts with the marker the brief draws for the same item after the press.
   const after = await core.brief({ item: v });
@@ -319,7 +323,7 @@ test("every status a panel act can answer carries its label, and the label table
   keep(await core.act({ kind: "done", item: o.item("task_000000000010", { who: "owner" }) }));
   keep(await core.act({ kind: "done", item: o.item("task_000000000012", { who: "owner", verify: { kind: "pr_merged", pr: "acme/api#40" } }) }));
 
-  assert.deepEqual([...seen.keys()].sort(), ["answered", "done", "late", "pending_verify"]);
+  assert.deepEqual([...seen.keys()].sort(), ["answered", "late", "pending_close"]);
   const table: Readonly<Record<string, string>> = coreNs.ACTED_LABEL ?? {};
   assert.deepEqual(Object.keys(table).sort(), [...seen.keys()].sort(), "the label table lists every reply status");
   for (const [status, label] of seen) {

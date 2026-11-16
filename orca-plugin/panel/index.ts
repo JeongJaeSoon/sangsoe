@@ -273,7 +273,7 @@ function mount(): void {
   const sayRefused = (r: Refusal) => {
     note = errorNote(r);
   };
-  // Owner items this panel pressed into ⏳ 검증 대기: their 완료 stays off until a reading drops them.
+  // Owner items this panel pressed (decision 317): their 완료 stays off until a reading drops them.
   const pending = new Set<string>();
   let lastOk = false;
   // Readings now arrive every few seconds (decision 205): a reply older than the newest asked-for
@@ -330,7 +330,7 @@ function mount(): void {
       const r = (await orca.plugin.request("panel.act", a).catch(failed)) as Reply<Acted>;
       if (r.ok) say(actedNote(a, r.value));
       else sayRefused(r.refusal);
-      if (r.ok && a.kind === "done" && r.value.status === "pending_verify") pending.add(a.item);
+      if (r.ok && a.kind === "done") pending.add(a.item);
       await draw();
     } finally {
       busy = false;

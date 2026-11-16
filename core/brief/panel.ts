@@ -1,6 +1,5 @@
 import type { OwnerTodoRow } from "../contract/index.ts";
 import type { OrcaAdapter } from "../contract/orca.ts";
-import { READING_LABEL } from "../contract/views.ts";
 import { type DecisionAnswered, decisionAnswer } from "../decision/answer.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
 import { createOrcaAdapter } from "../orca/adapter.ts";
@@ -108,14 +107,14 @@ export interface PanelPorts {
  */
 export const PANEL_RUN = "";
 
-type ItemActed = { readonly status: "done" | "pending_verify"; readonly item: string };
+type ItemActed = { readonly status: "pending_close"; readonly item: string };
 
-/** What the panel prints after an act, per reply status (glossary terms: 닫힘, 원인이 사라진 결정, 검증 대기). */
+/** What the panel prints after an act, per reply status (glossary terms: 닫힘, 원인이 사라진 결정). */
 export const ACTED_LABEL: Readonly<Record<(DecisionAnswered | ItemActed)["status"], string>> = {
   answered: "답이 달려 닫힘",
   late: "뒤늦은 답: 기록만 함(원인이 사라진 결정)",
-  done: READING_LABEL.done,
-  pending_verify: READING_LABEL.pending_verify,
+  // Decision 317: the panel's process cannot close a Task; the session that holds its Run does.
+  pending_close: "기록했다 — 그 Run 의 세션이 닫는다",
 };
 
 /** An answer recorded from the panel while its gate sits on a Run: the press is done, the delivery is that Run's. */
@@ -172,10 +171,9 @@ export function panelCore(ports: PanelPorts): PanelCore {
 
   function closeItem(input: BriefInput, item: string): Promise<Result<PanelActed>> {
     return ports.withStore(async (store) => {
-      const r = await ownerDone({ store, orca: ports.orca }, input, itemFacts(input), { task: item });
+      const r = await ownerDone({ store }, input, itemFacts(input), { task: item });
       if (!r.ok) return r;
-      const status = r.value.pendingVerify ? "pending_verify" : "done";
-      return done({ status, label: ACTED_LABEL[status], item: r.value.alias });
+      return done({ status: "pending_close", label: ACTED_LABEL.pending_close, item: r.value.alias });
     });
   }
 

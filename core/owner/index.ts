@@ -1,4 +1,4 @@
-export { ownerDone, type OwnerDone } from "./done.ts";
+export { closeOwnerDone, DONE_REQUEST, ownerDone, type OwnerDone, ownerDoneRequests } from "./done.ts";
 export { DRIVEN_WINDOW_MS, recordDriven, wasDriven } from "./driven.ts";
 export { type ItemSet, type ItemSetDone, type OwnerExtra, parseOwnerExtra, recordOwnerExtra, setItemExtra } from "./extra.ts";
 export { type ChatLink, hintMatches, linkChat, linkedActs, linkShell, recordProposal, recordShellLink, type ShellLine, type ShellLink } from "./link.ts";

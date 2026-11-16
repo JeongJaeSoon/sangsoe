@@ -70,10 +70,10 @@ test("a refusal is one short Korean line with the raw text in its title; the hea
   }
   const raw = { code: "selector_not_found", reason: '{"selector":"active"}', fix: "run sangsoe brief in a terminal" };
   assert.equal(errorLine(raw), "sangsoe 가 요청을 처리하지 못했다.", "an unlisted code is the generic line, never the raw text");
-  // The note a refused act leaves: the Korean line as text, the raw refusal escaped into the title only.
+  // The note a refused act leaves: the Korean line and the code as text (decision 317), the raw refusal escaped into the title only.
   assert.equal(
     errorNote(raw),
-    '<p class="msg bad" role="status" title="selector_not_found · {&quot;selector&quot;:&quot;active&quot;} · run sangsoe brief in a terminal">sangsoe 가 요청을 처리하지 못했다.</p>',
+    '<p class="msg bad" role="status" title="selector_not_found · {&quot;selector&quot;:&quot;active&quot;} · run sangsoe brief in a terminal">sangsoe 가 요청을 처리하지 못했다. (selector_not_found)</p>',
   );
 
   const nf = { code: "not_found", reason: "no open group api-migration", fix: "go back to 현황" };
@@ -88,7 +88,7 @@ test("a refusal is one short Korean line with the raw text in its title; the hea
   assert.doesNotMatch(renderError({ code: "core_unavailable", reason: "core not found", fix: "run sangsoe doctor" }), /data-back/, "현황 has no way back to draw");
 });
 
-test("an owner item the panel pressed into ⏳ 검증 대기 keeps its 완료 off", () => {
+test("an owner item the panel pressed keeps its 완료 off", () => {
   const v = view({}) as unknown as PanelView;
   const owner = v.todo.find((r) => r.kind === "owner_item");
   assert.ok(owner, "the fixture has an owner item");
@@ -96,7 +96,7 @@ test("an owner item the panel pressed into ⏳ 검증 대기 keeps its 완료 of
   assert.ok(renderStage(v).includes(done));
   const pressed = renderStage(v, "all", new Set([owner.ref]));
   assert.ok(!pressed.includes(done), "no 완료 act on the pressed row");
-  assert.match(pressed, /<button type="button" class="btn" disabled><span class="em">⏳<span class="sr"> <\/span><\/span>검증 대기<\/button>/);
+  assert.match(pressed, /<button type="button" class="btn" disabled>완료 기록됨<\/button>/);
 
   const pending = new Set([owner.ref, "i999"]);
   prunePending(pending, v.todo);

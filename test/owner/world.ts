@@ -1,11 +1,15 @@
 import {
+  closeOwnerDone,
   type GhClient,
   type GhResponse,
   type ItemReading,
   itemFacts,
   type OrcaAdapter,
   type OrcaPluginRow,
+  type OwnerDone,
   type OwnerItemFacts,
+  ownerDone,
+  type Result,
   Store,
   type TaskRow,
   type VerifySpec,
@@ -110,6 +114,16 @@ export function ownerWorld(): OwnerWorld {
     },
   };
   return w;
+}
+
+/**
+ * The panel's 완료, then the prompt hook of the session that holds the Run closing it (decision 317):
+ * the panel's process records the press and Orca takes the task-update only from that session.
+ */
+export async function pressDone(w: OwnerWorld, task: string): Promise<Result<OwnerDone>> {
+  const r = await ownerDone({ store: w.store }, w.input(), w.facts(), { task });
+  if (r.ok) await closeOwnerDone({ orca: w.orca, store: w.store }, { run: RUN, rows: [...w.tasks.values()], source: "UserPromptSubmit", now: w.now });
+  return r;
 }
 
 /** The owner's words as the UserPromptSubmit hook records them (U13 writes this row). */

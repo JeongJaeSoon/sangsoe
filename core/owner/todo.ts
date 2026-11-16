@@ -1,5 +1,6 @@
 import type { OwnerTodoRow, ViewInput } from "../contract/index.ts";
 import { decision } from "../store/views/decision.ts";
+import { ownerDoneRequests } from "./done.ts";
 import { ownerMarks } from "./marks.ts";
 import { isOwnerItem, OWNER_DEFAULTS, type OwnerConfig, type OwnerItemFacts } from "./types.ts";
 
@@ -40,9 +41,11 @@ export function ownerTodoFrom(input: ViewInput, facts: readonly OwnerItemFacts[]
     if (d.state === "open") rows.push({ kind: "decision", ref: d.decision, whyOwner: null, since: opened.get(d.decision) ?? input.now });
     else if (d.undelivered) rows.push({ kind: "undelivered_answer", ref: d.decision, whyOwner: null, since: answered.get(d.decision) ?? input.now });
   }
+  // Decision 317: a pressed item waits for its Run's session, not for the owner.
+  const pressed = ownerDoneRequests(input.events);
   for (const f of facts) {
     if (f.state !== "ready" || !isOwnerItem(f)) continue;
-    if (marks.get(f.task)?.verified) continue;
+    if (marks.get(f.task)?.verified || pressed.has(f.task)) continue;
     rows.push({ kind: "owner_item", ref: f.alias, whyOwner: f.whyOwner, since: f.since ?? input.now });
   }
   for (const e of input.events) {

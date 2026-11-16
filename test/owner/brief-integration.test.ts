@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildBrief, linkShell, owner_todo, ownerDone, recordShellLink } from "../../core/index.ts";
-import { later, ownerWorld, T0 } from "./world.ts";
+import { buildBrief, linkShell, owner_todo, recordShellLink } from "../../core/index.ts";
+import { later, ownerWorld, pressDone, T0 } from "./world.ts";
 
 // The brief (U9) reads owner_todo's one body (core/owner), so the counts below are the brief's own.
 
@@ -47,7 +47,7 @@ test("an owner `!` line does not verify an item the button pressed: it stays ⏳
   w.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: "gh workflow run promote.yml" });
   const line = { uuid: "u1", command: "gh workflow run promote.yml -R acme/api", exitCode: 0, stdout: "https://github.com/acme/api/actions/runs/9", stderr: "", repo: "acme/api", ts: T0 };
   recordShellLink(w.store, line, linkShell(w.input(), w.facts(), line));
-  const r = await ownerDone({ orca: w.orca, store: w.store }, w.input(), w.facts(), { task: T });
+  const r = await pressDone(w, T);
   assert.ok(r.ok);
   w.at(later(T0, 1));
   const b = buildBrief(w.input());

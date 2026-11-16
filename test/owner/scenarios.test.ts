@@ -4,7 +4,6 @@ import {
   awaitingResume,
   countsAsEvidence,
   linkShell,
-  ownerDone,
   ownerMarks,
   ownerTodoFrom,
   probeRound,
@@ -15,7 +14,7 @@ import {
   unreleasedWaits,
   type VerifySpec,
 } from "../../core/index.ts";
-import { later, type OwnerWorld, ownerSays, ownerWorld, T0 } from "./world.ts";
+import { later, type OwnerWorld, ownerSays, ownerWorld, pressDone, T0 } from "./world.ts";
 
 // Five of decision 91's seven regression scenarios (the other two are U8's and U10's).
 
@@ -112,8 +111,8 @@ test("owner_item_probe_closes: a merge seen by the probe takes the item out with
   // The button first: ⏳ 검증 대기 (decision 181), then the probe's merge makes it ✅.
   const v = ownerWorld();
   v.item(T, { verify });
-  const r = await ownerDone({ orca: v.orca, store: v.store }, v.input(), v.facts(), { task: T });
-  assert.ok(r.ok && r.value.pendingVerify);
+  const r = await pressDone(v, T);
+  assert.ok(r.ok);
   assert.equal(v.state(T), "pending_verify");
   assert.equal(v.store.events().filter(countsAsEvidence).length, 0, "the button is not evidence when a verify exists");
   v.gh.set("repos/acme/api/pulls/40", { merged: true, merge_commit_sha: "abc1234" });
@@ -126,8 +125,9 @@ test("owner_item_probe_closes: a merge seen by the probe takes the item out with
   // No verify: the button is the evidence.
   const n = ownerWorld();
   n.item(T, {});
-  const nr = await ownerDone({ orca: n.orca, store: n.store }, n.input(), n.facts(), { task: T });
-  assert.ok(nr.ok && !nr.value.pendingVerify);
+  const nr = await pressDone(n, T);
+  assert.ok(nr.ok);
+  assert.equal(n.state(T), "done");
   assert.equal(n.store.events().filter(countsAsEvidence).length, 1);
 });
 
@@ -153,7 +153,7 @@ test("owner_ran_command_marks_verifying: the real case, end to end", async () =>
   // Decision 181: 완료 pressed before the `!` line; the later line still links and gives the run id.
   const p = ownerWorld();
   p.item(T, { verify: { kind: "run_ok", repo: "acme/api" }, cmdHint: HINT });
-  await ownerDone({ orca: p.orca, store: p.store }, p.input(), p.facts(), { task: T });
+  await pressDone(p, T);
   assert.equal(p.state(T), "pending_verify");
   assert.equal(bang(p).kind, "seen", "a pending item still takes its `!` line");
   p.gh.set("repos/acme/api/actions/runs/111", { status: "completed", conclusion: "success" });

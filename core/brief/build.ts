@@ -1,6 +1,7 @@
 import type { ItemReading, ItemState, OwnerTodoRow, RestartDueRow, WaitsOn } from "../contract/index.ts";
 import { ITEM_READINGS, READING_LABEL, STATE_LABEL } from "../contract/index.ts";
 import { isKind, localDay, modelDrift, POLICY, spend, spendText } from "../models/index.ts";
+import { DONE_REQUEST } from "../owner/done.ts";
 import { linkedActs } from "../owner/link.ts";
 import { DEFAULT_RESTART_RULES, restart_due } from "../session/restart-due.ts";
 import { item_timeline } from "../store/views/item_timeline.ts";
@@ -86,6 +87,9 @@ const table = (title: string, columns: readonly Column[], rows: Row[]): Table =>
   rows,
 });
 
+/** Decision 317: Orca takes no task-update from the panel's process, so a pressed item waits for its Run's session. */
+const OWNER_DONE_WAIT = "완료 기록됨: 그 Run 의 세션이 닫는다(대기)";
+
 function next(f: ItemFacts): string {
   let base = "—";
   if (f.openDecisions[0]) base = `${f.openDecisions[0]} 답`;
@@ -94,6 +98,7 @@ function next(f: ItemFacts): string {
   else if (f.state === "unknown") base = "PR 상태를 아직 읽지 못함(pr-monitor)";
   else if (f.state === "pending_verify") base = "검증 대기: verify probe 통과 전";
   else if (f.state === "blocked") base = f.lastReason ?? "—";
+  else if (f.pressed) base = OWNER_DONE_WAIT;
   else if (f.state === "ready") base = "시작";
   // Decision 279: an item held by itself says so; "선행 대기" is for one that waits on something else.
   else if (f.state === "planned") base = f.plannedBy === "hold" ? "⏸️ 보류" : f.plannedBy === "trigger" ? "trigger 확인 필요" : "선행 대기";
@@ -612,6 +617,7 @@ function chainText(type: string, p: Record<string, unknown>): string {
     const to = STATE_LABEL[p.to as ItemState] ?? s("to");
     return `${from} → ${to} ${s("reason")}`.trim();
   }
+  if (type === "evidence" && p.kind === DONE_REQUEST) return "완료 눌림: 그 Run 의 세션이 닫는다";
   if (type === "evidence") return `${s("kind")}${typeof p.exit_code === "number" ? ` exit ${p.exit_code}` : ""}`;
   if (type.startsWith("decision_")) return `${s("decision")} ${type.slice(9)}${p.answer ? ` "${s("answer")}"` : ""}`;
   const nine = NINE[type];

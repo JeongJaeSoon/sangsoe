@@ -189,9 +189,9 @@
 | land 판정 함수 | design.html §3 역할과 완료 판정 | implemented | `core/land/land.ts:189`, `core/land/land.ts:211` | 결정 158·204 |
 | 당사자 원칙 넷 | design.html §3 역할과 완료 판정 | implemented | `claude-plugin/agents/worker.md:53`, `claude-plugin/agents/lead.md:39` | |
 | 감지기 | design.html §3 역할과 완료 판정 | implemented | `core/detect/pr/round.ts:149`, `core/detect/pr/round.ts:200` | 닫기는 머지 확인 뒤 하나뿐 |
-| 오너 | design.html §3 역할과 완료 판정 | implemented | `core/session/record.ts:81`, `core/owner/done.ts:36` | 채팅과 패널 버튼 모두 owner_action |
+| 오너 | design.html §3 역할과 완료 판정 | implemented | `core/session/record.ts:81`, `core/owner/done.ts:57` | 채팅과 패널 버튼 모두 owner_action |
 | 감지 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `core/session/record.ts:180`, `core/owner/probe.ts:157` | 사실·표지·close_suggested 만 |
-| 실행 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `core/session/record.ts:103`, `core/owner/done.ts:22` | 결정 173·181 |
+| 실행 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `core/session/record.ts:103`, `core/owner/done.ts:88` | 결정 173·181·317(패널의 완료는 그 Run 을 쥔 세션이 닫는다) |
 | 판단 층이 바꾸는 것 | design.html §3 항목의 상태를 누가 바꾸나 | implemented | `claude-plugin/mcp/tools/decision_answer.ts:14`, `claude-plugin/agents/orchestrator.md:49` | 결정 179 |
 | 에이전트는 MCP 만 | design.html §3 호출 경로 규칙 | implemented | `claude-plugin/mcp/server.ts:38`, `test/judgment-layer.test.ts:62` | 예외 하나: `[gate:pressure]` 거부 뒤 백그라운드 `sangsoe pressure wait`(결정 256) |
 | plugin worker 의 코어 import | design.html §3 호출 경로 규칙 | implemented | `orca-plugin/core-link.ts:64` | 결정 132 |
@@ -364,7 +364,7 @@
 | 뷰 owner_action·item_extra·item·evidence·edge | design-appendix sqlite 스키마 | changed (결정 160) | `core/graph/facts.ts:1`, `core/brief/item_status.ts:222` | 이름 있는 함수 없이 같은 event 를 접는다 |
 | 뷰 decision·owner_todo·item_timeline·edge_ok·ready·flow_gap·group_brief·group_items·restart_due | design-appendix sqlite 스키마 | implemented | `core/store/views/decision.ts:11`, `core/graph/ready.ts:213` | restart_due 를 부르는 쪽은 G10 |
 | 뷰 item_status 의 🚨 orphan_extra | design-appendix sqlite 스키마 | missing | `core/brief/item_status.ts:222`, `core/contract/views.ts:90` | G24 — 주석에 이름만 있고 판정이 없다 |
-| 뷰 done_blockers | design-appendix sqlite 스키마 | implemented | `core/graph/flow.ts:311`, `core/detect/pr/round.ts:165`, `core/owner/done.ts:47`, `core/gates/done-blockers.ts:12` | Task 를 닫는 세 자리(pr-monitor 의 닫기, 패널의 완료, 역할 세션의 `task-update --status completed`)가 막는 것을 적어 거부한다(결정 212 ④) |
+| 뷰 done_blockers | design-appendix sqlite 스키마 | implemented | `core/graph/flow.ts:311`, `core/detect/pr/round.ts:165`, `core/owner/done.ts:68`, `core/owner/done.ts:101`, `core/gates/done-blockers.ts:12` | Task 를 닫는 세 자리(pr-monitor 의 닫기, 패널의 완료, 역할 세션의 `task-update --status completed`)가 막는 것을 적어 거부한다(결정 212 ④). 패널의 완료는 누를 때와 그 Run 의 세션이 닫을 때 두 번 읽는다(결정 317) |
 | 뷰 ask_due | design-appendix sqlite 스키마 | cut (결정 161) | `core/contract/views.ts:182` | 시그니처만. LATER 조건은 2절 N6 |
 | 소유 PR·Run·Task·게이트·대화 기록 | design-appendix 데이터 소유 | implemented | `core/detect/pr/round.ts:1`, `core/decision/open.ts:137` | |
 | 소유 부가 정보·간선·결정 키 | design-appendix 데이터 소유 | implemented | `core/store/schema.ts:111` | event 만 정본 |
@@ -644,5 +644,6 @@
 | 296 | 릴리스의 꼴(0.1.11). 본문이 릴리스에 대해 적는 것은 결정 272 의 행과 같고 결정 296 과 어긋나지 않는다 | 메모: 결정 296 이 후보 없이 안정판으로 내는 까닭(결정 272 ② 그대로)과 설치본에서 다시 잴 것을 적었다. 고칠 대목 없음 | `CHANGELOG.md` "0.1.11", `docs/smoke-run.md` "0.1.11 의 릴리스 smoke 가 다시 잴 것" |
 | 297 | 실행 기록(0.1.11 릴리스 smoke), 전환 조건 I2 · M3. 세 페이지는 smoke 를 적지 않는다 | 메모: 결정 297 이 결과(FAIL 없음)와 결정 283 ⑥ 의 측정을 적었다. 고칠 대목 없음 | `docs/smoke-run.md` "릴리스 smoke (0.1.11)", `docs/switch-conditions.md` I2 · M3 |
 | 315 | 릴리스의 꼴(0.1.12). 본문이 릴리스에 대해 적는 것은 결정 272 의 행과 같고 결정 315 와 어긋나지 않는다 | 메모: 결정 315 가 후보 없이 안정판으로 내는 까닭(결정 272 ② · 296 ② 그대로)과 설치본에서 잴 것을 적었다. 고칠 대목 없음 | `CHANGELOG.md` "0.1.12", `docs/smoke-run.md` "0.1.12 의 릴리스 smoke 가 잴 것" |
+| 317 | 결정 91 ② 의 패널 "완료" 가 Task 를 닫는다는 것, 결정 274 ⑥ 이 남긴 패널의 `task-update`. Orca 는 plugin worker 의 쓰기를 받지 않는다(D22) | 메모: 결정 317 을 새로 적고 코드를 고쳤다. 누름은 대기 요청을 남기고, 그 Run 을 쥔 세션의 `UserPromptSubmit` hook 이 닫는다. 패널의 띠는 code 를 본문에 보인다. 세 페이지의 완료 버튼 글은 고치지 않았다(이 항목의 범위 밖) | `core/owner/done.ts` `ownerDone` · `closeOwnerDone`, `core/detect/queue/own-run.ts`, `core/owner/todo.ts`, `core/brief/build.ts` `next`, `core/brief/panel.ts`, `orca-plugin/panel/view.ts` `errorText` |
 
 첫 빌드 시험 T1–T6 의 결과는 `test-outcomes.md` 의 행이다. 여섯 모두 통과다. T5 는 두 행이다: "워커는 자기 Run 에 Task 를 만들지 못한다"(U10)와, U93 이 Run 을 쥔 리드 세션에서 돌린 이중 시작 거부 · 세 번 실패 차단이다(`smoke-run.md` 3절 끝). 한 번 시작된 Task 는 실패 세기 앞에서 `already_dispatched` 로 멈추므로 버리는 항목 둘을 썼다. 컷오프 항목은 없는 저장소 선택자로 `worktree create` 를 세 번 실패시켜 `loop_detected{start_failed_3x}` 를 남겼고, 넷째는 `stopped` 였다. 이중 시작 항목은 둘째 호출이 `waiting already_dispatched` 였다. 코드는 결정 114 그대로다: 시작 함수는 `worker-start` 전에 그 Task 의 세는 실패를 세어 세 번이면 `stopped` 로 돌려주고(`core/start/start.ts:316-334`), 이어 Task 상태를 읽어 `dispatched` 이면 `already_dispatched` 로 돌려준다(`:341`).

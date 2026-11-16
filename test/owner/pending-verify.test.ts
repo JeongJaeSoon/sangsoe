@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildBrief, itemFacts, ownerDone, ownerTodoFrom, probeRound, probeTargets, type VerifySpec, type ViewInput, why } from "../../core/index.ts";
-import { later, type OwnerWorld, ownerWorld, T0 } from "./world.ts";
+import { buildBrief, itemFacts, ownerTodoFrom, probeRound, probeTargets, type VerifySpec, type ViewInput, why } from "../../core/index.ts";
+import { later, type OwnerWorld, ownerWorld, pressDone, T0 } from "./world.ts";
 
 // Decision 181 (the owner's answer to Q1): a to-do closes on verification. The owner's 완료 on an
 // item with a verify reads pending verification, its own state, until a probe sees the effect.
@@ -21,8 +21,8 @@ function withDep(input: ViewInput): ViewInput {
 test("Q1: the owner's 완료 on a to-do with a verify is pending verification, not done, until the probe passes", async () => {
   const w = ownerWorld();
   w.item(T, { verify: MERGED });
-  const r = await ownerDone({ orca: w.orca, store: w.store }, w.input(), itemFacts(w.input()), { task: T });
-  assert.ok(r.ok && r.value.pendingVerify, "the button reports pending verification");
+  const r = await pressDone(w, T);
+  assert.ok(r.ok, JSON.stringify(r));
 
   const f = factOf(w.input());
   assert.equal(f?.state, "pending_verify");
@@ -63,8 +63,8 @@ test("Q1: every entrance that completes the Task reads the same; a to-do with no
   // No verify: nothing to wait for, the button is the evidence.
   const n = ownerWorld();
   n.item(T, {});
-  const r = await ownerDone({ orca: n.orca, store: n.store }, n.input(), itemFacts(n.input()), { task: T });
-  assert.ok(r.ok && !r.value.pendingVerify);
+  const r = await pressDone(n, T);
+  assert.ok(r.ok, JSON.stringify(r));
   assert.equal(factOf(n.input())?.state, "done");
 });
 
@@ -72,7 +72,7 @@ test("Q1: a dependent waits for the verification, not for the press", async () =
   const w = ownerWorld();
   w.item(T, { verify: MERGED });
   w.item(D, { who: "lead:api" });
-  await ownerDone({ orca: w.orca, store: w.store }, w.input(), itemFacts(w.input()), { task: T });
+  await pressDone(w, T);
   const held = why(withDep(w.input()), D);
   assert.equal(held.readiness, "waiting");
   assert.match(held.rows[0]?.predState ?? "", /검증 대기/);
@@ -85,7 +85,7 @@ test("Q1: a dependent waits for the verification, not for the press", async () =
 test("Q1: a pending item is probed without a mark; run_ok with no run id stays pending and calls nothing", async () => {
   const w = ownerWorld();
   w.item(T, { verify: { kind: "pr_found", repo: "acme/api", search: "promote" } });
-  await ownerDone({ orca: w.orca, store: w.store }, w.input(), itemFacts(w.input()), { task: T });
+  await pressDone(w, T);
   assert.deepEqual(
     probeTargets(w.input(), itemFacts(w.input())).map((x) => [x.task, x.open]),
     [[T, false]],
@@ -94,7 +94,7 @@ test("Q1: a pending item is probed without a mark; run_ok with no run id stays p
 
   const r = ownerWorld();
   r.item(T, { verify: { kind: "run_ok", repo: "acme/api" } });
-  await ownerDone({ orca: r.orca, store: r.store }, r.input(), itemFacts(r.input()), { task: T });
+  await pressDone(r, T);
   await probe(r);
   assert.deepEqual(r.ghCalls, [], "no run id: unreadable, nothing called");
   assert.equal(factOf(r.input())?.state, "pending_verify");

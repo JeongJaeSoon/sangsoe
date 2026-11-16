@@ -48,7 +48,7 @@ test("an owner item Orca calls ready but GRAPH holds behind deploys_after is �
   const row = buildBrief(input).inProgress.rows.find((r) => r.id === "i002");
   assert.equal(row?.cells[0]?.text, "📅");
   const done = await ownerDone(
-    { orca: { taskUpdate: async () => assert.fail("no task-update for a 📅 item") }, store: Store.open({ path: ":memory:" }) },
+    { store: Store.open({ path: ":memory:" }) },
     input,
     itemFacts(input),
     { task: "i002" },

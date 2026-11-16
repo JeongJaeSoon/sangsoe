@@ -6,7 +6,6 @@ import {
   decisionOpen,
   linkChat,
   linkShell,
-  ownerDone,
   ownerMarks,
   ownerTodoFrom,
   probeRound,
@@ -16,7 +15,7 @@ import {
   type VerifySpec,
 } from "../../core/index.ts";
 import { createWorld } from "../decision/world.ts";
-import { later, type OwnerWorld, ownerSays, ownerWorld, RUN, T0 } from "./world.ts";
+import { later, type OwnerWorld, ownerSays, ownerWorld, pressDone, RUN, T0 } from "./world.ts";
 
 // Decision 91⑥(3) as a table: input kind × current state → next state and mark, with the event that
 // grounds it. Only rows 1, 2, 8, 9 and 10 change anything recorded, each by an observed effect or an
@@ -70,12 +69,12 @@ const ROWS: readonly Row[] = [
   {
     n: 2,
     input: "panel 완료 button",
-    ground: "explicit link (나): owner_action{button} + item_transition ready→done; reads ⏳ until a probe (decision 181)",
+    ground: "explicit link (나): owner_action{button}; the Run's session writes item_transition ready→done (decision 317); reads ⏳ until a probe (decision 181)",
     changes: "state",
     given: (w) => void w.item(T, { verify: RUN_OK, cmdHint: HINT }),
     act: async (w) => {
-      const r = await ownerDone({ orca: w.orca, store: w.store }, w.input(), w.facts(), { task: T });
-      assert.ok(r.ok && r.value.pendingVerify, "verify with no probe yet: ⏳ 검증 대기");
+      const r = await pressDone(w, T);
+      assert.ok(r.ok, JSON.stringify(r));
     },
     check: (b, a, w) => {
       assert.equal(b.state, "ready");

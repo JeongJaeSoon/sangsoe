@@ -144,14 +144,15 @@ const attr = (v: unknown) => esc(JSON.stringify(v));
 const DASH = '<span class="dash">—</span>';
 
 /**
- * One short Korean line per refusal code (decision 198); the code, reason and fix stay in the title.
- * A code not listed reads as the generic line, never as the raw text.
+ * One short Korean line per refusal code (decision 198); the reason and fix stay in the title.
+ * A code not listed reads as the generic line, never as the raw text. The code itself is in the text
+ * (decision 317), with Orca's own code and its meaning for an orca_error.
  */
 export const ERROR_LINE: Readonly<Record<string, string>> = {
   request_failed: "패널이 sangsoe 에 닿지 못했다. 새로 고침을 누른다.",
   core_unavailable: "sangsoe 코어를 열지 못했다. 터미널에서 sangsoe doctor 를 본다.",
   core_error: "sangsoe 코어가 오류로 끝났다. 되풀이되면 sangsoe doctor 를 본다.",
-  orca_error: "Orca 가 답하지 않았다. 잠시 뒤 새로 고침을 누른다.",
+  orca_error: "Orca 가 요청을 받지 않았다.",
   not_found: "이 묶음이나 항목은 이제 열려 있지 않다. 뒤로 가서 현황을 본다.",
   bad_input: "패널이 알 수 없는 요청을 보냈다. 새로 고침을 누른다.",
   not_open: "이 결정은 이미 닫혔다. 새로 고침을 누른다.",
@@ -161,14 +162,31 @@ export const ERROR_LINE: Readonly<Record<string, string>> = {
 };
 const ERROR_OTHER = "sangsoe 가 요청을 처리하지 못했다.";
 
+/** What Orca's own error codes mean; a code not listed is shown bare. */
+const ORCA_CODE_LINE: Readonly<Record<string, string>> = {
+  no_active_sender_terminal: "터미널 없는 프로세스의 쓰기는 받지 않는다",
+  consumer_fenced: "그 Run 을 쥔 터미널의 쓰기만 받는다",
+  runtime_unreachable: "Orca 에 닿지 못했다",
+  response_lost: "답이 오지 않았다",
+};
+// The core writes Orca's code first after "<what>: " or "(": `task-update x: <code> <message>`, `(<code>: <message>)`.
+const ORCA_CODE = /(?:^|: |\()([a-z]+(?:_[a-z]+)+)\b/;
+
 export type Refusal = { code: string; reason: string; fix: string };
 export const errorLine = (r: Refusal): string => ERROR_LINE[r.code] ?? ERROR_OTHER;
 const errorTitle = (r: Refusal): string => [r.code, r.reason, r.fix].filter(Boolean).join(" · ");
 
-/** The one-line note a refused act leaves: Korean text, the raw refusal as its title. */
-export function errorNote(r: Refusal): string {
-  return `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorLine(r))}</p>`;
+/** The refusal's code after its line, and for an orca_error Orca's code and what it means. */
+function errorText(r: Refusal): string {
+  const orca = r.code === "orca_error" ? ORCA_CODE.exec(r.reason)?.[1] : undefined;
+  const meaning = orca ? ORCA_CODE_LINE[orca] : undefined;
+  const codes = [r.code, orca ? `Orca ${orca}${meaning ? `: ${meaning}` : ""}` : ""].filter(Boolean).join(" · ");
+  return `${errorLine(r)} (${codes})`;
 }
+const errorP = (r: Refusal, tail = ""): string => `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorText(r))}${tail}</p>`;
+
+/** The one-line note a refused act leaves: Korean text and the codes, the raw refusal as its title. */
+export const errorNote = (r: Refusal): string => errorP(r);
 
 /**
  * Decision 259: the gap after an emoji is the `.em` class's, never a literal space. `html` is escaped
@@ -335,9 +353,9 @@ function overview(m: Overview, todo: readonly TodoRow[], pending: ReadonlySet<st
   });
   // Only an owner item has a core function behind its button (ownerDone); a waiting session and an
   // undelivered answer close on observed facts (decision 91①④), so their rows carry none. A row already
-  // pressed into ⏳ 검증 대기 keeps its button off until the reading drops it (decision 198).
+  // pressed keeps its button off until the reading drops it (decisions 198, 317).
   const todoRows = m.ownerTodo.rows.map((r) => {
-    const acts = kind.get(r.id) !== "owner_item" ? "" : pending.has(r.id) ? btn("⏳ 검증 대기", null) : btn("완료", { kind: "done", item: r.id });
+    const acts = kind.get(r.id) !== "owner_item" ? "" : pending.has(r.id) ? btn("완료 기록됨", null) : btn("완료", { kind: "done", item: r.id });
     return rowHtml(m.ownerTodo, r, { idCol: true, acts });
   });
   const progress = m.inProgress.rows.map((r) => {
@@ -864,7 +882,7 @@ const bar = (head: string, nav: string) => `<div class="bar">${head}${nav}</div>
  */
 export function renderError(r: Refusal, crumbs: readonly string[] = []): string {
   const nav = crumbs.length > 0 ? backLine(crumbs) : "";
-  const line = `<p class="msg bad" role="status" title="${esc(errorTitle(r))}">${esc(errorLine(r))} <button type="button" class="link" data-refresh>새로 고침</button></p>`;
+  const line = errorP(r, ' <button type="button" class="link" data-refresh>새로 고침</button>');
   return `${bar(header(null), nav)}<main data-view="all">${line}</main>`;
 }
 
