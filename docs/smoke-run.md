@@ -846,7 +846,7 @@ store 읽기: `sqlite3 -readonly` 는 여전히 `unable to open database file (1
 
 ### 0.1.12 의 릴리스 smoke 가 잴 것
 
-결정 315 ③ 이 정한 목록이다. 시험과 fixture 로만 본 것 가운데 이 판이 잴 것이고, 설치한 0.1.12 에서 실제 Orca 로 잰다. 이 밖에 결정 301 ⑦ · 302 ⑨ · 303 ⑤ · 307 ④ 가 적은 재지 않은 것(`run:` 주소의 메시지, 3600000 ms 대기가 Orca 의 한도 안인지, `--agent` 없이 resume 한 세션의 agent_type, 실제 패널의 손 확인)은 이 목록에 없고, 보게 되면 함께 적는다.
+결정 315 ③ 이 정한 목록이다. 시험과 fixture 로만 본 것 가운데 이 판이 잴 것이고, 설치한 0.1.12 에서 실제 Orca 로 잰다. 이 밖에 결정 301 ⑦ · 302 ⑨ · 303 ⑤ · 307 ④ 등이 적은 재지 않은 것(예: `run:` 주소의 메시지, 3600000 ms 대기가 Orca 의 한도 안인지, `--agent` 없이 resume 한 세션의 agent_type, 실제 패널의 손 확인)은 이 목록에 없고, 보게 되면 함께 적는다.
 
 - 큰 Run 의 `[gate:done-blockers]`: `task-list --full` 이 몇 MB 인 Run 에서 워커의 worker_done 이 "읽지 못해" 로 막히지 않는지(결정 299).
 - 오케스트레이터가 자기 백그라운드 `check --wait` 의 출력 파일(`…/tasks/<id>.output`)을 Read 로 읽을 수 있는지(결정 300).
