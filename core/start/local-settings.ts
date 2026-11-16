@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { WorktreeSettings } from "../models/index.ts";
 
@@ -102,8 +102,14 @@ function allowOf(doc: unknown): { permissions: Record<string, unknown>; allow: u
 /** Whole or not at all: a running Claude Code session watches this file and must never read half of it. */
 function replaceFile(file: string, doc: Record<string, unknown>): void {
   const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(doc, null, 2)}\n`);
-  renameSync(tmp, file);
+  try {
+    writeFileSync(tmp, `${JSON.stringify(doc, null, 2)}\n`);
+    renameSync(tmp, file);
+  } catch (err) {
+    // A leftover is an untracked file, and REAPER keeps a worktree with one.
+    rmSync(tmp, { force: true });
+    throw err;
+  }
 }
 
 /**
