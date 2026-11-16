@@ -2,6 +2,7 @@ import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { StringDecoder } from "node:string_decoder";
 import { judgeLoad, sampleLoad } from "../capacity/capacity.ts";
 import { doneBlockers } from "../graph/flow.ts";
+import { foldFacts } from "../graph/facts.ts";
 import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import type { Host } from "../install/host.ts";
 import { buildArgs, parseEnvelope } from "../orca/adapter.ts";
@@ -148,19 +149,35 @@ export function openPrs(host: Host, cwd: string, store: () => Pick<Store, "event
  * done_blockers for the gate (decision 212 ④): the store's events and one `task-list --full` of the
  * Task's Run, built and parsed by the Orca adapter's own functions. Any unread part is undefined.
  */
-export function readDoneBlockers(host: Host, store: () => Pick<Store, "events"> | undefined, task: string, run?: string): string[] | undefined {
+export function readDoneBlockers(host: Host, store: () => Pick<Store, "events"> | undefined, task: string, run?: string): string[] | { unread: string } {
   try {
     const s = store();
-    if (!s) return undefined;
+    if (!s) return { unread: "sangsoe 저장소를 열지 못했다" };
+    const events = s.events();
+    // Nothing in the store names the Task (no item, flow child, flow or PR), so doneBlockers is [] whatever
+    // Orca says: its own checks all start from those facts, and the Orca rows only say whether they are finished.
+    if (!knows(events, task)) return [];
     const r = host.run("orca", buildArgs("taskList", { flags: { run, full: true } }), undefined, READ_BUDGET_MS);
     const env = parseEnvelope({ code: r.code, stdout: r.stdout, stderr: r.stderr }, false);
-    const value = env.ok ? (env.value as { tasks?: unknown; runId?: unknown }) : undefined;
-    if (!value || !Array.isArray(value.tasks)) return undefined;
+    if (!env.ok) return { unread: `Orca task-list: ${env.error.code}: ${env.error.message || "no output"}` };
+    const value = env.value as { tasks?: unknown; runId?: unknown };
+    if (!value || !Array.isArray(value.tasks)) return { unread: "Orca task-list 의 응답에 tasks 가 없다" };
     const tasks = snapshotTasks(value.tasks as FullTaskRow[], run ?? (typeof value.runId === "string" ? value.runId : ""));
-    return doneBlockers({ orca: { tasks, gates: [] }, events: s.events(), now: new Date().toISOString() }, task);
-  } catch {
-    return undefined;
+    return doneBlockers({ orca: { tasks, gates: [] }, events, now: new Date().toISOString() }, task);
+  } catch (e) {
+    return { unread: e instanceof Error ? e.message : String(e) };
   }
+}
+
+function knows(events: Parameters<typeof foldFacts>[0], task: string): boolean {
+  const f = foldFacts(events);
+  const id = f.aliases.get(task) ?? task;
+  return (
+    f.items.has(id) ||
+    [...f.items.values()].some((x) => x.flow === id) ||
+    f.flows.some((x) => x.parent === id) ||
+    [...f.prs.values()].some((p) => p.tasks.has(id))
+  );
 }
 
 // The line Orca writes into a dispatched worker's first prompt.

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { type Host, realHost } from "../install/host.ts";
-import { openPrs } from "./facts.ts";
+import { openPrs, readDoneBlockers } from "./facts.ts";
 
 const noStore = () => ({ events: () => [] });
 
@@ -159,4 +159,28 @@ test("an empty cwd is unknown; /, a folder outside every repo and a checkout wit
   );
   assert.deepEqual(openPrs(host, "/w", noStore), []);
   assert.ok(!calls.some((c) => c[0] === "gh"));
+});
+
+// Decision 299: done_blockers of a Task sangsoe never heard of is [] without asking Orca; a failed read says why.
+const created = (task: string) => ({ seq: 1, type: "item_created", entity_id: task, payload: { task, alias: "i1", who: "w" } });
+const events = (rows: object[]) => () => ({ events: () => rows as never });
+
+test("decision 299: a Task no item, flow or PR names passes without reading Orca", () => {
+  const { host, calls } = fakeHost(() => ({ code: 1, stderr: "must not be asked" }));
+  assert.deepEqual(readDoneBlockers(host, events([created("task_other")]), "task_unknown", "run_x"), []);
+  assert.deepEqual(calls, []);
+});
+
+test("decision 299: a known Task reads Orca, and an unreadable answer names its cause", () => {
+  const { host, calls } = fakeHost(() => ({ code: 127, stderr: "ENOBUFS: spawnSync orca ENOBUFS" }));
+  const r = readDoneBlockers(host, events([created("task_a")]), "task_a", "run_x");
+  assert.equal(calls.length, 1);
+  assert.ok("unread" in r && /ENOBUFS/.test(r.unread), JSON.stringify(r));
+  assert.deepEqual(readDoneBlockers(host, () => undefined, "task_a"), { unread: "sangsoe 저장소를 열지 못했다" });
+});
+
+test("decision 299: a known Task whose Orca answer has no children is read from a large answer", () => {
+  const rows = Array.from({ length: 3000 }, (_, i) => ({ id: `task_${i}`, status: "completed", spec: "x".repeat(900) }));
+  const { host } = fakeHost(() => ({ code: 0, stdout: JSON.stringify({ ok: true, result: { runId: "run_x", tasks: rows } }) }));
+  assert.deepEqual(readDoneBlockers(host, events([created("task_1")]), "task_1", "run_x"), []);
 });
