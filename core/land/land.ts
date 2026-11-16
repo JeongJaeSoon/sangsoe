@@ -145,7 +145,8 @@ export async function land(input: LandInput, deps: LandDeps): Promise<LandOutcom
     const value = await judge({ ...input, repo }, pr, deps, events, (pull) => {
       head = pull.head.sha;
       // A fork's head or a head named like the base is not a card's branch (as in pr-monitor's onBranchRows).
-      if (pull.head.repo?.full_name?.toLowerCase() === repo.toLowerCase() && pull.head.ref !== pull.base.ref) headRef = pull.head.ref;
+      // A closed or merged PR's branch name may belong to newer work by now.
+      if (pull.state === "open" && pull.head.repo?.full_name?.toLowerCase() === repo.toLowerCase() && pull.head.ref !== pull.base.ref) headRef = pull.head.ref;
     });
     if (!input.dryRun) {
       if (value.action !== "merge_on_approval") {

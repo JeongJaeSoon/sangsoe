@@ -664,6 +664,11 @@ test("323: the first land of a PR, whatever it answers, asks for its head branch
   await land(input(), sameName.deps);
   assert.equal(asked.length, 2, "a fork's head and a head named like the base are not a card's branch");
 
+  const closed = harness(withRef({ state: "closed", merged: true }));
+  hook(closed);
+  await land(input(), closed.deps);
+  assert.equal(asked.length, 2, "a closed or merged PR's branch name may belong to newer work");
+
   const live: Record<string, GhResponse<unknown>> = {};
   const unread = harness(live);
   hook(unread);
