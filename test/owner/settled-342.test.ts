@@ -12,9 +12,11 @@ const line = (w: OwnerWorld, act: string, at = T0) => {
   w.at(at);
   return w.store.append({ type: "owner_act_unlinked", source: "hook:owner_input", payload: { act } });
 };
-const merged = (w: OwnerWorld, pr: string, at = later(T0, 5)) => {
+// pr-monitor writes actor owner:<login> on a merge it ties to the owner (watch.owners, not a land).
+const OWNER = "owner:acme-owner";
+const merged = (w: OwnerWorld, pr: string, at = later(T0, 5), actor = OWNER) => {
   w.at(at);
-  w.store.append({ type: "pr_merged", source: "monitor:pr", payload: { pr, merge_sha: SHA, merged_at: at } });
+  w.store.append({ type: "pr_merged", source: "monitor:pr", payload: { pr, merge_sha: SHA, merged_at: at }, ...(actor ? { actor } : {}) });
 };
 const closed = (w: OwnerWorld, pr: string, at = later(T0, 5)) => {
   w.at(at);
@@ -48,6 +50,18 @@ test("a bare PR number links when exactly one settled PR carries it near the lin
     ["└ gh pr merge 22"],
     "22 is merged in two repos: the line names neither, so it stays",
   );
+});
+
+test("a bare number is not joined to a merge nobody tied to the owner: another repo's PR with the same number", () => {
+  const w = ownerWorld();
+  line(w, "gh pr merge 200");
+  merged(w, "acme/tool#200", later(T0, 5), "some-bot");
+  merged(w, "acme/lib#200", later(T0, 5), "");
+  w.at(later(T0, 10));
+  assert.equal(acts(w).length, 1);
+  merged(w, "acme/app#200");
+  w.at(later(T0, 10));
+  assert.equal(acts(w).length, 0, "one merge by the owner: that is the line's PR");
 });
 
 test("the same line typed three times leaves together, and `gh pr close` reads pr_closed, not pr_merged", () => {

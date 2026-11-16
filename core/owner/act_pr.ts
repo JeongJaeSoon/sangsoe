@@ -54,6 +54,8 @@ export function settledByFact(events: readonly StoredEvent[], act: string, ts: s
     const pr = String(e.payload.pr);
     const [repo, n] = pr.split("#");
     if (Number(n) !== p.number || (p.repo !== null && repo !== p.repo)) continue;
+    // A bare number names no repo, so only a merge pr-monitor tied to the owner (actor owner:<login>) can be theirs.
+    if (p.repo === null && !(e.actor ?? "").startsWith("owner:")) continue;
     const at = Date.parse(typeof e.payload.merged_at === "string" ? e.payload.merged_at : e.ts);
     if (Math.abs(at - Date.parse(ts)) <= windowMs) near.add(pr);
   }
