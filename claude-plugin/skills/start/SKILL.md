@@ -63,19 +63,31 @@ alias 는 바깥 설정(`ANTHROPIC_DEFAULT_*_MODEL`)에 고정될 수 있다. �
 | 결과 | 뜻 | 할 일 |
 |---|---|---|
 | `started` | Dispatch 가 생겼다 | 끝. 워커의 보고는 Orca 메시지로 온다. 기다리며 폴링하지 않는다 |
+| `resumed` | 다시 띄운 세션이 새 Dispatch 로 원래 Task 에 묶였다(아래 재시작) | `started` 와 같다 |
 | `waiting` · `not_ready` | Task 가 준비되지 않았다 | 선행을 본다. 다시 부르는 것은 준비된 뒤다 |
 | `waiting` · `already_dispatched` | 이미 누가 일하고 있다 | 다시 시작하지 않는다 |
 | `waiting` · `no_capacity` | 자리·부하 여유가 없다 | 자리가 나면(`capacity_free` 알림) 다시 부른다 |
 | `stopped` · `start_failed_3x` | 같은 Task 의 시작이 세 번 실패했다 | 다시 부르지 않는다. 위에 올린다 |
 | `ok: false`, `refusal.code` 가 거부 사유 | 시작하지 않았고, `start_refused` 신호로 이미 위에 보고됐다 | 같은 일을 다른 길로 시작하지 않는다. 원인이 Orca 설정이면 오너 몫이다 |
 | `ok: false`, `refusal.code` 가 `invalid_input` | 입력이 틀렸다 | `refusal.fix` 대로 고쳐 한 번 다시 부른다 |
-| 호출이 "거부" 로 돌아왔는데 사람이 거부하지 않았다(interrupt 문구) | 터미널에 들어온 Orca nudge 가 호출을 끊었다. 서버는 호출을 끝냈을 수 있다(결정 318·321) | 끊김으로 읽는다. 거부로 보고하지 않는다. Task id 를 알면 같은 Task 를 `task` 로 다시 부른다(같은 spec 을 다시 보내지 않는다). 모르면 같은 spec·title 로 한 번 다시 부른다: 결정 318 의 채택이 반쯤 만든 Task 를 받는다(`notes` 의 "채택:" 으로 확인) |
+| 호출이 "거부" 로 돌아왔는데 사람이 거부하지 않았다(interrupt 문구) | 터미널에 들어온 Orca nudge 가 호출을 끊었다. 서버는 호출을 끝냈을 수 있다(결정 318·321) | 끊김으로 읽는다. 거부로 보고하지 않는다. `resume` 호출이었으면 같은 `task` 와 같은 `resume` 으로 다시 부른다(빼면 새 세션이 하나 더 뜬다, 결정 322). Task id 를 알면 같은 Task 를 `task` 로 다시 부른다(같은 spec 을 다시 보내지 않는다). 모르면 같은 spec·title 로 한 번 다시 부른다: 결정 318 의 채택이 반쯤 만든 Task 를 받는다(`notes` 의 "채택:" 으로 확인) |
 
 거부 사유 여섯은 `capability_missing` · `lineage_invalid` · `depth_exceeded` · `orca_error` · `no_dispatch` · `model_invalid`(advisor 짝이 맞지 않는 모델 선택) 다. 어느 것도 "다시 해 보면 되는" 사유가 아니다. 부모는 같은 일을 자기 Run 에 새 Task 로 만들지도 않는다(같은 일의 원본이 둘이 된다).
 
 `lineage_invalid` 는 항목의 역할 줄이 맞지 않을 때만 오지 않는다. Task·Dispatch 가 없는 리드가 부르거나, 밝힌 worktree 가 `orca worktree list` 에 없을 때도 온다. 그때 다시 부르지 않고 새 항목을 만들지 않는다. 오케스트레이터에게 브리프 경로를 붙여 question 으로 묻는다.
 
 `server_stale` 은 `/reload-plugins` 로 풀리지 않는다. 세션을 다시 시작해야 풀린다.
+
+## 재시작: 다시 띄운 세션을 원래 Task 에 묶기
+
+Task 를 쥔 리드나 워커를 새 터미널에서 `claude --resume` 으로 다시 띄웠으면, 그 세션은 새 Dispatch 가 없고 옛 Dispatch 는 죽은 터미널에 묶여 남는다. 새 Task 를 만들거나 resume 없이 `start_unit` 을 부르면 같은 일이 둘이 된다. 이렇게 묶는다(결정 322):
+
+1. 오너나 재시작 명령이 그 세션을 다시 열자고 했을 때만 한다. `unverifiable` 행이나 조용한 워커만 보고 하지 않는다: Orca 는 그것만으로 abandon 해도 된다고 보지 않는다.
+2. 그 Task 의 worktree 에 터미널을 연다: `orca terminal create --worktree id:<Task 의 worktree> --command "claude --resume <세션 id> --model <model> --effort <effort>" --json`. model·effort 는 그 Task 의 `unit_started` 행 값이다. 돌아온 handle 을 적어 둔다. 오케스트레이터는 `[gate:delegate]` 때문에 이 명령을 직접 치지 못한다: 서브에이전트에게 이 한 명령을 맡기고 handle 만 받는다.
+3. `start_unit` 을 처음 시작과 같은 칸으로 부르되 `task` 에 그 Task id 를, `resume` 에 `{worktreeId, sessionId, terminal}` 을 준다. 리드를 묶는 것은 오케스트레이터이고, 워커를 묶는 것은 그 워커를 띄운 쪽이다.
+4. `resumed` 가 오면 끝이다: 옛 Dispatch(`from`)는 abandon 되었고 새 Dispatch 가 그 터미널에 묶였다. 세션은 Orca 가 넣는 새 Task·Dispatch 줄로 이어 간다.
+
+lineage·깊이·역할 검사는 처음 시작과 같다. 그 Task 가 네 Run 에 없거나, worktree 가 `start_unit` 이 그 Task 에 만든 것이 아니거나, 세션이 그 Task 의 세션으로 기록된 적이 없거나(다른 Task 의 세션이면 더욱), 터미널이 그 worktree 에 없거나, 옛 세션이 아직 살아 있으면 `lineage_invalid` 로 거부한다. 이때 아무것도 바뀌지 않았다. 그 뒤의 실패(`orca_error`·`no_dispatch`)는 `detail` 이 무엇까지 바뀌었는지 말한다(abandon 했는지, Task 가 ready 인지, 묶였는지 알 수 없는지). 그 터미널은 닫지 않고 위로 올린다. "알 수 없다" 면 같은 resume 을 다시 부른다: 이미 묶였으면 아무것도 바꾸지 않고 `resumed` 가 온다. resume 없는 `start_unit` 은 부르지 않는다.
 
 ## 깊이가 모자랄 때
 

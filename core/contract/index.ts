@@ -72,6 +72,7 @@ import tool_called from "./events/tool_called.ts";
 import trigger_unclear from "./events/trigger_unclear.ts";
 import turn_ended from "./events/turn_ended.ts";
 import unit_closed from "./events/unit_closed.ts";
+import unit_resumed from "./events/unit_resumed.ts";
 import unit_started from "./events/unit_started.ts";
 import unmapped_reviewer from "./events/unmapped_reviewer.ts";
 import verify_tier_set from "./events/verify_tier_set.ts";
@@ -167,6 +168,7 @@ export const EVENTS = {
   trigger_unclear,
   turn_ended,
   unit_closed,
+  unit_resumed,
   unit_started,
   unmapped_reviewer,
   verify_tier_set,

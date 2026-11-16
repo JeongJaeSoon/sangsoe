@@ -82,3 +82,4 @@
 {"type":"tool_called","source":"PostToolUse","dedupe_key":"tool_called:sess-1:toolu_1","payload":{"session":"sess-1","role":"orchestrator","tool":"Agent"}}
 {"type":"unit_started","source":"mcp:start_unit","payload":{"kind":"worker","picked_by":"class","model":"m-main","effort":"medium","advisor":"m-adv","route":"owner_setting","budget":3,"budget_per":"unit","used":0}}
 {"type":"unit_closed","source":"core:unit","payload":{"dispatch":"ctx_1","terminal":"term_1"}}
+{"type":"unit_resumed","source":"mcp:start_unit","payload":{"dispatch":"ctx_2","from":"ctx_1","session":"0a1b2c3d-0000-4000-8000-000000000001","terminal":"term_2","worktree":"repo-0001::/home/dev/workspaces/api/feature-a","run":"run_1"}}
