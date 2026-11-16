@@ -4,6 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
+- **A lead reads its workers' worktrees without a permission prompt (310).** `start_unit` adds a `Read(//<child worktree>/**)` allow rule to the parent worktree's own `.claude/settings.local.json`, keeping every other key and adding no write rule or `additionalDirectories`; REAPER takes exactly that rule back when it removes the child worktree. A parent file tracked in git or on another host is left alone and named in the start's notes.
 - **A test now pins that the resource panel's load history is wired from the store (308).** `openResources` hands the stored load samples to the load part in one line, and no test called it; dropping that line left the panel quietly without history. `test/reaper/open-resources.test.ts` reads it through a scratch store. Tests only.
 - **The resource panel's keyboard focus no longer gets pulled back, and a 정리 result is no longer lost (307).** A press waiting for its button is dropped when focus moves anywhere else, cancelling the confirm in a stale view lands on 새로 고침 instead of body, and a failed reread after 정리 still shows what the 정리 did.
 

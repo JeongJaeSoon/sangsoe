@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { WorktreeSettings } from "../models/index.ts";
 
@@ -29,6 +29,12 @@ export function localSettingsJson(s: WorktreeSettings, base: Record<string, unkn
  * throw leaves no file: a path that is not a local git worktree (another host's) creates nothing.
  */
 export function writeLocalSettings(worktree: string, s: WorktreeSettings): void {
+  const { file, base } = openLocalSettings(worktree);
+  writeFileSync(file, localSettingsJson(s, base));
+}
+
+/** The file's path and its current content, after the checks that keep a write out of git and off another host. */
+function openLocalSettings(worktree: string): { file: string; base: Record<string, unknown> } {
   if (!statSync(worktree).isDirectory()) throw new Error(`not a directory: ${worktree}`);
   const git = (...args: string[]) => execFileSync("git", ["-C", worktree, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
   const rel = git("rev-parse", "--git-path", "info/exclude").trim();
@@ -55,5 +61,67 @@ export function writeLocalSettings(worktree: string, s: WorktreeSettings): void 
   const file = join(worktree, LOCAL_SETTINGS);
   const base = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>) : {};
   if (!existsSync(join(worktree, ".claude"))) mkdirSync(join(worktree, ".claude"));
-  writeFileSync(file, localSettingsJson(s, base));
+  return { file, base };
+}
+
+// Characters a Read rule would read as a gitignore pattern or a rule boundary rather than a path.
+const RULE_META = /[*?[\]\\!()]/;
+
+/**
+ * Decision 310: the allow rules that let a parent session Read its child's worktree. A `Read` rule
+ * opens reads only; `additionalDirectories` would also let edits through in acceptEdits and auto
+ * mode. `//` makes the path absolute: a single `/` anchors at the session's working directory.
+ */
+export function childReadRules(child: string): string[] {
+  const paths = [child];
+  try {
+    paths.push(realpathSync(child));
+  } catch {
+    // A child not on this disk yet keeps the path Orca gave.
+  }
+  const out = new Set<string>();
+  for (const p of paths) {
+    const dir = p.replace(/\/+$/, "");
+    if (!isAbsolute(dir) || dir === "" || RULE_META.test(dir)) throw new Error(`not a plain absolute path for a Read rule: ${p}`);
+    out.add(`Read(/${dir}/**)`);
+  }
+  return [...out];
+}
+
+const allowOf = (doc: Record<string, unknown>): { permissions: Record<string, unknown>; allow: unknown[] } => {
+  const permissions = typeof doc.permissions === "object" && doc.permissions !== null ? { ...(doc.permissions as Record<string, unknown>) } : {};
+  const allow = Array.isArray(permissions.allow) ? [...permissions.allow] : [];
+  return { permissions, allow };
+};
+
+/**
+ * Decision 310: adds `rules` to the parent worktree's own local settings, keeping every other key;
+ * the same guards as decision 202, so a tracked file or another host's path throws and writes nothing.
+ * A running Claude Code session reloads the file on change.
+ */
+export function addParentReadRules(parent: string, rules: readonly string[]): void {
+  const { file, base } = openLocalSettings(parent);
+  const { permissions, allow } = allowOf(base);
+  for (const r of rules) if (!allow.includes(r)) allow.push(r);
+  writeFileSync(file, `${JSON.stringify({ ...base, permissions: { ...permissions, allow } }, null, 2)}\n`);
+}
+
+/**
+ * Takes back exactly the strings decision 310 added, when the child worktree is gone. A file that is
+ * gone, unreadable or no longer holds them is left as it is.
+ */
+export function dropParentReadRules(parent: string, rules: readonly string[]): boolean {
+  const file = join(parent, LOCAL_SETTINGS);
+  let base: Record<string, unknown>;
+  try {
+    base = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+  } catch {
+    return false;
+  }
+  if (typeof base !== "object" || base === null || Array.isArray(base)) return false;
+  const { permissions, allow } = allowOf(base);
+  const kept = allow.filter((r) => !(typeof r === "string" && rules.includes(r)));
+  if (kept.length === allow.length) return false;
+  writeFileSync(file, `${JSON.stringify({ ...base, permissions: { ...permissions, allow: kept } }, null, 2)}\n`);
+  return true;
 }

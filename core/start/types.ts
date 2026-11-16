@@ -107,6 +107,10 @@ export type StartPorts = {
   advisorSetting?: () => boolean;
   /** Writes the new worktree's local settings before its session starts (decision 202); throws when it cannot. */
   writeSettings?: (worktreePath: string, s: WorktreeSettings) => void;
+  /** Adds the child's Read rules to the parent worktree's local settings (decision 310); throws when it cannot. */
+  parentRead?: (parentPath: string, rules: readonly string[]) => void;
+  /** Takes those rules back when a failed start removes the child worktree (decision 310). */
+  dropParentRead?: (parentPath: string, rules: readonly string[]) => void;
   /** Whether the new worktree has its own repo hook file (`orca.yaml`); default reads the disk. */
   hookFile?: (worktreePath: string) => boolean;
 };

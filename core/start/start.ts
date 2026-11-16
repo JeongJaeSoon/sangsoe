@@ -13,7 +13,7 @@ import { type Choice, launch, localDay, POLICY, pairing, resolve, spend } from "
 import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
 import { shownWorktree } from "./lineage.ts";
-import { writeLocalSettings } from "./local-settings.ts";
+import { addParentReadRules, childReadRules, dropParentReadRules, writeLocalSettings } from "./local-settings.ts";
 import { type NewTask, REPO_SELECTOR, type RefusalReason, type Role, type StartOutcome, type StartPorts, type StartRefusal, type StartRequest } from "./types.ts";
 
 type Json = Record<string, unknown>;
@@ -440,6 +440,19 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       if ((spent || !choice.advisor) && owner) plan = { ...plan, note: "advisor 를 끄지 못했다: 오너 설정의 advisorModel 이 이 세션에 붙는다" };
     }
   }
+  // Decision 310: the parent session reads its child's worktree (evidence under .scratch/) without a
+  // prompt; reads only, and taken back when the child worktree is removed.
+  const parentPath = requester.worktreeId ? rows.find((w) => w.id === requester.worktreeId)?.path : undefined;
+  let readRules: string[] | undefined;
+  if (parentPath) {
+    try {
+      const rules = childReadRules(tree.path);
+      (ports.parentRead ?? addParentReadRules)(parentPath, rules);
+      readRules = rules;
+    } catch (err) {
+      notes.push(`부모 worktree 설정에 자식 읽기 규칙을 쓰지 못했다 (${(err as Error).message}): 부모 세션은 자식 파일을 읽을 때마다 묻는다`);
+    }
+  }
   // Before worker-start: the new session's SessionStart reads this row for its budget and finish lines.
   store.append({
     type: "unit_started",
@@ -460,6 +473,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       worktree: tree.id,
       ...(shell.handle ? { shell: shell.handle } : {}),
       setup: shell.setup,
+      ...(parentPath && readRules ? { parent: parentPath, read_rules: readRules } : {}),
       run: requester.runId,
     },
   });
@@ -489,6 +503,13 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       : shell.setup !== "none"
         ? `남은 worktree: ${tree.id}${shell.handle ? `, 셸 ${shell.handle}` : ""} (setup ${shell.setup}: 끝났는지 알 수 없어 닫지 않는다)`
         : await removeFailed(orca, tree.id, shell.handle);
+    if (left === null && parentPath && readRules) {
+      try {
+        (ports.dropParentRead ?? dropParentReadRules)(parentPath, readRules);
+      } catch {
+        // The rule then names a worktree that no longer exists, which opens nothing.
+      }
+    }
     return failedAttempt("orca_error", `worker-start 실패 (${started.error.code}: ${started.error.message})${left ? `, ${left}` : ""}`);
   }
 
