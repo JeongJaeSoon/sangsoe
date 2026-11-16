@@ -3,11 +3,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Exec, ExecResult } from "../contract/orca.ts";
 import { createGhClient, memoryGhCache } from "../gh/client.ts";
+import { createOrcaAdapter } from "../orca/adapter.ts";
 import { nodeExec } from "../orca/exec.ts";
 import { Store } from "../store/store.ts";
 import { parseTierConfig, tierConfigGaps } from "../verify/verify-tier.ts";
 import { readPrGate } from "./github.ts";
 import type { LandConfig, LandDeps, MergeNowPort, MergePort } from "./land.ts";
+import { cardReference } from "./reference.ts";
 
 const REPO_NAME = /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/;
 
@@ -60,6 +62,7 @@ export function realLandDeps(o: { home?: string; exec?: Exec } = {}): LandDeps {
     merge: ghMerge(exec),
     mergeNow: ghMergeNow(exec),
     prGate: readPrGate(exec),
+    reference: cardReference(createOrcaAdapter(exec)),
     config: () => readLandConfig(o.home),
   };
 }

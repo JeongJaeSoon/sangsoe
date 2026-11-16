@@ -1,4 +1,5 @@
 import type { StoredEvent } from "../../contract/index.ts";
+import type { LocalRows, OrcaResult, WorktreeRow } from "../../contract/orca.ts";
 import { budgetLevel, type GhResponse } from "../../gh/client.ts";
 import { approvedAndGreen, mergeConfirm, type Pull, readDiff, readLabels, readPull } from "../../land/github.ts";
 import { pendingRereview } from "../../land/rereview.ts";
@@ -50,6 +51,8 @@ type Reads = {
   conditional: boolean;
   /** `notified` dedupe keys, read once per round when a review wake is weighed. */
   notified?: string[];
+  /** The worktree rows, read once per round for the reference adds. */
+  worktrees?: OrcaResult<LocalRows<WorktreeRow>>;
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
@@ -332,13 +335,15 @@ async function reviews(r: Reads, repo: string, p: ListedPull): Promise<void> {
 }
 
 /** A PR whose branch is a local workspace Orca did not link yet: attach it there (decision 64, one-way). */
-async function addReference(r: Reads, repo: string, p: ListedPull): Promise<void> {
-  const list = await r.d.orca.worktreeList({ limit: 500 });
+async function addReference(r: Reads, repo: string, p: ListedPull, atHead = false): Promise<void> {
+  r.worktrees ??= await r.d.orca.worktreeList({ limit: 500 });
+  const list = r.worktrees;
   if (!list.ok) {
     r.unseen.push("worktree list");
     return;
   }
-  const ws = onBranchRows(list.value.rows, repo, p);
+  // A merged PR's branch name may be reused by newer work: only a card still at the merged head is its card.
+  const ws = onBranchRows(list.value.rows, repo, p).filter((w) => !atHead || w.head === p.head.sha);
   if (ws.length !== 1 || !ws[0]) return;
   const worktree = `id:${ws[0].id}`;
   const url = prUrl(repo, p.number);
@@ -515,6 +520,8 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal): Promise<Read
         if (!isOpen && !p.merged_at && !known) continue;
         const link = await linkOf(d, prUrl(repo, p.number), workers);
         if (!link) r.unseen.push(`reference find ${ref}`);
+        // Decision 323: a PR merged before an open round saw it has no other chance to reach its card.
+        if (!isOpen && p.merged_at && link && !link.linked) await addReference(r, repo, p, true);
         // linked_only: Orca's link, a recorded pr_opened, or (open PRs) a workspace on its branch.
         if (watch.linkedOnly && !known && !link?.linked && !isOpen) continue;
         if (isOpen) {
