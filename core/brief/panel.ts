@@ -54,17 +54,26 @@ export const STATUS_TEXT_MAX = 64;
 /**
  * Status bar item B (decisions 92⑤, 170, 219): a ✨ SANGSOE label, then 🚧 blocked | open decisions | 🔄
  * doing, one space and a '|' between entries, read from the same Overview `sangsoe todo` and the brief's
- * top line print. Danger while anything is 🚧, the owner has a decision or a to-do, or a restart is due.
+ * top line print. Danger while anything is 🚧, the owner has a decision or a to-do, a coordinator stopped or a restart is due.
  */
 export function statusBarItem(o: Overview): StatusBarItem {
   // Design N1: the owner types /clear, so a session due for a restart is the owner's to see.
   const restart = o.restartDue?.length ?? 0;
-  const entries = ["✨ SANGSOE", `🚧 ${o.summary.blocked}`, `결정 ${o.todo.decisions}`, `🔄 ${o.summary.doing}`, ...(restart > 0 ? [`♻️ ${restart}`] : [])];
+  // Decision 309: a stopped coordinator reaches nobody else, so the owner's always-visible item names it.
+  const stalled = o.stalled?.length ?? 0;
+  const entries = [
+    "✨ SANGSOE",
+    `🚧 ${o.summary.blocked}`,
+    `결정 ${o.todo.decisions}`,
+    `🔄 ${o.summary.doing}`,
+    ...(stalled > 0 ? [`🚨 ${stalled}`] : []),
+    ...(restart > 0 ? [`♻️ ${restart}`] : []),
+  ];
   const text = entries.join(" | ");
   return {
     text: text.slice(0, STATUS_TEXT_MAX),
-    tone: o.summary.blocked > 0 || o.todo.total > 0 || restart > 0 ? "danger" : "neutral",
-    tooltip: [`sangsoe: 내가 할 일 ${o.todo.total} (결정 ${o.todo.decisions} + 할 일 ${o.todo.other})`, ...(o.restartDue ?? [])].join("\n"),
+    tone: o.summary.blocked > 0 || o.todo.total > 0 || restart > 0 || stalled > 0 ? "danger" : "neutral",
+    tooltip: [`sangsoe: 내가 할 일 ${o.todo.total} (결정 ${o.todo.decisions} + 할 일 ${o.todo.other})`, ...(o.stalled ?? []), ...(o.restartDue ?? [])].join("\n"),
   };
 }
 
