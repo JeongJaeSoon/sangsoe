@@ -22,6 +22,8 @@ const DESIGN_TABLE = [
   "orchestration send",
   "orchestration inbox",
   "orchestration worker-start",
+  // Decision 322: a resume fences the Dispatch the re-opened session held before binding its new terminal.
+  "orchestration worker-abandon",
   "orchestration worker-show",
   "orchestration worker-list",
   "orchestration dispatch-show",

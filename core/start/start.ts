@@ -16,6 +16,7 @@ import { recoverWrite } from "../orca/adapter.ts";
 import { settled } from "../recover/recover.ts";
 import { shownWorktree } from "./lineage.ts";
 import { addParentReadRules, childReadRules, dropParentReadRules, writeLocalSettings } from "./local-settings.ts";
+import { resumeUnit } from "./resume.ts";
 import { type NewTask, REPO_SELECTOR, type RefusalReason, type Role, type StartOutcome, type StartPorts, type StartRefusal, type StartRequest } from "./types.ts";
 
 type Json = Record<string, unknown>;
@@ -156,7 +157,7 @@ function firstPrompt(role: Role, t: NewTask): string {
  * The one path that opens a session (decision 94): lineage and depth → task-create --deps →
  * ready and capacity → worktree create (the parent's child) → its setup shell and local settings →
  * `unit_started` (decisions 200, 202) → worker-start --task <id> --worktree id:<it> --keep-open →
- * Dispatch read back.
+ * Dispatch read back. With `resume` it binds a re-opened session to its Task instead (decision 322, resume.ts).
  * A refusal writes one `signal{start_refused}` and escalates to whoever handed the requester its work.
  */
 export async function startUnit(ports: StartPorts, req: StartRequest): Promise<StartOutcome> {
@@ -301,7 +302,8 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     requester = { ...requester, worktreeId: innermost.id };
   } else {
     // Orca refuses new-child outside a managed worktree, so one outside every worktree names a repo (decision 197).
-    if (!(req.repo ?? ("id" in req.task ? storedRepo(store, req.task.id) : undefined))) return refuse("lineage_invalid", "worktree 밖의 오케스트레이터는 대상 저장소(repo)를 밝힌다: 새 worktree 를 둘 곳이 없다");
+    // A resume makes no worktree, so it needs no repo (decision 322).
+    if (!req.resume && !(req.repo ?? ("id" in req.task ? storedRepo(store, req.task.id) : undefined))) return refuse("lineage_invalid", "worktree 밖의 오케스트레이터는 대상 저장소(repo)를 밝힌다: 새 worktree 를 둘 곳이 없다");
   }
 
   // ③ depth_exceeded: only when the setting was read; otherwise the receipt decides (⑤).
@@ -321,6 +323,8 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
       ? "an advisor without its tier cannot be checked"
       : null;
   if (badPair) return refuse("model_invalid", `${choice.kind}: ${badPair}`);
+
+  if (req.resume && !("id" in req.task)) return refuse("lineage_invalid", "resume 는 있는 Task 를 이어 간다: task 에 그 Task id 를 준다");
 
   // The Task: an existing one, or a new one with its deps and the child's role line first.
   let taskId: string;
@@ -368,7 +372,7 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     }
   }
   // Decision 318: kept with the Task, so a restart by id alone lands in the same repo.
-  if (req.repo && storedRepo(store, taskId) !== req.repo) {
+  if (req.repo && !req.resume && storedRepo(store, taskId) !== req.repo) {
     store.append({ type: "item_extra_set", source, payload: { task: taskId, repo: req.repo }, entity: "task", entity_id: taskId });
   }
   const repo = req.repo ?? storedRepo(store, taskId) ?? parentRepo;
@@ -393,6 +397,24 @@ export async function startUnit(ports: StartPorts, req: StartRequest): Promise<S
     }
     return out;
   };
+
+  // Decision 322: one session replaces one, so a resume neither waits on capacity nor makes a worktree.
+  if (req.resume) {
+    return resumeUnit({
+      orca,
+      store,
+      source,
+      taskId,
+      run: requester.runId,
+      childRole: req.childRole,
+      target: req.resume,
+      specRole,
+      dispatchOf: (r) => findKey(r, DISPATCH_KEYS),
+      write: (first, again) => write(orca, first, again),
+      refuse: (reason, detail) => refuse(reason, detail, taskId),
+      failed: failedAttempt,
+    });
+  }
 
   // Ready and capacity: not refusals, the caller waits. An unreadable one is not "no room".
   // Decision 318: a wait still leaves one row per Task and cause, so a caller cut off mid-call can be traced.

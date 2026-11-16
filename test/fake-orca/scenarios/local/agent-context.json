@@ -23,6 +23,7 @@
     {"command":"orchestration task-create","path":["orchestration","task-create"],"flags":["help","json","pairing-code","environment","spec","spec-file","task-title","display-name","deps","parent","run","from","retry-request","full"]},
     {"command":"orchestration task-list","path":["orchestration","task-list"],"flags":["help","json","pairing-code","environment","status","ready","brief","run","from","full"]},
     {"command":"orchestration task-update","path":["orchestration","task-update"],"flags":["help","json","pairing-code","environment","id","status","result","run","from","retry-request","full"]},
+    {"command":"orchestration worker-abandon","path":["orchestration","worker-abandon"],"flags":["help","json","pairing-code","environment","dispatch","retry-request","full"]},
     {"command":"orchestration worker-list","path":["orchestration","worker-list"],"flags":["help","json","pairing-code","environment","run","terminal-state","include-remote","cursor","limit","full"]},
     {"command":"orchestration worker-release","path":["orchestration","worker-release"],"flags":["help","json","pairing-code","environment","dispatch","retry-request","full"]},
     {"command":"orchestration worker-show","path":["orchestration","worker-show"],"flags":["help","json","pairing-code","environment","dispatch","full"]},

@@ -63,10 +63,11 @@ export const ORCA_COMMANDS = {
 
   workerStart: {
     path: ["orchestration", "worker-start"],
-    flags: ["json", "task", "agent", "worktree", "run", "model", "effort", "keep-open", "repo", "retry-request"],
+    flags: ["json", "task", "agent", "worktree", "run", "model", "effort", "keep-open", "repo", "terminal", "retry-request"],
     optional: ["advisor"],
     write: true,
   },
+  workerAbandon: { path: ["orchestration", "worker-abandon"], flags: ["json", "dispatch", "retry-request"], write: true },
   workerShow: { path: ["orchestration", "worker-show"], flags: ["json", "dispatch"] },
   workerList: { path: ["orchestration", "worker-list"], flags: ["json", "run", "limit", "cursor"] },
   dispatchShow: { path: ["orchestration", "dispatch-show"], flags: ["json", "task"] },

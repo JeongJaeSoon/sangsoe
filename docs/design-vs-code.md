@@ -310,7 +310,7 @@
 | MCP tool flow_step_skip | design.html MCP 인터페이스 | changed (결정 195) | `claude-plugin/mcp/tools/flow_step_skip.ts:11`, `core/graph/edit.ts:173` | |
 | MCP tool decision_open | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/decision_open.ts:29` | |
 | MCP tool decision_answer | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/decision_answer.ts:19` | |
-| MCP tool start_unit | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/start_unit.ts:44`, `claude-plugin/mcp/stale.ts:13`, `core/start/start.ts:258`, `test/lineage/start.test.ts:1066` | 낡은 서버 거부(결정 211). 오케스트레이터가 비운 `worktreeId` 는 작업 폴더의 worktree 로 읽는다(결정 217) |
+| MCP tool start_unit | design.html MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/start_unit.ts:44`, `claude-plugin/mcp/stale.ts:13`, `core/start/start.ts:258`, `test/lineage/start.test.ts:1066` | 낡은 서버 거부(결정 211). 오케스트레이터가 비운 `worktreeId` 는 작업 폴더의 worktree 로 읽는다(결정 217). `resume` 은 `claude --resume` 으로 다시 띄운 세션을 원래 Task 에 묶는다: 옛 Dispatch abandon → Task ready → `worker-start --terminal`, 행 `unit_resumed`(결정 322, `core/start/resume.ts`, `test/lineage/resume.test.ts`). 설계 본문 첫째 칸 표에는 아직 `worker-abandon` · `--terminal` 이 없다 |
 | MCP tool land | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/land.ts:6`, `core/land/land.ts:200` | |
 | MCP tool handoff_save | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/handoff_save.ts:21` | sqlite 에 쓰지 않는다 |
 | MCP tool review_ask_record | design-appendix MCP 인터페이스 | implemented | `claude-plugin/mcp/tools/review_ask_record.ts:21` | |

@@ -11,6 +11,7 @@ import {
   type ModelTier,
   nodeExec,
   REPO_SELECTOR,
+  type ResumeTarget,
   type Role,
   resolveModel,
   runSlots,
@@ -55,6 +56,16 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
     return invalid("lateAnswers go only into a new Task's first prompt", "omit task and pass spec with lateAnswers to create and start a new Task");
   }
   const references = list("references");
+  let resume: ResumeTarget | undefined;
+  if (input.resume !== undefined) {
+    const r = input.resume as Record<string, unknown> | null;
+    const field = (k: keyof ResumeTarget) => (typeof r?.[k] === "string" && r[k] !== "" ? (r[k] as string) : undefined);
+    const [worktreeId, sessionId, terminal] = [field("worktreeId"), field("sessionId"), field("terminal")];
+    if (!task || spec || !worktreeId || !sessionId || !terminal) {
+      return invalid("resume needs task and all of resume.worktreeId, sessionId, terminal, and no spec", "pass task (the Task the session held) and resume {worktreeId, sessionId, terminal}");
+    }
+    resume = { worktreeId, sessionId, terminal };
+  }
   const given = s("class");
   if (given !== undefined && (!isUnitClass(given) || childRole === "lead")) {
     return invalid(`class "${given}" is not a worker unit class`, `class (workers only): ${UNIT_CLASSES.join("|")}`);
@@ -94,6 +105,7 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
       : { spec: spec ?? "", ...(title ? { title } : {}), ...(deps ? { deps } : {}), ...(lateAnswers ? { lateAnswers } : {}) },
     agent: s("agent") ?? "claude",
     ...(references ? { references } : {}),
+    ...(resume ? { resume } : {}),
     model: model.value,
     pickedBy: s("kind") ? "kind" : unitClass ? "class" : "role",
   });
@@ -116,7 +128,7 @@ export async function handle(input: Record<string, unknown>, ports: StartPorts):
 export default {
   name: "start_unit",
   description:
-    "Start one worker (or, for the orchestrator, a lead) on an item: the only way sangsoe opens a session. Refusals come back with their reason and are already escalated to whoever handed you the work.",
+    "Start one worker (or, for the orchestrator, a lead) on an item: the only way sangsoe opens a session, or binds a resumed one back to its Task (resume). Refusals come back with their reason and are already escalated to whoever handed you the work.",
   inputSchema: {
     type: "object",
     properties: {
@@ -146,6 +158,18 @@ export default {
         description: "Answers that arrived after the last worker ended; only with spec (a new Task), added to its first prompt.",
       },
       references: { type: "array", items: { type: "string" }, description: "Ticket URLs." },
+      resume: {
+        type: "object",
+        description:
+          "Bind a session re-opened with `claude --resume` back to task instead of opening a new one (decision 322). Open the terminal first, in the Task's worktree; start_unit abandons the old Dispatch, reopens the Task and binds the terminal.",
+        properties: {
+          worktreeId: { type: "string", description: "The Task's worktree, the one start_unit made for it." },
+          sessionId: { type: "string", description: "The Claude Code session id the terminal resumed." },
+          terminal: { type: "string", description: "The Orca terminal handle `orca terminal create` returned." },
+        },
+        required: ["worktreeId", "sessionId", "terminal"],
+        additionalProperties: false,
+      },
       agent: { type: "string", description: "Orca agent id, default claude." },
       class: {
         type: "string",

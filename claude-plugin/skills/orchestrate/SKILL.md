@@ -49,7 +49,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 | 프롬프트에 붙은 한 줄 `sangsoe: Run <id> — 🟢 준비됨 N · 📅 기한 N · ⚠️ trigger 불명 N (새로 M건)` | 네 Run 을 쥔 세션의 hook 이 붙인 줄이다(결정 274). Orca 메시지가 아니라서 `check` 로 읽을 것이 없다. 🟢 는 시작할 항목, 📅 는 날짜가 된 오너 항목이라 오너에게 가져가고, ⚠️ 는 스크립트가 읽지 못한 trigger 라 그 조건이 왔는지 네가 판단한다. 줄 끝의 "게이트 N개를 풀었다" · "닫힌 Task 가 기다리던 결정" · "머지된 PR 의 Task 를 닫았다" 는 hook 이 이미 한 일이다(결정 275). 목록은 resource `ready` 와 `brief` 로 읽는다 | `start_unit`(`start` skill) |
 | `close_suggested` | 증거가 그 오너 항목의 완료를 보이나. 보이면 오너에게 완료 버튼을 누를 항목이라고 알린다. 오너 항목은 오너가 닫는다. 오너가 먼저 누른 항목은 ⏳ 검증 대기라 이 제안이 오지 않고 probe 가 통과하면 저절로 ✅ 로 읽힌다(결정 181) | — |
 | `main_red` | 머지한 PR 의 당사자에게 원인 좁히기를 맡긴다. 동결 중에는 `main_fix` 만 land 된다 | `start_unit` 또는 Orca `send` |
-| MCP tool 호출이 "거부" 로 돌아왔는데 사람이 거부하지 않았다(interrupt 문구) | 끊김이다. 거부 보고가 아니다(결정 321). 끊김으로 읽는다. `start_unit` 이면 Task id 를 알 때 같은 Task 를 `task` 로 다시 부른다(같은 spec 을 다시 보내지 않는다). 모르면 같은 spec·title 로 한 번 다시 부른다(결정 318 의 채택, `notes` 의 "채택:" 으로 확인) | `start_unit` |
+| MCP tool 호출이 "거부" 로 돌아왔는데 사람이 거부하지 않았다(interrupt 문구) | 끊김이다. 거부 보고가 아니다(결정 321). 끊김으로 읽는다. `start_unit` 이면 Task id 를 알 때 같은 Task 를 `task` 로 다시 부른다(같은 spec 을 다시 보내지 않는다). `resume` 호출이었으면 같은 `resume` 도 그대로 넘긴다(결정 322). 모르면 같은 spec·title 로 한 번 다시 부른다(결정 318 의 채택, `notes` 의 "채택:" 으로 확인) | `start_unit` |
 | `worker_dead`·`worker_stuck` | 같은 Task 를 다시 시작할지(`start_unit` 의 `task`), 멈출지 | `start_unit` |
 
 ## 리드: 프로그램을 끝까지
@@ -78,4 +78,4 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 ## 재시작
 
-압축이 잦으면(`restart_due`) `handoff_save` 로 다음 할 일·기다리는 답·답 없는 질문·회신 경로를 남긴다. 리드가 다시 뜨면 자기 Run 을 `run-use` 로 다시 쥔다. 리드는 오케스트레이터의 Run 을 쥐지 않는다. handoff 에 없는 앞 세션의 말은 `orca search "<구절>" --scope conversation --sort newest --json` 으로 찾는다. `orca search --index-status` 가 켜짐(`enabled: true`)이 아니면 찾지 않는다. 대화 파일을 직접 읽지 않는다(결정 193).
+압축이 잦으면(`restart_due`) `handoff_save` 로 다음 할 일·기다리는 답·답 없는 질문·회신 경로를 남긴다. Task 를 쥔 리드나 워커를 새 터미널에서 `claude --resume` 으로 다시 띄웠으면 그 세션을 `start_unit` 의 `resume` 으로 원래 Task 에 다시 묶는다(`start` skill 의 재시작 절, 결정 322): 리드는 오케스트레이터가(터미널을 여는 한 명령은 `[gate:delegate]` 때문에 서브에이전트가 친다), 워커는 그 워커를 띄운 쪽이 묶는다. 묶지 않은 채 새 Task 를 만들거나 resume 없이 다시 시작하지 않는다. 리드가 다시 뜨면 자기 Run 을 `run-use` 로 다시 쥔다. 리드는 오케스트레이터의 Run 을 쥐지 않는다. handoff 에 없는 앞 세션의 말은 `orca search "<구절>" --scope conversation --sort newest --json` 으로 찾는다. `orca search --index-status` 가 켜짐(`enabled: true`)이 아니면 찾지 않는다. 대화 파일을 직접 읽지 않는다(결정 193).
