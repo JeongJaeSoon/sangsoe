@@ -38,7 +38,7 @@ export type NewEvent<T extends EventType = EventType> = {
 }[T];
 
 /** Types written only by their own Store method (EventDef.storeOnly); Store.append's type leaves them out. */
-export type StoreOnlyType = "owner_action" | "owner_text_redacted";
+export type StoreOnlyType = "owner_action" | "owner_approval" | "owner_text_redacted";
 
 export interface Appended {
   readonly seq: number;
@@ -411,14 +411,21 @@ export class Store {
     return this.#tx(() => this.#insert(e));
   }
 
-  /** Records an owner_action with its masked text (masking is the caller's, before this call). */
-  appendOwnerAction(e: NewEvent<"owner_action">, maskedText: string): Appended {
+  /**
+   * Records an owner_action with its masked text (masking is the caller's, before this call). With
+   * `approval`, the owner_approval citing it is written in the same transaction (decision 311): only
+   * for a newly inserted chat line, and a refused approval takes the owner_action back with it.
+   */
+  appendOwnerAction(e: NewEvent<"owner_action">, maskedText: string, approval?: { pr: string; head_sha: string }): Appended {
     if (typeof maskedText !== "string" || maskedText.length === 0) {
       throw new ContractError("owner text: expected a non-empty string");
     }
+    if (approval && e.payload.origin !== "chat") throw new ContractError("owner_approval rests only on an owner_action{origin chat}");
     return this.#tx(() => {
       const out = this.#insert(e, true);
-      if (out.inserted) this.#db.prepare("INSERT INTO owner_text (seq, text) VALUES (?, ?)").run(out.seq, maskedText);
+      if (!out.inserted) return out;
+      this.#db.prepare("INSERT INTO owner_text (seq, text) VALUES (?, ?)").run(out.seq, maskedText);
+      if (approval) this.#insert({ type: "owner_approval", source: e.source, payload: { ...approval, owner_action: out.seq } }, true);
       return out;
     });
   }

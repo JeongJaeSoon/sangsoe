@@ -28,6 +28,16 @@ export function recordDriven(store: Store, e: { terminal: string; prompt: string
 }
 
 /**
+ * Decision 311: the approval's test fails closed where wasDriven reads by shape. A row of any kind and
+ * any age for this text in this terminal, or no terminal to look in, means it may have been driven.
+ */
+export function mayBeDriven(events: readonly StoredEvent[], terminal: string | undefined, prompt: string): boolean {
+  if (!terminal) return true;
+  const hash = hashOfPrompt(prompt);
+  return events.some((e) => e.type === "prompt_driven" && e.payload.terminal === terminal && e.payload.hash === hash);
+}
+
+/**
  * Whether Orca reported this text as driven into this terminal within the window before `now`.
  * Only the `driving` kind counts: a launch prompt can be the owner's own words typed into Orca, and
  * the other kinds were not measured, so those rows are kept and the prompt is read by its shape.

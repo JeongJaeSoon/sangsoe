@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, openSync, readSync } from "node:fs";
+import { accessSync, closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 
 // Claude Code's transcript is JSONL whose record shapes are not documented (P13). Every reader here
 // returns nothing for a shape it does not know, so a format change costs a missed record, never a wrong one.
@@ -121,6 +121,26 @@ export function shellInputs(records: readonly Rec[]): ShellInput[] {
     out.push({ uuid: r.uuid, ts: r.timestamp, command, stdout: between(o, "bash-stdout") ?? "", stderr: (between(o, "bash-stderr") ?? "").trim() });
   }
   return out;
+}
+
+const SCHEDULERS = new Set(["ScheduleWakeup", "CronCreate"]);
+
+/**
+ * Decision 311: whether a tool that submits a prompt later (ScheduleWakeup, CronCreate) was called
+ * anywhere in the transcript with `needle` in its input. null when the file cannot be read.
+ */
+export function scheduledWith(path: string | undefined, needle: string): boolean | null {
+  if (!path) return null;
+  try {
+    accessSync(path, constants.R_OK);
+  } catch {
+    return null;
+  }
+  return marked(path, needle).some(
+    (r) =>
+      Array.isArray(r.message?.content) &&
+      r.message.content.some((b: { type?: unknown; name?: unknown; input?: unknown }) => b?.type === "tool_use" && SCHEDULERS.has(String(b.name)) && JSON.stringify(b.input ?? {}).includes(needle)),
+  );
 }
 
 /** The context size of the last model call: its input plus cache tokens. */

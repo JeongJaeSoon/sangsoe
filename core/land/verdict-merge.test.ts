@@ -306,6 +306,147 @@ test("a V3 PR lowered by an owner's label still waits for the owner on this path
   assert.deepEqual(lowered.mergesNow, []);
 });
 
+// Decision 311: on this path the owner's typed `승인 <repo>#<N> <head>` (owner_approval, written by the
+// UserPromptSubmit hook with its owner_action) is the owner's approval V3 and protected paths wait for.
+const V3_FILES = [{ filename: ".github/workflows/ci.yml", patch: "@@ -1 +1 @@\n-a\n+b" }];
+const ownerSays = (store: Store, o: { pr?: string; head?: string; key?: string } = {}) =>
+  store.appendOwnerAction(
+    {
+      type: "owner_action",
+      source: "UserPromptSubmit",
+      dedupe_key: `owner_action:${o.key ?? "p1"}`,
+      payload: { origin: "chat", summary: "승인", hash: "h", cc_session: "o1" },
+    },
+    "승인",
+    { pr: o.pr ?? PR, head_sha: o.head ?? HEAD },
+  );
+const v3Ready = () => {
+  const h = harness({ files: V3_FILES });
+  ready(h.store);
+  evidence(h.store, "dev");
+  return h;
+};
+
+test("311: a V3 PR the owner approved in chat at its exact head merges at once, pinned to the head", async () => {
+  const h = v3Ready();
+  const before = await land(input(), h.deps);
+  assert.equal(refusal(before), "ok:merge_on_approval");
+  assert.match(before.ok ? before.value.note : "", new RegExp(`승인 ${REPO}#12 ${HEAD}`), "the waiting note names the owner's line");
+
+  ownerSays(h.store);
+  const r = await land(input(), h.deps);
+  assert.equal(refusal(r), "ok:merge_owner_approved");
+  assert.equal(r.ok ? r.value.tier : "", "V3");
+  assert.equal(r.ok ? r.value.merge_method : "", "squash");
+  assert.deepEqual(h.mergesNow, [{ repo: REPO, pr: 12, head: HEAD, method: "squash" }]);
+  assert.deepEqual(h.merges, [], "no --auto");
+  assert.deepEqual(landRows(h.store), ["land_requested:merge_on_approval", "land_requested:owner_approved"]);
+  assert.match(r.ok ? r.value.note : "", /owner approved aaaaaaa in chat \(owner_action \d+\)/);
+});
+
+test("311: the owner's approval also opens protected paths", async () => {
+  const h = harness({ protectedPaths: ["infra/"], files: [{ filename: "infra/a.tf", patch: "@@ -1 +1 @@\n-a\n+b" }] });
+  ready(h.store);
+  ownerSays(h.store);
+  assert.equal(refusal(await land(input(), h.deps)), "ok:merge_owner_approved");
+  assert.equal(h.mergesNow.length, 1);
+});
+
+test("311: an approval of another head, another PR, or one before the base moved is not this head's approval", async () => {
+  const other = v3Ready();
+  ownerSays(other.store, { head: OLD });
+  ownerSays(other.store, { pr: "acme/api#13", key: "p2" });
+  ownerSays(other.store, { pr: "acme/web#12", key: "p3" });
+  const r = await land(input(), other.deps);
+  assert.equal(refusal(r), "ok:merge_on_approval");
+  assert.deepEqual(other.mergesNow, []);
+
+  const moved = v3Ready();
+  ownerSays(moved.store);
+  moved.store.append({ type: "pr_base_changed", source: "pr-monitor", payload: { pr: PR, from: "feature-a", to: "main" } });
+  verdict(moved.store, { reviewer: "claude-2" });
+  assert.equal(refusal(await land(input(), moved.deps)), "ok:merge_on_approval", "the approval was for the change on the old base");
+  assert.deepEqual(moved.mergesNow, []);
+});
+
+test("311: an owner_approval row that does not rest on the hook's owner_action{chat} is not counted", async () => {
+  const forged = (edit: (approval: StoredEvent, action: StoredEvent) => StoredEvent[]) => {
+    const h = v3Ready();
+    ownerSays(h.store);
+    h.editEvents((rows) => {
+      const approval = rows.find((e) => e.type === "owner_approval") as StoredEvent;
+      const action = rows.find((e) => e.type === "owner_action") as StoredEvent;
+      return [...rows.filter((e) => e !== approval && e !== action), ...edit(approval, action)];
+    });
+    return h;
+  };
+  const cases: [string, (a: StoredEvent, o: StoredEvent) => StoredEvent[]][] = [
+    ["approval from another source", (a, o) => [o, { ...a, source: "mcp:tool" }]],
+    ["no owner_action at the cited seq", (a) => [a]],
+    ["a button press", (a, o) => [{ ...o, payload: { ...o.payload, origin: "button" } }, a]],
+    ["owner_action from another source", (a, o) => [{ ...o, source: "plugin:panel" }, a]],
+  ];
+  for (const [why, edit] of cases) {
+    const h = forged(edit);
+    assert.equal(refusal(await land(input(), h.deps)), "ok:merge_on_approval", why);
+    assert.deepEqual(h.mergesNow, [], why);
+  }
+});
+
+test("311: the owner's approval keeps every other condition: verdict at the head, evidence, checks, threads", async () => {
+  const noVerdict = harness({ files: V3_FILES });
+  evidence(noVerdict.store, "test");
+  evidence(noVerdict.store, "run");
+  evidence(noVerdict.store, "dev");
+  verdict(noVerdict.store, { head: OLD });
+  ownerSays(noVerdict.store);
+  assert.equal(refusal(await land(input(), noVerdict.deps)), "review_stale:ccccccc");
+
+  const noDev = harness({ files: V3_FILES });
+  ready(noDev.store);
+  ownerSays(noDev.store);
+  assert.equal(refusal(await land(input(), noDev.deps)), "evidence_missing:dev");
+
+  const red = harness({ files: V3_FILES, gate: { ...GREEN, checks: [{ name: "unit", required: true, state: "fail" }] } });
+  ready(red.store);
+  evidence(red.store, "dev");
+  ownerSays(red.store);
+  assert.equal(refusal(await land(input(), red.deps)), "checks_red:unit");
+
+  const threads = harness({ files: V3_FILES, gate: { ...GREEN, unresolvedThreads: 1 } });
+  ready(threads.store);
+  evidence(threads.store, "dev");
+  ownerSays(threads.store);
+  assert.equal(refusal(await land(input(), threads.deps)), "threads_unresolved:1");
+  assert.deepEqual([noVerdict, noDev, red, threads].flatMap((h) => h.mergesNow), []);
+});
+
+test("311: a repo not opted in, and one whose protection was read, behave as before with an approval recorded", async () => {
+  const out = harness({ files: V3_FILES, optIn: false });
+  ready(out.store);
+  evidence(out.store, "dev");
+  ownerSays(out.store);
+  assert.equal(refusal(await land(input(), out.deps)), "ok:merge_on_approval");
+  assert.deepEqual([out.mergesNow, out.merges], [[], []]);
+
+  const read = harness({
+    files: V3_FILES,
+    protection: "none",
+    rules: [
+      { type: "pull_request", parameters: { required_approving_review_count: 1, dismiss_stale_reviews_on_push: true } },
+      { type: "required_status_checks", parameters: { required_status_checks: [{ context: "unit" }] } },
+      { type: "required_linear_history" },
+      { type: "merge_queue" },
+    ],
+  });
+  ready(read.store);
+  evidence(read.store, "dev");
+  ownerSays(read.store);
+  const r = await land(input(), read.deps);
+  assert.equal(refusal(r), "ok:auto_merge", JSON.stringify(r));
+  assert.deepEqual([read.mergesNow.length, read.merges.length], [0, 1]);
+});
+
 test("the merge method is the repo's first allowed of squash, merge, rebase; none refuses", async () => {
   const rebase = harness({ gate: { ...GREEN, methods: ["rebase"] } });
   ready(rebase.store);

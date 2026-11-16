@@ -57,7 +57,7 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
 
 1. `land` 를 부른다: `{pr, head_sha}`. head 는 리뷰하고 증거를 만든 그 sha 다.
 2. 결과를 읽는다. 성공이면 `action`, 거부면 `refusal.code` 다. 먼저 `dry_run: true` 로 불러 조건만 볼 수 있다.
-   - `auto_merge`: GitHub 이 필수 리뷰와 CI 가 찰 때 머지한다. `merge_approved`·`merge_verdict`: 승인이나 기록된 리뷰 판정으로 지금 머지했다(결정 158).
+   - `auto_merge`: GitHub 이 필수 리뷰와 CI 가 찰 때 머지한다. `merge_approved`·`merge_verdict`: 승인이나 기록된 리뷰 판정으로 지금 머지했다(결정 158). `merge_owner_approved`: 오너가 오케스트레이터 대화에 친 승인 줄로 지금 머지했다(결정 311).
    - `merge_on_approval`: 승인이 찰 때 pr-monitor 가 리드를 깨우고, 리드가 같은 `land` 로 머지한다.
    - 거부 code(`evidence_missing`, `review_missing`, `review_stale`, `head_moved`, `stack_order`, `main_red` 등): `refusal.fix` 대로 원인을 고치고 다시 부른다. `review_stale`·`head_moved` 는 리뷰한 head 가 지금 head 가 아니라는 뜻이니, 새 head 를 다시 리뷰받는다. 브랜치 보호가 조건을 채우지 않으면(못 읽음·없음·요구하지 않음) land 가 그 조건을 스스로 확인한다(조건의 `source: own`, 결정 204): `checks_pending`·`checks_red`·`checks_missing` 은 head 의 모든 검사, `behind_base` 는 head 가 base 끝을 품지 않는다는 뜻이다. base 를 합쳐 push 하고(충돌을 풀었으면 `git show --remerge-diff` 로 delta 리뷰) 새 head 를 리뷰받는다. `main_red` 동안에는 `main_fix: true` 로 요청한 PR 만 들어간다.
    - `checks_missing` 인데 그 저장소가 검사를 올리지 않으면(CI 가 없다: 기다려도 head 에 검사가 하나도 오지 않는다) 네가 고칠 것이 없다. 다시 부르지 않고, 실패로도 보고하지 않는다. 그 head 에 맞춘 머지는 오케스트레이터의 일이다(결정 226). 3번의 worker_done 본문에 `READY-WAIT: checks_missing` 줄과 PR·head sha 를 적어 끝낸다. 그 줄이 없으면 `[gate:self-land]` 가 land 요청이 없는 열린 PR 위의 worker_done 을 막는다.

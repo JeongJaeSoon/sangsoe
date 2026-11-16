@@ -65,6 +65,7 @@ export const OWN_TYPES = [
   "notified",
   "observed_change",
   "owner_action",
+  "owner_approval",
   "owner_class",
   "owner_text_redacted",
   "plugin_approved",

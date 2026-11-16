@@ -32,6 +32,7 @@
 {"type":"observed_change","source":"orca-monitor","payload":{"task":"task_a1","field":"lastOutputAt"}}
 {"type":"owner_act_unlinked","source":"pr-monitor","payload":{"act":"merged acme/api#13 on GitHub"}}
 {"type":"owner_action","source":"UserPromptSubmit","payload":{"origin":"chat","summary":"start the api version work","hash":"sha256:0f1e","cc_session":"sess-1","cc_message":"uuid-1"}}
+{"type":"owner_approval","source":"UserPromptSubmit","payload":{"pr":"acme/api#12","head_sha":"0123456789abcdef0123456789abcdef01234567","owner_action":1}}
 {"type":"owner_class","source":"orchestrator","subject":"owner_action:1","payload":{"class":"새 일"}}
 {"type":"owner_text_redacted","source":"owner-text redact","payload":{"seq":1,"reason":"a token leaked past masking"}}
 {"type":"pr_base_changed","source":"pr-monitor","payload":{"pr":"acme/api#12","from":"feature-a","to":"main"}}

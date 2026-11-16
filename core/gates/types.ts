@@ -4,7 +4,7 @@ export type LoadVerdict = { level: "ok" | "warn" | "danger"; reasons: readonly s
 export type Decision = "allow" | "ask" | "deny";
 
 /** The four gates of appendix #gates, the start guard (decision 94 (마)) and the report-address shape check (N8). */
-export type GateName = "pressure" | "sleep-loop" | "delegate" | "self-land" | "start" | "report-address" | "done-blockers";
+export type GateName = "pressure" | "sleep-loop" | "delegate" | "self-land" | "start" | "report-address" | "done-blockers" | "owner-approval";
 
 export type Verdict = { decision: Decision; gate: GateName; reason: string };
 
