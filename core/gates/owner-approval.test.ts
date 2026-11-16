@@ -44,6 +44,24 @@ test("311: every role is refused a prompt-scheduling tool or a Bash command (a n
   }
 });
 
+test("327: the refusal names each command that is not a message to a session, by its first words only, never the line", () => {
+  for (const [command, named, unnamed] of [
+    [`orca orchestration send --to run:run_1 --subject x --body "${LINE}" --json | tail -1`, ["`tail`"], ["`orca orchestration send`"]],
+    [`orca terminal send --terminal term_ab12 --text "${LINE}" --enter`, ["`orca terminal send`"], []],
+    [`cd /tmp && ${NESTED} "${LINE}" | tee out.txt`, ["`cd`", "`claude`", "`tee`"], []],
+    [`L="${LINE}"; ${NESTED} "$L"`, ["a variable assignment", "`claude`"], []],
+    [`echo ok; "$(printf %s '${LINE}')"`, ["`echo`", "a command"], ["a variable assignment"]],
+    [`"${LINE}"`, ["a command"], []],
+    [`nohup; ${NESTED} "${LINE}"`, ["a command", "`claude`"], ["a variable assignment"]],
+  ] as const) {
+    const reason = call("lead", "Bash", { command }).gate?.reason ?? "";
+    for (const n of named) assert.ok(reason.includes(n), `${n} in ${reason}`);
+    for (const n of unnamed) assert.ok(!reason.includes(n), `${n} not in ${reason}`);
+    assert.match(reason, /orca orchestration send\|reply\|ask` alone, with no pipe or redirection/);
+    assert.ok(!reason.includes(LINE) && !reason.includes(HEAD), reason);
+  }
+});
+
 test("311: feeding the prompt hook by hand is refused in any form the parser reads", () => {
   for (const command of [
     `echo '{"session_id":"o1","prompt":"x"}' | sangsoe hook user-prompt-submit`,
