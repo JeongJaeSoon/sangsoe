@@ -325,6 +325,7 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
         o,
       ),
     workerAbandon: (a, o) => run("workerAbandon", { flags: { dispatch: a.dispatch } }, o),
+    workerStop: (a, o) => run("workerStop", { flags: { dispatch: a.dispatch } }, o),
     workerShow: (a) => shaped("workerShow", isObject, { flags: { dispatch: a.dispatch } }),
     workerList: (a) =>
       local("workerList", "workers", "host", "dispatchId", { flags: { run: a.run, limit: a.limit, cursor: a.cursor } }),
@@ -354,6 +355,15 @@ export function createOrcaAdapter(exec: Exec, orcaBin = "orca"): OrcaAdapter {
       return { ok: true, value: { id: w.id, path: w.path, ...(typeof w.repoId === "string" ? { repoId: w.repoId } : {}) } };
     },
     terminalList: (a) => local("terminalList", "terminals", "executionHostId", "handle", { flags: { worktree: a.worktree } }),
+    terminalCreate: async (a) => {
+      const r = await run<unknown>("terminalCreate", { flags: { worktree: a.worktree, command: a.command, title: a.title } });
+      if (!r.ok) return r;
+      // The help prints no result shape; the handle is read where `terminal list` rows keep it.
+      const t = isObject(r.value) && isObject(r.value.terminal) ? r.value.terminal : r.value;
+      const handle = isObject(t) ? t.handle : undefined;
+      if (typeof handle !== "string" || handle === "") return unexpected("orca terminal create: no terminal handle", r.value);
+      return { ok: true, value: { handle } };
+    },
     terminalClose: (a) => run("terminalClose", { flags: { terminal: a.terminal } }),
     terminalSend: (a, o) =>
       run("terminalSend", { flags: { terminal: a.terminal, text: a.text, enter: a.enter, "wait-submit": a.waitSubmit } }, o),

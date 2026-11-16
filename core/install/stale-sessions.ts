@@ -29,7 +29,7 @@ const PS = ["-axo", "pid=,etime=,args="];
 const TIMEOUT_MS = 10_000;
 
 export const RESTART_LINE =
-  "restart each with claude --continue in its terminal (quit the session, then start it again in the same directory with the flags it was started with, such as --agent); /reload-plugins does not restart the server";
+  "restart them with `sangsoe restart --stale` (the orchestrator restarts its leads, each lead its workers; add --dry-run to see the plan first); /reload-plugins does not restart the server";
 
 /** `ps` elapsed time, `[[dd-]hh:]mm:ss`, in milliseconds. */
 function elapsedMs(etime: string): number | undefined {
@@ -41,23 +41,50 @@ function elapsedMs(etime: string): number | undefined {
 
 type Server = { pid: number; startedAt: number; entry: string };
 
+/**
+ * The plugin entry `args` runs, or undefined. Only `node <entry>`, as the plugin's .mcp.json launches
+ * it: an editor or pager open on server.ts is no server. Either path may hold a space, so the entry is
+ * everything from the first argument that starts with `/`.
+ */
+export function serverEntry(args: string): string | undefined {
+  const cut = args.indexOf(" /");
+  const entry = cut < 0 ? "" : args.slice(cut + 1);
+  return basename(args.slice(0, Math.max(cut, 0)).trim()) === "node" && SERVER_ENTRY.test(entry) ? entry : undefined;
+}
+
 function servers(stdout: string, now: number): Server[] {
   const out: Server[] = [];
   for (const line of stdout.split("\n")) {
-    // Only `node <entry>`, as the plugin's .mcp.json launches it: an editor or pager open on server.ts is no server.
-    // Either path may hold a space, so the entry is everything from the first argument that starts with `/`.
     const [, pid, etime, args = ""] = /^(\d+)\s+(\S+)\s+(.+)$/.exec(line.trim()) ?? [];
-    const cut = args.indexOf(" /");
-    const entry = cut < 0 ? "" : args.slice(cut + 1);
+    const entry = serverEntry(args);
     const ms = elapsedMs(etime ?? "");
-    if (basename(args.slice(0, Math.max(cut, 0)).trim()) !== "node" || !SERVER_ENTRY.test(entry)) continue;
-    if (ms !== undefined) out.push({ pid: Number(pid), startedAt: now - ms, entry });
+    if (entry && ms !== undefined) out.push({ pid: Number(pid), startedAt: now - ms, entry });
   }
   return out;
 }
 
+/** One row of the whole process table with parents, for `sangsoe restart` (decision 330). */
+export type Proc = { pid: number; ppid: number; startedAt: number; args: string };
+
+/** `ps` with each process's parent and untruncated arguments; null when it cannot be read. */
+export function processTable(host: Host, now: number): Proc[] | null {
+  const r = host.run("ps", ["-ww", "-axo", "pid=,ppid=,etime=,args="], { LC_ALL: "C" }, TIMEOUT_MS);
+  if (r.code !== 0) return null;
+  return r.stdout.split("\n").flatMap((line) => {
+    const [, pid, ppid, etime, args = ""] = /^(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line.trim()) ?? [];
+    const ms = elapsedMs(etime ?? "");
+    return ms === undefined ? [] : [{ pid: Number(pid), ppid: Number(ppid), startedAt: now - ms, args }];
+  });
+}
+
+/** Decision 247's verdict for one server: it started before the install its entry names now, or that install is gone. */
+export function isStale(startedAt: number, entry: string, installed: (entry: string) => InstalledTree | null = installedTree): boolean {
+  const tree = installed(entry);
+  return !tree || startedAt < tree.at;
+}
+
 /** The working directory of each pid, from one `lsof` call; a pid lsof cannot read is missing. */
-function workingDirs(host: Host, pids: number[]): Map<number, string> {
+export function workingDirs(host: Host, pids: number[]): Map<number, string> {
   const r = host.run("lsof", ["-a", "-d", "cwd", "-Fpn", "-p", pids.join(",")], undefined, TIMEOUT_MS);
   const dirs = new Map<number, string>();
   let pid: number | undefined;

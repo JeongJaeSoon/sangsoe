@@ -33,7 +33,7 @@ test("decision 247: install --stale-sessions prints only the list and runs only 
   assert.equal(lines.length, 3, r.out);
   assert.match(lines[0] ?? "", /^stale sessions: 1 sangsoe MCP server runs/);
   assert.match(lines[1] ?? "", /^ {2}pid 7 /);
-  assert.match(lines[2] ?? "", /^restart each with claude --continue in its terminal/);
+  assert.match(lines[2] ?? "", /^restart them with `sangsoe restart --stale`/);
   assert.deepEqual(one.calls, ["ps", "lsof"]);
 });
 

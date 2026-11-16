@@ -10,7 +10,7 @@ sangsoe 의 설치·갱신·점검은 오너가 터미널이나 Claude Code 의 
 | 상황 | 오너가 돌릴 명령 |
 |---|---|
 | 처음 설치 | `brew install JeongJaeSoon/tap/sangsoe` → `sangsoe install` → `sangsoe install --permissions` → `sangsoe plugin approve` → `sangsoe doctor` |
-| 갱신 | `brew upgrade sangsoe` 다음 `sangsoe install`(doctor 의 `permissions` 행이 warn 이면 `sangsoe install --permissions` 도) |
+| 갱신 | `brew upgrade sangsoe` 다음 `sangsoe install`(doctor 의 `permissions` 행이 warn 이면 `sangsoe install --permissions` 도). install 끝의 `stale sessions` 목록에 있는 세션은 오케스트레이터가 `sangsoe restart --stale` 로 다시 띄운다(결정 330): 오너가 하나씩 다시 치지 않는다 |
 | 무엇이 어긋났는지 보기 | `sangsoe doctor`(내려받기 없이 보려면 `--offline`) |
 | sangsoe 세션이 권한 프롬프트에서 멈춘다 | `sangsoe install --permissions`. 바꿀 diff 를 보이고 y/N 을 묻는다. 느낌표 줄은 터미널이 없어 묻지 않고, 아무것도 쓰지 않은 채 마지막 줄에 돌릴 `sangsoe install --permissions --yes`(준 `--scope` 도 그대로)를 적는다. 두 번째 실행은 아무것도 쓰지 않는다 |
 | Orca plugin 승인 | `sangsoe doctor` 가 가리킬 때만 `sangsoe plugin approve` |

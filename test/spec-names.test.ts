@@ -178,6 +178,8 @@ const ALLOWED = new Map<string, string>([
   // Decision 322: start_unit's resume row, built after design.html's last edit.
   ["event:unit_resumed:code-only", "322"],
   ["event-glossary:unit_resumed:code-only", "322"],
+  // Decision 330: the coordinator's restart of stale sessions, built after design.html's last edit.
+  ["cli:restart:code-only", "330"],
 ]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };

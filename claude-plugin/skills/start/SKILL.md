@@ -76,9 +76,11 @@ alias 는 바깥 설정(`ANTHROPIC_DEFAULT_*_MODEL`)에 고정될 수 있다. �
 
 `lineage_invalid` 는 항목의 역할 줄이 맞지 않을 때만 오지 않는다. Task·Dispatch 가 없는 리드가 부르거나, 밝힌 worktree 가 `orca worktree list` 에 없을 때도 온다. 그때 다시 부르지 않고 새 항목을 만들지 않는다. 오케스트레이터에게 브리프 경로를 붙여 question 으로 묻는다.
 
-`server_stale` 은 `/reload-plugins` 로 풀리지 않는다. 세션을 다시 시작해야 풀린다.
+`server_stale` 은 `/reload-plugins` 로 풀리지 않는다. 세션을 다시 시작해야 풀린다. 그 세션의 Run 을 쥔 쪽(리드는 오케스트레이터, 워커는 리드)이 `sangsoe restart --stale` 로 다시 띄운다(결정 330). 낡은 server 로는 새 tool 을 부를 수 없어 CLI 다.
 
 ## 재시작: 다시 띄운 세션을 원래 Task 에 묶기
+
+업그레이드 뒤의 재시작은 아래를 손으로 하지 않는다. `sangsoe restart --stale`(하나만이면 `--task <Task id>`, 먼저 `--dry-run`)이 쉬는 자식마다 `worker-stop` → 그 worktree 에 `claude --resume <세션 id> <원래 flag>` 터미널 → 아래 3 의 `resume` 을 한다(결정 330). 턴 중인 세션·다른 Run 의 세션·오너가 연 세션은 이유를 적고 건너뛴다. 명령이 실패한 줄은 무엇까지 바뀌었는지와 이어 갈 한 줄을 적는다: 그 줄대로 3 의 `resume` 을 부른다.
 
 Task 를 쥔 리드나 워커를 새 터미널에서 `claude --resume` 으로 다시 띄웠으면, 그 세션은 새 Dispatch 가 없고 옛 Dispatch 는 죽은 터미널에 묶여 남는다. 새 Task 를 만들거나 resume 없이 `start_unit` 을 부르면 같은 일이 둘이 된다. 이렇게 묶는다(결정 322):
 

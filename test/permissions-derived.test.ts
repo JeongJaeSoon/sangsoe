@@ -124,14 +124,14 @@ test("a command a skill runs that the policy does not name is reported with its 
 test("an unknown command in the session text, a quoted command and a bare Orca verb in a skill are all reported", () => {
   const root = fixture({
     "core/session/session-start.ts": "const t = `run orca orchestration frobnicate now`;\n",
-    "claude-plugin/skills/x/SKILL.md": 'run `bash -c "orca terminal wipe --x"` or Orca `worker-stop --dispatch d`, Orca `send`\n',
+    "claude-plugin/skills/x/SKILL.md": 'run `bash -c "orca terminal wipe --x"` or Orca `worker-zap --dispatch d`, Orca `send`\n',
   });
   try {
     const d = derive(root);
     assert.deepEqual(
       d.unclassified.map((h) => `${h.file}:${h.line} ${h.path}`).sort(),
       [
-        "claude-plugin/skills/x/SKILL.md:1 orca orchestration worker-stop",
+        "claude-plugin/skills/x/SKILL.md:1 orca orchestration worker-zap",
         "claude-plugin/skills/x/SKILL.md:1 orca terminal wipe",
         "core/session/session-start.ts:1 orca orchestration frobnicate",
       ],

@@ -162,12 +162,12 @@ test("decision 247: install ends with the stale-session list, one line when none
     cmd === "ps" ? { code: 0, stdout: `  11  1-00:00:00 node ${gone}\n  12  00:05 node ${gone}\n  13  00:05 node /x/other.js\n`, stderr: "" } : run(cmd, args, env);
   const two = await install(host, ROOT, online().ctx);
   assert.equal(two.code, 0, two.lines.join("\n"));
-  const tail = two.lines.slice(two.lines.indexOf("") + 1).filter((l) => /^stale sessions|^ {2}pid |^restart each/.test(l));
+  const tail = two.lines.slice(two.lines.indexOf("") + 1).filter((l) => /^stale sessions|^ {2}pid |^restart them/.test(l));
   assert.equal(tail.length, 4, two.lines.join("\n"));
   assert.match(tail[0] ?? "", /^stale sessions: 2 sangsoe MCP servers/);
   assert.match(tail[1] ?? "", /^ {2}pid 11 .*installed none$/);
   assert.match(tail[2] ?? "", /^ {2}pid 12 /);
-  assert.match(tail[3] ?? "", /^restart each with claude --continue in its terminal/);
+  assert.match(tail[3] ?? "", /^restart them with `sangsoe restart --stale`/);
   assert.equal(two.lines.at(-1), tail[3], "the list is the last thing install prints");
 });
 

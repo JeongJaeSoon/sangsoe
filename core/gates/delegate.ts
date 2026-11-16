@@ -34,7 +34,8 @@ const SUB: Record<string, RegExp> = {
   gh: /^(pr (view|list|checks|diff|status)|run (view|list)|issue (view|list)|search|api)\b/,
   git: /^(status|log|show|diff|rev-parse|branch|worktree list|ls-remote)\b/,
   // Decision 256: the wait a [gate:pressure] refusal names; the orchestrator is the one calling start_unit.
-  sangsoe: /^pressure wait$/,
+  // Decision 330: after an upgrade the orchestrator restarts its stale leads; its own MCP server is stale too.
+  sangsoe: /^(pressure wait|restart( \S+)?)$/,
 };
 const PLAIN = new Set(["cd", "pwd", "jq", "head", "tail", "wc", "sort", "uniq", "grep", "date", "true"]);
 const SHIMS = new Set(["claude-teams", "agent-teams-tmux"]);

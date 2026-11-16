@@ -24,6 +24,9 @@ const DESIGN_TABLE = [
   "orchestration worker-start",
   // Decision 322: a resume fences the Dispatch the re-opened session held before binding its new terminal.
   "orchestration worker-abandon",
+  // Decision 330: `sangsoe restart` stops the old session, then opens `claude --resume` in a new terminal.
+  "orchestration worker-stop",
+  "terminal create",
   "orchestration worker-show",
   "orchestration worker-list",
   "orchestration dispatch-show",

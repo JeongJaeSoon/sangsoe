@@ -69,6 +69,7 @@ export const ORCA_POLICY: Readonly<Record<string, Entry>> = {
   "worktree create": { kind: "deny", why: "starts go through start_unit and its gate (decision 94)" },
   "orchestration worker-abandon": { kind: "deny", why: "start_unit's resume abandons the Dispatch it replaces; Orca: unverifiable alone never authorizes an abandon (decision 322)" },
   "terminal create": { kind: "deny", why: "runs any command in a new terminal; its one use is the resume a person asked for, asked each time (decision 322)" },
+  "orchestration worker-stop": { kind: "deny", why: "stops a session; sangsoe restart stops the one it resumes, run by the coordinator and asked each time (decision 330)" },
   "agent launch": { kind: "deny", why: "launch agents are forbidden; start_unit is the only start (decision 94)" },
   // Deletes, resets and close-alls.
   "worktree rm": { kind: "deny", why: "deletes a worktree; the REAPER checks first (decisions 62, 86)" },
@@ -106,6 +107,7 @@ export const SANGSOE_POLICY: Readonly<Record<string, Entry>> = {
   "plugin approve": { kind: "deny", why: "approval is the owner's act" },
   land: { kind: "deny", why: "merges; sessions land through the land MCP tool, which checks the verdict first" },
   "item new": { kind: "deny", why: "writes an item; sessions use the item_create MCP tool" },
+  restart: { kind: "deny", why: "stops and restarts sessions; the coordinator runs it after an upgrade and is asked each time (decision 330)" },
 };
 
 /** Literal `exec("gh"|"git", [...])` calls in sangsoe's code, keyed by command and first non-flag word. */

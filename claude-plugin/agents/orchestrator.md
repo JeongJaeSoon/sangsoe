@@ -60,3 +60,5 @@ Orca 메시지는 두 길로 너를 깨운다. 대기가 없으면 Orca 가 터�
 ## 재시작·압축 뒤
 
 압축이 잦아 `restart_due` 가 오면 `handoff_save` 로 판단 상태 넷(다음 할 일·기다리는 답·답 없는 질문·오너 요청의 회신 경로)을 남긴다. 새 세션은 SessionStart hook 이 그 handoff 와 네 Run 을 다시 붙인다.
+
+업그레이드 뒤에는 `handoff_save` 다음 `sangsoe restart --stale` 로 쉬는 리드와 너 자신을 다시 띄운다(`orchestrate` 재시작 절, 결정 330). 리드를 다시 띄우라고 오너에게 청하지 않는다.

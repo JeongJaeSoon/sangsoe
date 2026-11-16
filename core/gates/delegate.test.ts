@@ -57,6 +57,11 @@ test("300 (c): an interpreter in a pipe stays refused and the refusal names jq a
   assert.doesNotMatch(why(bash("sangsoe item set i1 --hold")), /resource `brief`/);
 });
 
+test("330: the orchestrator's own turn runs sangsoe restart; other sangsoe writes stay refused", () => {
+  for (const c of ["sangsoe restart --stale --dry-run", "sangsoe restart --stale", "sangsoe restart --task task_a"]) assert.equal(bash(c).decision, "none", c);
+  for (const c of ["sangsoe item set i1 --hold", "sangsoe restart now please"]) assert.equal(bash(c).decision, "deny", c);
+});
+
 test("300 (d): typing into another terminal stays refused and the refusal names reply and send", () => {
   const v = bash('orca terminal send --terminal term_abc --text "4"');
   assert.equal(v.decision, "deny");

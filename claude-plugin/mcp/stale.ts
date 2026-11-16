@@ -3,7 +3,7 @@ import { installedTree, SERVER_ENTRY, VERSION } from "../../core/index.ts";
 // Decision 233: a reload keeps a plugin MCP server whose configuration is unchanged, and an upgrade
 // at the same install path changes none of it, so only a new session starts the new server.
 export const STALE_FIX =
-  "/reload-plugins does not restart this server: quit this Claude Code session, start it again in the same directory with `claude --continue` plus the flags it was started with (such as --agent), then call start_unit again";
+  "/reload-plugins does not restart this server: the Run's coordinator restarts this session with `sangsoe restart --stale` (decision 330; an orchestrator runs it itself); after the restart, call start_unit again";
 
 /**
  * Why this MCP server is stale, or null (decision 211). A server keeps the code it loaded at start

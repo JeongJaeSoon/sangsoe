@@ -61,7 +61,7 @@ test("decision 247: two servers started before their install are two rows and on
     "stale sessions: 2 sangsoe MCP servers run code older than what is installed now",
     "  pid 101  ~/work/acme-api  runs an install older than sangsoe 0.1.5  installed 0.1.5",
     "  pid 102  ~/work/acme-web  runs an install older than sangsoe 0.1.6-rc.1  installed 0.1.6-rc.1",
-    "restart each with claude --continue in its terminal (quit the session, then start it again in the same directory with the flags it was started with, such as --agent); /reload-plugins does not restart the server",
+    "restart them with `sangsoe restart --stale` (the orchestrator restarts its leads, each lead its workers; add --dry-run to see the plan first); /reload-plugins does not restart the server",
   ]);
   // Read-only: the process table and the two stale servers' working directories, nothing else.
   assert.deepEqual(calls, ["ps -axo pid=,etime=,args= (LC_ALL=C)", "lsof -a -d cwd -Fpn -p 101,102"]);

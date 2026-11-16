@@ -362,6 +362,8 @@ export interface OrcaAdapter {
   ): Promise<OrcaResult<Receipt>>;
   /** Fences and settles a Dispatch without claiming its process stopped; closes nothing (decision 322). */
   workerAbandon(a: { dispatch: string }, o?: WriteOptions): Promise<OrcaResult<Receipt>>;
+  /** Fences a Dispatch and closes its agent terminal; `sangsoe restart` only, before the resume (decision 330). */
+  workerStop(a: { dispatch: string }, o?: WriteOptions): Promise<OrcaResult<Receipt>>;
   workerShow(a: { dispatch: string }): Promise<OrcaResult<WorkerShow>>;
   workerList(a: { run?: string; limit?: number; cursor?: string }): Promise<OrcaResult<LocalRows<WorkerRow>>>;
   dispatchShow(a: { task: string }): Promise<OrcaResult<DispatchRow>>;
@@ -381,6 +383,8 @@ export interface OrcaAdapter {
   worktreeCreate(a: { name: string; parent?: string; repo?: string }): Promise<OrcaResult<{ id: string; path: string; repoId?: string }>>;
   /** Live terminals of one worktree; an agent's carries `agentIdentity`, the plain shell create opens does not. */
   terminalList(a: { worktree?: string }): Promise<OrcaResult<LocalRows<TerminalRow>>>;
+  /** A new terminal in one worktree running `command`; `sangsoe restart` only, for `claude --resume` (decision 330). */
+  terminalCreate(a: { worktree: string; command: string; title?: string }): Promise<OrcaResult<{ handle: string }>>;
   /** One terminal by its handle, never `--all` (decision 202): only a handle start_unit recorded. */
   terminalClose(a: { terminal: string }): Promise<OrcaResult<Receipt>>;
   /** Owner-run `sangsoe recover auth --send` only (decision 246); the plugin never writes to a terminal (136). */
