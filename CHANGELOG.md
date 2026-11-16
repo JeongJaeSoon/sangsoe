@@ -8,6 +8,8 @@ Decision numbers refer to `docs/decisions.md`.
 
 - **A resumed session with no Task gets back the Run it held, wherever it runs (303).** SessionStart first names the Run the same session id last held, then falls back to the same Orca worktree (273), so a lead or orchestrator resumed in a folder Orca does not list is told to `run-use` its Run again. A session with neither `--agent sangsoe:<role>` nor a Dispatch is still not sangsoe's, which is why the lead in 298 ⑧ got no line; the agent texts and README now say to pass the same `--agent` when resuming such a session.
 
+- **A session with no Dispatch has an address and a way to be closed (301).** The `[gate:report-address]` refusal of a `term_` handle now names `orchestration reply --id` for a message it sent and `--to run:<id>` of the Run it coordinates (found through `run-list --json --full`'s `coordinator_handle`); one with neither goes to the owner. Its terminal is closed by the owner in Orca, and the `[gate:delegate]` close hint says so.
+
 - **`[gate:delegate]`: the orchestrator reads its own background wait's output file, and a refusal names the way on (300).** A task output file under the harness tmp opens for Read and `cat`. Closing a terminal, typing into one, interpreters, `sangsoe` commands and `sed` stay refused, and the reason now names `worker-release` / `unit_close`, `orchestration reply` / `send`, `jq`, and the resource `brief`.
 
 - **`[gate:done-blockers]` no longer refuses a large Run's Task as unreadable (299).** `realHost.run` had no maxBuffer, so a few-MB `task-list --full` ended in ENOBUFS; it now reads up to 64 MiB and puts the error code in stderr. The refusal names why the read failed, and a Task nothing in the store names passes without asking Orca.

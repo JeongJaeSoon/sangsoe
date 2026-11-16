@@ -87,7 +87,8 @@ function allowed(call: ToolCall): boolean {
 // the unit that closes a lead with no Dispatch can reword it in one place.
 export const CLOSE_ROUTE =
   "To close a finished unit use `orca orchestration worker-release`, then the MCP tool unit_close {dispatch} if the terminal stays retained; " +
-  "`worker-stop` is for a worker that must be stopped while it runs. `orca terminal close` is not called directly.";
+  "`worker-stop` is for a worker that must be stopped while it runs. A terminal with no Dispatch (a session started outside start_unit) " +
+  "is closed by the owner in Orca: tell them its handle (decision 301). `orca terminal close` is not called directly.";
 const INTERPRETERS = /^(python[\d.]*|node|deno|bun|ruby|perl|php|lua)$/;
 
 function route(call: ToolCall): string {
