@@ -15,7 +15,7 @@ export const GENERATED_RULES: readonly { readonly rule: string; readonly source:
   { rule: "Bash(orca orchestration request-show:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca orchestration run-create:*)", source: "claude-plugin/agents/lead.md" },
   { rule: "Bash(orca orchestration run-current:*)", source: "claude-plugin/agents/orchestrator.md" },
-  { rule: "Bash(orca orchestration run-list:*)", source: "core/orca/commands.ts" },
+  { rule: "Bash(orca orchestration run-list:*)", source: "claude-plugin/agents/orchestrator.md" },
   { rule: "Bash(orca orchestration run-show:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca orchestration run-use:*)", source: "claude-plugin/agents/lead.md" },
   { rule: "Bash(orca orchestration send:*)", source: "claude-plugin/skills/end-session/SKILL.md" },

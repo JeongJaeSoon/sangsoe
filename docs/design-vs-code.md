@@ -214,7 +214,7 @@
 | N6 리뷰 의뢰 기록 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/session/review-ask.ts:41` | 리마인드 뷰는 다음 행 |
 | N6 리마인드(`ask_due` 몸체·일반 스킬) | design.html §3 복구와 운영 규칙 여덟 | cut (결정 161) | `core/contract/views.ts:182` | LATER — 리뷰 리마인드를 sangsoe 가 정해야 하는 첫 경우 |
 | N7 감시 범위 필터 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/detect/pr/config.ts:30`, `core/detect/pr/round.ts:494` | |
-| N8 보고 주소 규칙 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/gates/report-address.ts:20` | |
+| N8 보고 주소 규칙 | design.html §3 복구와 운영 규칙 여덟 | implemented | `core/gates/report-address.ts:29` | |
 | 현황 1단계 | design.html §3 오너가 보는 것 | implemented | `core/brief/build.ts:133`, `core/brief/render.ts:35` | |
 | 묶음 상세 2단계 | design.html §3 오너가 보는 것 | changed (결정 218·219·220) | `core/brief/build.ts:310`, `core/brief/build.ts:369`, `orca-plugin/panel/view.ts:124`, `orca-plugin/panel/view.ts:100` | G13 고침(U76, 결정 213): 패널은 시안 순서대로 요약 수치 → 의존 그래프 → 왜 준비되지 않았나 → 간선 → 상태별 절 → 최근 전환 → 접힌 완료. 글은 지금 꼴을 지킨다(결정 213 ④). 결정 218: 머리는 "열린 N건 · 막힘 M"(🔄 + 🚧 + 남은 것, ✅ 는 따로), 🚧 항목마다 왜 행, 묶음 안 항목의 PR 마디는 그 항목. 결정 219: 크리티컬 패스·왜 행이 이름 대는 항목은 모두 마디, 경로는 화면의 자리(현황 › 묶음 › 항목)이고 뒤로는 그 줄 끝, 스택의 화면은 메모리에서 먼저 그린다, 좁은 패널의 요약 칸은 4+3, 게이트 없는 결정은 버튼 없는 깨진 행(`core/brief/build.ts:277`). 결정 220: 아래 절의 표는 넓은 패널에서 열 역할로 너비를 나누고 좁은 패널에서 항목마다 카드 하나(`orca-plugin/panel/view.ts:551`) |
 | 항목 상세 3단계 | design.html §3 오너가 보는 것 | partial | `core/brief/build.ts:541`, `orca-plugin/panel/view.ts:578` | G14 — 대화 기록 위치(세션 id·메시지 uuid)가 없다 |
@@ -246,7 +246,7 @@
 | 위임 게이트 | design-appendix 게이트와 원칙 | implemented | `core/gates/delegate.ts:55`, `core/gates/delegate.ts:69` | |
 | 자기 머지 게이트 | design-appendix 게이트와 원칙 | implemented | `core/gates/self-land.ts:60` | |
 | 시작 가드 | design-appendix 게이트와 원칙 | implemented | `core/gates/start.ts:166` | |
-| 보고 주소 검사 | design-appendix 게이트와 원칙 | implemented | `core/gates/report-address.ts:20` | |
+| 보고 주소 검사 | design-appendix 게이트와 원칙 | implemented | `core/gates/report-address.ts:29` | |
 | 원칙 내장 먼저 | design-appendix 게이트와 원칙 | implemented | `test/layout.test.ts:135` | |
 | 원칙 완료 조건·승인 줄·거부 문단 | design-appendix 게이트와 원칙 | implemented | `claude-plugin/skills/write-brief/SKILL.md:21`, `claude-plugin/skills/write-brief/SKILL.md:40` | |
 | 원칙 오너를 막지 않는다 | design-appendix 게이트와 원칙 | implemented | `claude-plugin/agents/orchestrator.md:49` | |

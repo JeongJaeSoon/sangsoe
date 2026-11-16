@@ -8,13 +8,22 @@ const HANDLE = /^term_[\w-]+$/;
 // A brief handed to start_unit that tells the worker to report to a handle.
 const BRIEF_HANDLE = /(?:--to[=\s]+|\bREPORT\b[^\n]*?)term_[\w-]+/;
 
-const deny = (where: string): Verdict => ({
+// Decision 301: a session with no Dispatch (started outside start_unit) has no dispatch: address. Orca
+// refuses a Dispatch holder's send to another Run (decision 261 ③), so the run: route is for a sender with none.
+const NO_DISPATCH =
+  " A session with no Dispatch is answered with `orca orchestration reply --id <message_id>` on the message it sent; " +
+  "a sender that holds no Dispatch itself (the orchestrator) may also reach it at the Run it coordinates: " +
+  "`orca orchestration run-list --json --full` names each Run's coordinator_handle, so send --to run:<that id>. " +
+  "One that holds no Run and sent no message has no address; tell the owner.";
+
+const deny = (where: string, more = ""): Verdict => ({
   decision: "deny",
   gate: "report-address",
   reason:
     `[gate:report-address] ${where} reports to a term_ handle. ` +
     "Address a Run or a Dispatch instead (--to run:<id> or --to dispatch:<id>), or leave --to out so Orca " +
-    "uses the Dispatch's Run: a handle changes on every restart and a report to a closed terminal is lost (decision 80 N8).",
+    "uses the Dispatch's Run: a handle changes on every restart and a report to a closed terminal is lost (decision 80 N8)." +
+    more,
 });
 
 export const reportAddress: Gate = (call) => {
@@ -23,7 +32,7 @@ export const reportAddress: Gate = (call) => {
       const { argv } = unwrap(cmd.words);
       if (argv[0] !== "orca" || argv[1] !== "orchestration") continue;
       const to = option(argv, "--to");
-      if (to && HANDLE.test(to)) return deny("This message");
+      if (to && HANDLE.test(to)) return deny("This message", NO_DISPATCH);
     }
     return null;
   }
