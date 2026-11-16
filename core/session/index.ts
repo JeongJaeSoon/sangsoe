@@ -5,6 +5,6 @@ export { recordHook, SESSION_HOOKS, type SessionHook } from "./record.ts";
 export { DEFAULT_RESTART_RULES, restart_due } from "./restart-due.ts";
 export { configuredReviewers, parseReviewAsk, type ReviewAsk, reviewAskRecord } from "./review-ask.ts";
 export { parseSessionInput, type SessionHookInput, type SessionRow, sessionOf } from "./session.ts";
-export { type SessionStartOptions, sessionStart } from "./session-start.ts";
+export { type SessionLaunch, type SessionStartOptions, sessionStart } from "./session-start.ts";
 export { recordShellInputs } from "./shell.ts";
 export { lastContextTokens, lastPreTokens, marked, type ShellInput, shellInputs, tail } from "./transcript.ts";

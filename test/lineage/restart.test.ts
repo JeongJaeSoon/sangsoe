@@ -55,7 +55,7 @@ type Setup = {
   /** The CLI process's folder; the orchestrator's worktree by default. */
   cwd?: string;
   /** Who runs the command: the orchestrator (pid 100) by default, or the idle lead (pid 200). */
-  caller?: "orchestrator" | "lead";
+  caller?: "orchestrator" | "lead" | "worker";
   /** Server age per pid; every server is stale unless named here. */
   age?: Record<number, string>;
   stop?: () => ExecResult;
@@ -89,13 +89,13 @@ function harness(s: Setup = {}) {
       : s.restored === "restart"
         ? `  200   199 00:10:00 ${CLAUDE} --resume ${LEAD_SESSION} --plugin-dir ${PLUGIN_DIR} --model m-main --effort medium`
         : `  200     1 1-00:00:00 ${CLAUDE} --plugin-dir ${PLUGIN_DIR} --resume 0a1b2c3d-0000-4000-8000-0000000000aa --model m-main --effort medium --verbose`;
-  const self = s.caller === "lead" ? 251 : 151;
+  const callerPid = { orchestrator: 100, lead: 200, worker: 400 }[s.caller ?? "orchestrator"];
+  const self = callerPid + 51;
   const ps = [
     `  100     1 3-00:00:00 ${CLAUDE} --continue --agent sangsoe:orchestrator`,
     `  101   100 ${age(101)} node ${ENTRY}`,
-    ...(s.caller === "lead"
-      ? [`  250   200     00:05 /bin/zsh -c sangsoe restart --stale`, `  251   250     00:05 node /opt/sangsoe/libexec/dist/cli/main.js restart --stale`]
-      : [`  150   100     00:05 /bin/zsh -c sangsoe restart --stale`, `  151   150     00:05 node /opt/sangsoe/libexec/dist/cli/main.js restart --stale`]),
+    `  ${callerPid + 50}   ${callerPid}     00:05 /bin/zsh -c sangsoe restart --stale`,
+    `  ${self}   ${callerPid + 50}     00:05 node /opt/sangsoe/libexec/dist/cli/main.js restart --stale`,
     lead,
     // A session re-opened into a profile without sangsoe has no sangsoe MCP server.
     ...(s.restored ? [] : [`  201   200 ${age(201)} node ${ENTRY}`]),
@@ -139,7 +139,7 @@ function harness(s: Setup = {}) {
   };
   const restoredTerm = s.restored === "restart" ? NEW_TERM : RESTORED_TERM;
   let created = 0;
-  const callerRun = s.caller === "lead" ? LEAD_RUN : ORCH_RUN;
+  const callerRun = s.caller === undefined || s.caller === "orchestrator" ? ORCH_RUN : LEAD_RUN;
   const fake = createFakeOrca({
     replies: {
       "orchestration-run-current": () => ok({ runId: callerRun }),
@@ -190,7 +190,7 @@ function harness(s: Setup = {}) {
         ok({
           messages:
             flag(args, "terminal") === `run:${ORCH_RUN}`
-              ? [{ id: "msg_h1", type: "handoff", subject: "handoff:task_lead", body: "next", from: "x", to: "y", handled: false }]
+              ? [{ id: "msg_h1", type: "handoff", subject: "handoff task_lead", body: "next", from: "x", to: "y", handled: false }]
               : [],
         }),
       "worktree-ps": () =>
@@ -230,7 +230,7 @@ function harness(s: Setup = {}) {
   }
   store.append({ type: "session_started", source: "test", entity: "task", entity_id: "task_lead", payload: { session: LEAD_SESSION, role: "lead", model: "m" } });
   for (const [i, l] of (s.launches ?? []).entries()) {
-    store.append({ type: "session_started", source: "test", entity: "task", entity_id: "task_lead", dedupe_key: `l${i}`, payload: { session: LEAD_SESSION, role: "lead", model: "m", ...l } });
+    store.append({ type: "session_started", source: "test", entity: "task", entity_id: "task_lead", dedupe_key: `session_started:${LEAD_SESSION}:launch${i}`, payload: { session: LEAD_SESSION, role: "lead", model: "m", ...l } });
   }
   store.append({ type: "session_started", source: "test", entity: "task", entity_id: "task_w", payload: { session: "0a1b2c3d-0000-4000-8000-000000000003", role: "worker", model: "m" } });
   store.append({ type: "session_started", source: "test", target: `run:${ORCH_RUN}`, payload: { session: ORCH_SESSION, role: "orchestrator", model: "m" } });
@@ -241,7 +241,7 @@ function harness(s: Setup = {}) {
     orca: createOrcaAdapter(fake.exec),
     store,
     host,
-    self: { pid: self, cwd: s.cwd ?? (s.caller === "lead" ? pathOf(LEAD_TREE) : pathOf(PARENT_TREE)), terminal: "term_orch" },
+    self: { pid: self, cwd: s.cwd ?? pathOf({ orchestrator: PARENT_TREE, lead: LEAD_TREE, worker: WORKER_TREE }[s.caller ?? "orchestrator"]), terminal: "term_orch" },
     installed: () => ({ version: "0.1.13", at: NOW - 3_600_000 }),
     now: () => clock,
     exists: (p) => p === PLUGIN_DIR,
@@ -303,7 +303,7 @@ test("decision 330 (A): planning reads a bounded set of Orca calls and never wal
   const text = (await restartSessions(lead.ports, { dryRun: true })).lines.join("\n");
   assert.match(text, /부른 쪽 lead, Run run_000000000001/);
   assert.match(text, /pid 400 {2}worker task_w ctx_w .*state done.*\n {4}→ restart: 쉬고 있다/);
-  assert.match(text, /pid 200 {2}lead task_lead ctx_lead .*\n {4}→ skip: 이 명령을 부른 세션이다/);
+  assert.match(text, /pid 200 {2}lead task_lead .*\n {4}→ skip: 이 명령을 부른 세션이다: Dispatch 를 쥔 세션은/);
 });
 
 test("decision 330 (B): the wait for claude in the new terminal is bounded by the clock, not by how many sleeps it took", async () => {
@@ -388,7 +388,7 @@ test("decision 330 (E): the hook reads its session's launch from the nearest cla
         ? {
             code: 0,
             stdout: [
-              `  898     1 01:00 ${CLAUDE} --plugin-dir ${PLUGIN_DIR} --model opus --effort high --agent sangsoe:lead --name lead:alpha`,
+              `  898     1 01:00 ${CLAUDE} --plugin-dir ${PLUGIN_DIR} --model m-main --effort high --agent sangsoe:lead --name lead:alpha`,
               "  899   898 00:01 /bin/sh -c sangsoe hook session-start",
               "  900   899 00:01 node /opt/sangsoe/libexec/dist/cli/main.js hook session-start",
             ].join("\n"),
@@ -396,7 +396,7 @@ test("decision 330 (E): the hook reads its session's launch from the nearest cla
           }
         : { code: 127, stdout: "", stderr: "" },
   };
-  assert.deepEqual(core.sessionLaunch(host, 900, NOW), { agent: "sangsoe:lead", name: "lead:alpha", model: "opus", effort: "high", configDir: "/home/u/.claude-a" });
+  assert.deepEqual(core.sessionLaunch(host, 900, NOW), { agent: "sangsoe:lead", name: "lead:alpha", model: "m-main", effort: "high", configDir: "/home/u/.claude-a" });
   assert.equal(core.sessionLaunch({ ...host, run: () => ({ code: 1, stdout: "", stderr: "" }) }, 900, NOW), undefined);
 });
 
@@ -465,7 +465,7 @@ test("decision 330 (2): --task restarts the one child holding that Task even whe
 });
 
 test("decision 330 (1): a worker does not restart sessions", async () => {
-  const h = harness({ cwd: pathOf(WORKER_TREE) });
+  const h = harness({ caller: "worker" });
   const out = await restartSessions(h.ports, { dryRun: false });
   assert.equal(out.code, 1);
   assert.match(out.lines[0] ?? "", /워커는 세션을 다시 띄우지 않는다/);

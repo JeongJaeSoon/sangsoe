@@ -108,8 +108,8 @@
 | uninstall | design.html 설치, README Uninstall | changed (결정 208) | `core/install/install.ts:161`, `core/install/install.ts:178` | 마켓플레이스는 scope 없이 지우고 재시작 안내 줄 |
 | 데이터·설정 남김 | README Uninstall | implemented | `core/install/install.ts:180` | |
 | 버전 어긋남 SessionStart 줄 | design.html 설치 | implemented | `core/session/session-start.ts:71`, `core/detect/queue/drift.ts:19` | Orca 쪽은 job_drift |
-| 낡은 MCP 서버 거부 | README Update | changed (결정 211·233) | `claude-plugin/mcp/tools/start_unit.ts:166`, `claude-plugin/mcp/stale.ts:9` | start_unit 만 `server_stale`. 고칠 말은 `claude --continue`(결정 233) |
-| install 끝의 낡은 세션 목록 | README Install | changed (결정 247) | `core/install/stale-sessions.ts:73`, `core/install/install.ts:133`, `cli/commands/install.ts:26` | 결정 211 ⑤ 가 버린 대안을 install 의 목록으로. 버전 대신 "지금 설치본보다 오래된 설치본", 판정은 시작 시각 대 package.json change time |
+| 낡은 MCP 서버 거부 | README Update | changed (결정 211·233) | `claude-plugin/mcp/tools/start_unit.ts:166`, `claude-plugin/mcp/stale.ts:9` | start_unit 만 `server_stale`. 고칠 말은 `claude --continue`(결정 233)였고, 지금은 그 Run 을 쥔 쪽의 `sangsoe restart --stale`(결정 330) |
+| install 끝의 낡은 세션 목록 | README Install | changed (결정 247·330) | `core/install/stale-sessions.ts:73`, `core/install/install.ts:133`, `cli/commands/install.ts:26`, `cli/commands/restart.ts:7`, `core/start/restart.ts:528`, `test/lineage/restart.test.ts:1` | 결정 211 ⑤ 가 버린 대안을 install 의 목록으로. 버전 대신 "지금 설치본보다 오래된 설치본", 판정은 시작 시각 대 package.json change time. 목록의 세션은 오너가 손으로 다시 치지 않고 `sangsoe restart --stale`(하나만이면 `--task`)이 쉬는 자식마다 `worker-stop` → `claude --resume` 터미널 → `start_unit` 의 `resume` 으로 다시 띄운다. 이미 다시 뜬 세션은 묶기만 한다. flag 는 ps 와 SessionStart 가 남긴 첫 launch 기록(`session_started.launch_*`·`config_dir`)에서 읽는다(결정 330). 설계 본문에는 이 명령이 없다 |
 | hook·MCP 가 CLI 찾기 | design.html 설치 | changed (결정 118) | `claude-plugin/.mcp.json:6` | plugin 옆 dist, 없으면 PATH |
 | 플러그인 경계 bin 폴더 CLI | design-appendix 플러그인 경계 | changed (결정 90) | `claude-plugin/.mcp.json:6` | plugin 안 bin 없음, CLI 는 브루 래퍼 |
 | vendor 코어 사본 | design-appendix 배치 규칙 | implemented | `orca-plugin/core-link.ts:51`, `package.json:26` | |

@@ -16,6 +16,7 @@ import {
   SESSION_HOOKS,
   type SessionHook,
   Store,
+  sessionLaunch,
 } from "../../core/index.ts";
 import type { CommandDef, Report } from "../contract.ts";
 
@@ -65,6 +66,7 @@ async function record(event: SessionHook, host: Host): Promise<Report> {
     const lines = await recordHook(event, { store, orca: createOrcaAdapter(nodeExec(HOOK_ORCA_MS)) }, input, {
       pluginVersion: pluginVersion(host),
       terminal: host.env.ORCA_TERMINAL_HANDLE,
+      launch: () => sessionLaunch(host, process.pid, Date.now()),
     });
     return { code: 0, lines };
   } catch (e) {

@@ -16,6 +16,28 @@ export interface SessionStartOptions {
   readonly pluginVersion?: string | undefined;
   /** The session's own Orca terminal handle (`ORCA_TERMINAL_HANDLE`), read by UserPromptSubmit (decision 280). */
   readonly terminal?: string | undefined;
+  /** How this session was launched (decision 330), read only once it has a role; a throw records none. */
+  readonly launch?: (() => SessionLaunch | undefined) | undefined;
+}
+
+/** The launch flags and settings folder `sangsoe restart` passes again (decision 330). */
+export type SessionLaunch = { agent?: string; name?: string; model?: string; effort?: string; configDir?: string };
+
+function launchFields(read: SessionStartOptions["launch"]): Record<string, string> {
+  let l: SessionLaunch | undefined;
+  try {
+    l = read?.();
+  } catch {
+    return {};
+  }
+  const pairs = [
+    ["launch_agent", l?.agent],
+    ["launch_name", l?.name],
+    ["launch_model", l?.model],
+    ["launch_effort", l?.effort],
+    ["config_dir", l?.configDir],
+  ] as const;
+  return Object.fromEntries(pairs.filter((p): p is [(typeof pairs)[number][0], string] => typeof p[1] === "string" && p[1] !== ""));
 }
 
 /**
@@ -54,7 +76,7 @@ export async function sessionStart(deps: CoreDeps, input: SessionHookInput, opts
     ...(loc ? { entity: "task", entity_id: loc.task, subject: `run:${loc.run}` } : {}),
     ...(held ? { target: `run:${held}` } : {}),
     dedupe_key: dedupeKey(EVENTS.session_started, input.session_id, input.source ?? "startup"),
-    payload: { session: input.session_id, role, model: input.model ?? "unknown", ...(here ? { worktree: here } : {}) },
+    payload: { session: input.session_id, role, model: input.model ?? "unknown", ...(here ? { worktree: here } : {}), ...launchFields(opts.launch) },
   });
 
   const lines = [`${roleLine(role)}${loc ? ` · Task ${loc.task} · Dispatch ${loc.dispatch} · Run ${loc.run}` : ""}`];

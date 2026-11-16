@@ -80,7 +80,7 @@ alias 는 바깥 설정(`ANTHROPIC_DEFAULT_*_MODEL`)에 고정될 수 있다. �
 
 ## 재시작: 다시 띄운 세션을 원래 Task 에 묶기
 
-업그레이드 뒤의 재시작은 아래를 손으로 하지 않는다. `sangsoe restart --stale`(하나만이면 `--task <Task id>`, 먼저 `--dry-run`)이 쉬는 자식마다 `worker-stop` → 그 worktree 에 `claude --resume <세션 id> <원래 flag>` 터미널 → 아래 3 의 `resume` 을 한다(결정 330). 턴 중인 세션·다른 Run 의 세션·오너가 연 세션은 이유를 적고 건너뛴다. 명령이 실패한 줄은 무엇까지 바뀌었는지와 이어 갈 한 줄을 적는다: 그 줄대로 3 의 `resume` 을 부른다.
+업그레이드 뒤의 재시작은 아래를 손으로 하지 않는다. `sangsoe restart --stale`(하나만이면 `--task <Task id>`, 먼저 `--dry-run`)이 쉬는 자식마다 `worker-stop` → 그 worktree 에 `claude --resume <세션 id> <원래 flag>` 터미널 → 아래 3 의 `resume` 을 한다(결정 330). 턴 중인 세션·다른 Run 의 세션·오너가 연 세션은 이유를 적고 건너뛴다. 세션 하나가 claude 를 기다리는 데 90초까지 걸리므로 Bash 의 `run_in_background` 로 부르고 끝나기를 기다린다. 줄은 만들 때마다 찍힌다. 명령이 실패한 줄은 무엇까지 바뀌었는지와 이어 갈 `sangsoe restart --task <Task id>` 를 적는다. 옛 Dispatch 가 끝났고 그 worktree 에서 같은 세션이 이미 다시 떠 있으면(Orca 복원, 묶기 전에 끊긴 재시작) `--task` 는 멈추거나 터미널을 열지 않고 3 의 `resume` 으로 묶기만 한다(표의 `bind` 줄).
 
 Task 를 쥔 리드나 워커를 새 터미널에서 `claude --resume` 으로 다시 띄웠으면, 그 세션은 새 Dispatch 가 없고 옛 Dispatch 는 죽은 터미널에 묶여 남는다. 새 Task 를 만들거나 resume 없이 `start_unit` 을 부르면 같은 일이 둘이 된다. 이렇게 묶는다(결정 322):
 

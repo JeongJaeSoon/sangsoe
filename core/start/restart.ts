@@ -1,8 +1,11 @@
 import { basename } from "node:path";
-import type { OrcaAdapter, TerminalRow, WorktreePsRow } from "../contract/orca.ts";
+import type { OrcaAdapter, TerminalRow, WorkerRow, WorktreePsRow } from "../contract/orca.ts";
 import type { Host } from "../install/host.ts";
 import { type InstalledTree, isStale, type Proc, processTable, serverEntry, workingDirs } from "../install/stale-sessions.ts";
-import { agentRole, type Located, locate, readRoleLine } from "../session/locate.ts";
+import { settled } from "../recover/recover.ts";
+import { handoffSubject } from "../session/handoff.ts";
+import { agentRole, readRoleLine } from "../session/locate.ts";
+import type { SessionLaunch } from "../session/session-start.ts";
 import type { Store } from "../store/store.ts";
 import { startUnit } from "./start.ts";
 import type { Role, StartOutcome, StartRequest } from "./types.ts";
@@ -19,11 +22,13 @@ export type RestartPorts = {
   sleep?: (ms: number) => Promise<void>;
   /** Decision 322's bind; default start_unit's core. */
   bind?: (req: StartRequest) => Promise<StartOutcome>;
+  /** Each line as it is made: a run cut short by its caller's timeout still shows how far it got. */
+  emit?: (line: string) => void;
 };
 
 export type RestartOptions = { task?: string; dryRun: boolean };
 
-type Action = "restart" | "self" | "skip";
+type Action = "restart" | "bind" | "self" | "skip";
 
 export type RestartRow = {
   claudePid: number;
@@ -46,15 +51,19 @@ export type RestartRow = {
 type Caller = { role: Role; run: string; worktree?: string; task?: string };
 
 // Flags a restart carries over. Everything else is listed as dropped; the old session id goes too.
-const KEEP = new Set(["--agent", "--model", "--effort", "--permission-mode", "--plugin-dir"]);
+const KEEP = new Set(["--agent", "--name", "--model", "--effort", "--permission-mode", "--plugin-dir"]);
 const PATH_FLAGS = new Set(["--plugin-dir"]);
 const SESSION_FLAGS = new Set(["--resume", "-r", "--continue", "-c", "--session-id", "--fork-session"]);
 // What `worktree ps` reports for an agent that is not mid-turn (as unit_close reads it, decision 263).
 const AT_REST = new Set(["done", "idle"]);
 const AGENT_WAIT_MS = 90_000;
 const POLL_MS = 2_000;
+const CONFIG_ENV = "CLAUDE_CONFIG_DIR";
 
 export type Launch = { bin: string; flags: string[]; dropped: string[]; problem?: string };
+
+const binOf = (args: string) => (args.split(/\s(?=--?[A-Za-z])/)[0] ?? "").trim();
+const isClaude = (x: Proc) => basename(binOf(x.args)) === "claude";
 
 /**
  * The claude binary and the flags a restart keeps, read back from `ps` arguments. `ps` joins argv with
@@ -94,14 +103,75 @@ export function readLaunch(args: string, exists: (path: string) => boolean): Lau
   return { bin, flags, dropped, ...(problem ? { problem } : {}) };
 }
 
+function flagOf(launch: Pick<Launch, "flags">, name: string): string | undefined {
+  for (let i = 0; i < launch.flags.length; i += 2) if (launch.flags[i] === name) return launch.flags[i + 1];
+  return undefined;
+}
+
+/**
+ * Decision 330: how the session above `pid` was launched, for SessionStart to record. An Orca restore
+ * re-opens a session without its --agent and --name, so only the first launch a session recorded
+ * is trusted later. undefined when ps cannot be read or no claude is above `pid`.
+ */
+export function sessionLaunch(host: Host, pid: number, now: number): SessionLaunch | undefined {
+  const procs = processTable(host, now);
+  if (!procs) return undefined;
+  const byPid = new Map(procs.map((x) => [x.pid, x]));
+  const seen = new Set<number>();
+  let at = byPid.get(pid);
+  while (at && !isClaude(at) && !seen.has(at.pid)) {
+    seen.add(at.pid);
+    at = byPid.get(at.ppid);
+  }
+  if (!at || !isClaude(at)) return undefined;
+  const l = readLaunch(at.args, () => true);
+  const out: SessionLaunch = {};
+  for (const [key, name] of [["agent", "--agent"], ["name", "--name"], ["model", "--model"], ["effort", "--effort"]] as const) {
+    const v = flagOf(l, name);
+    if (v) out[key] = v;
+  }
+  const dir = host.env[CONFIG_ENV];
+  if (dir) out.configDir = dir;
+  return out;
+}
+
+const RECORDED = [
+  ["launch_agent", "--agent"],
+  ["launch_name", "--name"],
+  ["launch_model", "--model"],
+  ["launch_effort", "--effort"],
+] as const;
+
+/**
+ * The flags a restart passes: what ps shows, each recorded launch field written over it. Per field the
+ * first non-empty value wins: a session alive before decision 330 recorded none, and a later
+ * restore records what it lost.
+ */
+function withRecorded(store: RestartPorts["store"], session: string, launch: Launch): { launch: Launch; configDir?: string } {
+  const rows = store.events({ type: "session_started" }).filter((e) => e.payload.session === session);
+  const first = (field: string) => rows.map((e) => e.payload[field]).find((v): v is string => typeof v === "string" && v !== "");
+  const flags = [...launch.flags];
+  for (const [field, name] of RECORDED) {
+    const v = first(field);
+    if (!v) continue;
+    const i = flags.findIndex((f, j) => j % 2 === 0 && f === name);
+    if (i >= 0) flags[i + 1] = v;
+    else flags.push(name, v);
+  }
+  const configDir = first("config_dir");
+  return { launch: { ...launch, flags }, ...(configDir ? { configDir } : {}) };
+}
+
 const quote = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
 /**
  * The line the new terminal runs: wait until the old claude process is gone, then resume its session
- * with its own flags. After worker-stop the wait ends at once; it keeps two processes off one session.
+ * with its own flags and settings folder. After worker-stop the wait ends at once; it keeps two
+ * processes off one session.
  */
-export function resumeCommand(oldPid: number, launch: Launch, session: string): string {
-  return `while kill -0 ${oldPid} 2>/dev/null; do sleep 1; done; ${[launch.bin, "--resume", session, ...launch.flags].map(quote).join(" ")}`;
+export function resumeCommand(oldPid: number, launch: Launch, session: string, configDir?: string): string {
+  const env = configDir ? `${CONFIG_ENV}=${quote(configDir)} ` : "";
+  return `while kill -0 ${oldPid} 2>/dev/null; do sleep 1; done; ${env}${[launch.bin, "--resume", session, ...launch.flags].map(quote).join(" ")}`;
 }
 
 const trim = (p: string) => p.replace(/\/+$/, "");
@@ -130,15 +200,67 @@ function lastSession(store: RestartPorts["store"], o: { task: string } | { run: 
   return typeof hit?.payload.session === "string" ? hit.payload.session : undefined;
 }
 
-function flagOf(launch: Launch, name: string): string | undefined {
-  const i = launch.flags.indexOf(name);
-  return i < 0 ? undefined : launch.flags[i + 1];
+const MAX_PAGES = 10;
+
+/** The unsettled Dispatches of one Run by worktree, from worker-list over that Run alone; null when a read failed. */
+async function dispatchesIn(orca: OrcaAdapter, run: string): Promise<Map<string, WorkerRow> | null> {
+  const out = new Map<string, WorkerRow>();
+  let cursor: string | undefined;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const r = await orca.workerList({ run, limit: 100, ...(cursor ? { cursor } : {}) });
+    if (!r.ok) return null;
+    for (const w of r.value.rows) if (w.workspace && !settled(w)) out.set(w.workspace, w);
+    cursor = r.value.nextCursor;
+    if (!cursor) break;
+  }
+  return out;
+}
+
+/** Each Task's spec in one Run, from one `task-list --full`; null when it cannot be read. */
+async function specsIn(orca: OrcaAdapter, run: string): Promise<Map<string, string | undefined> | null> {
+  const r = await orca.taskList({ run, full: true });
+  if (!r.ok) return null;
+  return new Map(
+    r.value.map((t) => {
+      const spec = (t as { spec?: unknown }).spec;
+      return [t.id, typeof spec === "string" ? spec : undefined];
+    }),
+  );
+}
+
+/**
+ * Who runs the command, read without a walk over every Run (the walk stalled the first measurement for
+ * minutes): `--agent sangsoe:orchestrator` is the orchestrator; else the Task start_unit started in the
+ * caller's worktree (`unit_started`), when its Dispatch is still open; else the declared role, an
+ * orchestrator when none (an Orca restore drops --agent).
+ */
+async function findCaller(p: RestartPorts, claude: Proc | undefined, run: string, innermost: (dir: string) => string | undefined): Promise<Caller | { error: string }> {
+  const declared = agentRole(claude ? flagOf(readLaunch(claude.args, () => true), "--agent") : undefined);
+  if (declared === "orchestrator") return { role: "orchestrator", run };
+  const tree = innermost(p.self.cwd);
+  const started = tree ? p.store.events({ type: "unit_started" }).findLast((e) => e.payload.worktree === tree) : undefined;
+  const task = started?.entity_id;
+  const taskRun = typeof started?.payload.run === "string" ? started.payload.run : undefined;
+  if (task && taskRun) {
+    const d = await p.orca.dispatchShow({ task });
+    if (d.ok && d.value.status === "dispatched" && !d.value.completed_at) {
+      const specs = await specsIn(p.orca, taskRun);
+      if (!specs) return { error: `부른 세션의 Task ${task} 를 읽지 못했다(task-list --run ${taskRun})` };
+      const role = readRoleLine(specs.get(task));
+      if (!role) return { error: `부른 세션의 Task ${task} 에 역할 줄이 없다` };
+      return { role, run, task, ...(tree ? { worktree: tree } : {}) };
+    }
+  }
+  const role = declared ?? "orchestrator";
+  // A lead with no Task names its worktree as start_unit asks (decision 243); an orchestrator leaves it to start_unit.
+  return { role, run, ...(role === "lead" && tree ? { worktree: tree } : {}) };
 }
 
 /**
  * Decision 330: which sangsoe sessions to restart and how, read without changing anything. With
- * `task`, the one session holding that Task's Dispatch, stale or not; without, every session whose
- * MCP server runs an older install than the one its entry names now (decision 247).
+ * `task`, the one session holding that Task, stale or not, bound alone when it already runs again;
+ * without, every session whose MCP server runs an older install than the one its entry names now
+ * (decision 247) and whose Dispatch lives in the caller's Run.
  */
 export async function planRestart(p: RestartPorts, o: { task?: string }): Promise<{ caller: Caller; rows: RestartRow[] } | { error: string }> {
   const { orca, host } = p;
@@ -146,41 +268,67 @@ export async function planRestart(p: RestartPorts, o: { task?: string }): Promis
   const procs = processTable(host, (p.now ?? Date.now)());
   if (!procs) return { error: "ps 를 읽지 못해 도는 세션을 보지 못했다" };
   const byPid = new Map(procs.map((x) => [x.pid, x]));
-  const ancestors = new Set<number>();
-  for (let at = byPid.get(p.self.pid); at && !ancestors.has(at.ppid); at = byPid.get(at.ppid)) ancestors.add(at.ppid);
-  const callerClaude = [...ancestors].map((pid) => byPid.get(pid)).find((x): x is Proc => !!x && basename(x.args.split(/\s(?=--?[A-Za-z])/)[0] ?? "") === "claude");
+  const ancestors: number[] = [];
+  for (let at = byPid.get(p.self.pid); at && !ancestors.includes(at.ppid); at = byPid.get(at.ppid)) ancestors.push(at.ppid);
+  const callerClaude = ancestors.map((pid) => byPid.get(pid)).find((x): x is Proc => !!x && isClaude(x));
 
   const current = await orca.runCurrent();
   const run = current.ok && typeof current.value.runId === "string" && current.value.runId !== "" ? current.value.runId : undefined;
   if (!run) return { error: "부른 세션이 쥔 Run 을 읽지 못했다(run-current): Run 을 쥔 오케스트레이터나 리드가 부른다" };
-  const callerLoc = await locate(orca, p.self.cwd);
-  const callerRole = callerLoc
-    ? readRoleLine(callerLoc.spec)
-    : (agentRole(callerClaude ? flagOf(readLaunch(callerClaude.args, () => true), "--agent") : undefined) ?? "orchestrator");
-  if (!callerRole) return { error: `부른 세션의 Task ${callerLoc?.task} 에 역할 줄이 없다` };
-  if (callerRole === "worker") return { error: "워커는 세션을 다시 띄우지 않는다: 그 Run 을 쥔 리드가 부른다" };
   const trees = await orca.worktreeList({ limit: 1000 });
-  const innermost = (dir: string) =>
-    trees.ok ? trees.value.rows.filter((t) => within(dir, t.path)).sort((a, b) => b.path.length - a.path.length)[0]?.id : undefined;
-  // A lead with no Task names its worktree as start_unit asks (decision 243); an orchestrator leaves it to start_unit.
-  const ownTree = callerLoc?.worktree ?? (callerRole === "lead" ? innermost(p.self.cwd) : undefined);
-  const caller: Caller = { role: callerRole, run, ...(callerLoc ? { task: callerLoc.task } : {}), ...(ownTree ? { worktree: ownTree } : {}) };
+  if (!trees.ok) return { error: `worktree 목록을 읽지 못했다(${trees.error.code})` };
+  const innermost = (dir: string | undefined) =>
+    dir ? trees.value.rows.filter((t) => within(dir, t.path)).sort((a, b) => b.path.length - a.path.length)[0] : undefined;
+  const caller = await findCaller(p, callerClaude, run, (d) => innermost(d)?.id);
+  if ("error" in caller) return caller;
+  if (caller.role === "worker") return { error: "워커는 세션을 다시 띄우지 않는다: 그 Run 을 쥔 리드가 부른다" };
 
-  const servers = procs.flatMap((x) => {
+  const box = await orca.inbox({ terminal: `run:${run}`, limit: 50 });
+  const handoffOf = (task: string) => (box.ok ? box.value.filter((m) => m.type === "handoff" && m.subject === handoffSubject(task)).at(-1)?.id : undefined);
+  let psRows: Promise<WorktreePsRow[] | undefined> | undefined;
+  const ps = () =>
+    (psRows ??= orca.worktreePs({ limit: 1000 }).then((r) => (r.ok && !r.value.truncated ? r.value.rows : undefined)));
+
+  type Held = { role: Role; task: string; dispatch: string; run: string; worktree: string; terminal: string };
+  /** The row for an idle child: stop it, resume its session in a new terminal, bind it back. */
+  const restartRow = async (base: Pick<RestartRow, "claudePid" | "cwd" | "flags" | "dropped">, launch: Launch, h: Held): Promise<RestartRow> => {
+    const st = await agentState(orca, await ps(), h.worktree, h.terminal);
+    const state = "state" in st ? st.state : undefined;
+    const more = { ...base, ...h, ...(state ? { state } : {}) };
+    if (!state) return { ...more, action: "skip", why: `쉬는지 알 수 없다: ${"unknown" in st ? st.unknown : ""}` };
+    if (!AT_REST.has(state)) return { ...more, action: "skip", why: `턴 중이다(agent ${state}): 쉴 때 다시 부른다` };
+    const session = lastSession(p.store, { task: h.task });
+    if (!session) return { ...more, action: "skip", why: `Task ${h.task} 의 세션 id 가 store 에 없다(session_started)` };
+    if (launch.problem) return { ...more, session, action: "skip", why: launch.problem };
+    const r = withRecorded(p.store, session, launch);
+    const handoff = handoffOf(h.task);
+    return {
+      ...more,
+      flags: r.launch.flags,
+      session,
+      action: "restart",
+      why: `쉬고 있다(${handoff ? `마지막 handoff ${handoff}` : "handoff 없음: --resume 이 대화를 그대로 잇는다"})`,
+      command: resumeCommand(base.claudePid, r.launch, session, r.configDir),
+    };
+  };
+
+  if (o.task !== undefined) return { caller, rows: await planTask(o.task) };
+
+  const servers = procs.filter((x) => {
     const entry = serverEntry(x.args);
-    return entry && (o.task !== undefined || isStale(x.startedAt, entry, p.installed)) ? [x] : [];
+    return entry !== undefined && isStale(x.startedAt, entry, p.installed);
   });
-  const dirs = servers.length > 0 ? workingDirs(host, servers.map((s) => s.pid)) : new Map<number, string>();
-  const ps = await orca.worktreePs({ limit: 1000 });
-  const psRows = ps.ok && !ps.value.truncated ? ps.value.rows : undefined;
+  if (servers.length === 0) return { caller, rows: [] };
+  const dirs = workingDirs(host, servers.map((s) => s.pid));
+  const held = await dispatchesIn(orca, run);
+  if (!held) return { error: `Run ${run} 의 워커 목록을 읽지 못했다(worker-list --run)` };
+  const specs = await specsIn(orca, run);
+  if (!specs) return { error: `Run ${run} 의 Task 목록을 읽지 못했다(task-list --run)` };
 
   const rows: RestartRow[] = [];
   for (const s of servers) {
     const claude = byPid.get(s.ppid);
     const cwd = dirs.get(s.pid);
-    const self = ancestors.has(s.ppid);
-    const loc: Located | undefined = self ? (callerLoc ?? undefined) : cwd ? await locate(orca, cwd) : undefined;
-    if (o.task !== undefined && loc?.task !== o.task) continue;
     const launch = readLaunch(claude?.args ?? "", exists);
     const base = { claudePid: s.ppid, ...(cwd ? { cwd } : {}), flags: launch.flags, dropped: launch.dropped };
     const skip = (why: string, more: Partial<RestartRow> = {}): RestartRow => ({ ...base, ...more, action: "skip", why });
@@ -188,63 +336,93 @@ export async function planRestart(p: RestartPorts, o: { task?: string }): Promis
       rows.push(skip(!claude ? "MCP server 의 부모 프로세스가 없다" : "작업 폴더를 읽지 못했다"));
       continue;
     }
-    const role = loc ? readRoleLine(loc.spec) : agentRole(flagOf(launch, "--agent"));
-    const held = loc ? { task: loc.task, dispatch: loc.dispatch, run: loc.run, worktree: loc.worktree } : {};
+    const tree = innermost(cwd)?.id;
+    if (ancestors.includes(s.ppid)) {
+      if (caller.task) {
+        rows.push(skip("이 명령을 부른 세션이다: Dispatch 를 쥔 세션은 그 Run 의 coordinator 가 다시 띄운다", { role: caller.role, task: caller.task }));
+        continue;
+      }
+      const session = lastSession(p.store, { run, role: caller.role });
+      if (!session || !tree || launch.problem) {
+        rows.push(skip(`이 명령을 부른 세션이다: ${launch.problem ?? (session ? "worktree 를 찾지 못했다" : `Run ${run} 의 ${caller.role} 세션 id 가 store 에 없다`)}`, { role: caller.role }));
+        continue;
+      }
+      const r = withRecorded(p.store, session, launch);
+      rows.push({
+        ...base,
+        flags: r.launch.flags,
+        role: caller.role,
+        run,
+        worktree: tree,
+        session,
+        action: "self",
+        why: "이 명령을 부른 세션: 새 터미널이 이 세션이 끝나기를 기다렸다가 이어 띄운다",
+        command: resumeCommand(s.ppid, r.launch, session, r.configDir),
+      });
+      continue;
+    }
+    if (!tree) {
+      rows.push(skip("Orca worktree 밖의 세션이다(오너가 손으로 연 세션은 건드리지 않는다)"));
+      continue;
+    }
+    const w = held.get(tree);
+    if (!w) {
+      rows.push(skip(`부른 쪽 Run(${run})에 이 worktree 의 Dispatch 가 없다: 다른 Run 의 세션은 그 Run 을 쥔 쪽이, 오너가 연 세션은 오너가 다시 띄운다`));
+      continue;
+    }
+    const role = readRoleLine(specs.get(w.taskId));
+    const ids = { task: w.taskId, dispatch: w.dispatchId, run, worktree: tree };
     if (!role) {
-      rows.push(skip("sangsoe 역할이 없는 세션이다(오너가 손으로 연 세션은 건드리지 않는다)", held));
+      rows.push(skip("sangsoe 역할 줄이 없는 Task 다(sangsoe 밖에서 시작한 세션은 건드리지 않는다)", ids));
       continue;
     }
-    if (self) {
-      if (loc) {
-        rows.push(skip("이 명령을 부른 세션이다: Dispatch 를 쥔 세션은 그 Run 의 coordinator 가 다시 띄운다", { role, ...held }));
-        continue;
-      }
-      const session = lastSession(p.store, { run, role });
-      const worktree = innermost(cwd);
-      if (!session || !worktree || launch.problem) {
-        rows.push(skip(`이 명령을 부른 세션이다: ${launch.problem ?? (session ? "worktree 를 찾지 못했다" : `Run ${run} 의 ${role} 세션 id 가 store 에 없다`)}`, { role }));
-        continue;
-      }
-      rows.push({ ...base, role, run, worktree, session, action: "self", why: "이 명령을 부른 세션: 새 터미널이 이 세션이 끝나기를 기다렸다가 이어 띄운다", command: resumeCommand(s.ppid, launch, session) });
+    if (!w.terminal) {
+      rows.push(skip(`Dispatch ${w.dispatchId} 의 터미널을 읽지 못했다`, { role, ...ids }));
       continue;
     }
-    if (!loc) {
-      rows.push(skip("Dispatch 없는 세션이다: 그 세션이 스스로 sangsoe restart --stale 을 부른다", { role }));
-      continue;
-    }
-    if (loc.run !== run) {
-      rows.push(skip(`Run ${loc.run} 의 Task 다: 그 Run 을 쥔 coordinator 가 다시 띄운다`, { role, ...held }));
-      continue;
-    }
-    const w = await orca.workerShow({ dispatch: loc.dispatch });
-    const terminal = w.ok ? w.value.terminal : undefined;
-    if (!terminal) {
-      rows.push(skip(`Dispatch ${loc.dispatch} 의 터미널을 읽지 못했다`, { role, ...held }));
-      continue;
-    }
-    const st = await agentState(orca, psRows, loc.worktree, terminal);
-    const state = "state" in st ? st.state : undefined;
-    const more = { role, ...held, terminal, ...(state ? { state } : {}) };
-    if (!state) {
-      rows.push(skip(`쉬는지 알 수 없다: ${"unknown" in st ? st.unknown : ""}`, more));
-      continue;
-    }
-    if (!AT_REST.has(state)) {
-      rows.push(skip(`턴 중이다(agent ${state}): 쉴 때 다시 부른다`, more));
-      continue;
-    }
-    const session = lastSession(p.store, { task: loc.task });
-    if (!session) {
-      rows.push(skip(`Task ${loc.task} 의 세션 id 가 store 에 없다(session_started)`, more));
-      continue;
-    }
-    if (launch.problem) {
-      rows.push(skip(launch.problem, { ...more, session }));
-      continue;
-    }
-    rows.push({ ...base, ...more, session, action: "restart", why: "쉬고 있다", command: resumeCommand(s.ppid, launch, session) });
+    rows.push(await restartRow(base, launch, { role, ...ids, terminal: w.terminal }));
   }
   return { caller, rows };
+
+  /** One Task's session: restarted when its Dispatch is open, bound alone when it already runs again. */
+  async function planTask(task: string): Promise<RestartRow[]> {
+    const d = await orca.dispatchShow({ task });
+    if (!d.ok) return [];
+    const w = await orca.workerShow({ dispatch: d.value.id });
+    if (!w.ok || !w.value.workspace) return [];
+    const tree = w.value.workspace;
+    const claudes = (procs ?? []).filter(isClaude);
+    const dirs = workingDirs(host, claudes.map((c) => c.pid));
+    const here = claudes.filter((c) => innermost(dirs.get(c.pid))?.id === tree);
+    const session = lastSession(p.store, { task });
+    const resumed = session ? here.filter((c) => new RegExp(`(^|\\s)(--resume|-r)[\\s=]${session}(\\s|$)`).test(c.args)) : [];
+    const proc = resumed[0] ?? here[0];
+    if (!proc) return [];
+    const launch = readLaunch(proc.args, exists);
+    const base = { claudePid: proc.pid, ...(dirs.get(proc.pid) ? { cwd: dirs.get(proc.pid) as string } : {}), flags: launch.flags, dropped: launch.dropped };
+    const ids = { task, dispatch: d.value.id, run: w.value.runId, worktree: tree };
+    const skip = (why: string, more: Partial<RestartRow> = {}): RestartRow[] => [{ ...base, ...ids, ...more, action: "skip", why }];
+    if (w.value.runId !== run) return skip(`Run ${w.value.runId} 의 Task 다: 그 Run 을 쥔 coordinator 가 다시 띄운다`);
+    const specs = await specsIn(orca, run);
+    const role = readRoleLine(specs?.get(task));
+    if (!role) return skip(specs ? "sangsoe 역할 줄이 없는 Task 다" : `Run ${run} 의 Task 목록을 읽지 못했다`);
+    const open = d.value.status === "dispatched" && !d.value.completed_at && !settled(w.value);
+    if (open) {
+      if (!w.value.terminal) return skip(`Dispatch ${d.value.id} 의 터미널을 읽지 못했다`, { role });
+      if (here.length > 1) return skip(`worktree 에 claude 가 ${here.length}개 돈다: 어느 것이 이 Task 의 세션인지 모른다`, { role });
+      return [await restartRow(base, launch, { role, ...ids, terminal: w.value.terminal })];
+    }
+    // The old Dispatch is over and the session already runs again (an Orca restore, or a restart cut short before its bind).
+    if (!session || resumed.length !== 1) {
+      return skip(`옛 Dispatch ${d.value.id} 는 끝났고 이 worktree 에 세션 ${session ?? "?"} 를 이어 띄운 claude 가 ${resumed.length}개다: 하나일 때 묶는다`, { role });
+    }
+    const terms = await orca.terminalList({ worktree: `id:${tree}` });
+    if (!terms.ok || terms.value.truncated) return skip("터미널 목록을 다 읽지 못했다", { role, session });
+    const agents = terms.value.rows.filter((t) => t.agentIdentity && t.handle !== w.value.terminal);
+    const [only] = agents;
+    if (!only || agents.length !== 1) return skip(`옛 터미널 말고 agent 가 붙은 터미널이 ${agents.length}개다: 하나일 때 묶는다`, { role, session });
+    return [{ ...base, ...ids, role, session, terminal: only.handle, action: "bind", why: `옛 Dispatch 가 끝났고 세션이 터미널 ${only.handle} 에서 이미 다시 떠 있다: 묶기만 한다` }];
+  }
 }
 
 function describe(r: RestartRow): string {
@@ -254,108 +432,131 @@ function describe(r: RestartRow): string {
   return `  pid ${r.claudePid}  ${who}  ${r.cwd ?? "-"}  session ${r.session ?? "-"}  state ${r.state ?? "-"}  flags ${flags}${extra}\n    → ${r.action}: ${r.why}`;
 }
 
-/** The Run's coordinator sees a terminal show up with claude in it before binding it (decision 322 (나)). */
+/** The Run's coordinator sees a terminal show up with claude in it before binding it (decision 322 (나)); bounded by the clock. */
 async function waitAgent(p: RestartPorts, worktree: string, terminal: string): Promise<boolean> {
   const sleep = p.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
-  for (let waited = 0; waited <= AGENT_WAIT_MS; waited += POLL_MS) {
+  const now = p.now ?? Date.now;
+  const end = now() + AGENT_WAIT_MS;
+  for (;;) {
     const list = await p.orca.terminalList({ worktree: `id:${worktree}` });
     if (list.ok && list.value.rows.some((t) => t.handle === terminal && t.agentIdentity)) return true;
+    if (now() >= end) return false;
     await sleep(POLL_MS);
   }
-  return false;
 }
 
-async function restartOne(p: RestartPorts, caller: Caller, r: RestartRow): Promise<{ ok: boolean; lines: string[] }> {
-  const { orca } = p;
+type Say = (...lines: string[]) => void;
+
+async function bindOne(p: RestartPorts, caller: Caller, r: RestartRow, terminal: string, say: Say): Promise<boolean> {
   const task = r.task as string;
-  const worktree = r.worktree as string;
-  const fail = (...lines: string[]) => ({ ok: false, lines: [`  ✗ ${task}: ${lines[0]}`, ...lines.slice(1).map((l) => `    ${l}`)] });
-  const stopped = await orca.workerStop({ dispatch: r.dispatch as string });
-  if (!stopped.ok) {
-    return fail(`worker-stop ${r.dispatch} 실패(${stopped.error.code}): 세션을 다시 띄우지 않았다. worker-show 로 그 Dispatch 를 읽고 다시 부른다`);
-  }
-  const resumeArgs = `start_unit {task: ${task}, childRole: ${r.role}, resume: {worktreeId: ${worktree}, sessionId: ${r.session}, terminal: <새 터미널>}}`;
-  const created = await orca.terminalCreate({ worktree: `id:${worktree}`, command: r.command as string, title: `restart ${task}` });
-  if (!created.ok) {
-    return fail(
-      `Dispatch ${r.dispatch} 는 멈췄고 터미널 생성이 실패로 읽혔다(${created.error.code}: ${created.error.message.slice(0, 200)})`,
-      `먼저 orca terminal list --worktree ${quote(`id:${worktree}`)} 로 claude 터미널이 이미 열렸는지 본다. 없으면: orca terminal create --worktree ${quote(`id:${worktree}`)} --command ${quote(r.command as string)}`,
-      `그 뒤 ${resumeArgs}`,
-    );
-  }
-  const terminal = created.value.handle;
-  if (!(await waitAgent(p, worktree, terminal))) {
-    return fail(`터미널 ${terminal} 에 ${AGENT_WAIT_MS / 1000}초 안에 claude 가 붙지 않았다`, `붙은 뒤 ${resumeArgs.replace("<새 터미널>", terminal)}`);
-  }
-  const bind = p.bind ?? ((req: StartRequest) => startUnit({ orca, store: p.store, slots: () => 0, cwd: () => p.self.cwd, source: "cli:restart" }, req));
+  const again = `sangsoe restart --task ${task}`;
+  const bind = p.bind ?? ((req: StartRequest) => startUnit({ orca: p.orca, store: p.store, slots: () => 0, cwd: () => p.self.cwd, source: "cli:restart" }, req));
   const out = await bind({
     requester: { role: caller.role, runId: caller.run, ...(caller.worktree ? { worktreeId: caller.worktree } : {}), ...(caller.task ? { taskId: caller.task } : {}) },
     childRole: r.role === "lead" ? "lead" : "worker",
     task: { id: task },
     agent: "claude",
-    resume: { worktreeId: worktree, sessionId: r.session as string, terminal },
+    resume: { worktreeId: r.worktree as string, sessionId: r.session as string, terminal },
   });
   if (out.kind !== "resumed") {
     const why = out.kind === "refused" ? `${out.reason}: ${out.detail}` : out.kind;
-    return fail(`터미널 ${terminal} 에서 세션은 다시 떴지만 Task 에 묶지 못했다(${why})`, `같은 resume 을 다시: ${resumeArgs.replace("<새 터미널>", terminal)}`);
+    say(`  ✗ ${task}: 터미널 ${terminal} 에서 세션은 다시 떴지만 Task 에 묶지 못했다(${why})`, `    이어서: ${again} (묶기만 한다)`);
+    return false;
   }
-  const lines = [`  ✓ ${task}: Dispatch ${out.from} → ${out.dispatchId}, 터미널 ${terminal}`];
+  say(`  ✓ ${task}: Dispatch ${out.from} → ${out.dispatchId}, 터미널 ${terminal}`);
   if (r.role === "lead") {
     // The lead's own workers hold its Run, which only it can reopen (Orca's recovery guide).
-    const sent = await orca.send({
+    const sent = await p.orca.send({
       to: terminal,
       type: "status",
       subject: "sangsoe restart: 다시 띄웠다(결정 330)",
       body: "업그레이드 뒤 이 세션을 claude --resume 으로 다시 띄워 원래 Task 에 묶었다. 이 Run 의 낡은 워커는 `sangsoe restart --stale` 로 다시 띄운다(--dry-run 으로 먼저 본다).",
     });
-    if (!sent.ok) lines.push(`    리드에게 알리지 못했다(${sent.error.code}): 리드가 sangsoe restart --stale 을 부르게 알린다`);
+    if (!sent.ok) say(`    리드에게 알리지 못했다(${sent.error.code}): 리드가 sangsoe restart --stale 을 부르게 알린다`);
   }
-  return { ok: true, lines };
+  return true;
 }
 
-async function restartSelf(p: RestartPorts, r: RestartRow): Promise<{ ok: boolean; lines: string[] }> {
+async function restartOne(p: RestartPorts, caller: Caller, r: RestartRow, say: Say): Promise<boolean> {
+  const { orca } = p;
+  const task = r.task as string;
+  const worktree = r.worktree as string;
+  const again = `sangsoe restart --task ${task}`;
+  const stopped = await orca.workerStop({ dispatch: r.dispatch as string });
+  if (!stopped.ok) {
+    say(`  ✗ ${task}: worker-stop ${r.dispatch} 실패(${stopped.error.code}): 세션을 다시 띄우지 않았다. worker-show 로 그 Dispatch 를 읽고 다시 부른다`);
+    return false;
+  }
+  const created = await orca.terminalCreate({ worktree: `id:${worktree}`, command: r.command as string, title: `restart ${task}` });
+  if (!created.ok) {
+    say(
+      `  ✗ ${task}: Dispatch ${r.dispatch} 는 멈췄고 터미널 생성이 실패로 읽혔다(${created.error.code}: ${created.error.message.slice(0, 200)})`,
+      `    먼저 ${again} --dry-run 으로 claude 가 이미 다시 떴는지 본다(떴으면 bind 줄). 없으면: orca terminal create --worktree ${quote(`id:${worktree}`)} --command ${quote(r.command as string)}`,
+      `    그 뒤 ${again}`,
+    );
+    return false;
+  }
+  const terminal = created.value.handle;
+  if (!(await waitAgent(p, worktree, terminal))) {
+    say(`  ✗ ${task}: 터미널 ${terminal} 에 ${AGENT_WAIT_MS / 1000}초 안에 claude 가 붙지 않았다`, `    붙은 뒤: ${again} (묶기만 한다)`);
+    return false;
+  }
+  return bindOne(p, caller, r, terminal, say);
+}
+
+async function restartSelf(p: RestartPorts, r: RestartRow, say: Say): Promise<boolean> {
   const created = await p.orca.terminalCreate({ worktree: `id:${r.worktree}`, command: r.command as string, title: `restart ${r.role}` });
   const ownLine = `/exit 뒤 이 터미널에서: ${r.command?.slice(r.command.indexOf("done; ") + "done; ".length)}`;
-  if (!created.ok) return { ok: false, lines: [`  ✗ 이 세션: 새 터미널을 열지 못했다(${created.error.code})`, `    오너가 칠 한 줄: ${ownLine}`] };
-  return {
-    ok: true,
-    lines: [
-      `  ✓ 이 세션: 새 터미널 ${created.value.handle} 이 pid ${r.claudePid} 가 끝나기를 기다린다`,
-      `    오너: Orca 에서 이 세션의 터미널${p.self.terminal ? ` ${p.self.terminal}` : ""} 을 닫으면(결정 301) 새 터미널이 세션을 이어 띄운다`,
-    ],
-  };
+  if (!created.ok) {
+    say(`  ✗ 이 세션: 새 터미널을 열지 못했다(${created.error.code})`, `    오너가 칠 한 줄: ${ownLine}`);
+    return false;
+  }
+  say(
+    `  ✓ 이 세션: 새 터미널 ${created.value.handle} 이 pid ${r.claudePid} 가 끝나기를 기다린다`,
+    `    오너: Orca 에서 이 세션의 터미널${p.self.terminal ? ` ${p.self.terminal}` : ""} 을 닫으면(결정 301) 새 터미널이 세션을 이어 띄운다`,
+  );
+  return true;
 }
 
 /**
  * Decision 330: restart the caller's own children whose sessions run stale code (or the one `task`
  * names), each idle one by worker-stop, a new terminal running `claude --resume` with its flags, and
- * start_unit's resume (decision 322); then, for a caller with no Dispatch, a terminal that resumes the
- * caller once it ends. A dry run prints the plan and changes nothing.
+ * start_unit's resume (decision 322); a Task whose session already runs again is only bound. Then, for
+ * a caller with no Dispatch, a terminal that resumes the caller once it ends. A dry run prints the plan
+ * and changes nothing.
  */
 export async function restartSessions(p: RestartPorts, o: RestartOptions): Promise<{ code: number; lines: string[] }> {
+  const lines: string[] = [];
+  const say: Say = (...ls) => {
+    for (const l of ls) {
+      lines.push(l);
+      p.emit?.(l);
+    }
+  };
   const plan = await planRestart(p, o);
-  if ("error" in plan) return { code: 1, lines: [`sangsoe restart: ${plan.error}`] };
+  if ("error" in plan) {
+    say(`sangsoe restart: ${plan.error}`);
+    return { code: 1, lines };
+  }
   const { caller, rows } = plan;
   const what = o.task ? `Task ${o.task}` : "낡은 세션";
-  const lines = [`sangsoe restart: ${what} ${rows.length}개 (부른 쪽 ${caller.role}, Run ${caller.run})${o.dryRun ? " — dry-run, 바꾸지 않는다" : ""}`];
-  if (rows.length === 0) return { code: o.task ? 1 : 0, lines: [...lines, o.task ? `  Task ${o.task} 를 쥔 sangsoe 세션 프로세스를 찾지 못했다` : "  없다"] };
+  say(`sangsoe restart: ${what} ${rows.length}개 (부른 쪽 ${caller.role}, Run ${caller.run})${o.dryRun ? " — dry-run, 바꾸지 않는다" : ""}`);
+  if (rows.length === 0) {
+    say(o.task ? `  Task ${o.task} 를 쥔 sangsoe 세션 프로세스를 찾지 못했다` : "  없다");
+    return { code: o.task ? 1 : 0, lines };
+  }
   for (const r of rows) {
-    lines.push(describe(r));
-    if (r.command) lines.push(`    command: ${r.command}`);
+    say(describe(r));
+    if (r.command) say(`    command: ${r.command}`);
   }
   if (o.dryRun) return { code: 0, lines };
   let ok = true;
-  lines.push("결과:");
-  for (const r of rows.filter((x) => x.action === "restart")) {
-    const one = await restartOne(p, caller, r);
-    ok &&= one.ok;
-    lines.push(...one.lines);
+  say("결과:");
+  for (const r of rows) {
+    if (r.action === "bind") ok = (await bindOne(p, caller, r, r.terminal as string, say)) && ok;
+    if (r.action === "restart") ok = (await restartOne(p, caller, r, say)) && ok;
   }
-  for (const r of rows.filter((x) => x.action === "self")) {
-    const one = await restartSelf(p, r);
-    ok &&= one.ok;
-    lines.push(...one.lines);
-  }
-  if (!rows.some((x) => x.action !== "skip")) lines.push("  다시 띄운 세션 없음");
+  for (const r of rows.filter((x) => x.action === "self")) ok = (await restartSelf(p, r, say)) && ok;
+  if (!rows.some((x) => x.action !== "skip")) say("  다시 띄운 세션 없음");
   return { code: ok ? 0 : 1, lines };
 }

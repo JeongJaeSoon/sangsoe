@@ -17,10 +17,19 @@ export async function restart(
   }
   const store = (open ?? (() => Store.open()))();
   try {
-    return await restartSessions(
-      { orca, store, host, self: { pid: process.pid, cwd: process.cwd(), terminal: host.env.ORCA_TERMINAL_HANDLE }, exists: existsSync },
+    // Lines go out as they are made, so a caller's timeout still leaves what was done on screen.
+    const out = await restartSessions(
+      {
+        orca,
+        store,
+        host,
+        self: { pid: process.pid, cwd: process.cwd(), terminal: host.env.ORCA_TERMINAL_HANDLE },
+        exists: existsSync,
+        emit: (line) => process.stdout.write(`${line}\n`),
+      },
       { ...(task ? { task } : {}), dryRun: values["dry-run"] === true },
     );
+    return { code: out.code, lines: [] };
   } finally {
     if (!open) store.close();
   }
