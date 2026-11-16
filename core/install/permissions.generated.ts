@@ -8,6 +8,7 @@ export const GENERATED_RULES: readonly { readonly rule: string; readonly source:
   { rule: "Bash(orca diagnostics memory:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca host list:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca orchestration ask:*)", source: "claude-plugin/agents/worker.md" },
+  { rule: "Bash(orca orchestration check:*)", source: "claude-plugin/agents/lead.md" },
   { rule: "Bash(orca orchestration dispatch-show:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca orchestration gate-list:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca orchestration inbox:*)", source: "claude-plugin/skills/general/recall/SKILL.md" },

@@ -25,6 +25,7 @@ export const ORCA_POLICY: Readonly<Record<string, Entry>> = {
   "orchestration send": { kind: "allow" },
   "orchestration reply": { kind: "allow" },
   "orchestration inbox": { kind: "allow" },
+  "orchestration check": { kind: "allow" },
   "orchestration run-create": { kind: "allow" },
   "orchestration run-use": { kind: "allow" },
   "orchestration task-list": { kind: "allow" },

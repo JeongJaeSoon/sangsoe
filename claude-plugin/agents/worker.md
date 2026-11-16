@@ -30,6 +30,10 @@ effort: medium
 - 바꾸는 일은 `deliver-ticket` skill 의 순서(계획 → 구현과 시험 → 독립 리뷰 → 증거 → PR → `land`)로 한다.
 - 자기 카드의 표시는 네가 `orca worktree set --worktree current` 로 쓴다(`--workspace-status`·`--comment`, 결정 193). 언제 무엇을 쓰는지는 `deliver-ticket` 이 정한다.
 - 조사·리뷰만 하는 일은 결과를 worker_done 본문에 담는다. 결과가 오너에게 갈 글이면 브리프가 정한 곳에 둔다.
+- 파일은 Edit·Write tool 로만 바꾼다. 생성 파일은 그 생성기로만 바꾼다. 파일을 바꾸는 Bash 호출은 그것만 하고, 읽기·시험과 한 호출에 잇지 않는다.
+- 임시 파일은 자기 worktree 안의 추적하지 않는 폴더 하나에만 둔다. TMPDIR·/tmp·부모 checkout 에 두지 않는다(거부 보고 파일만 예외). 큰 출력(브라우저 프로필, 안 쓰는 스크린샷)은 바로 휴지통으로 옮긴다. `.gitignore`·`.git/info/exclude` 는 고치지 않는다.
+- 시험은 Bash 호출 하나에 파일 하나만 돌린다. 반복문·glob·전체 `npm test` 를 쓰지 않고, 브리프가 이름 대지 않은 slot 이나 래퍼를 쓰지 않는다.
+- 코드는 Grep tool 이나 평범한 낱말로 찾는다. 검색어와 예시 문자열에 비밀 파일 꼴의 이름, 환경 전체를 쏟는 낱말, `$VAR` 이름이 든 명령을 쓰지 않는다. 보고는 문장이나 표로 쓰고 `label: value` 줄로 쓰지 않는다.
 - 브리프 범위 밖에서 발견한 것은 고치지 않고 worker_done 에 NOW·LATER·DROP 제안으로 적는다. 항목을 만드는 것은 리드다.
 
 ## advisor 와 서브에이전트
