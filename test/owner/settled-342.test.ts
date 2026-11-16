@@ -76,6 +76,16 @@ test("a fact far from the line, a line with no PR number and a non-gh line all s
   assert.equal(acts(w).length, 3);
 });
 
+test("a compound line, a quoted flag value and a `#N` comment are not read: the row stays", () => {
+  const w = ownerWorld();
+  line(w, "gh pr merge 61 -R acme/app && gh pr merge 62 -R acme/app");
+  line(w, 'gh pr merge -t "fix #63 stuff" 64 -R acme/app');
+  line(w, "gh pr merge #65 -R acme/app");
+  for (const n of [61, 63, 65]) merged(w, `acme/app#${n}`);
+  w.at(later(T0, 10));
+  assert.equal(acts(w).length, 3);
+});
+
 test("pr-monitor's own `merged <PR>` row is the merge fact itself and stays for the orchestrator to link", () => {
   const w = ownerWorld();
   line(w, "merged acme/app#51");

@@ -12,6 +12,8 @@ const URL_PR = /^https?:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/pul
 
 /** Null when the line is not a merge or close of a PR it names (`gh pr merge` alone merges the current branch's). */
 export function actPr(act: string): ActPr | null {
+  // Quotes and shell operators make the whitespace split misread which PR a command names, or hide a second command: leave the row.
+  if (/["'`;&|\n]/.test(act)) return null;
   const t = act.trim().split(/\s+/);
   const verb = t[2];
   if (t[0] !== "gh" || t[1] !== "pr" || (verb !== "merge" && verb !== "close")) return null;
@@ -19,14 +21,13 @@ export function actPr(act: string): ActPr | null {
   let number: number | null = null;
   for (let i = 3; i < t.length; i++) {
     const w = t[i] ?? "";
-    if (w === "&&" || w === ";" || w === "||" || w === "|") break;
     if (w === "-R" || w === "--repo") repo = t[++i]?.toLowerCase() ?? null;
     else if (w.startsWith("--repo=")) repo = w.slice("--repo=".length).toLowerCase();
     else if (VALUE_FLAGS.has(w)) i++;
     else if (w.startsWith("-")) continue;
     else if (number === null) {
       const url = URL_PR.exec(w);
-      const bare = /^#?([1-9][0-9]*)$/.exec(w);
+      const bare = /^([1-9][0-9]*)$/.exec(w);
       if (url) {
         repo = (url[1] ?? "").toLowerCase();
         number = Number(url[2]);
