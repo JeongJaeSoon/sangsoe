@@ -4,6 +4,7 @@ export { type ItemSet, type ItemSetDone, type OwnerExtra, parseOwnerExtra, recor
 export { type ChatLink, hintMatches, linkChat, linkedActs, linkShell, recordProposal, recordShellLink, type ShellLine, type ShellLink } from "./link.ts";
 export { countsAsEvidence, DONE_EVIDENCE, MARK_LABEL, type OwnerItemMarks, type OwnerMark, ownerMarks, UNMARK_CLASSES } from "./marks.ts";
 export { ownerVerify } from "./pending.ts";
+export { approvalLine, type OwnerApprovalLine, parseApprovalLine } from "./approval.ts";
 export { classifyPrompt, type PromptOrigin } from "./prompt.ts";
 export { MARKED_ONLY, type ProbePorts, type ProbeRead, type ProbeTarget, probeRound, probeTargets, readProbe, type RoundResult, VERIFY_KINDS } from "./probe.ts";
 export {

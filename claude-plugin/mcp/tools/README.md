@@ -45,7 +45,7 @@ export default {
 | `item_retire` | Task 가 `completed` 이고 PR 이 머지 없이 닫힌 항목을 이유와 함께 거둔다(`item_retired{task, by, reason}`, 결정 223). 거둔 항목은 🗑️ 취소로 읽혀 🚧 수와 묶음의 열린 수에서 빠진다. Orca 에는 쓰지 않는다(Task 는 `completed` 그대로). 그 밖의 항목은 `not_retirable`, 다시 부르면 `already`. CLI `sangsoe item retire` 와 같은 Outcome | `{item, reason, by, run?}` | U89 |
 | `decision_open` | 결정 열기(닫힌 같은 결정 키는 기존 dNNN 과 답 반환, 열린 것은 대기자 합류) | `{subject, question, options?, waiters?: [{task, run}], carrier_run?}` | U8 |
 | `decision_answer` | 결정 답·게이트 풀기·대기자마다 notify 한 번(다시 불러도 같다) | `{decision, answer, owner_action, linked_by?, run?}` | U8 |
-| `land` | land 판정 함수 호출: 머지 예약, "승인되면 머지"(`merge_on_approval`), 또는 `verdict_merge_repos` 에 든 저장소에서 기록된 리뷰 판정으로 바로 머지(`verdict_approved`, 결정 158). CLI `sangsoe land` 와 같은 결과 | `{pr, repo?, head_sha?, dry_run?, main_fix?}` | U11 |
+| `land` | land 판정 함수 호출: 머지 예약, "승인되면 머지"(`merge_on_approval`), 또는 `verdict_merge_repos` 에 든 저장소에서 기록된 리뷰 판정으로 바로 머지(`verdict_approved`, 결정 158), 그 저장소의 V3·보호 경로는 오너가 대화에 친 승인 줄로 바로 머지(`owner_approved`, 결정 311). CLI `sangsoe land` 와 같은 결과 | `{pr, repo?, head_sha?, dry_run?, main_fix?}` | U11 |
 | `handoff_save` | 판단 상태 넷의 모양을 검사해 자기 Run 우편함에 Orca `handoff` 메시지로 남기기(sqlite 에 쓰지 않음) | `{next, waiting, open_questions, reply_to}` | U13 |
 | `review_ask_record` | 리뷰 의뢰·리마인드 한 건을 `review_ask_sent` 로, 설정에 없는 리뷰어는 `unmapped_reviewer` 도 | `{pr, reviewer, reminder?}` | U13 |
 | `resource_record` | 당사자가 막 만든 Docker id(또는 compose 프로젝트의 id 전부)를 소유자와 함께 `resource` 로 남긴다(REAPER 가 치우는 근거는 이 기록뿐, R-12). CLI `sangsoe resource record` 와 같은 Outcome | `{owner, kind?, ref?, compose?, action?}` | U18 |

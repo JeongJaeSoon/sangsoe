@@ -2,6 +2,7 @@ import type { StoredEvent } from "../contract/index.ts";
 import type { GhClient } from "../gh/client.ts";
 import { type Facts, foldFacts } from "../graph/facts.ts";
 import { type MergeCondition, readMergeConditions } from "../gh/merge-conditions.ts";
+import { approvalLine } from "../owner/approval.ts";
 import type { NewEvent } from "../store/store.ts";
 import { evidenceGaps } from "../verify/evidence.ts";
 import { requiredEvidence, type Tier, type TierConfig, verifyTier } from "../verify/verify-tier.ts";
@@ -25,7 +26,7 @@ import { lastBaseChange, rereviewItem, verdictsSinceBase } from "./rereview.ts";
 // land_failed row with the reason the refusal carries.
 
 export type LandInput = { repo: string; pr: number; headSha?: string; dryRun?: boolean; mainFix?: boolean };
-export type LandAction = "auto_merge" | "merge_approved" | "merge_verdict" | "merge_on_approval";
+export type LandAction = "auto_merge" | "merge_approved" | "merge_verdict" | "merge_owner_approved" | "merge_on_approval";
 export type LandValue = {
   pr: string;
   head_sha: string;
@@ -34,7 +35,7 @@ export type LandValue = {
   dry_run: boolean;
   conditions: MergeCondition[];
   note: string;
-  /** Set on `merge_verdict` only. */
+  /** Set on `merge_verdict` and `merge_owner_approved` only. */
   merge_method?: MergeMethod;
 };
 export type LandRefusal = { code: string; reason: string; fix: string };
@@ -132,12 +133,18 @@ export async function land(input: LandInput, deps: LandDeps): Promise<LandOutcom
     if (!input.dryRun) {
       if (value.action !== "merge_on_approval") {
         const merged =
-          value.action === "merge_verdict"
+          value.action === "merge_verdict" || value.action === "merge_owner_approved"
             ? await mergeNow(deps, { repo, pr: input.pr, head: value.head_sha, method: value.merge_method })
             : await deps.merge({ repo, pr: input.pr, head: value.head_sha });
         if (!merged.ok) throw new Refused("merge_refused", "", `GitHub refused the merge: ${merged.message}`, "read the PR's merge box; land again once it is fixed");
       }
-      const reason = { auto_merge: undefined, merge_approved: "approved", merge_verdict: "verdict_approved", merge_on_approval: "merge_on_approval" }[value.action];
+      const reason = {
+        auto_merge: undefined,
+        merge_approved: "approved",
+        merge_verdict: "verdict_approved",
+        merge_owner_approved: "owner_approved",
+        merge_on_approval: "merge_on_approval",
+      }[value.action];
       store.append({ type: "land_requested", source: "land", payload: { pr, head_sha: value.head_sha, ...(reason ? { reason } : {}) } });
     }
     return { ok: true, value };
@@ -285,13 +292,40 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
 
   // Decision 158: the opted-in repo's approval is the recorded verdict; the owner's cases stay with the owner.
   // On a one-account repo every session's label is the owner's, so a lowered V3 stays V3 here (decision 172).
-  if (tier.effective === "V3" || tier.computed === "V3") return waitApproval("V3 needs the owner's approval; merge once approved");
+  // Decision 311: the owner's own typed line at this exact head is that approval; nothing else changes.
   const paths = conditions.find((c) => c.id === "no_protected_paths");
-  if (!paths?.ok) return waitApproval(`${paths?.reason ?? "protected paths unread"}; merge once the owner approves`);
+  const ownersCase = tier.effective === "V3" || tier.computed === "V3" ? "V3 needs the owner's approval" : paths?.ok ? null : (paths?.reason ?? "protected paths unread");
+  const owner = ownersCase ? ownerApproved(events, pr, head) : null;
+  if (ownersCase && owner === null) {
+    return waitApproval(`${ownersCase}; merge once the owner types \`${approvalLine(repo, input.pr, head)}\` in the orchestrator's chat, then land again`);
+  }
   const by = verdictApproval(events, pr, head, pull);
   mergeable();
   const method = await verdictGate({ repo, pr, head, pull, readGate, gateFix });
+  if (owner !== null) {
+    const said = `owner approved ${short(head)} in chat (owner_action ${owner}), verdict by ${by}, checks green, ${method} now`;
+    return { ...base, action: "merge_owner_approved", merge_method: method, note: [...note, said].join("; ") };
+  }
   return { ...base, action: "merge_verdict", merge_method: method, note: [...note, `verdict by ${by} at ${short(head)}, checks green, ${method} now`].join("; ") };
+}
+
+/**
+ * Decision 311: the seq of the owner_action under an owner_approval of `pr` at exactly `head`, written
+ * by the prompt hook after the PR's latest base change and resting on the hook's own chat row; else null.
+ */
+function ownerApproved(events: readonly StoredEvent[], pr: string, head: string): number | null {
+  const since = lastBaseChange(events, pr)?.seq ?? 0;
+  const said = new Set(events.filter((e) => e.type === "owner_action" && e.source === "UserPromptSubmit" && e.payload.origin === "chat").map((e) => e.seq));
+  const row = events.find(
+    (e) =>
+      e.type === "owner_approval" &&
+      e.source === "UserPromptSubmit" &&
+      e.seq > since &&
+      e.payload.pr === pr &&
+      e.payload.head_sha === head &&
+      said.has(Number(e.payload.owner_action)),
+  );
+  return row ? Number(row.payload.owner_action) : null;
 }
 
 async function mergeNow(deps: LandDeps, a: { repo: string; pr: number; head: string; method: MergeMethod | undefined }) {

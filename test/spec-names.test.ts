@@ -171,6 +171,10 @@ const ALLOWED = new Map<string, string>([
   // Decision 280: the row Orca's prompt hook leaves, built after design.html's last edit.
   ["event:prompt_driven:code-only", "280"],
   ["event-glossary:prompt_driven:code-only", "280"],
+  // Decision 311: the owner's typed approval and the gate that keeps sessions from typing it.
+  ["event:owner_approval:code-only", "311"],
+  ["event-glossary:owner_approval:code-only", "311"],
+  ["gate:owner-approval:code-only", "311"],
 ]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };

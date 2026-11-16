@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, openSync, readSync } from "node:fs";
+import { accessSync, closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 
 // Claude Code's transcript is JSONL whose record shapes are not documented (P13). Every reader here
 // returns nothing for a shape it does not know, so a format change costs a missed record, never a wrong one.
@@ -121,6 +121,36 @@ export function shellInputs(records: readonly Rec[]): ShellInput[] {
     out.push({ uuid: r.uuid, ts: r.timestamp, command, stdout: between(o, "bash-stdout") ?? "", stderr: (between(o, "bash-stderr") ?? "").trim() });
   }
   return out;
+}
+
+const SCHEDULERS = new Set(["ScheduleWakeup", "CronCreate"]);
+
+type Block = { type?: unknown; id?: unknown; name?: unknown; input?: unknown; tool_use_id?: unknown; is_error?: unknown };
+const blocks = (r: Rec): Block[] => (Array.isArray(r.message?.content) ? (r.message.content as Block[]) : []);
+const strings = (v: unknown): string[] =>
+  typeof v === "string" ? [v] : v && typeof v === "object" ? Object.values(v as Record<string, unknown>).flatMap(strings) : [];
+
+/**
+ * Decision 311: whether a tool that submits a prompt later (ScheduleWakeup, CronCreate) was called
+ * anywhere in the transcript with a string `carries` holds: the approval line for that head. A call
+ * whose result came back as an error (the gate refused it) submits nothing. null when the file
+ * cannot be read.
+ */
+export function scheduledWith(path: string | undefined, head: string, carries: (s: string) => boolean): boolean | null {
+  if (!path) return null;
+  try {
+    accessSync(path, constants.R_OK);
+  } catch {
+    return null;
+  }
+  const calls = marked(path, head)
+    .flatMap(blocks)
+    .filter((b) => b.type === "tool_use" && SCHEDULERS.has(String(b.name)) && strings(b.input).some(carries));
+  return calls.some((b) => {
+    const id = typeof b.id === "string" ? b.id : "";
+    const refused = id !== "" && marked(path, id).some((r) => blocks(r).some((x) => x.type === "tool_result" && x.tool_use_id === id && x.is_error === true));
+    return !refused;
+  });
 }
 
 /** The context size of the last model call: its input plus cache tokens. */

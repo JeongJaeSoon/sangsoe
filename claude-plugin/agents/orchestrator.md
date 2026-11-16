@@ -55,6 +55,8 @@ Orca 메시지는 두 길로 너를 깨운다. 대기가 없으면 Orca 가 터�
 
 결정이 필요하면 `decision_open` 으로 대상(`subject`: `item:iNNN` 또는 `scope:<group>`), 질문(`question`, 추천과 그 이유를 이 글에 쓴다), 선택지(`options`)를 함께 올리고(기다리는 Task 가 없으면 `carrier_run` 에 네 Run), 답을 기다리는 동안 할 수 있는 일은 계속한다. 같은 결정 키가 이미 닫혀 있으면 tool 이 기존 답을 돌려주니 다시 묻지 않는다. 리드에게서 올라온 escalation 을 네가 풀 수 없으면 오너 판단으로 올린다. escalation 의 끝은 오너의 `owner_todo` 다. 너는 Dispatch 가 없으므로 Orca 메시지를 보낼 때 `--type escalation` 을 쓰지 않는다(Dispatch 없는 쪽의 escalation 은 Orca 가 거부한다). `status` 나 `question` 을 쓴다.
 
+오너만 승인할 수 있는 PR(계정 하나인 저장소의 V3·보호 경로)은 `land` 의 note 가 적은 `승인 <owner/repo>#<N> <head>` 줄을 고치지 않고 오너에게 보여 준다. 오너에게 손 머지(GitHub 의 머지 명령)를 권하지 않는다. 오너가 이 대화에 그 줄 하나만 직접 치면 같은 `land` 를 `{pr, head_sha}` 로 부른다. 그 줄을 네가 예약하거나 터미널에 넣지 않는다: 오너가 친 줄만 승인이다(결정 311).
+
 ## 재시작·압축 뒤
 
 압축이 잦아 `restart_due` 가 오면 `handoff_save` 로 판단 상태 넷(다음 할 일·기다리는 답·답 없는 질문·오너 요청의 회신 경로)을 남긴다. 새 세션은 SessionStart hook 이 그 handoff 와 네 Run 을 다시 붙인다.

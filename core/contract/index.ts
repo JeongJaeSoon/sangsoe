@@ -34,6 +34,7 @@ import notified from "./events/notified.ts";
 import observed_change from "./events/observed_change.ts";
 import owner_act_unlinked from "./events/owner_act_unlinked.ts";
 import owner_action from "./events/owner_action.ts";
+import owner_approval from "./events/owner_approval.ts";
 import owner_class from "./events/owner_class.ts";
 import owner_text_redacted from "./events/owner_text_redacted.ts";
 import pr_base_changed from "./events/pr_base_changed.ts";
@@ -127,6 +128,7 @@ export const EVENTS = {
   observed_change,
   owner_act_unlinked,
   owner_action,
+  owner_approval,
   owner_class,
   owner_text_redacted,
   pr_base_changed,

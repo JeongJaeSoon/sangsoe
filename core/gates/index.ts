@@ -1,6 +1,7 @@
 import { delegateGate } from "./delegate.ts";
 import { doneBlockersGate } from "./done-blockers.ts";
 import { type Merged, mergeVerdicts } from "./merge.ts";
+import { ownerApprovalGate } from "./owner-approval.ts";
 import { pressureGate } from "./pressure.ts";
 import { reportAddress } from "./report-address.ts";
 import { selfLandGate } from "./self-land.ts";
@@ -12,7 +13,7 @@ export { type Merged, mergeVerdicts } from "./merge.ts";
 export { START_TOOL, START_TOOL_ID } from "./start.ts";
 export type * from "./types.ts";
 
-export const GATES: readonly Gate[] = [startGuard, reportAddress, sleepLoop, pressureGate, delegateGate, selfLandGate, doneBlockersGate];
+export const GATES: readonly Gate[] = [startGuard, reportAddress, sleepLoop, pressureGate, delegateGate, selfLandGate, doneBlockersGate, ownerApprovalGate];
 
 /** One PreToolUse event: every gate, merged deny > ask > allow. */
 export function evaluate(call: ToolCall, facts: Facts, gates: readonly Gate[] = GATES): Merged {

@@ -1,11 +1,12 @@
-import { dedupeKey, EVENTS } from "../contract/index.ts";
+import { dedupeKey, EVENTS, type StoredEvent } from "../contract/index.ts";
 import { decisionAnswer } from "../decision/answer.ts";
 import { syncOwnRun } from "../graph/own-run.ts";
 import { advisorCalls } from "../models/spend.ts";
 import { readDecision } from "../decision/waiters.ts";
 import type { CoreDeps } from "../notify/result.ts";
 import { deliverOwnRun } from "../detect/queue/own-run.ts";
-import { wasDriven } from "../owner/driven.ts";
+import { carriesApproval, type OwnerApprovalLine, parseApprovalLine } from "../owner/approval.ts";
+import { mayBeDriven, wasDriven } from "../owner/driven.ts";
 import { classifyPrompt } from "../owner/prompt.ts";
 import { openWaits, RELEASE_READS, type ReleaseSignal, recordReleases } from "../owner/release.ts";
 import type { Store } from "../store/store.ts";
@@ -14,7 +15,7 @@ import { hashOf, mask, summarize } from "./mask.ts";
 import { type SessionHookInput, type SessionRow, sessionOf } from "./session.ts";
 import { sessionStart, type SessionStartOptions } from "./session-start.ts";
 import { recordShellInputs } from "./shell.ts";
-import { lastContextTokens, lastPreTokens, marked, tail } from "./transcript.ts";
+import { lastContextTokens, lastPreTokens, marked, scheduledWith, tail } from "./transcript.ts";
 
 export const SESSION_HOOKS = [
   "session-start",
@@ -147,7 +148,9 @@ async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
   if (classifyPrompt(text) !== "owner") return;
   // Decision 280: text Orca reported as driven into this terminal was typed by no person. No row: it
   // answers no decision, marks no wait as the owner's, and is no owner_action a tool could cite.
-  if (wasDriven(deps.store.events({ type: "prompt_driven" }), terminal, text, Date.now())) return;
+  const driven = deps.store.events({ type: "prompt_driven" });
+  if (wasDriven(driven, terminal, text, Date.now())) return;
+  const approval = ownerApproval(row, input, terminal, driven);
   const masked = mask(text);
   const key = dedupeKey(EVENTS.owner_action, input.session_id, input.prompt_id ?? hashOf(`${masked}\n${tail(input.transcript_path).length}`));
   const action = deps.store.appendOwnerAction(
@@ -165,6 +168,7 @@ async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
       },
     },
     masked,
+    approval ?? undefined,
   );
   // The orchestrator is the owner's session; a lead or worker whose Dispatch locate() missed is not.
   if (!action.inserted || row.task || row.role !== "orchestrator") return;
@@ -175,6 +179,18 @@ async function ownerSaid(deps: CoreDeps, row: SessionRow, input: SessionHookInpu
   const callerRun = current.ok && typeof current.value.runId === "string" ? current.value.runId : "";
   // A refusal (an owner_action already used, a moot close) is the record's answer; the hook stays silent.
   await decisionAnswer(deps, { decision: d, answer: masked, ownerAction: action.seq, linkedBy: "hook", callerRun });
+}
+
+/**
+ * Decision 311: the approval line in the orchestrator's own session, holding no Dispatch, that no one
+ * but the owner can have put there. Each test fails closed: a terminal Orca may have driven it into,
+ * a scheduling tool that carried its head, a transcript that cannot be read.
+ */
+function ownerApproval(row: SessionRow, input: SessionHookInput, terminal: string | undefined, driven: readonly StoredEvent[]): OwnerApprovalLine | null {
+  if (row.task || row.role !== "orchestrator") return null;
+  const line = parseApprovalLine(input.prompt ?? "");
+  if (!line || mayBeDriven(driven, terminal, input.prompt ?? "")) return null;
+  return scheduledWith(input.transcript_path, line.head_sha, (s) => carriesApproval(s, line.head_sha)) === false ? line : null;
 }
 
 /**
