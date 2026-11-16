@@ -7,6 +7,7 @@ import type { Appended, EventFilter, NewEvent, StoreOnlyType } from "../store/st
 import type { TierConfig } from "../verify/verify-tier.ts";
 import type { ChatProvider } from "./chat/provider.ts";
 import type { WatchConfig } from "./pr/config.ts";
+import type { PrCursor } from "./pr/round.ts";
 
 /** An event a round decided to write; `runMonitor` appends it, or only reports it on a dry run. */
 export type Planned = NewEvent<Exclude<EventType, StoreOnlyType>>;
@@ -32,6 +33,12 @@ export type Act = {
  * `calls` names the core functions the round called, or on a dry run would have called.
  */
 export type Reading = { planned: Planned[]; unseen: string[]; acts?: Act[]; calls?: string[] };
+
+/**
+ * Hands part of a round to `runMonitor` before the round ends (decision 329): its events are
+ * written at once, past the cap too, and its acts run in order unless the cap has passed.
+ */
+export type Flush = (part: { planned: Planned[]; acts: Act[] }) => Promise<void>;
 
 export type MonitorConfig = {
   /** worker_stuck: minutes since the session's last activity while an agent is working. */
@@ -87,6 +94,8 @@ export type MonitorDeps = {
   ghBudget?: () => RateBudget | undefined;
   watch?: () => WatchConfig | null;
   tier?: () => TierConfig | null;
+  /** pr-monitor's memory between rounds of one runner. Absent: every round reads every PR, in `watch.repos` order. */
+  prCursor?: PrCursor;
 };
 
 export type Written = { type: string; dedupe_key: string | null; seq: number; inserted: boolean };

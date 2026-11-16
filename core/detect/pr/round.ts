@@ -5,7 +5,7 @@ import { approvedAndGreen, mergeConfirm, type Pull, readDiff, readLabels, readPu
 import { pendingRereview } from "../../land/rereview.ts";
 import { hostRereadPending } from "../../store/backup.ts";
 import { verifyTier } from "../../verify/verify-tier.ts";
-import type { Act, MonitorDeps, Planned, Reading } from "../monitor.ts";
+import type { Act, Flush, MonitorDeps, Planned, Reading } from "../monitor.ts";
 import { sendNotice } from "../notice.ts";
 import type { WatchConfig } from "./config.ts";
 import { classifyMain, isClosedTask, key, type MainRun, prRef, prUrl, requestedTier } from "./judge.ts";
@@ -18,6 +18,7 @@ const CLOSED_PAGE = 30;
 type ListedPull = {
   number: number;
   merged_at?: string | null;
+  updated_at?: string;
   user: { login: string } | null;
   head: { sha: string; ref: string; repo?: { full_name?: string } | null };
   base: { ref: string };
@@ -51,7 +52,7 @@ type Reads = {
   conditional: boolean;
   /** `notified` dedupe keys, read once per round when a review wake is weighed. */
   notified?: string[];
-  /** The worktree rows, read once per round for the reference adds. */
+  /** The worktree rows, read once per round for the reference adds and the branch match. */
   worktrees?: OrcaResult<LocalRows<WorktreeRow>>;
 };
 
@@ -336,8 +337,7 @@ async function reviews(r: Reads, repo: string, p: ListedPull): Promise<void> {
 
 /** A PR whose branch is a local workspace Orca did not link yet: attach it there (decision 64, one-way). */
 async function addReference(r: Reads, repo: string, p: ListedPull, atHead = false): Promise<void> {
-  r.worktrees ??= await r.d.orca.worktreeList({ limit: 500 });
-  const list = r.worktrees;
+  const list = await worktrees(r);
   if (!list.ok) {
     r.unseen.push("worktree list");
     return;
@@ -486,11 +486,39 @@ const REVIEW_TYPES = ["pr_review_requested", "pr_changes_requested", "review_com
 const TYPES = ["pr_opened", "pr_merged", "pr_closed", "pr_reopened", "pr_base_changed", "verify_tier_set", "land_requested", "pr_ready_to_merge", "main_green", "main_red", "ci_failed", "item_transition", "review_verdict", ...REVIEW_TYPES];
 
 /**
+ * pr-monitor's memory between rounds of one runner (decision 329), in process memory like the ETags
+ * (decision 186): a new runner starts empty and reads everything once.
+ */
+export type PrCursor = {
+  /** A PR's `updated_at` when its last pass found nothing to write or do, for closed PRs and open ones nobody tracks. */
+  settled: Map<string, string>;
+  /** Repositories the last round did not finish, in the order it left them: this round walks them first. */
+  left: string[];
+  /** The PR an unfinished repository's walk starts from next, by repository. */
+  resume: Map<string, string>;
+};
+
+export const prCursor = (): PrCursor => ({ settled: new Map(), left: [], resume: new Map() });
+
+/**
+ * The round's own budget for the repository walk. The worker's cap is 90 s and one gh or orca call may
+ * take up to its 30 s exec timeout, so the walk stops at 60 s and still writes before the cap.
+ */
+export const WALK_BUDGET_MS = 60_000;
+
+type Walk = { r: Reads; cursor: PrCursor; skip: boolean; level: string; signal: AbortSignal; workers: () => Promise<Map<string, string[]>> };
+
+/**
  * One pr-monitor round. GitHub through core/gh only, Orca through the adapter only; the PR's link to
  * an item is Orca's `reference find`, never a copy. Writes events, and one kind of item change: the
  * merged PR's Task goes `completed`, as an act after `pr_merged` (decision 84 ①).
+ *
+ * Decision 329: with `flush`, the walk keeps to `WALK_BUDGET_MS`, splits it among the repositories
+ * left, hands each repository's events and acts over when it ends, and starts the next round with
+ * the repositories it did not finish. A round that stops with repositories left writes
+ * `monitor_round_truncated`. Without `flush` (the host reread) it reads every repository at once.
  */
-export async function prRound(d: MonitorDeps, signal: AbortSignal): Promise<Reading> {
+export async function prRound(d: MonitorDeps, signal: AbortSignal, flush?: Flush): Promise<Reading> {
   const conditional = !hostRereadPending(d.events({ type: "signal" }));
   const r: Reads = { d, watch: { repos: [], authors: [], linkedOnly: true, owners: [] }, rows: new Map(), planned: [], unseen: [], acts: [], conditional };
   if (!d.gh) return { planned: [], unseen: ["gh client"] };
@@ -498,58 +526,130 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal): Promise<Read
   if (!watch || watch.repos.length === 0) return { planned: [], unseen: ["watch.repos setting"] };
   r.watch = watch;
   for (const t of TYPES) r.rows.set(t, d.events({ type: t }));
-  const level = budgetLevel(d.ghBudget?.());
+  // The settled marks were judged against rows a lost database no longer has (decision 184).
+  if (!conditional) d.prCursor?.settled.clear();
+  const cursor = d.prCursor ?? prCursor();
   let byWorkspace: Promise<Map<string, string[]>> | undefined;
   const workers = () => {
     byWorkspace ??= dispatchesByWorkspace(d);
     return byWorkspace;
   };
+  const w: Walk = { r, cursor, skip: conditional && d.prCursor !== undefined, level: budgetLevel(d.ghBudget?.()), signal, workers };
+  const hand = async () => {
+    if (flush) await flush({ planned: r.planned.splice(0), acts: r.acts.splice(0) });
+  };
+  const started = d.now();
+  const deadline = flush ? started + WALK_BUDGET_MS : Number.POSITIVE_INFINITY;
+  const order = [...cursor.left.filter((x) => watch.repos.includes(x)), ...watch.repos.filter((x) => !cursor.left.includes(x))];
+  const done: string[] = [];
+  let limited = false;
   try {
-    for (const repo of watch.repos) {
-      if (signal.aborted) break;
-      const open = level === "essential" ? [] : ((await get<ListedPull[]>(r, `repos/${repo}/pulls?state=open&per_page=100`)) ?? []);
-      const closed = (await get<ListedPull[]>(r, `repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=${CLOSED_PAGE}`)) ?? [];
-      // pr_merged rows then follow merge order, so the newest merge has the repository's last row.
-      closed.sort((a, b) => (a.merged_at ?? "").localeCompare(b.merged_at ?? ""));
-      for (const [p, isOpen] of [...open.map((x) => [x, true] as const), ...closed.map((x) => [x, false] as const)]) {
-        if (signal.aborted) break;
-        const ref = prRef(repo, p.number);
-        const author = p.user?.login.toLowerCase() ?? "";
-        if (watch.authors.length > 0 && !watch.authors.includes(author)) continue;
-        const known = rowsOf(r, "pr_opened", ref).length > 0;
-        if (!isOpen && !p.merged_at && !known) continue;
-        const link = await linkOf(d, prUrl(repo, p.number), workers);
-        if (!link) r.unseen.push(`reference find ${ref}`);
-        // Decision 323: a PR merged before an open round saw it has no other chance to reach its card.
-        if (!isOpen && p.merged_at && link && !link.linked) await addReference(r, repo, p, true);
-        // linked_only: Orca's link, a recorded pr_opened, or (open PRs) a workspace on its branch.
-        if (watch.linkedOnly && !known && !link?.linked && !isOpen) continue;
-        if (isOpen) {
-          if (watch.linkedOnly && !known && !link?.linked && !(await onBranch(d, repo, p))) continue;
-          await onOpen(r, repo, p, link, level);
-        } else if (p.merged_at) {
-          if (level !== "essential" && rowsOf(r, "pr_merged", ref).length === 0 && !known && link?.linked) {
-            const task = link.tasks.length === 1 ? link.tasks[0]?.task : undefined;
-            // Seen first already merged: the item↔PR row land and the brief read still gets written.
-            plan(r, { type: "pr_opened", dedupe_key: task ? key("pr_opened", ref, task) : key("pr_opened", ref), payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha, ...headBranch(repo, p) } });
-          }
-          await onMerged(r, repo, p, link);
-        } else {
-          const t = closeTurns(r, ref);
-          // The first close keeps the key it always had; a close after a reopen is the next turn.
-          if (t.closes === 0) plan(r, { type: "pr_closed", dedupe_key: key("pr_closed", ref), payload: { pr: ref } });
-          else if (t.reopened) plan(r, { type: "pr_closed", dedupe_key: key("pr_closed", ref, String(t.closes + 1)), payload: { pr: ref } });
+    // A second pass hands the time the quick repositories left to the ones that ran out of their share.
+    let queue = order;
+    for (let pass = 0; pass < 2 && queue.length > 0; pass++) {
+      const unfinished: string[] = [];
+      for (const [i, repo] of queue.entries()) {
+        if (signal.aborted || ((pass > 0 || i > 0) && d.now() >= deadline)) break;
+        const until = d.now() + (deadline - d.now()) / (queue.length - i);
+        try {
+          if (await walkRepo(w, repo, until)) done.push(repo);
+          else unfinished.push(repo);
+        } finally {
+          await hand();
         }
       }
+      queue = unfinished;
     }
     if (!signal.aborted) await mainCi(r);
   } catch (e) {
     if (!(e instanceof RateLimited)) throw e;
+    limited = true;
     const reset = new Date(e.resetAt * 1000).toISOString().replace(/\.\d+Z$/, "Z");
     plan(r, { type: "rate_limited", dedupe_key: key("rate_limited", "github", String(e.resetAt)), payload: { kind: "github", reset_at: reset } });
     r.unseen.push(`GitHub rate limit until ${reset}`);
   }
+  cursor.left = order.filter((x) => !done.includes(x));
+  if (flush && !limited && cursor.left.length > 0) {
+    plan(r, { type: "monitor_round_truncated", payload: { repos_done: done.length, repos_left: cursor.left.length, elapsed_ms: d.now() - started } });
+  }
+  await hand();
   return { planned: r.planned, unseen: r.unseen, acts: r.acts };
+}
+
+/**
+ * One repository's PRs, from the one its unfinished walk stopped at (from the start when that PR is
+ * no longer listed) to the end. Past `until` it stops before the next PR, after at least one, so a
+ * walk always moves on. True when it reached the end.
+ */
+async function walkRepo(w: Walk, repo: string, until: number): Promise<boolean> {
+  const { r, cursor } = w;
+  const open = w.level === "essential" ? [] : ((await get<ListedPull[]>(r, `repos/${repo}/pulls?state=open&per_page=100`)) ?? []);
+  const closed = (await get<ListedPull[]>(r, `repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=${CLOSED_PAGE}`)) ?? [];
+  // pr_merged rows then follow merge order, so the newest merge has the repository's last row.
+  closed.sort((a, b) => (a.merged_at ?? "").localeCompare(b.merged_at ?? ""));
+  const all = [...open.map((x) => [x, true] as const), ...closed.map((x) => [x, false] as const)];
+  const walk = all.slice(Math.max(0, all.findIndex(([p]) => prRef(repo, p.number) === cursor.resume.get(repo))));
+  for (const [i, [p, isOpen]] of walk.entries()) {
+    const ref = prRef(repo, p.number);
+    // Set before the PR, so a stop here, a cap, a rate limit or a throw inside it starts the next walk here.
+    cursor.resume.set(repo, ref);
+    if (w.signal.aborted || (i > 0 && r.d.now() >= until)) return false;
+    const before = [r.planned.length, r.acts.length, r.unseen.length].join();
+    const at = typeof p.updated_at === "string" ? p.updated_at : undefined;
+    if (w.skip && at !== undefined && cursor.settled.get(ref) === at && (await stillSettled(r, repo, p, isOpen))) continue;
+    const tracked = await onPull(w, repo, p, isOpen);
+    const quiet = [r.planned.length, r.acts.length, r.unseen.length].join() === before;
+    if (at !== undefined && quiet && !(isOpen && tracked)) cursor.settled.set(ref, at);
+    else cursor.settled.delete(ref);
+  }
+  cursor.resume.delete(repo);
+  return !w.signal.aborted;
+}
+
+/**
+ * A settled PR whose `updated_at` did not move. An open one is read again once it is recorded or a
+ * workspace sits on its branch, since neither moves `updated_at`.
+ */
+async function stillSettled(r: Reads, repo: string, p: ListedPull, isOpen: boolean): Promise<boolean> {
+  if (!isOpen) return true;
+  if (rowsOf(r, "pr_opened", prRef(repo, p.number)).length > 0) return false;
+  return (await onBranch(r, repo, p)) === false;
+}
+
+/** One PR's pass. True when it is an open PR the round tracks (recorded, linked or on a workspace's branch). */
+async function onPull(w: Walk, repo: string, p: ListedPull, isOpen: boolean): Promise<boolean> {
+  const { r, level } = w;
+  const { watch, d } = r;
+  const ref = prRef(repo, p.number);
+  const author = p.user?.login.toLowerCase() ?? "";
+  if (watch.authors.length > 0 && !watch.authors.includes(author)) return false;
+  const known = rowsOf(r, "pr_opened", ref).length > 0;
+  if (!isOpen && !p.merged_at && !known) return false;
+  const link = await linkOf(d, prUrl(repo, p.number), w.workers);
+  if (!link) r.unseen.push(`reference find ${ref}`);
+  // Decision 323: a PR merged before an open round saw it has no other chance to reach its card.
+  if (!isOpen && p.merged_at && link && !link.linked) await addReference(r, repo, p, true);
+  // linked_only: Orca's link, a recorded pr_opened, or (open PRs) a workspace on its branch.
+  if (watch.linkedOnly && !known && !link?.linked && !isOpen) return false;
+  if (isOpen) {
+    if (watch.linkedOnly && !known && !link?.linked && !(await onBranch(r, repo, p))) return false;
+    await onOpen(r, repo, p, link, level);
+    return true;
+  }
+  if (p.merged_at) {
+    if (level !== "essential" && rowsOf(r, "pr_merged", ref).length === 0 && !known && link?.linked) {
+      const task = link.tasks.length === 1 ? link.tasks[0]?.task : undefined;
+      // Seen first already merged: the item↔PR row land and the brief read still gets written.
+      plan(r, { type: "pr_opened", dedupe_key: task ? key("pr_opened", ref, task) : key("pr_opened", ref), payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha, ...headBranch(repo, p) } });
+    }
+    await onMerged(r, repo, p, link);
+    return false;
+  }
+  const t = closeTurns(r, ref);
+  // The first close keeps the key it always had; a close after a reopen is the next turn.
+  if (t.closes === 0) plan(r, { type: "pr_closed", dedupe_key: key("pr_closed", ref), payload: { pr: ref } });
+  else if (t.reopened) plan(r, { type: "pr_closed", dedupe_key: key("pr_closed", ref, String(t.closes + 1)), payload: { pr: ref } });
+  return false;
 }
 
 /**
@@ -563,7 +663,14 @@ export function onBranchRows<W extends { branch: string; isArchived: boolean; pr
   return rows.filter((w) => w.projectId?.toLowerCase() === `github:${own}` && w.branch.replace(/^refs\/heads\//, "") === p.head.ref && !w.isArchived);
 }
 
-async function onBranch(d: MonitorDeps, repo: string, p: ListedPull): Promise<boolean> {
-  const list = await d.orca.worktreeList({ limit: 500 });
-  return list.ok && onBranchRows(list.value.rows, repo, p).length === 1;
+/** null when the worktree list could not be read. */
+async function onBranch(r: Reads, repo: string, p: ListedPull): Promise<boolean | null> {
+  const list = await worktrees(r);
+  return list.ok ? onBranchRows(list.value.rows, repo, p).length === 1 : null;
+}
+
+/** The worktree rows, read once per round (decision 329: once per open PR was most of a round's Orca calls after `reference find`). */
+async function worktrees(r: Reads): Promise<OrcaResult<LocalRows<WorktreeRow>>> {
+  r.worktrees ??= await r.d.orca.worktreeList({ limit: 500 });
+  return r.worktrees;
 }

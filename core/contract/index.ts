@@ -30,6 +30,7 @@ import main_green from "./events/main_green.ts";
 import main_red from "./events/main_red.ts";
 import mention_new from "./events/mention_new.ts";
 import model_changed from "./events/model_changed.ts";
+import monitor_round_truncated from "./events/monitor_round_truncated.ts";
 import notified from "./events/notified.ts";
 import observed_change from "./events/observed_change.ts";
 import owner_act_unlinked from "./events/owner_act_unlinked.ts";
@@ -124,6 +125,7 @@ export const EVENTS = {
   main_red,
   mention_new,
   model_changed,
+  monitor_round_truncated,
   notified,
   observed_change,
   owner_act_unlinked,

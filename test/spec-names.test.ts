@@ -175,6 +175,9 @@ const ALLOWED = new Map<string, string>([
   ["event:owner_approval:code-only", "311"],
   ["event-glossary:owner_approval:code-only", "311"],
   ["gate:owner-approval:code-only", "311"],
+  // Decision 329: a pr-monitor round that stopped with watched repositories left.
+  ["event:monitor_round_truncated:code-only", "329"],
+  ["event-glossary:monitor_round_truncated:code-only", "329"],
 ]);
 
 type Diff = { key: string; category: string; name: string; side: "design-only" | "code-only"; where: string };

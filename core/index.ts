@@ -120,7 +120,7 @@ export { judgeResource, type ResourceReads, withDiagnostics } from "./detect/res
 export { type ChatProvider, nullChatProvider } from "./detect/chat/provider.ts";
 export { parseWatch, readWatchConfig, type WatchConfig } from "./detect/pr/config.ts";
 export { classifyMain, type MainRun, type MainVerdict } from "./detect/pr/judge.ts";
-export { linkOf, type LinkedTask, prRound } from "./detect/pr/round.ts";
+export { linkOf, type LinkedTask, prCursor, type PrCursor, prRound, WALK_BUDGET_MS } from "./detect/pr/round.ts";
 export { judgeQueue, type Moot, QUEUE_SOURCE, type QueueJudgment, type ReadyItem, type Reanswer, type StaleAnswer } from "./detect/queue/judge.ts";
 export { judgeDrift } from "./detect/queue/drift.ts";
 export { judgeStall, STALL_SOURCE } from "./detect/queue/stall.ts";
