@@ -54,7 +54,7 @@ export type ResState =
   | { kind: "reading"; got: Got; last?: ResView | undefined; result?: Reaped | undefined }
   /** `got`: the parts the view was built from, kept for a read that asks only some (absent when read whole). */
   | { kind: "shown"; view: ResView; got?: Required<Got>; confirm?: boolean; running?: boolean; result?: Reaped }
-  | { kind: "failed"; refusal: Refusal };
+  | { kind: "failed"; refusal: Refusal; /** What a 정리 just did, when only the read after it failed. */ result?: Reaped };
 
 /** The whole view from three settled parts; a part that failed is unread in its own block. */
 function assemble(got: Required<Got>): ResState {
@@ -387,6 +387,17 @@ export type Want = { from: string; to: string };
 /** Where the keyboard goes after a press whose button does not come back: 정리… opens the confirm, 취소 closes it, a reap ends on 새로 고침. */
 export const FOCUS_AFTER: Readonly<Record<string, string>> = { ask: "run", cancel: "ask", run: "refresh" };
 
+/** Where a press of `what` sends the keyboard; a stale view draws no 정리… button, so 취소 lands on 새로 고침. */
+export function focusAfter(what: string, stale: boolean): string {
+  return what === "cancel" && stale ? "refresh" : (FOCUS_AFTER[what] ?? what);
+}
+
+/** Keyboard focus moving to anything but the waiting press's button or its target ends the wait. */
+export function wantOnFocus(want: Want | null, target: Element | null): Want | null {
+  const on = target?.getAttribute("data-res") ?? null;
+  return want && on !== null && (on === want.from || on === want.to) ? want : null;
+}
+
 /**
  * Repainting replaces the buttons. The keyboard goes where the last press asked (`want.to`) or else
  * stays on the button it was on, once that button is drawn enabled; until then `want` is returned to
@@ -485,7 +496,7 @@ export function patchPieces(el: HTMLElement, next: Pieces, which: readonly Piece
 export function renderResBody(s: ResState, now: number, hours: 6 | 24 = 6): string {
   if (s.kind === "idle") return "";
   if (s.kind === "failed") {
-    return `<p class="msg bad" role="status" title="${esc([s.refusal.code, s.refusal.reason].join(" · "))}">리소스를 읽지 못했다. <button type="button" class="link" data-res="refresh">새로 고침</button></p>`;
+    return `${s.result ? resultNote(s.result) : ""}<p class="msg bad" role="status" title="${esc([s.refusal.code, s.refusal.reason].join(" · "))}">리소스를 읽지 못했다. <button type="button" class="link" data-res="refresh">새로 고침</button></p>`;
   }
   return joinPieces(resPieces(s, now, hours));
 }

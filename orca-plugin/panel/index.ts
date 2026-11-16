@@ -4,7 +4,7 @@
 import { foldReads, panelReads, tickParts } from "./refresh.ts";
 import {
   changedPieces,
-  FOCUS_AFTER,
+  focusAfter,
   joinPieces,
   PARTS,
   type PartName,
@@ -22,6 +22,7 @@ import {
   resPieces,
   STALE_MS,
   type Want,
+  wantOnFocus,
 } from "./resources.ts";
 import { STYLE } from "./style.ts";
 import {
@@ -92,10 +93,14 @@ function mountResources(after: HTMLElement): () => void {
     drawn = null;
   };
   let want: Want | null = null;
-  // A click anywhere else drops a press still waiting for its button.
+  // A click anywhere else, or the keyboard moving on, drops a press still waiting for its button.
   document.addEventListener("pointerdown", (ev) => {
     if (!box.contains(ev.target as Node)) want = null;
   });
+  document.addEventListener("focusin", (ev) => {
+    want = wantOnFocus(want, ev.target as Element | null);
+  });
+  const stale = () => state.kind === "shown" && Date.now() - Date.parse(state.view.at) > STALE_MS;
   const body = () => {
     const el = box.querySelector<HTMLElement>(".res-body");
     if (!el) return;
@@ -132,7 +137,7 @@ function mountResources(after: HTMLElement): () => void {
         body();
       });
       if (end.kind === "shown" && end.got?.candidates.ok) candidatesAt = asked;
-      state = end.kind === "shown" && result ? { ...end, result } : end;
+      state = result && (end.kind === "shown" || end.kind === "failed") ? { ...end, result } : end;
       body();
     });
   };
@@ -194,7 +199,7 @@ function mountResources(after: HTMLElement): () => void {
     if (ev.key !== "Escape" || !open || ev.isComposing) return;
     if (state.kind === "shown" && state.confirm) {
       state = { ...state, confirm: false };
-      want = { from: "cancel", to: FOCUS_AFTER.cancel ?? "ask" };
+      want = { from: "cancel", to: focusAfter("cancel", stale()) };
       body();
       ev.stopImmediatePropagation();
       return;
@@ -217,10 +222,9 @@ function mountResources(after: HTMLElement): () => void {
     const el = (ev.target as Element).closest<HTMLElement>("[data-res]");
     if (!el) return;
     const what = el.getAttribute("data-res");
-    want = what ? { from: what, to: FOCUS_AFTER[what] ?? what } : null;
+    want = what ? { from: what, to: focusAfter(what, stale()) } : null;
     const busy = state.kind === "reading" || (state.kind === "shown" && state.running === true);
-    const stale = state.kind === "shown" && Date.now() - Date.parse(state.view.at) > STALE_MS;
-    if (what === "ask" && stale) {
+    if (what === "ask" && stale()) {
       // A view gone stale since it was drawn: read it again, as 정리 itself would.
       want = { from: what, to: "refresh" };
       if (!busy) void read();
