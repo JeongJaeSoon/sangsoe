@@ -22,7 +22,7 @@ description: "Use when a sangsoe lead or the orchestrator writes the spec a new 
 | 계보 | 받는 쪽이 리드면, 단위의 세션은 MCP tool `start_unit` 으로만 연다(Task 없는 리드도, 결정 243). 받는 쪽이 워커면 이 칸 대신 아래의 "워커는 세션을 시작하지 않는다" 줄을 둔다 |
 | 머지 | 리뷰 판정은 작성자가 아니라 리드가 `review_record` 로 기록한다(결정 111). 워커는 리뷰한 head·리뷰어·리뷰 원문의 위치를 리드에게 보낸다. 머지는 `land` tool 하나이고, 끝은 `merge_ready` 를 담은 worker_done 이다. 그 저장소의 필수 체크는 이름이 아니라 확인하는 명령으로 적는다: 받는 쪽이 그대로 돌려 초록인지 읽을 수 있는 한 줄. 리드의 go 뒤에 머지하는 단위면 그 조건, go 뒤에 누가 `land` 를 부르는지, go 전에 보내는 worker_done 본문에 `READY-WAIT: <kind>` 줄을 둔다는 것을 여기 적는다. 그 줄이 없으면 `[gate:self-land]` 가 열린 PR 위의 worker_done 을 막는다(결정 201) |
 | 승인 줄 | 오너의 말을 그대로 인용한 줄: `오너(dNNN, 날짜): "원문"`. 이 줄 밖의 일은 escalation 이다 |
-| 보고 | 끝은 worker_done 한 번. 본문에 담을 것(바꾼 것, 증거, 확인 못 한 것, NOW·LATER·DROP 제안). 도중의 메시지는 다음 걸음으로 type 을 고른다: 답을 기다릴 메시지는 question 이다(워커는 `ask`), 답을 기다리지 않는 보고만 status 다. status 는 어느 세션도 깨우지 않는다: 받는 쪽이 곧 행동해야 하는 것(go · ready · merged · 시간 창이 있는 알림)은 창이 끝나는 시각을 적은 `--type question` 으로 보낸다 |
+| 보고 | 끝은 worker_done 한 번. 본문에 담을 것(바꾼 것, 증거, 확인 못 한 것, NOW·LATER·DROP 제안). 도중의 메시지는 다음 걸음으로 type 을 고른다: 답을 기다릴 메시지는 question 이다(워커는 `ask`), 답을 기다리지 않는 보고만 status 다. status 는 어느 세션도 깨우지 않는다: 받는 쪽이 곧 행동해야 하는 것(go · ready · merged · 시간 창이 있는 알림)은 창이 끝나는 시각을 적은 `--type question` 으로 보낸다(워커는 `ask`) |
 | 거부 | 아래 거부 문단을 그대로 붙인다 |
 
 ## 첫 프롬프트에 대해 알아둘 것
@@ -44,7 +44,7 @@ description: "Use when a sangsoe lead or the orchestrator writes the spec a new 
 - 보고에서 비밀처럼 생긴 값은 파일 경로나 변수 이름으로만 가리키고, `KEY=value`·`key: value` 꼴의 줄로 쓰지 않는다. 비밀 검사 hook 이 보고 전체를 막는다.
 - 코드는 Grep tool 이나 평범한 낱말로 찾는다. 검색어와 예시 문자열에 비밀 파일 꼴의 이름, 환경 전체를 쏟는 낱말, `$VAR` 이름이 든 명령을 쓰지 않는다. 보고는 문장이나 표로 쓰고 `label: value` 줄로 쓰지 않는다.
 - 시험은 Bash 호출 하나에 파일 하나만 돌린다. 반복문·glob·전체 `npm test` 를 쓰지 않고, 브리프가 이름 대지 않은 slot 이나 래퍼를 쓰지 않는다.
-- 파일은 Edit·Write tool 로만 바꾸고, 임시 파일은 자기 worktree 안의 추적하지 않는 폴더 하나에만 둔다(TMPDIR·/tmp·부모 checkout 에 두지 않는다).
+- 파일은 Edit·Write tool 로만 바꾸고, 임시 파일은 자기 worktree 안의 추적하지 않는 폴더 하나에만 둔다(TMPDIR·/tmp·부모 checkout 에 두지 않는다. 거부 보고 파일만 예외).
 
 아래 거부 문단도 통째로 붙인다. 서브에이전트의 거부는 그 결과로 시작한 세션에 온다.
 
