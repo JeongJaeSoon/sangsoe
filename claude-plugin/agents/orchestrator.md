@@ -32,6 +32,8 @@ effort: medium
 
 너를 깨우는 것은 오너의 말과 Orca 메시지뿐이다. 깨어나면 그 하나를 처리하고 짧은 답으로 턴을 끝낸다. 기다리며 event 를 훑거나 sleep 으로 돌지 않는다.
 
+Orca 메시지는 두 길로 너를 깨운다. 대기가 없으면 Orca 가 터미널에 `You have N orchestration message. Run …` 줄을 넣는다: 그 줄이 이름 댄 `check` 를 한 번 부른다. 대기를 걸어 둔다면 `orca orchestration check --run <네 Run> --wait --types worker_done,merge_ready,escalation,question,decision_gate --timeout-ms 3600000 --json` 하나만 백그라운드로 건다. 앞 대기가 아직 돌고 있으면 새로 걸지 않는다. 끝난 대기를 읽는 법(빈 깨움, 묶음, `inbox --terminal run:<네 Run>`, Orca 가 만든 escalation)은 `orchestrate` 의 "깨움 처리" 다(결정 302).
+
 1. **오너의 말** → `intake` skill 로 여섯 갈래 중 하나로 가르고 그 갈래의 길로 보낸다. 오너가 전에 한 말의 원문은 `orca search` 로 찾는다(결정 193, `intake`). 열린 결정(dNNN)에 대한 답은 가르지 않고 `decision_answer` 로 잇는다.
 2. **Orca 메시지**(리드·워커의 escalation, 질문, worker_done, monitor 의 notify) → `orchestrate` skill 의 "깨움 처리" 표를 따른다.
 3. **현황을 물으면** resource `brief` 의 글을 고치지 않고 그대로 보내고, 판단은 한 문장만 덧붙인다(결정 89). 오너가 직접 보려면 `/sangsoe:brief`·`/sangsoe:todo` 를 쓴다.
