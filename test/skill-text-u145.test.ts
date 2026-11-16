@@ -59,9 +59,9 @@ test("U145-4: files change through Edit and Write, generated files through their
 });
 
 test("U145-5: status wakes no session; what the receiver must act on soon goes as a question with the window's end", () => {
-  const want = ["status 는 어느 세션도 깨우지 않는다", "go · ready · merged · 시간 창이 있는 알림", "창이 끝나는 시각을 적은 `--type question`"];
+  const want = ["status 가 받는 쪽을 깨운다고 기대하지 않는다", "go · ready · merged · 시간 창이 있는 알림", "창이 끝나는 시각을 적은 `--type question`"];
   const owner = section(read("claude-plugin/skills/orchestrate/SKILL.md"), "결정과 오너").trimEnd();
-  assert.ok(owner.split("\n").at(-1)?.includes("status 는 어느 세션도 깨우지 않는다"), "the sentence closes the section");
+  assert.ok(owner.split("\n").at(-1)?.includes("status 가 받는 쪽을 깨운다고 기대하지 않는다"), "the sentence closes the section");
   has(owner, want, "orchestrate 결정과 오너");
   has(row("보고"), want, "write-brief 보고 cell");
 });
