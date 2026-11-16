@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
 import { dedupeKey, EVENTS, type StoredEvent, type ViewInput } from "../contract/index.ts";
 import type { OrcaAdapter, TaskRow } from "../contract/orca.ts";
-import { canTransition } from "../contract/transitions.ts";
-import { itemStateOf } from "../detect/pr/judge.ts";
 import { doneBlockers } from "../graph/flow.ts";
 import { type FullTaskRow, snapshotTasks } from "../graph/snapshot.ts";
 import { done, type Result, refuse } from "../notify/result.ts";
@@ -12,6 +10,8 @@ import { isOwnerItem, OWNER_DEFAULTS, type OwnerConfig, type OwnerItemFacts } fr
 
 /** The evidence kind of a 완료 press that waits for the session holding the item's Run (decision 317). */
 export const DONE_REQUEST = "owner_act:done";
+/** Orca statuses of a Task still open and not taken by a worker. */
+const WAITING: ReadonlySet<string> = new Set(["pending", "ready"]);
 
 export interface OwnerDone {
   readonly task: string;
@@ -95,8 +95,8 @@ export async function closeOwnerDone(
   const tasks = snapshotTasks(a.rows as FullTaskRow[], a.run);
   const closed: string[] = [];
   for (const [task, action] of asks) {
-    const from = itemStateOf(a.rows.find((r) => r.id === task)?.status ?? "");
-    if (!from || !canTransition(from, "done")) continue;
+    // The press took a 🟢 reading, which GRAPH gives an Orca `pending` Task too (decision 147).
+    if (!WAITING.has(a.rows.find((r) => r.id === task)?.status ?? "")) continue;
     const events = d.store.events();
     if (doneBlockers({ orca: { tasks, gates: [] }, events, now: a.now }, task, { owner: true, ownerAction: action }).length > 0) continue;
     const u = await d.orca.taskUpdate({ id: task, status: "completed", result: "owner_done", run: a.run });
@@ -104,7 +104,7 @@ export async function closeOwnerDone(
     d.store.append({
       type: "item_transition",
       source: a.source,
-      payload: { task, from, to: "done", reason: "owner_done" },
+      payload: { task, from: "ready", to: "done", reason: "owner_done" },
       entity: "task",
       entity_id: task,
       dedupe_key: dedupeKey(EVENTS.item_transition, task, "owner_done"),

@@ -29,9 +29,9 @@ const PRESSED ="완료 기록됨: 그 Run 의 세션이 닫는다(대기)";
 
 type Row = { id: string; run: string; status: string; title: string; result?: string };
 
-function world(o: { verify?: VerifySpec } = {}) {
+function world(o: { verify?: VerifySpec; status?: string } = {}) {
   const store = Store.open({ path: ":memory:", clock: () => NOW });
-  const tasks: Row[] = [{ id: T, run: RUN, status: "ready", title: "promote to production" }];
+  const tasks: Row[] = [{ id: T, run: RUN, status: o.status ?? "ready", title: "promote to production" }];
   const calls: string[] = [];
   const orca = {
     taskList: async ({ run }: { run: string }) => {
@@ -62,7 +62,9 @@ function world(o: { verify?: VerifySpec } = {}) {
     events: store.events(),
     now: NOW,
   });
-  const press = () => ownerDone({ store }, input(), itemFacts(input()), { task: T });
+  // The panel's ports, the Orca adapter included: the press must not use it.
+  const panelPorts = { orca, store };
+  const press = () => ownerDone(panelPorts, input(), itemFacts(input()), { task: T });
   const prompt = async (run = RUN) => {
     const before = calls.length;
     const out = await deliverOwnRun({ store, orca }, run, NOW);
@@ -140,6 +142,15 @@ test("317: a session that holds another Run leaves it; with a verify the closed 
   assert.equal(w.store.events({ type: "item_transition" }).length, 1);
   assert.equal(w.store.events().filter(countsAsEvidence).length, 0, "a verify exists: the probe gives the evidence");
   assert.equal(w.state(), "pending_verify");
+});
+
+test("317: an Orca `pending` Task that reads 🟢 is pressed and closed the same way", async () => {
+  const w = world({ status: "pending" });
+  assert.equal(w.state(), "ready", "GRAPH reads a pending Task with nothing ahead of it as 🟢");
+  assert.ok((await w.press()).ok);
+  const p = await w.prompt();
+  assert.ok(p.calls.includes(`task-update ${T} completed ${RUN}`), JSON.stringify(p.calls));
+  assert.equal(w.state(), "done");
 });
 
 test("317: a blocker that appears before the hook keeps the request waiting and the Task open", async () => {
