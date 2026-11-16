@@ -623,6 +623,8 @@
 
 307. **(결정 257 의 tick·`STALE_MS`·정리 흐름과 결정 262 의 Escape 층 순서는 그대로 두고, 리소스 패널의 focus·새로 고침 가장자리 셋을 고친다. 옛 보류 항목이 가리킨 "made 표가 낡는다"는 결정 248 이 표를 뺐으므로 버린다.) 기다리는 `want` 는 키보드가 그 단추·목표 밖으로 옮겨 가면 풀리고, 낡은 보기에서 확인을 취소하면 focus 는 그려진 새로 고침으로 가며, 정리 뒤 다시 읽기가 실패해도 정리 결과 줄은 실패 줄 위에 남는다(2026-11-16, 리드 판정, i091).** ① 있던 일. `want` 는 절 밖의 `pointerdown` 에서만 풀렸다. 새로 고침·정리 뒤 읽는 동안 Tab 으로 `.res-body` 에 옮겨 가도 `want` 가 남아 읽기가 끝나면 focus 를 새로 고침 단추로 끌어갔다. 낡은 보기는 정리… 단추를 그리지 않는데 취소의 목표는 늘 `ask` 여서 focus 가 body 로 떨어지고 `want` 가 남았다. 정리 뒤 세 부분이 모두 실패하면 `ResState` 의 failed 가 결과를 나르지 못해 무엇이 지워졌는지 사라졌다. ② 고친 것. `document` 의 `focusin` 이 `wantOnFocus` 로 대상의 `data-res` 가 `want.from`·`want.to` 가 아니면 `want` 를 푼다(절 안팎 같다). `focusAfter(what, stale)` 가 낡은 보기의 취소 목표를 `refresh` 로 고르고 클릭·Escape 가 같이 쓴다. `ResState` 의 failed 에 `result?` 를 더하고 `renderResBody` 가 결과 줄을 실패 줄 위에 그린다. ③ 시험. `test/panel/panel-307.test.ts`: 위 둘의 pure 시험과 헤드리스 셋(고치기 전 main 의 `index.ts` 로 셋 모두 실패를 확인했다). ④ 확인하지 못한 것. 실제 Orca 패널에서의 손 확인은 하지 않았다.
 
+308. **(시험만 더한다. 코드는 그대로다.) `openResources` 가 load 부분에 store 의 표본 history 를 잇는지(`core/reaper/open.ts` 의 `samples` 줄) 보는 시험을 더한다(2026-11-16, 리드 판정, i115 (가)).** ① 있던 일. `readResourcePart` 시험은 deps 를 손으로 넣어서, `open.ts` 의 그 한 줄이 빠져도 패널이 history 없는 옛 꼴로 그려질 뿐 시험은 모두 통과했다. ② 더한 것. `test/reaper/open-resources.test.ts`: scratch store 에 표본 둘을 넣고 `openResources({ dbPath, home }).part("load")` 의 `history` 가 그 둘을 시간 순으로 나르는지 본다. Orca 쪽 값은 단언하지 않아 `orca` 가 PATH 에 있든 없든 통과한다. ③ 확인. 그 줄을 지우면 시험이 실패하고 되돌리면 통과한다. ④ 하지 않은 것. Docker CPU 계열은 이 결정이 아니다.
+
 ## 기존 설계 조사 20항목의 처리
 
 | 항목 | 처리 | 결정 · 위치 |
