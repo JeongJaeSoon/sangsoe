@@ -58,6 +58,7 @@ function world(c: Cell, reason: Reason): World {
   const status = { waiting: c.gate === "open" ? "blocked" : "failed", running: "dispatched", closed: "completed", elsewhere: "pending" }[c.task];
   const run = c.task === "elsewhere" ? OTHER : RUN;
   const w = createWorld([{ id: T, run, status, ...(c.task === "running" ? { dispatchId: DISPATCH } : {}) }]);
+  w.store.append({ type: "item_created", source: "test", payload: { task: T, alias: "i001", who: "lead:api", done_when: "done", owner_action: 0 }, entity: "task", entity_id: T });
   if (c.gate !== "none") w.gates.set(GATE, { id: GATE, taskId: T, status: c.gate === "open" ? "pending" : "resolved", question: "Take it?" });
   if (c.carrier) w.store.append({ type: "item_extra_set", source: "test", payload: { task: T, exec_by: "owner" } });
   w.store.append({ type: "decision_opened", source: "decision_open", dedupe_key: "decision:k1", payload: { decision: D, decision_key: "k1" } });
@@ -132,6 +133,7 @@ for (const [who, as] of Object.entries(ROLES)) {
     const G2 = "gate_000000000002";
     const w = world({ task: "closed", gate: "open", carrier: false, told: false }, "answered");
     w.tasks.set(T2, { id: T2, run: RUN, status: "blocked" });
+    w.store.append({ type: "item_created", source: "test", payload: { task: T2, alias: "i002", who: "lead:api", done_when: "done", owner_action: 0 }, entity: "task", entity_id: T2 });
     w.gates.set(G2, { id: G2, taskId: T2, status: "pending", question: "Take it?" });
     w.store.append({ type: "decision_joined", source: "decision_open", dedupe_key: `decision_joined:${D}:${T2}`, payload: { decision: D, waiter: T2, run: RUN, gate: G2 } });
     as(w);

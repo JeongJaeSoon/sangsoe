@@ -310,9 +310,14 @@ export function ready(input: ViewInput): ReadyRow[] {
     .map((r) => ({ task: r.task, alias: r.item === r.task ? null : r.item }));
 }
 
+/**
+ * Decision 314: the list reads sangsoe items only (a Task with an item_created row, as the brief does).
+ * An Orca Task made outside sangsoe has no alias and no lead, so a lead cannot start it from here;
+ * whyFrom still answers for one asked by id.
+ */
 export function readiness(input: ViewInput): WhyReport[] {
   const facts = foldFacts(input.events);
-  return input.orca.tasks.map((t) => whyFrom(input, facts, t.id));
+  return input.orca.tasks.filter((t) => facts.items.get(t.id)?.alias !== undefined).map((t) => whyFrom(input, facts, t.id));
 }
 
 /** Decision 92④'s table, one row per blocking predecessor. */

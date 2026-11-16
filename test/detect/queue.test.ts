@@ -101,6 +101,8 @@ const GATED = { id: T1, run: RUN, status: "pending" };
 
 test("answer_gate_unresolved (queue side): the round re-calls decision_answer, the gate's Run resolves it once", async () => {
   const w = createWorld([GATED]);
+  // The gated Task is an item: ready tells the Run of items only (decision 314).
+  w.store.append({ type: "item_created", source: "test", payload: { task: T1, alias: "i900", who: "lead:api", done_when: "done", owner_action: 0 }, entity: "task", entity_id: T1 });
   const d = await openDecision(w);
   const said = answerWithoutDelivery(w, d);
 
