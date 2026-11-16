@@ -122,6 +122,36 @@ test("333: an answer or approval line in a session sangsoe does not know says wh
   assert.equal(w.store.events().length, 0, "and nothing is written for it");
 });
 
+test("333: a session whose SessionStart was never recorded (sangsoe enabled mid-session) is registered by its first prompt when agent_type names the role", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: "run_orch" });
+  const out = await hook(w, "user-prompt-submit", { session_id: "r1", agent_type: "sangsoe:orchestrator", prompt_id: "p1", prompt: "계속해" }, T1);
+  assert.equal(out[0], "sangsoe-role: orchestrator", out.join("\n"));
+  const rows = w.store.events({ type: "session_started" }).filter((e) => e.payload.session === "r1");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.payload.role, "orchestrator");
+  assert.equal(said(w, "r1"), 1);
+  await hook(w, "user-prompt-submit", { session_id: "r1", agent_type: "sangsoe:orchestrator", prompt_id: "p2", prompt: "다음" }, T1);
+  assert.equal(said(w, "r1"), 2);
+  assert.equal(w.store.events({ type: "session_started" }).filter((e) => e.payload.session === "r1").length, 1, "registered once");
+});
+
+test("333: a Stop in a session never recorded registers it too when agent_type names the role", async () => {
+  const w = createSessionWorld({ dispatched: false, heldRun: null });
+  await hook(w, "stop", { session_id: "r2", agent_type: "sangsoe:lead" }, T1);
+  assert.equal(w.store.events({ type: "session_started" }).filter((e) => e.payload.session === "r2").length, 1);
+  assert.equal(w.store.events({ type: "turn_ended" }).filter((e) => e.payload.session === "r2").length, 1);
+});
+
+test("333: a resume in a worktree where sessions of two roles ran takes neither role and says why", async () => {
+  const w = await started();
+  await hook(w, "session-start", { session_id: "l1", source: "startup", agent_type: "sangsoe:lead" }, T2);
+  const lines = await hook(w, "session-start", { session_id: "o9", source: "resume" }, T3);
+  assert.equal(lines.length, 1, lines.join("\n"));
+  assert.match(lines[0] ?? "", /역할을 잇지 않았다/);
+  assert.equal(w.store.events({ type: "session_started" }).filter((e) => e.payload.session === "o9").length, 0);
+  assert.deepEqual(continued(w), []);
+});
+
 test("333: an approval line the orchestrator's hook cannot take as an approval says why", async () => {
   const w = await started();
   const line = `승인 acme/api#12 ${"b".repeat(40)}`;
