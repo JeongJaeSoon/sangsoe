@@ -11,7 +11,7 @@ export type Pull = {
   merged?: boolean;
   merge_commit_sha?: string | null;
   mergeable_state?: string;
-  head: { sha: string };
+  head: { sha: string; ref?: string; repo?: { full_name?: string } | null };
   base: { ref: string; repo?: { default_branch?: string } };
   user: { login: string };
   labels?: { name: string }[];

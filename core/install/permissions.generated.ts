@@ -28,7 +28,7 @@ export const GENERATED_RULES: readonly { readonly rule: string; readonly source:
   { rule: "Bash(orca plugin list:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca ports:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca reference find:*)", source: "core/orca/commands.ts" },
-  { rule: "Bash(orca reference list:*)", source: "claude-plugin/skills/orchestrate/SKILL.md" },
+  { rule: "Bash(orca reference list:*)", source: "claude-plugin/skills/deliver-ticket/SKILL.md" },
   { rule: "Bash(orca repo show:*)", source: "core/orca/commands.ts" },
   { rule: "Bash(orca search:*)", source: "claude-plugin/skills/general/recall/SKILL.md" },
   { rule: "Bash(orca status:*)", source: "core/orca/commands.ts" },

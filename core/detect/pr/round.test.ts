@@ -40,7 +40,7 @@ function world(o: { watch?: Partial<WatchConfig>; budget?: RateBudget } = {}) {
   const dispatches: Record<string, { taskId: string; runId: string; liveness?: string }> = {};
   const messages: { to: string; subject: string; body: string }[] = [];
   const tasks = new Map<string, Task>();
-  const worktrees: { id: string; projectId?: string; branch: string; isArchived: boolean; displayName: string }[] = [];
+  const worktrees: { id: string; projectId?: string; branch: string; isArchived: boolean; displayName: string; head?: string }[] = [];
   const calls: string[] = [];
   let writesRefused = false;
   const workerRows: { dispatchId: string; taskId: string; state: string; workspace: string }[] = [];
@@ -633,4 +633,18 @@ test("no watch setting or no gh client: the round reads nothing", async () => {
   const w = world();
   assert.deepEqual((await w.round({ watch: () => null })).unseen, ["watch.repos setting"]);
   assert.deepEqual((await w.round({}, ["gh"])).unseen, ["gh client"]);
+});
+
+test("323: a PR merged before any open round saw it still gets the reference of the workspace on its branch at its head, and no other", async () => {
+  const w = world();
+  w.routes[CLOSED] = ok([listed(40, { merged_at: "2026-11-10T11:00:00Z" }), listed(41, { merged_at: "2026-11-10T11:01:00Z" }), listed(42, { merged_at: "2026-11-10T11:02:00Z" })]);
+  for (const n of [40, 41, 42]) w.merged(n, SHA);
+  w.worktrees.push(
+    { id: "repo1::/w/40", projectId: `github:${REPO}`, branch: "refs/heads/feature-40", isArchived: false, displayName: "card 40", head: HEAD },
+    // The branch name of #42 was reused by newer work: another head.
+    { id: "repo1::/w/42", projectId: `github:${REPO}`, branch: "refs/heads/feature-42", isArchived: false, displayName: "card 42", head: SHA2 },
+  );
+  const r = await w.round();
+  assert.deepEqual(w.calls, [`reference add ${url(40)} id:repo1::/w/40`], "#41 has no workspace, #42's is at another head; no task-update, the PRs are still unrecorded");
+  assert.deepEqual(r.acts.map((a) => a.ok), [true]);
 });

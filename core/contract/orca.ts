@@ -76,6 +76,8 @@ export type WorktreeRow = {
   childWorktreeIds: string[];
   lastActivityAt: number;
   workspaceStatus?: string;
+  /** The reviews and issues attached to the card (`orca reference list`); `worktree show` names them. */
+  linkedItems?: { url?: string }[];
 };
 
 export type AgentWait = { state?: string; [key: string]: unknown } | null;

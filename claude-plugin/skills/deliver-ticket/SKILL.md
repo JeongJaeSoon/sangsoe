@@ -48,7 +48,7 @@ PR 의 검증 등급(V0–V3)은 diff 로 정해진다. 너는 고르지 않고,
 ## 5. PR
 
 - 본문: 왜 · 범위 · 트레이드오프 · 영향 범위 · 검증(각 확인을 VERIFIED · NOT VERIFIED · INCONCLUSIVE 로). 어떤 리뷰를 돌렸는지 한 줄(리뷰 범위 줄).
-- PR 을 열면 자기 카드에 한 번 적는다: `orca worktree set --worktree current --workspace-status in-review --comment "<PR URL>"`. 카드는 오너가 Orca 에서 보는 한 방향 표시이고 원본이 아니다. 오너가 이미 다른 열로 옮긴 카드(`orca worktree show --worktree current --json` 의 `workspaceStatus` 가 `todo`·`in-progress` 가 아님)는 덮지 않는다. PR 과 항목의 연결(Orca 참조)은 pr-monitor 가 붙인다(결정 193).
+- PR 을 열면 자기 카드에 한 번 적는다: `orca worktree set --worktree current --workspace-status in-review --comment "<PR URL>"`. 카드는 오너가 Orca 에서 보는 한 방향 표시이고 원본이 아니다. 오너가 이미 다른 열로 옮긴 카드(`orca worktree show --worktree current --json` 의 `workspaceStatus` 가 `todo`·`in-progress` 가 아님)는 덮지 않는다. PR 과 항목의 연결(Orca 참조)은 `land` 가 그 PR 을 처음 볼 때와 pr-monitor 가 붙이지만 놓칠 수 있다(결정 193·323). PR 을 연 뒤 `orca reference list --worktree id:<자기 worktree id> --json` 로 그 PR 이 붙었는지 본다. 없으면 직접 붙이지 않고 worker_done 본문에 적는다: 머지가 항목을 닫지 못한다. `land` 결과에 `notes` 가 있으면 그 줄이 이유다.
 - 다른 열린 PR 에 기대는 변경이면 그 PR 위에 쌓는다. 의존은 `stacked_on` 간선이다.
 - 리뷰를 사람에게 부탁했으면 `review_ask_record` 로 남긴다.
 - 필수 CI 가 초록이고, 리뷰 스레드가 모두 풀리고, 독립 리뷰의 Act-on 이 0 일 때까지 따라간다. 기다릴 때는 백그라운드 명령의 완료 알림이나 Orca 메시지가 깨우게 한다.
