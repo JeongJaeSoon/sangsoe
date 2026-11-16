@@ -42,11 +42,11 @@ test("302-2: a timed-out wait is not mail, and the lead and orchestrator point a
   has(orchestrator, ["`orchestrate` 의 \"깨움 처리\"", "`You have N orchestration message. Run …`"], "orchestrator.md 깨어날 때마다");
 });
 
-test("302-3: the batch is in the wait's output, and past mail is read from the Run's own mailbox", () => {
-  has(orchestrate, [`이어 부른 \`${"chec"}k\` 는 그 묶음을 다시 주지 않는다`, "`orca orchestration inbox --terminal run:<네 Run> --limit <n> --full`", "`--terminal` 없는 `inbox` 는 모든 우편함을 보여", "너를 깨운 메시지가 아니다"], "orchestrate 깨움 처리");
+test("302-3: the batch is the wait output's last JSON line, keepalives are not mail, and past mail is read from the Run's own mailbox", () => {
+  has(orchestrate, ["마지막 JSON 줄이고, 15초마다 찍히는 `_keepalive` 줄은 메일이 아니다",`이어 부른 \`${"chec"}k\` 는 그 묶음을 다시 주지 않는다`, "`orca orchestration inbox --terminal run:<네 Run> --limit <n> --full`", "`--terminal` 없는 `inbox` 는 모든 우편함을 보여", "너를 깨운 메시지가 아니다"], "orchestrate 깨움 처리");
 });
 
-test("302-4: Orca's own escalations are read by stopReason, and an unsettled Dispatch's terminal is not closed", () => {
+test("302-4: Orca's own escalations are read by their subject, and an unsettled Dispatch's terminal is not closed", () => {
   has(orchestrate, ["`--types` 로 가르지 못한다", "제목으로 읽는다(`stopReason` 은 `--full` 에만 있다)", "아직 답하지 않았으면 답하고, 답했으면 아무것도 하지 않는다", "`ask` 뒤에는 붙이지 않는다", "앞 메시지 없이 온 `finished`", "누가 일부러 닫았어도 같은 글이 온다", "`Worker is waiting for permission`(`needs-input`)"], "orchestrate 깨움 처리");
   has(orchestrate, ["끝나지 않은 Dispatch 의 터미널은 닫지 않는다", "`worker-release`", "`unit_close`", "서브에이전트에게 정리를 맡기는 지시문에도 `orca terminal close` 를 쓰지 말라고"], "orchestrate 깨움 처리");
 });
