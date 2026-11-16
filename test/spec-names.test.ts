@@ -178,6 +178,9 @@ const ALLOWED = new Map<string, string>([
   // Decision 322: start_unit's resume row, built after design.html's last edit.
   ["event:unit_resumed:code-only", "322"],
   ["event-glossary:unit_resumed:code-only", "322"],
+  // Decision 329: a pr-monitor round that stopped with watched repositories left.
+  ["event:monitor_round_truncated:code-only", "329"],
+  ["event-glossary:monitor_round_truncated:code-only", "329"],
   // Decision 330: the coordinator's restart of stale sessions, built after design.html's last edit.
   ["cli:restart:code-only", "330"],
 ]);

@@ -9,7 +9,7 @@ const USAGE = `run <${MONITOR_NAMES.join("|")}> [--dry-run] [--db <path>] [--hom
 export async function monitor(
   positionals: readonly string[],
   values: CommandArgs["values"],
-  open: (o: { dryRun: boolean; dbPath?: string; home?: string }) => MonitorRunner = openMonitors,
+  open: (o: { dryRun: boolean; dbPath?: string; home?: string; oneShot: true }) => MonitorRunner = openMonitors,
 ): Promise<Outcome<MonitorReport>> {
   const [verb, name] = positionals;
   if (verb !== "run" || name === undefined || !isMonitorName(name)) {
@@ -17,7 +17,7 @@ export async function monitor(
   }
   const dbPath = typeof values.db === "string" && values.db !== "" ? values.db : undefined;
   const home = typeof values.home === "string" && values.home !== "" ? values.home : undefined;
-  const runner = open({ dryRun: values["dry-run"] === true, ...(dbPath ? { dbPath } : {}), ...(home ? { home } : {}) });
+  const runner = open({ dryRun: values["dry-run"] === true, ...(dbPath ? { dbPath } : {}), ...(home ? { home } : {}), oneShot: true });
   try {
     return { ok: true, value: await runner.run(name) };
   } finally {

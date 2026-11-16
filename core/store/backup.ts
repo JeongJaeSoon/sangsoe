@@ -62,6 +62,7 @@ export const OWN_TYPES = [
   "loop_detected",
   "mention_new",
   "model_changed",
+  "monitor_round_truncated",
   "notified",
   "observed_change",
   "owner_action",

@@ -9,6 +9,8 @@ import { nullChatProvider } from "../chat/provider.ts";
 import { DEFAULT_MONITOR_CONFIG, type MonitorDeps } from "../monitor.ts";
 import { runMonitor } from "../run.ts";
 import type { WatchConfig } from "./config.ts";
+import { key } from "./judge.ts";
+import { prCursor } from "./round.ts";
 
 const REPO = "acme/api";
 const NOW = Date.parse("2026-11-10T12:00:00Z");
@@ -633,6 +635,169 @@ test("no watch setting or no gh client: the round reads nothing", async () => {
   const w = world();
   assert.deepEqual((await w.round({ watch: () => null })).unseen, ["watch.repos setting"]);
   assert.deepEqual((await w.round({}, ["gh"])).unseen, ["gh client"]);
+});
+
+/** A round with a runner's cursor, counting `reference find` calls. */
+function withCursor(w: ReturnType<typeof world>) {
+  const cursor = prCursor();
+  const finds: string[] = [];
+  const referenceFind = async (a: { query: string; limit?: number }) => {
+    finds.push(a.query);
+    return w.deps.orca.referenceFind(a);
+  };
+  const orca = { ...w.deps.orca, referenceFind } as OrcaAdapter;
+  return { finds, round: () => w.round({ orca, prCursor: cursor }) };
+}
+
+const UPDATED = "2026-11-10T11:00:00Z";
+
+test("329: a merged PR whose Task is closed is not looked up again until GitHub shows it changed", async () => {
+  const w = world();
+  w.link(7, "task_item", "blocked");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  const pr: Record<string, unknown> = listed(7, { merged_at: UPDATED, updated_at: UPDATED });
+  w.routes[CLOSED] = ok([pr]);
+  w.merged(7, SHA);
+  const c = withCursor(w);
+  const first = await c.round();
+  assert.deepEqual(first.written.map((x) => x.type), ["pr_merged", "item_transition"]);
+  await c.round();
+  assert.equal(c.finds.length, 2, "the round after the close still looks, and finds nothing owed");
+  await c.round();
+  assert.equal(c.finds.length, 2, "then it is settled");
+  pr.updated_at = "2026-11-10T11:30:00Z";
+  await c.round();
+  assert.equal(c.finds.length, 3, "a change on GitHub reads it again");
+});
+
+test("329: a close Orca refused is still owed, so the merged PR is looked up and the close listed every round", async () => {
+  const w = world();
+  w.link(7, "task_item", "blocked");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: UPDATED, updated_at: UPDATED })]);
+  w.merged(7, SHA);
+  w.refuseWrites();
+  const c = withCursor(w);
+  for (let i = 1; i <= 3; i++) {
+    const r = await c.round();
+    assert.deepEqual(r.acts.map((a) => a.what), ["task-update task_item completed (acme/api#7 merged)"], `round ${i}`);
+  }
+  assert.equal(c.finds.length, 3);
+});
+
+test("329: a Task status Orca could not read is not settled", async () => {
+  const w = world();
+  w.link(7, "task_item", "blocked");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7", task: "task_item" } });
+  w.store.append({ type: "pr_merged", source: "pr-monitor", dedupe_key: key("pr_merged", "acme/api#7"), payload: { pr: "acme/api#7", merge_sha: SHA } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: UPDATED, updated_at: UPDATED })]);
+  const orca = { ...w.deps.orca, taskList: async () => ({ ok: false, error: { code: "runtime_error", message: "" } }) } as unknown as OrcaAdapter;
+  const cursor = prCursor();
+  for (let i = 0; i < 2; i++) {
+    const r = await w.round({ orca, prCursor: cursor });
+    assert.ok(r.unseen.includes("status of task_item"), `round ${i + 1}`);
+  }
+  assert.equal(cursor.settled.size, 0);
+});
+
+test("329: decision 323's reference add is followed by the close on the next round, not settled in between", async () => {
+  const w = world();
+  w.routes[CLOSED] = ok([listed(40, { merged_at: UPDATED, updated_at: UPDATED })]);
+  w.merged(40, SHA);
+  w.worktrees.push({ id: "repo1::/w/40", projectId: `github:${REPO}`, branch: "refs/heads/feature-40", isArchived: false, displayName: "card 40", head: HEAD });
+  const c = withCursor(w);
+  await c.round();
+  assert.deepEqual(w.calls, [`reference add ${url(40)} id:repo1::/w/40`]);
+  // Orca now links the card to the PR and its Task.
+  w.link(40, "task_40", "blocked");
+  const next = await c.round();
+  assert.equal(c.finds.length, 2);
+  assert.deepEqual(next.written.map((x) => x.type), ["pr_opened", "pr_merged", "item_transition"]);
+});
+
+test("329: a cap that fires after pr_ready_to_merge is judged withholds the row with its wake, and the next round sends both", async () => {
+  const w = world();
+  w.link(12, "task_c", "blocked", "run_lead_c");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#12", task: "task_c", base: "main", head_sha: HEAD } });
+  w.store.append({ type: "verify_tier_set", source: "pr-monitor", payload: { pr: "acme/api#12", head_sha: HEAD, computed: "V1", effective: "V1", actor: "pr-monitor", accepted: true, reason: "x" } });
+  w.store.append({ type: "land_requested", source: "land", payload: { pr: "acme/api#12", head_sha: HEAD, reason: "merge_on_approval" } });
+  w.routes[OPEN] = ok([listed(12)]);
+  w.routes[`repos/${REPO}/pulls/12`] = ok({ ...listed(12), state: "open", mergeable_state: "clean" });
+  w.routes[`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`] = ok([{ user: { login: "bob" }, state: "APPROVED", commit_id: HEAD, author_association: "MEMBER" }]);
+  w.routes[`repos/${REPO}/commits/${HEAD}/check-runs?per_page=100`] = ok({ total_count: 1, check_runs: [{ status: "completed", conclusion: "success" }] });
+  const ctl = new AbortController();
+  const inner = w.deps.gh as GhClient;
+  // The timer's cap fires while the PR's review lists are read, after readyToMerge planned.
+  const gh: GhClient = {
+    get: async <T>(path: string, o?: { conditional?: boolean }) => {
+      if (path.includes("/comments?")) ctl.abort();
+      return inner.get<T>(path, o);
+    },
+  };
+  const cursor = prCursor();
+  const cut = await runMonitor("pr", { ...w.deps, gh, prCursor: cursor }, ctl.signal);
+  assert.equal(cut.aborted, true);
+  assert.deepEqual(w.rows("pr_ready_to_merge"), [], "no row without its wake");
+  assert.deepEqual(cut.acts.map((a) => a.ok), [null]);
+  const next = await runMonitor("pr", { ...w.deps, prCursor: cursor });
+  assert.ok(next.written.some((x) => x.type === "pr_ready_to_merge"));
+  assert.ok(w.calls.some((c) => c.startsWith("send run:run_lead_c")), "the lead is woken on the next round");
+});
+
+test("329: review rows judged before the cap are written past it, though their ETag is saved and the wake waits", async () => {
+  const w = world();
+  w.link(12, "task_c", "blocked", "run_lead_c");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#12", task: "task_c", base: "main", head_sha: HEAD } });
+  w.store.append({ type: "verify_tier_set", source: "pr-monitor", payload: { pr: "acme/api#12", head_sha: HEAD, computed: "V1", effective: "V1", actor: "pr-monitor", accepted: true, reason: "x" } });
+  w.routes[OPEN] = ok([listed(12)]);
+  w.routes[`repos/${REPO}/pulls/12/comments?sort=created&direction=desc&per_page=100`] = ok([{ id: 501, user: { login: "bob" }, created_at: "2026-11-10T11:30:00Z" }]);
+  const ctl = new AbortController();
+  let cut = true;
+  const inner = w.deps.gh as GhClient;
+  const tagged = new Set<string>();
+  // Like core/gh/client.ts: the tag is saved when the 200 is read, and a later conditional read is a 304.
+  const gh: GhClient = {
+    get: async <T>(path: string, o?: { conditional?: boolean }) => {
+      if (o?.conditional && tagged.has(path)) return { kind: "not_modified" } as GhResponse<T>;
+      const res = await inner.get<T>(path, o);
+      if (o?.conditional && res.kind === "ok") tagged.add(path);
+      if (cut && path.includes("/comments?")) ctl.abort();
+      return res;
+    },
+  };
+  const cursor = prCursor();
+  const first = await runMonitor("pr", { ...w.deps, gh, prCursor: cursor }, ctl.signal);
+  assert.equal(first.aborted, true);
+  assert.deepEqual(w.rows("review_commented").map((e) => e.dedupe_key?.split(":").at(-1)), ["501"], "written past the cap");
+  assert.deepEqual(first.acts.map((a) => a.ok), [null], "the wake did not run");
+  cut = false;
+  await runMonitor("pr", { ...w.deps, gh, prCursor: cursor });
+  assert.ok(w.calls.some((c) => c.startsWith("send dispatch:ctx_task_c") || c.startsWith("send run:run_lead_c")), "the next round sends the wake from the stored row");
+});
+
+test("329: a merged PR whose Dispatch Orca could not show is read again, and closed once it can", async () => {
+  const w = world();
+  w.link(7, "task_item", "blocked");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7" } });
+  w.store.append({ type: "pr_merged", source: "pr-monitor", dedupe_key: key("pr_merged", "acme/api#7"), payload: { pr: "acme/api#7", merge_sha: SHA } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: UPDATED, updated_at: UPDATED })]);
+  const cursor = prCursor();
+  const blind = { ...w.deps.orca, workerShow: async () => ({ ok: false, error: { code: "runtime_error", message: "" } }) } as unknown as OrcaAdapter;
+  await w.round({ orca: blind, prCursor: cursor });
+  assert.equal(cursor.settled.size, 0, "a link read in part is not settled");
+  await w.round({ prCursor: cursor });
+  assert.deepEqual(w.calls, ["task-update task_item completed run=run_lead"]);
+});
+
+test("329: a wider watch setting reads PRs again that were settled as out of scope", async () => {
+  const w = world({ watch: { authors: ["bob"] } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: UPDATED, updated_at: UPDATED })]);
+  w.merged(7, SHA);
+  const cursor = prCursor();
+  await w.round({ prCursor: cursor });
+  assert.ok(cursor.settled.has("acme/api#7"));
+  await w.round({ prCursor: cursor, watch: () => ({ repos: [REPO], authors: [], linkedOnly: false, owners: ["owner1"] }) });
+  assert.deepEqual(w.rows("pr_merged").map((e) => e.payload.pr), ["acme/api#7"]);
 });
 
 test("323: a PR merged before any open round saw it still gets the reference of the workspace on its branch at its head, and no other", async () => {

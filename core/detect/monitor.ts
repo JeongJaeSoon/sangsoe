@@ -7,13 +7,15 @@ import type { Appended, EventFilter, NewEvent, StoreOnlyType } from "../store/st
 import type { TierConfig } from "../verify/verify-tier.ts";
 import type { ChatProvider } from "./chat/provider.ts";
 import type { WatchConfig } from "./pr/config.ts";
+import type { PrCursor } from "./pr/round.ts";
 
 /** An event a round decided to write; `runMonitor` appends it, or only reports it on a dry run. */
 export type Planned = NewEvent<Exclude<EventType, StoreOnlyType>>;
 
 /**
  * An Orca write a round decided on (pr-monitor's Task close, `reference add`, a wake through notify).
- * `runMonitor` runs it after the planned events are appended, never on a dry run or past the cap, and
+ * `runMonitor` runs it after the planned events are appended, never on a dry run nor once the cap has
+ * passed before its part is handed over (a handed part's acts run to the end, decision 329), and
  * appends the events it returns (the `item_transition` that follows a `task-update`).
  */
 export type Act = {
@@ -24,6 +26,11 @@ export type Act = {
    * the loss from going out twice (decision 184).
    */
   wake?: true;
+  /**
+   * Dedupe keys of events in the same round whose row would stop this act from being judged again
+   * (`pr_ready_to_merge` and its wake). Past the cap those events are held back with the act (decision 329).
+   */
+  gates?: string[];
   run(d: MonitorDeps): Promise<{ ok: boolean; detail: string; planned: Planned[] }>;
 };
 
@@ -32,6 +39,13 @@ export type Act = {
  * `calls` names the core functions the round called, or on a dry run would have called.
  */
 export type Reading = { planned: Planned[]; unseen: string[]; acts?: Act[]; calls?: string[] };
+
+/**
+ * Hands part of a round to `runMonitor` before the round ends (decision 329): its events are
+ * written at once, past the cap too except those its acts `gate`, and its acts run in order unless
+ * the cap has passed.
+ */
+export type Flush = (part: { planned: Planned[]; acts: Act[] }) => Promise<void>;
 
 export type MonitorConfig = {
   /** worker_stuck: minutes since the session's last activity while an agent is working. */
@@ -87,6 +101,8 @@ export type MonitorDeps = {
   ghBudget?: () => RateBudget | undefined;
   watch?: () => WatchConfig | null;
   tier?: () => TierConfig | null;
+  /** pr-monitor's memory between rounds of one runner. Absent: every round reads every PR, in `watch.repos` order. */
+  prCursor?: PrCursor;
 };
 
 export type Written = { type: string; dedupe_key: string | null; seq: number; inserted: boolean };
@@ -94,7 +110,7 @@ export type Written = { type: string; dedupe_key: string | null; seq: number; in
 export type MonitorReport = {
   monitor: MonitorName;
   planned: Planned[];
-  /** Empty on a dry run, and when the round passed its cap before writing. */
+  /** Empty on a dry run. Past the cap, only what the round handed over through `Flush` (decision 329). */
   written: Written[];
   unseen: string[];
   calls: string[];
