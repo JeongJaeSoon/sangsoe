@@ -27,7 +27,8 @@ type ListedPull = {
 
 /** A Task Orca links to the PR: a local workspace whose agent's mailbox is a Dispatch. */
 export type LinkedTask = { task: string; run: string; dispatch: string; live: boolean };
-type Link = { linked: boolean; tasks: LinkedTask[] };
+/** `whole`: every Dispatch behind the link was read (decision 329: a part-read link is not settled). */
+type Link = { linked: boolean; tasks: LinkedTask[]; whole: boolean };
 
 class RateLimited extends Error {
   readonly resetAt: number;
@@ -85,13 +86,16 @@ async function changed<T>(r: Reads, path: string): Promise<T | "unchanged" | nul
 
 const WORKER_PAGES = 3;
 
-/** Dispatches by workspace id, from `worker-list` (newest first): a released worker leaves no agent row. */
-export async function dispatchesByWorkspace(d: MonitorDeps): Promise<Map<string, string[]>> {
+/**
+ * Dispatches by workspace id, from `worker-list` (newest first): a released worker leaves no agent row.
+ * null when no page could be read.
+ */
+export async function dispatchesByWorkspace(d: MonitorDeps): Promise<Map<string, string[]> | null> {
   const out = new Map<string, string[]>();
   let cursor: string | undefined;
   for (let page = 0; page < WORKER_PAGES; page++) {
     const r = await d.orca.workerList({ limit: 100, ...(cursor ? { cursor } : {}) });
-    if (!r.ok) break;
+    if (!r.ok) return page === 0 ? null : out;
     for (const w of r.value.rows) if (w.workspace) out.set(w.workspace, [...(out.get(w.workspace) ?? []), w.dispatchId]);
     cursor = r.value.nextCursor;
     if (!cursor) break;
@@ -103,7 +107,7 @@ export async function dispatchesByWorkspace(d: MonitorDeps): Promise<Map<string,
  * Orca's `reference find <url>` is the link (decision 80 N7). A live agent's mailbox names its
  * Dispatch; once the worker is released the workspace's Dispatches come from `worker-list`.
  */
-export async function linkOf(d: MonitorDeps, url: string, workers: () => Promise<Map<string, string[]>>): Promise<Link | null> {
+export async function linkOf(d: MonitorDeps, url: string, workers: () => Promise<Map<string, string[]> | null>): Promise<Link | null> {
   const found = await d.orca.referenceFind({ query: url, limit: 20 });
   if (!found.ok) return null;
   const matches = Array.isArray(found.value.matches) ? (found.value.matches as Record<string, unknown>[]) : [];
@@ -112,6 +116,7 @@ export async function linkOf(d: MonitorDeps, url: string, workers: () => Promise
     return (ws.hostId === undefined || ws.hostId === "local") && ws.archived !== true;
   });
   const dispatches = new Set<string>();
+  let whole = true;
   for (const m of local) {
     const before = dispatches.size;
     for (const a of Array.isArray(m.agents) ? (m.agents as Record<string, unknown>[]) : []) {
@@ -119,18 +124,23 @@ export async function linkOf(d: MonitorDeps, url: string, workers: () => Promise
       if (mail?.[1]) dispatches.add(mail[1]);
     }
     const ws = str((m.workspace as Record<string, unknown> | undefined)?.id);
-    if (dispatches.size === before && ws) for (const id of (await workers()).get(ws) ?? []) dispatches.add(id);
+    if (dispatches.size === before && ws) {
+      const byWs = await workers();
+      if (!byWs) whole = false;
+      for (const id of byWs?.get(ws) ?? []) dispatches.add(id);
+    }
   }
   const tasks = new Map<string, LinkedTask>();
   for (const dispatch of dispatches) {
     const show = await d.orca.workerShow({ dispatch });
+    if (!show.ok) whole = false;
     if (show.ok && show.value.taskId && show.value.runId) {
       const live = show.value.liveness === "live";
       // A Task's live Dispatch wins over its ended ones, whatever order Orca listed them in.
       if (!tasks.get(show.value.taskId)?.live) tasks.set(show.value.taskId, { task: show.value.taskId, run: show.value.runId, dispatch, live });
     }
   }
-  return { linked: local.length > 0, tasks: [...tasks.values()] };
+  return { linked: local.length > 0, tasks: [...tasks.values()], whole };
 }
 
 /**
@@ -494,28 +504,39 @@ const TYPES = ["pr_opened", "pr_merged", "pr_closed", "pr_reopened", "pr_base_ch
 export type PrCursor = {
   /** A PR's `updated_at` when its last pass found nothing to write or do, for closed PRs and open ones nobody tracks. */
   settled: Map<string, string>;
-  /** Repositories the last round did not finish, in the order it left them: this round walks them first. */
+  /** The watch setting the settled marks were judged under; another one clears them. */
+  watch: string;
+  /** Repositories the last round did not finish: the ones it never reached, then the ones it cut. This round walks them first. */
   left: string[];
   /** The PR an unfinished repository's walk starts from next, by repository. */
   resume: Map<string, string>;
 };
 
-export const prCursor = (): PrCursor => ({ settled: new Map(), left: [], resume: new Map() });
+export const prCursor = (): PrCursor => ({ settled: new Map(), watch: "", left: [], resume: new Map() });
 
 /**
- * The round's own budget for the repository walk. The worker's cap is 90 s and one gh or orca call may
- * take up to its 30 s exec timeout, so the walk stops at 60 s and still writes before the cap.
+ * The round's own budget for the repository walk, checked between PRs. The worker's cap is 90 s and
+ * one gh or orca call may take up to its 30 s exec timeout: stopping at 60 s leaves the PR in hand and
+ * the main CI read room before the cap, which they can still pass when several of their calls are slow.
  */
 export const WALK_BUDGET_MS = 60_000;
 
-type Walk = { r: Reads; cursor: PrCursor; skip: boolean; level: string; signal: AbortSignal; workers: () => Promise<Map<string, string[]>> };
+type Walk = {
+  r: Reads;
+  cursor: PrCursor;
+  skip: boolean;
+  level: string;
+  signal: AbortSignal;
+  workers: () => Promise<Map<string, string[]> | null>;
+  hand: () => Promise<void>;
+};
 
 /**
  * One pr-monitor round. GitHub through core/gh only, Orca through the adapter only; the PR's link to
  * an item is Orca's `reference find`, never a copy. Writes events, and one kind of item change: the
  * merged PR's Task goes `completed`, as an act after `pr_merged` (decision 84 ①).
  *
- * Decision 329: with `flush`, each repository's events and acts are handed over when it ends. With
+ * Decision 329: with `flush`, each PR's events and acts are handed over when its pass ends. With
  * `flush` and `d.prCursor` (the plugin's runner) the walk also keeps to `WALK_BUDGET_MS`, splits it
  * among the repositories left, and starts the next round with the repositories it did not finish.
  * A round that stops with repositories left writes `monitor_round_truncated`. Without `flush` (the
@@ -533,20 +554,25 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal, flush?: Flush
   // starts every repository from its first PR.
   if (!conditional && d.prCursor) Object.assign(d.prCursor, prCursor());
   const cursor = d.prCursor ?? prCursor();
-  let byWorkspace: Promise<Map<string, string[]>> | undefined;
+  // A wider `authors` or `linked_only` off makes PRs settled as out of scope matter.
+  const scope = JSON.stringify([watch.authors, watch.linkedOnly, watch.owners]);
+  if (cursor.watch !== scope) cursor.settled.clear();
+  cursor.watch = scope;
+  let byWorkspace: Promise<Map<string, string[]> | null> | undefined;
   const workers = () => {
     byWorkspace ??= dispatchesByWorkspace(d);
     return byWorkspace;
   };
-  const w: Walk = { r, cursor, skip: conditional && d.prCursor !== undefined, level: budgetLevel(d.ghBudget?.()), signal, workers };
   const hand = async () => {
     if (flush) await flush({ planned: r.planned.splice(0), acts: r.acts.splice(0) });
   };
+  const w: Walk = { r, cursor, skip: conditional && d.prCursor !== undefined, level: budgetLevel(d.ghBudget?.()), signal, workers, hand };
   const started = d.now();
   // Only a runner with memory keeps the budget: a one-shot round would walk the same first minute every time.
   const deadline = flush && d.prCursor ? started + WALK_BUDGET_MS : Number.POSITIVE_INFINITY;
   const order = [...cursor.left.filter((x) => watch.repos.includes(x)), ...watch.repos.filter((x) => !cursor.left.includes(x))];
   const done: string[] = [];
+  const walked = new Set<string>();
   let limited = false;
   try {
     // A second pass hands the time the quick repositories left to the ones that ran out of their share.
@@ -556,6 +582,7 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal, flush?: Flush
       for (const [i, repo] of queue.entries()) {
         if (signal.aborted || ((pass > 0 || i > 0) && d.now() >= deadline)) break;
         const until = d.now() + (deadline - d.now()) / (queue.length - i);
+        walked.add(repo);
         try {
           if (await walkRepo(w, repo, until)) done.push(repo);
           else unfinished.push(repo);
@@ -573,7 +600,9 @@ export async function prRound(d: MonitorDeps, signal: AbortSignal, flush?: Flush
     plan(r, { type: "rate_limited", dedupe_key: key("rate_limited", "github", String(e.resetAt)), payload: { kind: "github", reset_at: reset } });
     r.unseen.push(`GitHub rate limit until ${reset}`);
   }
-  cursor.left = order.filter((x) => !done.includes(x));
+  // The ones this round never reached go before the ones it cut, so a slow repository cannot hold the front.
+  const left = order.filter((x) => !done.includes(x));
+  cursor.left = [...left.filter((x) => !walked.has(x)), ...left.filter((x) => walked.has(x))];
   if (flush && !limited && cursor.left.length > 0) {
     plan(r, { type: "monitor_round_truncated", payload: { repos_done: done.length, repos_left: cursor.left.length, elapsed_ms: d.now() - started } });
   }
@@ -602,26 +631,34 @@ async function walkRepo(w: Walk, repo: string, until: number): Promise<boolean> 
     const before = [r.planned.length, r.acts.length, r.unseen.length].join();
     const at = typeof p.updated_at === "string" ? p.updated_at : undefined;
     if (w.skip && at !== undefined && cursor.settled.get(ref) === at && (await stillSettled(r, repo, p, isOpen))) continue;
-    const tracked = await onPull(w, repo, p, isOpen);
+    const again = await onPull(w, repo, p, isOpen);
     const quiet = [r.planned.length, r.acts.length, r.unseen.length].join() === before;
-    if (at !== undefined && quiet && !(isOpen && tracked)) cursor.settled.set(ref, at);
+    if (at !== undefined && quiet && !again) cursor.settled.set(ref, at);
     else cursor.settled.delete(ref);
+    // Each PR is handed over as one part, so its events and the acts they gate are written together.
+    await w.hand();
+    // Past the cap the part may have been withheld: the next walk starts at this PR.
+    if (w.signal.aborted) return false;
   }
   cursor.resume.delete(repo);
   return !w.signal.aborted;
 }
 
 /**
- * A settled PR whose `updated_at` did not move. An open one is read again once it is recorded or a
- * workspace sits on its branch, since neither moves `updated_at`.
+ * A settled PR whose `updated_at` did not move. An open one is read again once it is recorded, a land
+ * names it, or a workspace sits on its branch, since none of them moves `updated_at`.
  */
 async function stillSettled(r: Reads, repo: string, p: ListedPull, isOpen: boolean): Promise<boolean> {
   if (!isOpen) return true;
-  if (rowsOf(r, "pr_opened", prRef(repo, p.number)).length > 0) return false;
+  const ref = prRef(repo, p.number);
+  if (rowsOf(r, "pr_opened", ref).length > 0 || rowsOf(r, "land_requested", ref).length > 0) return false;
   return (await onBranch(r, repo, p)) === false;
 }
 
-/** One PR's pass. True when it is an open PR the round tracks (recorded, linked or on a workspace's branch). */
+/**
+ * One PR's pass. True when the PR is read again next round even if nothing changed: an open PR the
+ * round tracks (recorded, linked or on a workspace's branch), or a link read only in part.
+ */
 async function onPull(w: Walk, repo: string, p: ListedPull, isOpen: boolean): Promise<boolean> {
   const { r, level } = w;
   const { watch, d } = r;
@@ -632,12 +669,13 @@ async function onPull(w: Walk, repo: string, p: ListedPull, isOpen: boolean): Pr
   if (!isOpen && !p.merged_at && !known) return false;
   const link = await linkOf(d, prUrl(repo, p.number), w.workers);
   if (!link) r.unseen.push(`reference find ${ref}`);
+  const partial = link !== null && !link.whole;
   // Decision 323: a PR merged before an open round saw it has no other chance to reach its card.
   if (!isOpen && p.merged_at && link && !link.linked) await addReference(r, repo, p, true);
   // linked_only: Orca's link, a recorded pr_opened, or (open PRs) a workspace on its branch.
-  if (watch.linkedOnly && !known && !link?.linked && !isOpen) return false;
+  if (watch.linkedOnly && !known && !link?.linked && !isOpen) return partial;
   if (isOpen) {
-    if (watch.linkedOnly && !known && !link?.linked && !(await onBranch(r, repo, p))) return false;
+    if (watch.linkedOnly && !known && !link?.linked && !(await onBranch(r, repo, p))) return partial;
     await onOpen(r, repo, p, link, level);
     return true;
   }
@@ -648,13 +686,13 @@ async function onPull(w: Walk, repo: string, p: ListedPull, isOpen: boolean): Pr
       plan(r, { type: "pr_opened", dedupe_key: task ? key("pr_opened", ref, task) : key("pr_opened", ref), payload: { pr: ref, ...(task ? { task } : {}), base: p.base.ref, head_sha: p.head.sha, ...headBranch(repo, p) } });
     }
     await onMerged(r, repo, p, link);
-    return false;
+    return partial;
   }
   const t = closeTurns(r, ref);
   // The first close keeps the key it always had; a close after a reopen is the next turn.
   if (t.closes === 0) plan(r, { type: "pr_closed", dedupe_key: key("pr_closed", ref), payload: { pr: ref } });
   else if (t.reopened) plan(r, { type: "pr_closed", dedupe_key: key("pr_closed", ref, String(t.closes + 1)), payload: { pr: ref } });
-  return false;
+  return partial;
 }
 
 /**

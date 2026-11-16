@@ -715,6 +715,60 @@ test("329: decision 323's reference add is followed by the close on the next rou
   assert.deepEqual(next.written.map((x) => x.type), ["pr_opened", "pr_merged", "item_transition"]);
 });
 
+test("329: a cap that fires after pr_ready_to_merge is judged withholds the row with its wake, and the next round sends both", async () => {
+  const w = world();
+  w.link(12, "task_c", "blocked", "run_lead_c");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#12", task: "task_c", base: "main", head_sha: HEAD } });
+  w.store.append({ type: "verify_tier_set", source: "pr-monitor", payload: { pr: "acme/api#12", head_sha: HEAD, computed: "V1", effective: "V1", actor: "pr-monitor", accepted: true, reason: "x" } });
+  w.store.append({ type: "land_requested", source: "land", payload: { pr: "acme/api#12", head_sha: HEAD, reason: "merge_on_approval" } });
+  w.routes[OPEN] = ok([listed(12)]);
+  w.routes[`repos/${REPO}/pulls/12`] = ok({ ...listed(12), state: "open", mergeable_state: "clean" });
+  w.routes[`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`] = ok([{ user: { login: "bob" }, state: "APPROVED", commit_id: HEAD, author_association: "MEMBER" }]);
+  w.routes[`repos/${REPO}/commits/${HEAD}/check-runs?per_page=100`] = ok({ total_count: 1, check_runs: [{ status: "completed", conclusion: "success" }] });
+  const ctl = new AbortController();
+  const inner = w.deps.gh as GhClient;
+  // The timer's cap fires while the PR's review lists are read, after readyToMerge planned.
+  const gh: GhClient = {
+    get: async <T>(path: string, o?: { conditional?: boolean }) => {
+      if (path.includes("/comments?")) ctl.abort();
+      return inner.get<T>(path, o);
+    },
+  };
+  const cursor = prCursor();
+  const cut = await runMonitor("pr", { ...w.deps, gh, prCursor: cursor }, ctl.signal);
+  assert.equal(cut.aborted, true);
+  assert.deepEqual(w.rows("pr_ready_to_merge"), [], "no row without its wake");
+  assert.deepEqual(cut.acts.map((a) => a.ok), [null]);
+  const next = await runMonitor("pr", { ...w.deps, prCursor: cursor });
+  assert.ok(next.written.some((x) => x.type === "pr_ready_to_merge"));
+  assert.ok(w.calls.some((c) => c.startsWith("send run:run_lead_c")), "the lead is woken on the next round");
+});
+
+test("329: a merged PR whose Dispatch Orca could not show is read again, and closed once it can", async () => {
+  const w = world();
+  w.link(7, "task_item", "blocked");
+  w.store.append({ type: "pr_opened", source: "pr-monitor", payload: { pr: "acme/api#7" } });
+  w.store.append({ type: "pr_merged", source: "pr-monitor", dedupe_key: key("pr_merged", "acme/api#7"), payload: { pr: "acme/api#7", merge_sha: SHA } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: UPDATED, updated_at: UPDATED })]);
+  const cursor = prCursor();
+  const blind = { ...w.deps.orca, workerShow: async () => ({ ok: false, error: { code: "runtime_error", message: "" } }) } as unknown as OrcaAdapter;
+  await w.round({ orca: blind, prCursor: cursor });
+  assert.equal(cursor.settled.size, 0, "a link read in part is not settled");
+  await w.round({ prCursor: cursor });
+  assert.deepEqual(w.calls, ["task-update task_item completed run=run_lead"]);
+});
+
+test("329: a wider watch setting reads PRs again that were settled as out of scope", async () => {
+  const w = world({ watch: { authors: ["bob"] } });
+  w.routes[CLOSED] = ok([listed(7, { merged_at: UPDATED, updated_at: UPDATED })]);
+  w.merged(7, SHA);
+  const cursor = prCursor();
+  await w.round({ prCursor: cursor });
+  assert.ok(cursor.settled.has("acme/api#7"));
+  await w.round({ prCursor: cursor, watch: () => ({ repos: [REPO], authors: [], linkedOnly: false, owners: ["owner1"] }) });
+  assert.deepEqual(w.rows("pr_merged").map((e) => e.payload.pr), ["acme/api#7"]);
+});
+
 test("323: a PR merged before any open round saw it still gets the reference of the workspace on its branch at its head, and no other", async () => {
   const w = world();
   w.routes[CLOSED] = ok([listed(40, { merged_at: "2026-11-10T11:00:00Z" }), listed(41, { merged_at: "2026-11-10T11:01:00Z" }), listed(42, { merged_at: "2026-11-10T11:02:00Z" })]);

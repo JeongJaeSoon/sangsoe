@@ -37,8 +37,12 @@ const url = (repo: string, n: number) => `https://github.com/${repo}/pull/${n}`;
 
 export function fleet(o: FleetOptions = {}) {
   const repos = Array.from({ length: o.repos ?? 11 }, (_, i) => repoName(i));
-  const ghMs = o.ghMs ?? 400;
-  const orcaMs = o.orcaMs ?? 700;
+  let ghMs = o.ghMs ?? 400;
+  let orcaMs = o.orcaMs ?? 700;
+  const delays = (d: { ghMs?: number; orcaMs?: number }) => {
+    ghMs = d.ghMs ?? ghMs;
+    orcaMs = d.orcaMs ?? orcaMs;
+  };
   const store = Store.open({ path: ":memory:" });
   let virtual = FLEET_NOW;
   const now = () => (o.real ? Date.now() : virtual);
@@ -175,7 +179,7 @@ export function fleet(o: FleetOptions = {}) {
   const rows = (type?: string) => store.events(type ? { type } : {}).filter((e) => e.source === "pr-monitor");
   /** Calls of one stage since charge index `from`. */
   const calls = (stage: string, from = 0) => charges.slice(from).filter((c) => c.stage === stage).length;
-  return { repos, store, deps, charges, calls, capped, rows, now, routes, refs, unreadable, url };
+  return { repos, store, deps, charges, calls, capped, rows, now, routes, refs, unreadable, url, delays };
 }
 
 /** Milliseconds charged per repository and stage, as table rows. */

@@ -100,11 +100,21 @@ test("329: a repository whose tracked PRs alone outrun its share still reaches i
   assert.ok(cursor.settled.has("acme/app-01#129"), "the last merged PR of the busy repository was reached");
 });
 
-test("329: a round the cap cuts still writes what it judged and the truncation, and runs no Orca write", async () => {
+test("329: when one PR outlasts the whole budget, each round starts at a repository the last one never reached", async () => {
+  const f = fleet({ orcaMs: 61_000 });
+  const cursor = prCursor();
+  const firsts: string[] = [];
+  for (let i = 0; i < 11; i++) {
+    const from = f.charges.length;
+    await runMonitor("pr", { ...f.deps, prCursor: cursor });
+    firsts.push(f.charges[from]?.repo ?? "");
+  }
+  assert.deepEqual(firsts, f.repos);
+});
+
+test("329: a round the cap cuts still writes the PR it judged with no Orca write, and the truncation", async () => {
   // One Orca call outlasts the whole cap: the cap fires inside the first PR.
   const f = fleet({ orcaMs: 100_000 });
-  // No Orca link, a workspace on its branch: the round would add the reference.
-  f.refs.delete(f.url("acme/app-01", 900));
   const cap = f.capped();
   const r = await runMonitor("pr", { ...f.deps, prCursor: prCursor() }, cap.signal);
   cap.done();
@@ -112,8 +122,28 @@ test("329: a round the cap cuts still writes what it judged and the truncation, 
   assert.ok(f.rows("pr_opened").some((e) => e.payload.pr === "acme/app-01#900"), "the judged PR is written past the cap");
   const cut = f.rows("monitor_round_truncated")[0]?.payload;
   assert.deepEqual({ done: cut?.repos_done, left: cut?.repos_left }, { done: 0, left: 11 });
-  assert.ok(r.acts.length > 0 && r.acts.every((a) => a.ok === null), "acts past the cap are listed, not run");
+});
+
+test("329: past the cap a PR whose pass has an Orca write is withheld whole and judged first next round", async () => {
+  const f = fleet({ orcaMs: 100_000 });
+  // No Orca link, a workspace on its branch: the round adds the reference.
+  f.refs.delete(f.url("acme/app-01", 900));
+  const cursor = prCursor();
+  const cap = f.capped();
+  const r = await runMonitor("pr", { ...f.deps, prCursor: cursor }, cap.signal);
+  cap.done();
+  assert.equal(r.aborted, true);
+  assert.deepEqual(r.acts.map((a) => a.ok), [null], "the act is listed, not run");
+  assert.deepEqual(f.rows("pr_opened"), [], "nor is the event it came with written");
   assert.equal(f.calls("reference add"), 0);
+  assert.equal(f.rows("monitor_round_truncated").length, 1);
+
+  f.delays({ orcaMs: 700 });
+  const next = f.capped();
+  await runMonitor("pr", { ...f.deps, prCursor: cursor }, next.signal);
+  next.done();
+  assert.equal(f.charges.find((c) => c.stage === "reference add")?.repo, "acme/app-01");
+  assert.ok(f.rows("pr_opened").some((e) => e.payload.pr === "acme/app-01#900"));
 });
 
 test("329: the cursor is not trusted while a lost database waits for its reread", async () => {
