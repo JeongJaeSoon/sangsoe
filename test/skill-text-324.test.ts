@@ -29,7 +29,7 @@ test("324-2: the secretary's work, what it leaves to its principal, its authorit
   has(body, ["decision_answer", "start_unit", "`land`", "prod", "초안과 dry run", "review_record", "evidence_record", "주인의 증명"], "하지 않는 일");
   has(
     body,
-    ["주인의 권한 안에서만", "전해 들은 말", "권한 프롬프트", "주인에게 돌아간다", "원문 그대로", "다른 길", "일 하나에 비서 하나", "id", "되돌릴 수"],
+    ["주인의 권한 안에서만", "전해 들은 말", "권한 프롬프트", "주인에게 돌아간다", "원문 그대로", "명령은 인용하지 않고", "다른 길", "일 하나에 비서 하나", "id", "되돌릴 수"],
     "권한",
   );
   has(body, ["OK", "MISMATCH", "증거", "남은 것", "언어", "길이"], "보고 꼴");

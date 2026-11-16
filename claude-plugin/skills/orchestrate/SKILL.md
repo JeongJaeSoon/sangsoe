@@ -73,7 +73,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 오케스트레이터와 리드에게 같다(결정 324). 네 턴에 남는 것은 조율이다: 가르기, 결정, `start_unit`, 답할지와 무엇을 답할지, 증명 기록(`review_record`·`evidence_record`·`stage_record`), `land`. 나머지 읽기·확인·요약·정해진 답장과 외부 행위는 기본으로 `sangsoe:secretary` 서브에이전트에게 맡긴다. 비서가 하지 않는 일과 보고 꼴은 그 정의(`agents/secretary.md`)에 있다.
 
-- `model` 을 늘 적는다: 대조·조회·수집은 resource `models` 의 `subagents.collect`, 판단이 섞인 조사·초안은 `subagents.judge` 다.
+- `model` 을 늘 적는다: 값을 맞춰 보는 대조·조회·수집은 resource `models` 의 `subagents.collect`, 판단이 섞인 조사·초안과 완료 조건을 판정하는 대조는 `subagents.judge` 다. 비서는 resource 를 읽지 못하니 필요한 resource 의 글은 지시문에 싣는다.
 - 서로 기대지 않는 일은 한 메시지에 비서를 여럿 띄운다. 일 하나에 비서 하나다.
 - 지시문에 확인할 값을 정확히 준다: "증거를 확인해" 가 아니라 주장마다 그 값(head sha, 출력 sha256, 시험 수, PR 번호). 보고 꼴(결과 표 OK/MISMATCH, 증거, 만든 것의 id, 남은 것 한 줄), 언어, 길이 상한을 적는다.
 - 지시문에 `write-brief` 의 서브에이전트 지시문 다섯 줄과 거부 문단을 통째로 넣는다.
