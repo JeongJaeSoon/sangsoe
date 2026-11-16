@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { approvalLine, parseApprovalLine } from "../core/owner/approval.ts";
+import { approvalLine, parseApprovalLine } from "../core/index.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
@@ -14,7 +14,7 @@ const HEAD = "0123456789abcdef0123456789abcdef01234567";
 test("311-1: orchestrator.md and the orchestrate skill show the owner the line instead of a hand merge, and never type it", () => {
   for (const where of ["claude-plugin/agents/orchestrator.md", "claude-plugin/skills/orchestrate/SKILL.md"]) {
     const text = read(where);
-    for (const want of [TEMPLATE, "`! gh pr merge`", "결정 311", "`land`"]) assert.ok(text.includes(want), `${where} lacks: ${want}`);
+    for (const want of [TEMPLATE, "손 머지", "결정 311", "`land`"]) assert.ok(text.includes(want), `${where} lacks: ${want}`);
     assert.match(text, /오너가[^.]*그 줄 하나만 직접 치면/, where);
     assert.match(text, /예약/, where);
   }

@@ -26,7 +26,7 @@ export const ownerApprovalGate: Gate = (call) => {
     const { argv } = unwrap(cmd.words);
     if (argv.some((w, i) => w === "hook" && argv[i + 1] === "user-prompt-submit")) return deny("Only Claude Code calls the prompt hook");
     if (argv[0] === "orca" && argv[1] === "terminal" && argv[2] === "send" && APPROVAL_SHAPE.test(argv.join(" "))) {
-      return deny("A terminal send would type the owner's approval line for them");
+      return deny("Sending the owner's approval line into a terminal would type it for them");
     }
   }
   return null;
