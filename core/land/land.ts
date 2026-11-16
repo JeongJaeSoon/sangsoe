@@ -7,7 +7,6 @@ import { evidenceGaps } from "../verify/evidence.ts";
 import { requiredEvidence, type Tier, type TierConfig, verifyTier } from "../verify/verify-tier.ts";
 import {
   approvalAtHead,
-  type CheckState,
   containsBase,
   type MergeMethod,
   type PrGate,
@@ -17,7 +16,6 @@ import {
   readDiff,
   readBranchPulls,
   readLabels,
-  readCheckRuns,
   readPull,
 } from "./github.ts";
 import { lastBaseChange, rereviewItem, verdictsSinceBase } from "./rereview.ts";
@@ -277,10 +275,9 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   if (approval.approved) {
     mergeable();
     const state = pull.mergeable_state ?? "unknown";
-    if (state !== "clean") throw notMergeable(pr, state);
-    const runs = must(await readCheckRuns(gh, repo, head), "checks_unreadable", "call land again");
-    if (!runs.complete) throw new Refused("checks_unreadable", "", `${short(head)} has more check runs than one page reads`, "land reads one page of 100 check runs; tell the owner, who decides how this PR merges");
-    greenChecks(runs.checks, head);
+    if (state !== "clean" && state !== "has_hooks") throw notMergeable(pr, state);
+    // The rollup, not REST check runs: it also holds commit statuses.
+    greenChecks((await gateAt({ pr, head, readGate, gateFix })).checks, head);
     return { ...base, action: "merge_approved", note: [...note, "approved and green at the head"].join("; ") };
   }
   const waitApproval = (why: string): LandValue => ({ ...base, action: "merge_on_approval", note: [...note, approval.why, why].join("; ") });
@@ -414,7 +411,7 @@ function notMergeable(pr: string, state: string): Refused {
 }
 
 /** Refuses unless `checks` is non-empty and every one finished as success, neutral or skipped. */
-function greenChecks(checks: readonly { name: string; state: CheckState }[], head: string): void {
+function greenChecks(checks: PrGate["checks"], head: string): void {
   if (checks.length === 0) throw new Refused("checks_missing", "", `no check has reported on ${short(head)}`, "wait for CI to start, then land again");
   const red = checks.find((c) => c.state === "fail");
   if (red) throw new Refused("checks_red", red.name, `${red.name} failed at ${short(head)}`, "fix it, push, and have the new head reviewed");

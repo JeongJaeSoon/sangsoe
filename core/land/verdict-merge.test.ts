@@ -367,7 +367,24 @@ test("204: unreadable protection and a pending or failed check anywhere in the r
   }
 });
 
-// With protection unreadable, GitHub's merge state stands in for the compare (decision 304, core/land/land.test.ts).
+test("304: on this path too, unreadable protection reads GitHub's merge state: behind refuses, clean merges a head without the base tip", async () => {
+  const behind = harness({ compare: "diverged", pull: { mergeable_state: "behind" } });
+  ready(behind.store);
+  const r = await land(input(), behind.deps);
+  assert.equal(refusal(r), "behind_base:main");
+  assert.match(r.ok ? "" : r.refusal.reason, /up_to_date_or_queue \(own\): GitHub calls/);
+  assert.deepEqual(behind.mergesNow, []);
+
+  const clean = harness({ compare: "diverged" });
+  ready(clean.store);
+  const c = await land(input(), clean.deps);
+  assert.equal(refusal(c), "ok:merge_verdict");
+  assert.ok(sources(c).includes("up_to_date_or_queue:own:true"));
+  assert.ok(!clean.paths.some((p) => p.includes("/compare/")));
+  assert.equal(clean.mergesNow.length, 1);
+});
+
+// With protection unreadable, GitHub's merge state stands in for the compare (decision 304).
 test("204: on protection read without an up-to-date rule, a head that does not contain the base tip refuses with the fix; an unreadable compare refuses", async () => {
   for (const status of ["behind", "diverged", "mystery"]) {
     const h = harness({ compare: status, protection: "none" });

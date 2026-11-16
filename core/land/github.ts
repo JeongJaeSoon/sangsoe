@@ -84,10 +84,11 @@ export async function readLabels(gh: GhClient, repo: string, pr: number, pull: P
   return { kind: "ok", data: names.map((name) => ({ name, actor: actor.get(name) ?? null })) };
 }
 
-type Review = { user: { login: string } | null; state: string; commit_id: string; author_association?: string };
+/** `commit_id` is null when the reviewed commit is gone (a force-push GitHub has collected). */
+type Review = { user: { login: string } | null; state: string; commit_id: string | null; author_association?: string };
 
 const TRUSTED = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-type CheckRuns = { total_count: number; check_runs: { name?: string; status: string; conclusion: string | null }[] };
+type CheckRuns = { total_count: number; check_runs: { status: string; conclusion: string | null }[] };
 
 /** `why` says what is missing when `approved` is false. */
 export type HeadApproval = { approved: boolean; why: string };
@@ -114,20 +115,8 @@ export async function approvalAtHead(gh: GhClient, repo: string, pr: number, pul
   const untrusted = approvals.find((r) => r.commit_id === head);
   if (untrusted) return no(`${login(untrusted)}'s approval does not count (${untrusted.author_association ?? "no association"}, not in config owners)`);
   const older = approvals[0];
-  if (older) return no(`${login(older)} approved ${older.commit_id.slice(0, 7)}, not the head ${head.slice(0, 7)}`);
+  if (older) return no(`${login(older)} approved ${older.commit_id?.slice(0, 7) ?? "a commit that is gone"}, not the head ${head.slice(0, 7)}`);
   return no("no approval from anyone but the author");
-}
-
-/** The check runs on `sha`; `complete` is false when GitHub has more than one page of them. */
-export async function readCheckRuns(gh: GhClient, repo: string, sha: string): Promise<Read<{ checks: { name: string; state: CheckState }[]; complete: boolean }>> {
-  const runs = lift<CheckRuns>(await gh.get(`repos/${repo}/commits/${sha}/check-runs?per_page=100`), "check runs");
-  if (runs.kind !== "ok") return runs;
-  const all = runs.data.check_runs ?? [];
-  const checks = all.map((c) => ({
-    name: c.name ?? "check run",
-    state: (c.status !== "completed" ? "pending" : ["success", "neutral", "skipped"].includes(c.conclusion ?? "") ? "pass" : "fail") as CheckState,
-  }));
-  return { kind: "ok", data: { checks, complete: all.length === runs.data.total_count } };
 }
 
 /** Decision 81's re-call after approval: approved at the head, GitHub calls the PR clean, and every check run on the head passed. */
@@ -142,10 +131,14 @@ export async function approvedAndGreen(
   const approval = await approvalAtHead(gh, repo, pr, pull, owners);
   if (approval.kind !== "ok") return approval;
   if (!approval.data.approved) return { kind: "ok", data: false };
-  const runs = await readCheckRuns(gh, repo, pull.head.sha);
+  const runs = lift<CheckRuns>(await gh.get(`repos/${repo}/commits/${pull.head.sha}/check-runs?per_page=100`), "check runs");
   if (runs.kind !== "ok") return runs;
-  const { checks, complete } = runs.data;
-  return { kind: "ok", data: complete && checks.length > 0 && checks.every((c) => c.state === "pass") };
+  const all = runs.data.check_runs ?? [];
+  const green =
+    all.length > 0 &&
+    all.length === runs.data.total_count &&
+    all.every((c) => c.status === "completed" && ["success", "neutral", "skipped"].includes(c.conclusion ?? ""));
+  return { kind: "ok", data: green };
 }
 
 export type CheckState = "pass" | "pending" | "fail";

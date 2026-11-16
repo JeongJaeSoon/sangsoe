@@ -4,7 +4,7 @@ Decision numbers refer to `docs/decisions.md`.
 
 ## Unreleased
 
-- **`land` no longer stalls a PR on a fast-moving base when branch protection is unreadable, and no longer answers "merge once approved" to a PR already approved (304).** With protection unreadable, the head need not contain the base tip unless GitHub itself calls the PR `behind`; an approved head that cannot merge yet is refused with what blocks it (`not_mergeable`, `checks_pending`, `checks_red`, `checks_missing`, `behind_base`), and a `merge_on_approval` note says why the approval does not count. Repositories whose protection reads are unchanged.
+- **`land` no longer stalls a PR on a fast-moving base when branch protection is unreadable, and no longer answers "merge once approved" to a PR already approved (304).** With protection or rulesets unreadable, the head need not contain the base tip unless GitHub itself calls the PR `behind`; where both read, that check is unchanged. In every repository, an approved head that cannot merge yet is refused with what blocks it (`not_mergeable`, `checks_pending`, `checks_red`, `checks_missing`, `gate_unreadable`, `behind_base`), read from the same status rollup the own checks use, and the caller calls `land` again once it clears: pr-monitor's approval wake is now only for a PR not yet approved. A `merge_on_approval` note says why the approval does not count.
 
 - **`[gate:done-blockers]` no longer refuses a large Run's Task as unreadable (299).** `realHost.run` had no maxBuffer, so a few-MB `task-list --full` ended in ENOBUFS; it now reads up to 64 MiB and puts the error code in stderr. The refusal names why the read failed, and a Task nothing in the store names passes without asking Orca.
 

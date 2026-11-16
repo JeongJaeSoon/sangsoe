@@ -185,17 +185,20 @@ test("only the author approved: still merge_on_approval", async () => {
 });
 
 // Decision 304: a PR approved by a member and green, on a base that moves faster than the branch can follow.
-function approvedRoutes(o: { protection: "unreadable" | "none"; state?: string; compare?: string; runs?: unknown[]; approvedAt?: string }) {
+// The checks come from the harness's PR gate (the rollup), which passes `unit`.
+function approvedRoutes(o: { protection: "unreadable" | "none"; state?: string; compare?: string; approvedAt?: string | null }) {
   const r0 = routes({ rules: LOOSE, pull: { mergeable_state: o.state ?? "clean" } });
   if (o.protection === "unreadable") r0[`repos/${REPO}/branches/main/protection`] = { kind: "error", status: 403, message: "Resource not accessible by integration" };
   r0[`repos/${REPO}/compare/main...${HEAD}`] = ok({ status: o.compare ?? "diverged" });
   r0[`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`] = ok([
-    { user: { login: "bob" }, state: "APPROVED", commit_id: o.approvedAt ?? HEAD, author_association: "MEMBER" },
+    { user: { login: "bob" }, state: "APPROVED", commit_id: o.approvedAt === undefined ? HEAD : o.approvedAt, author_association: "MEMBER" },
   ]);
-  const runs = o.runs ?? [{ name: "unit", status: "completed", conclusion: "success" }];
-  r0[`repos/${REPO}/commits/${HEAD}/check-runs?per_page=100`] = ok({ total_count: runs.length, check_runs: runs });
   return r0;
 }
+const withChecks = (h: Harness, checks: { name: string; required: boolean; state: "pass" | "pending" | "fail" }[]) => {
+  h.deps.prGate = async () => ({ kind: "ok", data: { headSha: HEAD, unresolvedThreads: 0, checks, methods: ["squash"] } });
+  return h;
+};
 const outcome = (r: Awaited<ReturnType<typeof land>>) => (r.ok ? `ok:${r.value.action}` : r.refusal.reason.split(" ")[0]);
 const upToDate = (r: Awaited<ReturnType<typeof land>>) => (r.ok ? r.value.conditions.find((c) => c.id === "up_to_date_or_queue") : undefined);
 
@@ -229,25 +232,37 @@ test("304: protection unreadable and GitHub calls the PR behind: behind_base wit
 });
 
 test("304: an approved head that something else blocks is refused with that condition, not merge_on_approval", async () => {
-  const cases: [Parameters<typeof approvedRoutes>[0], string][] = [
-    [{ protection: "none", compare: "ahead", state: "unknown" }, "not_mergeable:unknown"],
-    [{ protection: "none", compare: "ahead", runs: [{ name: "e2e", status: "in_progress", conclusion: null }] }, "checks_pending:e2e"],
-    [{ protection: "none", compare: "ahead", runs: [{ name: "lint", status: "completed", conclusion: "failure" }] }, "checks_red:lint"],
-    [{ protection: "none", compare: "ahead", runs: [] }, "checks_missing"],
+  const pass = { name: "unit", required: false, state: "pass" as const };
+  const cases: [string | undefined, Parameters<typeof withChecks>[1], string][] = [
+    ["unknown", [pass], "not_mergeable:unknown"],
+    ["blocked", [pass], "not_mergeable:blocked"],
+    [undefined, [pass, { name: "e2e", required: false, state: "pending" }], "checks_pending:e2e"],
+    [undefined, [pass, { name: "lint", required: false, state: "fail" }], "checks_red:lint"],
+    [undefined, [], "checks_missing"],
   ];
-  for (const [world, want] of cases) {
-    const h = harness(approvedRoutes(world));
+  for (const [state, checks, want] of cases) {
+    const h = withChecks(harness(approvedRoutes({ protection: "none", compare: "ahead", ...(state ? { state } : {}) })), checks);
     ready(h.store);
     assert.equal(outcome(await land(input(), h.deps)), want, want);
     assert.deepEqual(landRows(h.store), [`land_failed:${want}`]);
     assert.deepEqual(h.merges, []);
   }
+  // GitHub Enterprise's has_hooks is as good as clean, as on the verdict path.
+  const hooks = harness(approvedRoutes({ protection: "none", compare: "ahead", state: "has_hooks" }));
+  ready(hooks.store);
+  assert.equal(outcome(await land(input(), hooks.deps)), "ok:merge_approved");
+
   // Not approved at the head: still waits for approval, and the note says why.
-  const h = harness(approvedRoutes({ protection: "none", compare: "ahead", approvedAt: OLD }));
-  ready(h.store);
-  const r = await land(input(), h.deps);
-  assert.equal(outcome(r), "ok:merge_on_approval");
-  assert.match(r.ok ? r.value.note : "", /bob approved ccccccc, not the head aaaaaaa/);
+  for (const [at, why] of [
+    [OLD, /bob approved ccccccc, not the head aaaaaaa/],
+    [null, /bob approved a commit that is gone, not the head aaaaaaa/],
+  ] as const) {
+    const h = harness(approvedRoutes({ protection: "none", compare: "ahead", approvedAt: at }));
+    ready(h.store);
+    const r = await land(input(), h.deps);
+    assert.equal(outcome(r), "ok:merge_on_approval");
+    assert.match(r.ok ? r.value.note : "", why);
+  }
 });
 
 test("304: a repo whose protection reads without an up-to-date rule still needs the base tip in the head", async () => {
