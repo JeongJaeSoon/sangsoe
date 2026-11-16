@@ -85,6 +85,8 @@ export interface Overview {
   readonly advisorToday?: string;
   /** Orchestrator and lead sessions restart_due names (design N1); absent when none. */
   readonly restartDue?: readonly string[];
+  /** Runs whose Dispatch-less coordinator stopped and has not moved since (decision 309); absent when none. */
+  readonly stalled?: readonly string[];
 }
 
 export interface GraphEdgeRow {

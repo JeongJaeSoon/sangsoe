@@ -47,6 +47,7 @@ function overview(m: Overview, open: boolean): string[] {
     "",
     `✅ 완료 ${s.done}건 · 🔄 진행 중 ${s.doing}건 · 남은 것 ${s.left}건 · 🚧 막힌 것 ${s.blocked}건`,
     "",
+    ...(m.stalled ? [...m.stalled, ""] : []),
     ...section(m.decisions, "없음"),
     ...section(m.ownerTodo, "없음"),
     ...section(m.inProgress, "없음"),
