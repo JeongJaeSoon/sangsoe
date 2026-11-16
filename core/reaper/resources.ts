@@ -7,7 +7,7 @@ import { DEFAULT_MONITOR_CONFIG } from "../detect/monitor.ts";
 import { withDiagnostics } from "../detect/resource/judge.ts";
 import { SAMPLE_RETENTION_MS, SAMPLE_STEP_MS, type StoredSample } from "../store/samples.ts";
 import type { EventFilter } from "../store/store.ts";
-import { ownerHolds } from "./record.ts";
+import { ownerHolds, type StartedCards, startedBySangsoe, startedCards } from "./record.ts";
 import type { Blocked, Judged, ReapOptions, ReapReport } from "./round.ts";
 
 // Decision 234: the panel's 리소스 section. Every number is read when the owner opens or refreshes the
@@ -118,29 +118,16 @@ function episodeOf(events: ResourceDeps["events"]): ResourceView["episode"] {
   return { state: "high", since: last.ts, reason: String((last.payload as { reason?: unknown }).reason ?? "") };
 }
 
-/** Worktree ids (Orca's `id`) and instance ids sangsoe started or recorded. */
-function ownCards(events: ResourceDeps["events"]): { ids: Set<string>; instances: Set<string> } {
-  const ids = new Set(events({ type: "unit_started" }).map((e) => String((e.payload as { worktree?: unknown }).worktree ?? "")));
-  const instances = new Set(
-    events({ type: "resource" })
-      .map((e) => e.payload as { kind?: string; ref?: string })
-      .filter((p) => p.kind === "worktree" && p.ref)
-      .map((p) => p.ref as string),
-  );
-  return { ids, instances };
-}
-
-const isMine = (own: ReturnType<typeof ownCards>, c: WorktreeRow) =>
-  c.isMainWorktree === false && (own.ids.has(c.id) || own.instances.has(c.instanceId ?? ""));
+const isMine = (own: StartedCards, c: WorktreeRow) => c.isMainWorktree === false && startedBySangsoe(own, c);
 
 /**
- * The instance ids of the worktrees sangsoe made (start_unit's `unit_started.worktree`, a recorded
- * `resource`{kind worktree}); null when Orca's list cannot be read. Only these are ever offered to 정리.
+ * The instance ids of the worktrees sangsoe made (start_unit's `unit_started.worktree`, by id or by its
+ * path); null when Orca's list cannot be read. Only these are ever offered to 정리.
  */
 export async function sangsoeWorktrees(events: ResourceDeps["events"], orca: Pick<OrcaAdapter, "worktreeList">): Promise<Set<string> | null> {
   const list = await orca.worktreeList({ limit: 1000 });
   if (!list.ok) return null;
-  const own = ownCards(events);
+  const own = startedCards(events);
   return new Set(list.value.rows.filter((c) => isMine(own, c)).map((c) => c.instanceId ?? c.id));
 }
 
@@ -242,7 +229,7 @@ async function tmpUsage(d: ResourceDeps, now: number, minAgeMs?: number): Promis
 }
 
 async function readMade(d: ResourceDeps, now: number): Promise<ResourceView["made"]> {
-  const own = ownCards(d.events);
+  const own = startedCards(d.events);
   const cards = async (): Promise<Pick<ResourceView["made"], "worktrees" | "terminals">> => {
     const [list, ps] = await Promise.all([d.orca.worktreeList({ limit: 1000 }), d.orca.worktreePs({})]);
     if (!list.ok) {
@@ -271,7 +258,7 @@ async function readCandidates(d: ResourceDeps, now: number): Promise<Pick<Resour
   const cards = async (): Promise<ResourceView["worktrees"]> => {
     const list = await d.orca.worktreeList({ limit: 1000 });
     if (!list.ok) return { ok: false, why: `worktree list: ${list.error.code}` };
-    const own = ownCards(d.events);
+    const own = startedCards(d.events);
     const mine = new Set(list.value.rows.filter((c) => isMine(own, c)).map((c) => c.instanceId ?? c.id));
     try {
       const plan = await d.plan({ trigger: "hint", explain: true, only: mine });
