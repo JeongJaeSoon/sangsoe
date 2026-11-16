@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { graphRead, readiness, Store, type ViewInput, type ViewTask } from "../../core/index.ts";
-import { readyKeys } from "../../core/graph/notify-ready.ts";
+import { graphRead, judgeQueue, readiness, Store, type ViewInput, type ViewTask } from "../../core/index.ts";
 import { readyText } from "../../claude-plugin/mcp/resources/ready.ts";
 import { itemFacts } from "../../core/index.ts";
 
@@ -32,7 +31,7 @@ test("readiness leaves a Task without item_created out", () => {
 test("the ready start list, the waiting list and the item_ready keys hold the item only", () => {
   const input = world();
   assert.deepEqual(graphRead.ready(input).map((r) => r.task), [ITEM]);
-  assert.deepEqual([...readyKeys(input).keys()], [ITEM]);
+  assert.deepEqual(judgeQueue(input, { decisionWaitMinutes: 30 }).ready.map((r) => r.task), [ITEM]);
   const text = readyText(input);
   assert.match(text, /i001/);
   for (const t of [OTHER, OTHER_BLOCKED, OTHER_AFTER]) assert.doesNotMatch(text, new RegExp(t));
