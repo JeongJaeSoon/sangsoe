@@ -408,7 +408,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
   const workerRows = typeof workers === "string" ? [] : workers;
   if (o.explain && r.roots_ok) {
     for (const c of candidates) {
-      const f = await judgeFinished(c, d.gh, workerRows);
+      const f = await judgeFinished(c, d.gh, workerRows, startedBySangsoe(own, c));
       const state = f.state === "unknown" && f.why === NO_TRACE ? "no_trace" : f.state;
       const why = f.state === "finished" ? (f.pr ? `PR #${f.pr.number}` : "Dispatch settled") : f.why;
       r.judged.push({ ref: c.instanceId, name: c.displayName ?? branchOf(c), path: c.path, gone: !existsSync(c.path), state, why });
@@ -458,7 +458,7 @@ export async function reapRound(d: ReaperDeps, o: ReapOptions = {}): Promise<Rea
       const seen = firstSeen.get(c.instanceId);
       if (!seen || seen.round >= round || now - seen.at < grace) continue;
     }
-    let f = await judgeFinished(c, d.gh, workerRows);
+    let f = await judgeFinished(c, d.gh, workerRows, startedBySangsoe(own, c));
     if (confirmed && !existsSync(c.path)) gone.add(c.id);
     // Decision 234: only the owner's confirmation lets a card no PR or Dispatch speaks for, or one
     // whose checkout is already gone, count as finished.
