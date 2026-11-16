@@ -132,17 +132,20 @@ export async function land(input: LandInput, deps: LandDeps): Promise<LandOutcom
   let head: string | undefined;
   let headRef: string | undefined;
   // Decision 323: the first look at a PR is the author's, so the author's card gets the PR then.
-  const events = store.events();
-  const first = !events.some((e) => (e.type === "land_requested" || e.type === "land_failed") && e.payload.pr === pr);
+  // A row without a head_sha is a refusal before the PR was read, so it did not look at the PR.
+  let first = false;
   const noted = async (o: LandOutcome): Promise<LandOutcome> => {
     if (!first || input.dryRun || !headRef || !deps.reference) return o;
     const note = await deps.reference({ repo, pr: input.pr, headRef }).catch((e) => `card reference: not attached (${e instanceof Error ? e.message : String(e)})`);
     return note ? { ...o, notes: [note] } : o;
   };
   try {
+    const events = store.events();
+    first = !events.some((e) => (e.type === "land_requested" || e.type === "land_failed") && e.payload.pr === pr && e.payload.head_sha !== undefined);
     const value = await judge({ ...input, repo }, pr, deps, events, (pull) => {
       head = pull.head.sha;
-      headRef = pull.head.ref;
+      // A fork's head or a head named like the base is not a card's branch (as in pr-monitor's onBranchRows).
+      if (pull.head.repo?.full_name?.toLowerCase() === repo.toLowerCase() && pull.head.ref !== pull.base.ref) headRef = pull.head.ref;
     });
     if (!input.dryRun) {
       if (value.action !== "merge_on_approval") {

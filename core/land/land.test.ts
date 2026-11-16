@@ -655,4 +655,22 @@ test("323: the first land of a PR, whatever it answers, asks for its head branch
   hook(none);
   await land(input(), none.deps);
   assert.equal(asked.length, 2, "a head without a branch name asks nothing");
+
+  const fork = harness(withRef({ head: { sha: HEAD, ref: "feature-12", repo: { full_name: "someone/api" } } }));
+  hook(fork);
+  await land(input(), fork.deps);
+  const sameName = harness(withRef({ head: { sha: HEAD, ref: "main", repo: { full_name: REPO } } }));
+  hook(sameName);
+  await land(input(), sameName.deps);
+  assert.equal(asked.length, 2, "a fork's head and a head named like the base are not a card's branch");
+
+  const live: Record<string, GhResponse<unknown>> = {};
+  const unread = harness(live);
+  hook(unread);
+  const blind = await land(input(), unread.deps);
+  assert.ok(!blind.ok && blind.refusal.code === "pr_unreadable", JSON.stringify(blind));
+  assert.equal(asked.length, 2, "a PR that could not be read is not seen");
+  Object.assign(live, withRef());
+  await land(input(), unread.deps);
+  assert.equal(asked.length, 3, "its row has no head_sha, so the next land is still the first look");
 });
