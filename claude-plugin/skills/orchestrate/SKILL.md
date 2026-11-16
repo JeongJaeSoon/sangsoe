@@ -26,7 +26,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 깨우는 것은 Orca 메시지 하나다. 하나를 처리하고 턴을 끝낸다. 다음 깨움은 Orca 가 가져온다.
 
-대기 명령은 하나다(백그라운드로): `orca orchestration check --run <네 Run> --wait --types worker_done,merge_ready,escalation,question,decision_gate --timeout-ms 3600000 --json`. 리드는 턴을 끝내기 전에 늘 걸고, 오케스트레이터는 대기를 걸 때 이것을 건다. 네 앞 대기가 아직 돌고 있으면 새로 걸지 않는다: 같은 도착에 깬 대기들은 같은 묶음을 받아 너를 그 수만큼 깨운다. `--types` 는 깨우는 조건일 뿐이라 status·dispatch·handoff·heartbeat 는 깨우지 않고, 깨면 그때 쌓인 묶음 전체(status 포함)가 돌아온다(결정 302).
+대기 명령은 하나다(백그라운드로): `orca orchestration check --run <네 Run> --wait --types worker_done,merge_ready,escalation,question,decision_gate --timeout-ms 3600000 --json`. 리드와 오케스트레이터는 깨움을 처리한 뒤 턴을 끝내기 전에 늘 건다(앞 대기가 끝났으면). 오케스트레이터는 건너뛰지 않는다: 도는 대기가 있으면 Orca 는 터미널에 `You have N orchestration message` 줄을 넣지 않고, 대기가 없을 때 그 줄이 네 tool 호출(`start_unit` 포함) 한가운데 들어가 호출을 끊은 적이 있다(결정 321). 네 앞 대기가 아직 돌고 있으면 새로 걸지 않는다: 같은 도착에 깬 대기들은 같은 묶음을 받아 너를 그 수만큼 깨운다. `--types` 는 깨우는 조건일 뿐이라 status·dispatch·handoff·heartbeat 는 깨우지 않고, 깨면 그때 쌓인 묶음 전체(status 포함)가 돌아온다(결정 302).
 
 - 대기가 `"timedOut":true`(`--json` 없이는 `Wait timed out; no messages were consumed.`)로 끝나면 메일이 아니다. 아무것도 처리·보고하지 않고 같은 명령을 다시 건다. `--timeout-ms` 를 빼면 약 2분마다 이렇게 exit 0 으로 끝나 빈 깨움이 된다.
 - 묶음은 그 대기의 출력에 있다: 마지막 JSON 줄이고, 15초마다 찍히는 `_keepalive` 줄은 메일이 아니다(`jq` 로 거른다). 대기가 묶음을 읽음으로 표시했으므로 이어 부른 `check` 는 그 묶음을 다시 주지 않는다. 지난 메일은 `orca orchestration inbox --terminal run:<네 Run> --limit <n> --full` 로 본다. `--terminal` 없는 `inbox` 는 모든 우편함을 보여 네가 Dispatch 에 보낸 메시지가 맨 위에 온다. 그것은 너를 깨운 메시지가 아니다.
@@ -49,6 +49,7 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 | 프롬프트에 붙은 한 줄 `sangsoe: Run <id> — 🟢 준비됨 N · 📅 기한 N · ⚠️ trigger 불명 N (새로 M건)` | 네 Run 을 쥔 세션의 hook 이 붙인 줄이다(결정 274). Orca 메시지가 아니라서 `check` 로 읽을 것이 없다. 🟢 는 시작할 항목, 📅 는 날짜가 된 오너 항목이라 오너에게 가져가고, ⚠️ 는 스크립트가 읽지 못한 trigger 라 그 조건이 왔는지 네가 판단한다. 줄 끝의 "게이트 N개를 풀었다" · "닫힌 Task 가 기다리던 결정" · "머지된 PR 의 Task 를 닫았다" 는 hook 이 이미 한 일이다(결정 275). 목록은 resource `ready` 와 `brief` 로 읽는다 | `start_unit`(`start` skill) |
 | `close_suggested` | 증거가 그 오너 항목의 완료를 보이나. 보이면 오너에게 완료 버튼을 누를 항목이라고 알린다. 오너 항목은 오너가 닫는다. 오너가 먼저 누른 항목은 ⏳ 검증 대기라 이 제안이 오지 않고 probe 가 통과하면 저절로 ✅ 로 읽힌다(결정 181) | — |
 | `main_red` | 머지한 PR 의 당사자에게 원인 좁히기를 맡긴다. 동결 중에는 `main_fix` 만 land 된다 | `start_unit` 또는 Orca `send` |
+| MCP tool 호출이 "거부" 로 돌아왔는데 사람이 거부하지 않았다(interrupt 문구) | 끊김이다. 거부 보고가 아니다(결정 321). 끊김으로 읽는다. `start_unit` 이면 같은 Task 를 `task` 로 다시 부른다(같은 spec 을 다시 보내지 않는다, 결정 318) | `start_unit` |
 | `worker_dead`·`worker_stuck` | 같은 Task 를 다시 시작할지(`start_unit` 의 `task`), 멈출지 | `start_unit` |
 
 ## 리드: 프로그램을 끝까지
