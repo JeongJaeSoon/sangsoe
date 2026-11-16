@@ -1,6 +1,7 @@
 import type { ItemReading, ItemState, OwnerTodoRow, RestartDueRow, WaitsOn } from "../contract/index.ts";
 import { ITEM_READINGS, READING_LABEL, STATE_LABEL } from "../contract/index.ts";
 import { isKind, localDay, modelDrift, POLICY, spend, spendText } from "../models/index.ts";
+import { settledByFact } from "../owner/act_pr.ts";
 import { linkedActs } from "../owner/link.ts";
 import { DEFAULT_RESTART_RULES, restart_due } from "../session/restart-due.ts";
 import { item_timeline } from "../store/views/item_timeline.ts";
@@ -8,7 +9,7 @@ import { type Facts, foldFacts } from "../graph/facts.ts";
 import { itemRef } from "../graph/nodes.ts";
 import { graphRead } from "../graph/read.ts";
 import { groupBriefFrom } from "./group.ts";
-import { type ItemFacts, itemFacts, OTHERS, rank } from "./item_status.ts";
+import { type ItemFacts, itemFacts, OTHERS, rank, shownFacts } from "./item_status.ts";
 import { ownerTodoFrom } from "./owner_todo.ts";
 import { stalledCoordinatorLines } from "./stalled.ts";
 import { localShort } from "./time.ts";
@@ -124,6 +125,8 @@ function unlinkedActs(input: BriefInput, showHours: number): UnlinkedAct[] {
   const linked = linkedActs(input.events);
   return input.events
     .filter((e) => e.type === "owner_act_unlinked" && !linked.has(e.seq) && Date.parse(e.ts) > cutoff && Date.parse(e.ts) <= Date.parse(input.now))
+    // Decision 342: a `gh pr merge|close` line the PR's own merged/closed row already answers.
+    .filter((e) => !settledByFact(input.events, String(e.payload.act), e.ts, showHours * 3_600_000))
     .map((e) => {
       const act = String(e.payload.act);
       const ref = PR_REF.exec(act)?.[1]?.toLowerCase() ?? null;
@@ -139,7 +142,7 @@ function unlinkedActs(input: BriefInput, showHours: number): UnlinkedAct[] {
 export function buildBrief(input: BriefInput, opts: BuildOptions = {}): Overview {
   const doneDays = opts.doneDays ?? 7;
   const now = input.now;
-  const facts = itemFacts(input, opts.graph ?? graphRead);
+  const facts = shownFacts(input, opts.graph ?? graphRead);
   const byAlias = new Map(facts.map((f) => [f.alias, f]));
   const todo = ownerTodoFrom(input, facts);
   const groups = groupBriefFrom(input, facts);
@@ -321,7 +324,7 @@ function todoRow(input: BriefInput, r: OwnerTodoRow, byAlias: ReadonlyMap<string
 export function buildGroup(input: BriefInput, lead: string, opts: BuildOptions = {}): GroupDetail | null {
   const graph = opts.graph ?? graphRead;
   const key = lead === "그 외" ? OTHERS : lead;
-  const facts = itemFacts(input, graph);
+  const facts = shownFacts(input, graph);
   const meta = groupBriefFrom(input, facts).find((g) => g.lead === key);
   if (!meta) return null;
   const mine = facts.filter((f) => f.lead === key);

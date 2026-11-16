@@ -1,3 +1,4 @@
+export { type ActPr, actPr, settledByFact } from "./act_pr.ts";
 export { ownerDone, type OwnerDone } from "./done.ts";
 export { DRIVEN_WINDOW_MS, recordDriven, wasDriven } from "./driven.ts";
 export { type ItemSet, type ItemSetDone, type OwnerExtra, parseOwnerExtra, recordOwnerExtra, setItemExtra } from "./extra.ts";

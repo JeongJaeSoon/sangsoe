@@ -11,7 +11,7 @@ import type { OwnerReap, OwnerReaped, ResourcePart, ResourcePartView, ResourceVi
 import { hashOf, mask, summarize } from "../session/mask.ts";
 import { Store } from "../store/store.ts";
 import { type BuildOptions, buildBrief, buildGroup, buildItem } from "./build.ts";
-import { itemFacts } from "./item_status.ts";
+import { itemFacts, shownFacts } from "./item_status.ts";
 import { loadBriefInput } from "./load.ts";
 import { ownerTodoFrom } from "./owner_todo.ts";
 import { localShort, localStamp, localZone } from "./time.ts";
@@ -78,7 +78,7 @@ export function statusBarItem(o: Overview): StatusBarItem {
 }
 
 export function panelView(input: BriefInput, target: PanelTarget, opts: BuildOptions = {}): Result<PanelView> {
-  const todo = ownerTodoFrom(input, itemFacts(input, opts.graph));
+  const todo = ownerTodoFrom(input, shownFacts(input, opts.graph));
   let model: BriefModel | null;
   if (target.item) model = buildItem(input, target.item, opts);
   else if (target.group) model = buildGroup(input, target.group, opts);

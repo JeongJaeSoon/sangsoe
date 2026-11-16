@@ -59,8 +59,8 @@ export async function itemNew(values: CommandArgs["values"], ports: { orca?: Orc
       ...(role ? { role } : {}),
     });
     if (r.ok) recordOwnerExtra(store, r.task, extra.value);
-    if (r.ok && (unitClass || repo || lead)) {
-      const payload = { task: r.task, ...(unitClass ? { unit_class: unitClass } : {}), ...(repo ? { repo } : {}), ...(lead ? { lead } : {}) };
+    if (r.ok && (unitClass || repo || lead || values.probe === true)) {
+      const payload = { task: r.task, ...(unitClass ? { unit_class: unitClass } : {}), ...(repo ? { repo } : {}), ...(lead ? { lead } : {}), ...(values.probe === true ? { probe: true } : {}) };
       store.append({ type: "item_extra_set", source: "core:item", payload, entity: "task", entity_id: r.task });
     }
     return r.ok ? { ok: true, value: { task: r.task, alias: r.alias } } : { ok: false, refusal: { code: r.code, reason: r.error, fix: FIX[r.code] } };
@@ -72,7 +72,7 @@ export async function itemNew(values: CommandArgs["values"], ports: { orca?: Orc
 export default {
   name: "item new",
   summary: "create an item's Orca Task (task-create --deps) and its iNNN alias; starting it is start_unit's",
-  usage: "--run <run id> --spec <text> --who <owner> --done-when <text> [--title <t>] [--deps <task,task>] [--role lead|worker] [--class default|hard|design|mechanical] [--repo id:<id>|name:<name>|path:<path>] [--lead <lead>] [--verify <json>] [--cmd-hint <text>]",
+  usage: "--run <run id> --spec <text> --who <owner> --done-when <text> [--title <t>] [--deps <task,task>] [--role lead|worker] [--class default|hard|design|mechanical] [--repo id:<id>|name:<name>|path:<path>] [--lead <lead>] [--verify <json>] [--cmd-hint <text>] [--probe]",
   options: {
     run: { type: "string" },
     spec: { type: "string" },
@@ -86,6 +86,7 @@ export default {
     "done-when": { type: "string" },
     verify: { type: "string" },
     "cmd-hint": { type: "string" },
+    probe: { type: "boolean" },
   },
   run: ({ values }) => itemNew(values),
 } satisfies CommandDef;

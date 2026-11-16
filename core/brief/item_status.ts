@@ -45,6 +45,8 @@ export interface ItemFacts {
   /** Done, no evidence, but its PR has an act_on 0 review (decision 236); never also evidenceShort. */
   readonly reviewOnly: boolean;
   readonly closedAt: string | null;
+  /** item_extra_set{probe} (decision 342): a smoke or probe made it; it is not work while it waits to start. */
+  readonly probe: boolean;
 }
 
 // Decision 198: decision 186's events that ask for action or judgment (pr_changes_requested,
@@ -265,11 +267,20 @@ export function itemFacts(input: ViewInput, graph: GraphRead = graphRead): ItemF
       idle: state === "in_progress" && (idle.get(t.id) ?? 0) > last,
       evidenceShort: lacking && !reviewOnly,
       reviewOnly,
+      probe: x.probe === true,
       // A worker_done or a lead's task-update closes a Task with no item_transition (decision 175, S7).
       closedAt: state === "done" ? latest(closedAt.get(t.id) ?? mergedAt.get(t.id) ?? t.completedAt ?? null, verifiedAt ?? null) : null,
     });
   }
   return out;
+}
+
+/**
+ * What the brief lists: every item, minus a probe item that has not started (decision 342). One
+ * place, so the open-items table, the to-do, the counts and the group views agree.
+ */
+export function shownFacts(input: ViewInput, graph: GraphRead = graphRead): ItemFacts[] {
+  return itemFacts(input, graph).filter((f) => !(f.probe && (f.state === "ready" || f.state === "planned")));
 }
 
 /** Whether a PR the task owns (pr_opened.task) is in `refs`. */

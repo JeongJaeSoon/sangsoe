@@ -22,6 +22,7 @@ export async function handle(input: Record<string, unknown>, ports: { orca: Orca
     ...(unitClass ? { unit_class: unitClass } : {}),
     ...(input.repo !== undefined ? { repo: input.repo } : {}),
     ...(input.lead !== undefined ? { lead: input.lead } : {}),
+    ...(input.probe !== undefined ? { probe: input.probe } : {}),
   };
   // Checked against the event contract before the Task exists: a row that fails after it would
   // leave an item with no trigger, visible as ready.
@@ -55,7 +56,7 @@ const FIX = {
   task_create_failed: "check that the Run id is right and the deps are Tasks of that Run",
   invalid_role: "role is lead or worker: the session start_unit opens for this item",
   invalid_class: "class is default, hard, design or mechanical, and only for a worker item",
-  invalid_timing: "trigger and review_trigger are non-empty text, hold a boolean, exec_by owner, lead or worker, repo an Orca repo selector (id:, name: or path:), lead text",
+  invalid_timing: "trigger and review_trigger are non-empty text, hold and probe booleans, exec_by owner, lead or worker, repo an Orca repo selector (id:, name: or path:), lead text",
   invalid_verify: "verify is one of pr_merged{pr} · orca_field{target,field,value} · plugin_approved{key} · run_ok{repo} · pr_found{repo,search}; cmdHint a non-empty command prefix",
 } as const;
 
@@ -101,6 +102,7 @@ export default {
         description:
           "📅 scheduled: the item is not ready before this ISO date (2026-11-17 or a full timestamp) or until this PR (owner/repo#N) merges. Any other text is not ready and raises trigger_unclear for a lead to judge.",
       },
+      probe: { type: "boolean", description: "A smoke or probe made this item (decision 342): the brief lists it only once it has started, never as ready work or an owner to-do." },
       hold: { type: "boolean", description: "⏸️ on hold: not ready until a lead or the owner reopens it." },
       review_trigger: { type: "string", description: "With hold: the condition, in words, to look at the item again." },
       exec_by: { type: "string", enum: ["owner", "lead", "worker"], description: "Who starts it; owner items go to the owner's to-do once ready." },

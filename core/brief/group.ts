@@ -1,5 +1,5 @@
 import type { GroupBriefRow, GroupBriefView, GroupItemsView, ViewInput } from "../contract/index.ts";
-import { type ItemFacts, itemFacts, leadPriority, toStatusRow } from "./item_status.ts";
+import { type ItemFacts, leadPriority, shownFacts, toStatusRow } from "./item_status.ts";
 
 const open = (f: ItemFacts) => f.state !== "done" && f.state !== "cancelled";
 
@@ -21,8 +21,8 @@ export function groupBriefFrom(input: ViewInput, facts: readonly ItemFacts[]): G
   });
 }
 
-export const group_brief: GroupBriefView = (input) => groupBriefFrom(input, itemFacts(input));
+export const group_brief: GroupBriefView = (input) => groupBriefFrom(input, shownFacts(input));
 export const group_items: GroupItemsView = (input, lead) =>
-  itemFacts(input)
+  shownFacts(input)
     .filter((f) => f.lead === lead)
     .map(toStatusRow);

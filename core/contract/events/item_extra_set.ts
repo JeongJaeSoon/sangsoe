@@ -19,6 +19,8 @@ export default defineEvent("item_extra_set", {
   verify: opt(verifySpec),
   cmd_hint: opt(str),
   why_owner: opt(str),
+  /** Decision 342: a smoke or probe made the item; the brief does not list it while it waits to start. */
+  probe: opt(bool),
   links: opt(arr(str)),
   /** The worker unit's class from item_create; start_unit reads it when given no class or kind (decision 187). */
   unit_class: opt(oneOf("default", "hard", "design", "mechanical", "docs")),
