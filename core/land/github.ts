@@ -88,7 +88,10 @@ export async function readLabels(gh: GhClient, repo: string, pr: number, pull: P
 type Review = { user: { login: string } | null; state: string; commit_id: string | null; author_association?: string };
 
 const TRUSTED = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-type CheckRuns = { total_count: number; check_runs: { status: string; conclusion: string | null }[] };
+type CheckRuns = {
+  total_count: number;
+  check_runs: { name?: string; status: string; conclusion: string | null; started_at?: string | null; completed_at?: string | null }[];
+};
 
 /** `why` says what is missing when `approved` is false. */
 export type HeadApproval = { approved: boolean; why: string };
@@ -134,14 +137,36 @@ export async function approvedAndGreen(
   const runs = lift<CheckRuns>(await gh.get(`repos/${repo}/commits/${pull.head.sha}/check-runs?per_page=100`), "check runs");
   if (runs.kind !== "ok") return runs;
   const all = runs.data.check_runs ?? [];
-  const green =
-    all.length > 0 &&
-    all.length === runs.data.total_count &&
-    all.every((c) => c.status === "completed" && ["success", "neutral", "skipped"].includes(c.conclusion ?? ""));
+  const byName = new Map<string, CheckRun[]>();
+  all.forEach((c, i) => {
+    const key = c.name ?? `#${i}`;
+    byName.set(key, [...(byName.get(key) ?? []), checkRun(c.status === "completed", c.conclusion, c.completed_at ?? c.started_at)]);
+  });
+  const green = all.length > 0 && all.length === runs.data.total_count && [...byName.values()].every((rs) => judgeRuns(rs) === "pass");
   return { kind: "ok", data: green };
 }
 
-export type CheckState = "pass" | "pending" | "fail";
+export type CheckState = "pass" | "pending" | "cancelled" | "fail";
+
+type CheckRun = { completed: boolean; conclusion: string; at: number };
+
+/** `at` is the completion time, else the start; a run with neither is the oldest if it finished and the newest if it has not. */
+function checkRun(completed: boolean, conclusion: string | null | undefined, time: string | null | undefined): CheckRun {
+  return { completed, conclusion: (conclusion ?? "").toUpperCase(), at: Date.parse(time ?? "") || (completed ? 0 : Number.POSITIVE_INFINITY) };
+}
+
+/**
+ * Decision 319: the state of one check name from every run it had on the head. GitHub judges a name
+ * by its latest run, and a cancelled latest run does not undo a success (a label event's concurrency
+ * group cancels runs behind a good one). Cancelled with no success is its own state: it needs a re-run, not a fix.
+ */
+export function judgeRuns(runs: CheckRun[]): CheckState {
+  const latest = [...runs].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).at(-1);
+  if (!latest?.completed) return "pending";
+  if (PASS.has(latest.conclusion)) return "pass";
+  if (latest.conclusion === "CANCELLED") return runs.some((r) => r.completed && r.conclusion === "SUCCESS") ? "pass" : "cancelled";
+  return "fail";
+}
 export type MergeMethod = "squash" | "merge" | "rebase";
 export type PrGate = {
   headSha: string;
@@ -163,7 +188,7 @@ const GATE_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
         pageInfo { hasNextPage }
         nodes {
           __typename
-          ... on CheckRun { name status conclusion isRequired(pullRequestNumber: $number) }
+          ... on CheckRun { name status conclusion startedAt completedAt isRequired(pullRequestNumber: $number) }
           ... on StatusContext { context state isRequired(pullRequestNumber: $number) }
         }
       } } } } }
@@ -202,14 +227,22 @@ export function parsePrGate(stdout: string): Read<PrGate> {
   const commit = pull.commits?.nodes?.[0]?.commit;
   if (commit?.oid !== pull.headRefOid) return no("last commit is not the head");
   const checks: PrGate["checks"] = [];
+  const runs = new Map<string, { at: number; required: boolean; runs: CheckRun[] }>();
   const contexts = commit.statusCheckRollup?.contexts;
   if (commit.statusCheckRollup != null) {
     if (!Array.isArray(contexts?.nodes) || contexts.pageInfo?.hasNextPage !== false) return no("checks unreadable or paged");
     for (const c of contexts.nodes) {
       if (typeof c?.isRequired !== "boolean") return no("a check without isRequired");
       if (c.__typename === "CheckRun" && typeof c.name === "string" && typeof c.status === "string") {
-        const state: CheckState = c.status !== "COMPLETED" ? "pending" : PASS.has(String(c.conclusion)) ? "pass" : "fail";
-        checks.push({ name: c.name, required: c.isRequired, state });
+        // One entry per name, at the place its first run came: a name's runs are judged together below.
+        let seen = runs.get(c.name);
+        if (!seen) {
+          seen = { at: checks.length, required: c.isRequired, runs: [] };
+          runs.set(c.name, seen);
+          checks.push({ name: c.name, required: c.isRequired, state: "pending" });
+        }
+        seen.required ||= c.isRequired;
+        seen.runs.push(checkRun(c.status === "COMPLETED", c.conclusion == null ? null : String(c.conclusion), c.completedAt ?? c.startedAt));
       } else if (c?.__typename === "StatusContext" && typeof c.context === "string" && typeof c.state === "string") {
         const state: CheckState = c.state === "SUCCESS" ? "pass" : c.state === "PENDING" || c.state === "EXPECTED" ? "pending" : "fail";
         checks.push({ name: c.context, required: c.isRequired, state });
@@ -218,6 +251,7 @@ export function parsePrGate(stdout: string): Read<PrGate> {
       }
     }
   }
+  for (const [name, seen] of runs) checks[seen.at] = { name, required: seen.required, state: judgeRuns(seen.runs) };
   const unresolvedThreads = threads.nodes.filter((t: { isResolved: boolean }) => !t.isResolved).length;
   return { kind: "ok", data: { headSha: pull.headRefOid, unresolvedThreads, checks, methods } };
 }

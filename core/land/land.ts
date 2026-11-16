@@ -449,6 +449,15 @@ function greenChecks(checks: PrGate["checks"], head: string): void {
   if (checks.length === 0) throw new Refused("checks_missing", "", `no check has reported on ${short(head)}`, "wait for CI to start, then land again");
   const red = checks.find((c) => c.state === "fail");
   if (red) throw new Refused("checks_red", red.name, `${red.name} failed at ${short(head)}`, "fix it, push, and have the new head reviewed");
+  const cancelled = checks.find((c) => c.state === "cancelled");
+  if (cancelled) {
+    throw new Refused(
+      "checks_cancelled",
+      cancelled.name,
+      `${cancelled.name} was cancelled at ${short(head)} and has no success`,
+      `re-run it (gh run list --commit ${head} --json databaseId,name,conclusion, then gh run rerun <databaseId>), wait for it to pass, then land again`,
+    );
+  }
   const pending = checks.find((c) => c.state === "pending");
   if (pending) throw new Refused("checks_pending", pending.name, `${pending.name} has not finished at ${short(head)}`, "wait for it, then land again");
 }
