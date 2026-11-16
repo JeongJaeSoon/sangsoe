@@ -6,7 +6,8 @@ import type { NewEvent } from "../store/store.ts";
 import { evidenceGaps } from "../verify/evidence.ts";
 import { requiredEvidence, type Tier, type TierConfig, verifyTier } from "../verify/verify-tier.ts";
 import {
-  approvedAndGreen,
+  approvalAtHead,
+  type CheckState,
   containsBase,
   type MergeMethod,
   type PrGate,
@@ -16,6 +17,7 @@ import {
   readDiff,
   readBranchPulls,
   readLabels,
+  readCheckRuns,
   readPull,
 } from "./github.ts";
 import { lastBaseChange, rereviewItem, verdictsSinceBase } from "./rereview.ts";
@@ -252,19 +254,36 @@ async function judge(input: LandInput, pr: string, deps: LandDeps, events: reado
   const readGate = (): Promise<Read<PrGate>> =>
     (gateRead ??= deps.prGate ? deps.prGate({ repo, pr: input.pr }) : Promise.resolve({ kind: "unreadable", why: "no PR gate reader" }));
   const gateFix = deps.prGate ? "call land again" : "run land from the sangsoe CLI or MCP tool";
-  const own = await ownConditions(gh, protection, { repo, pr, head, base: pull.base.ref, pull, events, reviewedNote: note[0] ?? "", readGate, gateFix });
+  const own = await ownConditions(gh, protection, {
+    repo,
+    pr,
+    head,
+    base: pull.base.ref,
+    pull,
+    events,
+    reviewedNote: note[0] ?? "",
+    readGate,
+    gateFix,
+    protectionUnread: read.kind === "read" ? read.unreadable : "",
+  });
   const conditions = own.conditions;
   // Decision 204: whatever path merges, the three conditions hold from protection or from sangsoe's own check.
   const mergeable = () => {
     if (own.blocked) throw own.blocked;
   };
   const base = { pr, head_sha: head, tier: tier.effective, dry_run: input.dryRun === true, conditions };
-  const approved = must(await approvedAndGreen(gh, repo, input.pr, pull, config.tier?.owners ?? []), "pr_unreadable", "call land again");
-  if (approved) {
+  const approval = must(await approvalAtHead(gh, repo, input.pr, pull, config.tier?.owners ?? []), "pr_unreadable", "call land again");
+  // Decision 304: an approved head never waits for an approval it already has; what blocks it is named.
+  if (approval.approved) {
     mergeable();
+    const state = pull.mergeable_state ?? "unknown";
+    if (state !== "clean") throw notMergeable(pr, state);
+    const runs = must(await readCheckRuns(gh, repo, head), "checks_unreadable", "call land again");
+    if (!runs.complete) throw new Refused("checks_unreadable", "", `${short(head)} has more check runs than one page reads`, "land reads one page of 100 check runs; tell the owner, who decides how this PR merges");
+    greenChecks(runs.checks, head);
     return { ...base, action: "merge_approved", note: [...note, "approved and green at the head"].join("; ") };
   }
-  const waitApproval = (why: string): LandValue => ({ ...base, action: "merge_on_approval", note: [...note, why].join("; ") });
+  const waitApproval = (why: string): LandValue => ({ ...base, action: "merge_on_approval", note: [...note, approval.why, why].join("; ") });
   if (!(config.verdictMergeRepos ?? []).includes(repo.toLowerCase())) return waitApproval("merge once approved; the lead calls land again");
 
   // Decision 158: the opted-in repo's approval is the recorded verdict; the owner's cases stay with the owner.
@@ -283,7 +302,17 @@ async function mergeNow(deps: LandDeps, a: { repo: string; pr: number; head: str
   return deps.mergeNow({ repo: a.repo, pr: a.pr, head: a.head, method: a.method });
 }
 
-type OwnInput = GateReader & { repo: string; pr: string; head: string; base: string; pull: Pull; events: readonly StoredEvent[]; reviewedNote: string };
+/** `protectionUnread` names the settings readMergeConditions could not read; "" when it read them all. */
+type OwnInput = GateReader & {
+  repo: string;
+  pr: string;
+  head: string;
+  base: string;
+  pull: Pull;
+  events: readonly StoredEvent[];
+  reviewedNote: string;
+  protectionUnread: string;
+};
 
 /**
  * Decision 204: a protection condition that is not ok (unreadable, absent or not required) is
@@ -320,17 +349,17 @@ const OWN_CHECKS: Partial<Record<MergeCondition["id"], (gh: GhClient, a: OwnInpu
     return `all ${gate.checks.length} checks in the rollup passed at ${short(a.head)}; verdict by ${by} at ${short(a.head)}`;
   },
   up_to_date_or_queue: async (gh, a) => {
+    // Decision 304: an up-to-date rule sangsoe cannot read is one GitHub enforces as `behind`.
+    if (a.protectionUnread) {
+      const state = a.pull.mergeable_state ?? "unknown";
+      if (state === "behind") throw behindBase(a, `GitHub calls ${a.pr} behind ${a.base}`);
+      if (state !== "clean" && state !== "unstable" && state !== "has_hooks") throw notMergeable(a.pr, state);
+      return `GitHub calls ${a.pr} ${state}: no up-to-date rule holds it back (${a.protectionUnread} unreadable)`;
+    }
     const r = await containsBase(gh, a.repo, a.base, a.head);
     stopIfLimited(r);
     if (r.kind !== "ok") throw new Refused("base_unreadable", "", r.kind === "unreadable" ? r.why : "unreadable", "call land again");
-    if (!r.data) {
-      throw new Refused(
-        "behind_base",
-        a.base,
-        `${short(a.head)} does not contain the tip of ${a.base}`,
-        `merge ${a.base} into the branch and push (a conflicted merge needs a delta review of git show --remerge-diff <new head>), have the new head reviewed, then land again`,
-      );
-    }
+    if (!r.data) throw behindBase(a, `${short(a.head)} does not contain the tip of ${a.base}`);
     return `${short(a.head)} contains the tip of ${a.base}`;
   },
   stale_approvals_dismissed: async (_gh, a) => `the verdict is bound to ${short(a.head)}, not to an approval a push keeps (${a.reviewedNote})`,
@@ -370,8 +399,22 @@ async function gateAt(a: GateReader & { pr: string; head: string }): Promise<PrG
   return gate;
 }
 
+function behindBase(a: { base: string }, why: string): Refused {
+  return new Refused(
+    "behind_base",
+    a.base,
+    why,
+    `merge ${a.base} into the branch and push (a conflicted merge needs a delta review of git show --remerge-diff <new head>), have the new head reviewed, then land again`,
+  );
+}
+
+function notMergeable(pr: string, state: string): Refused {
+  const fix = state === "unknown" ? "GitHub has not computed it yet; call land again in a minute" : "fix what the merge box shows, then land again";
+  return new Refused("not_mergeable", state, `GitHub calls ${pr} ${state}, not clean`, fix);
+}
+
 /** Refuses unless `checks` is non-empty and every one finished as success, neutral or skipped. */
-function greenChecks(checks: PrGate["checks"], head: string): void {
+function greenChecks(checks: readonly { name: string; state: CheckState }[], head: string): void {
   if (checks.length === 0) throw new Refused("checks_missing", "", `no check has reported on ${short(head)}`, "wait for CI to start, then land again");
   const red = checks.find((c) => c.state === "fail");
   if (red) throw new Refused("checks_red", red.name, `${red.name} failed at ${short(head)}`, "fix it, push, and have the new head reviewed");
@@ -382,9 +425,7 @@ function greenChecks(checks: PrGate["checks"], head: string): void {
 /** Decision 158's GitHub side: mergeable, the same head, no open thread, checks green, a merge method. */
 async function verdictGate(a: GateReader & { repo: string; pr: string; head: string; pull: Pull }): Promise<MergeMethod> {
   const state = a.pull.mergeable_state ?? "unknown";
-  if (state !== "clean" && state !== "has_hooks") {
-    throw new Refused("not_mergeable", state, `GitHub calls ${a.pr} ${state}, not clean`, "fix what the merge box shows (or wait while GitHub computes it), then land again");
-  }
+  if (state !== "clean" && state !== "has_hooks") throw notMergeable(a.pr, state);
   const gate = await gateAt(a);
   if (gate.unresolvedThreads > 0) {
     throw new Refused("threads_unresolved", String(gate.unresolvedThreads), `${gate.unresolvedThreads} review thread(s) unresolved`, "answer and resolve them, then land again");

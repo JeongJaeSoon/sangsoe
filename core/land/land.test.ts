@@ -38,6 +38,7 @@ function routes(o: { files?: unknown[]; rules?: unknown[]; pull?: Record<string,
     [`repos/${REPO}/pulls/12/files?per_page=100&page=1`]: ok(files),
     [`repos/${REPO}/rules/branches/main`]: ok(o.rules ?? STRICT),
     [`repos/${REPO}/compare/main...${HEAD}`]: ok({ status: "ahead" }),
+    [`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`]: ok([]),
   };
 }
 
@@ -180,6 +181,81 @@ test("only the author approved: still merge_on_approval", async () => {
   ready(h.store);
   const r = await land(input(), h.deps);
   assert.equal(r.ok && r.value.action, "merge_on_approval");
+  assert.deepEqual(h.merges, []);
+});
+
+// Decision 304: a PR approved by a member and green, on a base that moves faster than the branch can follow.
+function approvedRoutes(o: { protection: "unreadable" | "none"; state?: string; compare?: string; runs?: unknown[]; approvedAt?: string }) {
+  const r0 = routes({ rules: LOOSE, pull: { mergeable_state: o.state ?? "clean" } });
+  if (o.protection === "unreadable") r0[`repos/${REPO}/branches/main/protection`] = { kind: "error", status: 403, message: "Resource not accessible by integration" };
+  r0[`repos/${REPO}/compare/main...${HEAD}`] = ok({ status: o.compare ?? "diverged" });
+  r0[`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`] = ok([
+    { user: { login: "bob" }, state: "APPROVED", commit_id: o.approvedAt ?? HEAD, author_association: "MEMBER" },
+  ]);
+  const runs = o.runs ?? [{ name: "unit", status: "completed", conclusion: "success" }];
+  r0[`repos/${REPO}/commits/${HEAD}/check-runs?per_page=100`] = ok({ total_count: runs.length, check_runs: runs });
+  return r0;
+}
+const outcome = (r: Awaited<ReturnType<typeof land>>) => (r.ok ? `ok:${r.value.action}` : r.refusal.reason.split(" ")[0]);
+const upToDate = (r: Awaited<ReturnType<typeof land>>) => (r.ok ? r.value.conditions.find((c) => c.id === "up_to_date_or_queue") : undefined);
+
+test("304: protection unreadable and GitHub calls the PR clean: an approved head that lacks the base tip merges", async () => {
+  const h = harness(approvedRoutes({ protection: "unreadable" }));
+  ready(h.store);
+  const r = await land(input(), h.deps);
+  assert.equal(outcome(r), "ok:merge_approved");
+  assert.equal(upToDate(r)?.source, "own");
+  assert.equal(upToDate(r)?.ok, true);
+  assert.match(upToDate(r)?.reason ?? "", /GitHub calls acme\/api#12 clean/);
+  assert.equal(h.merges.length, 1);
+  assert.ok(!h.gh.paths.some((p) => p.includes("/compare/")), "GitHub's merge state decides, not the compare");
+});
+
+test("304: protection unreadable and GitHub calls the PR behind: behind_base with the fix; unknown asks to call again", async () => {
+  const behind = harness(approvedRoutes({ protection: "unreadable", state: "behind" }));
+  ready(behind.store);
+  const r = await land(input(), behind.deps);
+  assert.equal(outcome(r), "behind_base:main");
+  assert.match(r.ok ? "" : r.refusal.reason, /up_to_date_or_queue \(own\)/);
+  assert.match(r.ok ? "" : r.refusal.fix, /merge main into the branch/);
+  assert.deepEqual(behind.merges, []);
+
+  const unknown = harness(approvedRoutes({ protection: "unreadable", state: "unknown" }));
+  ready(unknown.store);
+  const u = await land(input(), unknown.deps);
+  assert.equal(outcome(u), "not_mergeable:unknown");
+  assert.match(u.ok ? "" : u.refusal.fix, /call land again/);
+  assert.deepEqual(unknown.merges, []);
+});
+
+test("304: an approved head that something else blocks is refused with that condition, not merge_on_approval", async () => {
+  const cases: [Parameters<typeof approvedRoutes>[0], string][] = [
+    [{ protection: "none", compare: "ahead", state: "unknown" }, "not_mergeable:unknown"],
+    [{ protection: "none", compare: "ahead", runs: [{ name: "e2e", status: "in_progress", conclusion: null }] }, "checks_pending:e2e"],
+    [{ protection: "none", compare: "ahead", runs: [{ name: "lint", status: "completed", conclusion: "failure" }] }, "checks_red:lint"],
+    [{ protection: "none", compare: "ahead", runs: [] }, "checks_missing"],
+  ];
+  for (const [world, want] of cases) {
+    const h = harness(approvedRoutes(world));
+    ready(h.store);
+    assert.equal(outcome(await land(input(), h.deps)), want, want);
+    assert.deepEqual(landRows(h.store), [`land_failed:${want}`]);
+    assert.deepEqual(h.merges, []);
+  }
+  // Not approved at the head: still waits for approval, and the note says why.
+  const h = harness(approvedRoutes({ protection: "none", compare: "ahead", approvedAt: OLD }));
+  ready(h.store);
+  const r = await land(input(), h.deps);
+  assert.equal(outcome(r), "ok:merge_on_approval");
+  assert.match(r.ok ? r.value.note : "", /bob approved ccccccc, not the head aaaaaaa/);
+});
+
+test("304: a repo whose protection reads without an up-to-date rule still needs the base tip in the head", async () => {
+  const h = harness(approvedRoutes({ protection: "none" }));
+  ready(h.store);
+  const r = await land(input(), h.deps);
+  assert.equal(outcome(r), "behind_base:main");
+  assert.match(r.ok ? "" : r.refusal.reason, /does not contain the tip of main/);
   assert.deepEqual(h.merges, []);
 });
 
@@ -445,6 +521,7 @@ test("R-06: a refused PR, a held PR and a refused merge hold nothing: the next P
     [`repos/${REPO}/pulls/${n}/files?per_page=100&page=1`]: ok([{ filename: "core/a.ts", patch: "@@ -1 +1 @@\n-a\n+b" }]),
     [`repos/${REPO}/rules/branches/main`]: ok(rules),
     [`repos/${REPO}/compare/main...${HEAD}`]: ok({ status: "ahead" }),
+    [`repos/${REPO}/pulls/${n}/reviews?per_page=100&page=1`]: ok([]),
   });
   const refusedOrHeld = harness({ ...forPr(12, LOOSE), ...forPr(13, LOOSE) });
   const store = refusedOrHeld.store;

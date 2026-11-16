@@ -51,6 +51,8 @@ type World = {
   /** GitHub's compare status for base...head; "unreadable" answers 502. */
   compare?: string | "unreadable";
   rules?: unknown[];
+  /** Classic branch protection: unreadable (403, the default) or none (404, read and empty). */
+  protection?: "unreadable" | "none";
   reviews?: unknown[];
   checkRuns?: unknown;
 };
@@ -70,7 +72,8 @@ function harness(w: World = {}) {
     }),
     [`repos/${REPO}/pulls/12/files?per_page=100&page=1`]: ok(w.files ?? [{ filename: "core/a.ts", patch: "@@ -1 +1 @@\n-a\n+b" }]),
     [`repos/${REPO}/rules/branches/main`]: ok(w.rules ?? NO_RULES),
-    [`repos/${REPO}/branches/main/protection`]: { kind: "error", status: 403, message: "Resource not accessible by integration" },
+    [`repos/${REPO}/branches/main/protection`]:
+      w.protection === "none" ? { kind: "error", status: 404, message: "Branch not protected" } : { kind: "error", status: 403, message: "Resource not accessible by integration" },
     [`repos/${REPO}/pulls/12/reviews?per_page=100&page=1`]: ok(w.reviews ?? []),
     [`repos/${REPO}/issues/12/events?per_page=100&page=1`]: ok(w.labelEvents ?? []),
     [`repos/${REPO}/compare/main...${HEAD}`]:
@@ -364,16 +367,17 @@ test("204: unreadable protection and a pending or failed check anywhere in the r
   }
 });
 
-test("204: a head that does not contain the base tip refuses with the fix; an unreadable compare refuses", async () => {
+// With protection unreadable, GitHub's merge state stands in for the compare (decision 304, core/land/land.test.ts).
+test("204: on protection read without an up-to-date rule, a head that does not contain the base tip refuses with the fix; an unreadable compare refuses", async () => {
   for (const status of ["behind", "diverged", "mystery"]) {
-    const h = harness({ compare: status });
+    const h = harness({ compare: status, protection: "none" });
     ready(h.store);
     const r = await land(input(), h.deps);
     assert.equal(refusal(r), status === "mystery" ? "base_unreadable" : "behind_base:main", status);
     if (status === "diverged") assert.match(r.ok ? "" : r.refusal.fix, /merge main into the branch.*remerge-diff/);
     assert.deepEqual(h.mergesNow, []);
   }
-  const h = harness({ compare: "unreadable" });
+  const h = harness({ compare: "unreadable", protection: "none" });
   ready(h.store);
   assert.equal(refusal(await land(input(), h.deps)), "base_unreadable");
   assert.deepEqual(h.mergesNow, []);
@@ -402,6 +406,7 @@ test("204: a GitHub approval does not merge past an own check that fails", async
   const h = harness({
     optIn: false,
     compare: "diverged",
+    protection: "none",
     pull: { mergeable_state: "clean" },
     reviews: [{ user: { login: "bob" }, state: "APPROVED", commit_id: HEAD, author_association: "MEMBER" }],
     checkRuns: { total_count: 1, check_runs: [{ status: "completed", conclusion: "success" }] },
@@ -427,7 +432,7 @@ test("204: a GitHub approval does not merge without a verdict the own check coun
 });
 
 test("204: waiting for approval does not refuse; it shows the own conditions as read", async () => {
-  const h = harness({ optIn: false, compare: "diverged" });
+  const h = harness({ optIn: false, compare: "diverged", protection: "none" });
   ready(h.store);
   const r = await land(input(), h.deps);
   assert.equal(refusal(r), "ok:merge_on_approval");

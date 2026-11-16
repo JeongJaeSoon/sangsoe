@@ -87,12 +87,50 @@ export async function readLabels(gh: GhClient, repo: string, pr: number, pull: P
 type Review = { user: { login: string } | null; state: string; commit_id: string; author_association?: string };
 
 const TRUSTED = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-type CheckRuns = { total_count: number; check_runs: { status: string; conclusion: string | null }[] };
+type CheckRuns = { total_count: number; check_runs: { name?: string; status: string; conclusion: string | null }[] };
+
+/** `why` says what is missing when `approved` is false. */
+export type HeadApproval = { approved: boolean; why: string };
 
 /**
- * Decision 81's re-call after approval: someone other than the author approved this head, nobody's
- * latest review asks for changes, GitHub calls the PR clean, and every check run on the head passed.
+ * Decision 81's approval: someone other than the author whose approval counts approved exactly this
+ * head, and nobody's latest review asks for changes.
  */
+export async function approvalAtHead(gh: GhClient, repo: string, pr: number, pull: Pull, owners: readonly string[]): Promise<Read<HeadApproval>> {
+  const reviews = await pages<Review>(gh, (p) => `repos/${repo}/pulls/${pr}/reviews?per_page=100&page=${p}`, "reviews");
+  if (reviews.kind !== "ok") return reviews;
+  const latest = new Map<string, Review>();
+  for (const r of reviews.data) if (r.user && r.state !== "COMMENTED") latest.set(r.user.login.toLowerCase(), r);
+  const author = pull.user.login.toLowerCase();
+  const others = [...latest.values()].filter((r) => r.user?.login.toLowerCase() !== author);
+  const login = (r: Review) => r.user?.login ?? "";
+  const no = (why: string): Read<HeadApproval> => ({ kind: "ok", data: { approved: false, why } });
+  const changes = others.find((r) => r.state === "CHANGES_REQUESTED");
+  if (changes) return no(`${login(changes)} requests changes`);
+  const approvals = others.filter((r) => r.state === "APPROVED");
+  const trusted = (r: Review) => TRUSTED.has(r.author_association ?? "") || owners.includes(login(r).toLowerCase());
+  const head = pull.head.sha;
+  if (approvals.some((r) => r.commit_id === head && trusted(r))) return { kind: "ok", data: { approved: true, why: "" } };
+  const untrusted = approvals.find((r) => r.commit_id === head);
+  if (untrusted) return no(`${login(untrusted)}'s approval does not count (${untrusted.author_association ?? "no association"}, not in config owners)`);
+  const older = approvals[0];
+  if (older) return no(`${login(older)} approved ${older.commit_id.slice(0, 7)}, not the head ${head.slice(0, 7)}`);
+  return no("no approval from anyone but the author");
+}
+
+/** The check runs on `sha`; `complete` is false when GitHub has more than one page of them. */
+export async function readCheckRuns(gh: GhClient, repo: string, sha: string): Promise<Read<{ checks: { name: string; state: CheckState }[]; complete: boolean }>> {
+  const runs = lift<CheckRuns>(await gh.get(`repos/${repo}/commits/${sha}/check-runs?per_page=100`), "check runs");
+  if (runs.kind !== "ok") return runs;
+  const all = runs.data.check_runs ?? [];
+  const checks = all.map((c) => ({
+    name: c.name ?? "check run",
+    state: (c.status !== "completed" ? "pending" : ["success", "neutral", "skipped"].includes(c.conclusion ?? "") ? "pass" : "fail") as CheckState,
+  }));
+  return { kind: "ok", data: { checks, complete: all.length === runs.data.total_count } };
+}
+
+/** Decision 81's re-call after approval: approved at the head, GitHub calls the PR clean, and every check run on the head passed. */
 export async function approvedAndGreen(
   gh: GhClient,
   repo: string,
@@ -101,24 +139,13 @@ export async function approvedAndGreen(
   owners: readonly string[],
 ): Promise<Read<boolean>> {
   if (pull.mergeable_state !== "clean") return { kind: "ok", data: false };
-  const reviews = await pages<Review>(gh, (p) => `repos/${repo}/pulls/${pr}/reviews?per_page=100&page=${p}`, "reviews");
-  if (reviews.kind !== "ok") return reviews;
-  const latest = new Map<string, Review>();
-  for (const r of reviews.data) if (r.user && r.state !== "COMMENTED") latest.set(r.user.login.toLowerCase(), r);
-  const author = pull.user.login.toLowerCase();
-  const states = [...latest.entries()].filter(([who]) => who !== author).map(([, r]) => r);
-  const trusted = (r: Review) =>
-    TRUSTED.has(r.author_association ?? "") || owners.includes(r.user?.login.toLowerCase() ?? "");
-  const approved = states.some((r) => r.state === "APPROVED" && r.commit_id === pull.head.sha && trusted(r));
-  if (!approved || states.some((r) => r.state === "CHANGES_REQUESTED")) return { kind: "ok", data: false };
-  const runs = lift<CheckRuns>(await gh.get(`repos/${repo}/commits/${pull.head.sha}/check-runs?per_page=100`), "check runs");
+  const approval = await approvalAtHead(gh, repo, pr, pull, owners);
+  if (approval.kind !== "ok") return approval;
+  if (!approval.data.approved) return { kind: "ok", data: false };
+  const runs = await readCheckRuns(gh, repo, pull.head.sha);
   if (runs.kind !== "ok") return runs;
-  const all = runs.data.check_runs ?? [];
-  const green =
-    all.length > 0 &&
-    all.length === runs.data.total_count &&
-    all.every((c) => c.status === "completed" && ["success", "neutral", "skipped"].includes(c.conclusion ?? ""));
-  return { kind: "ok", data: green };
+  const { checks, complete } = runs.data;
+  return { kind: "ok", data: complete && checks.length > 0 && checks.every((c) => c.state === "pass") };
 }
 
 export type CheckState = "pass" | "pending" | "fail";
