@@ -95,7 +95,8 @@
 {"expect":"deny","gate":"delegate","note":"orchestrator edits code","agent_type":"sangsoe:orchestrator","tool_name":"Edit","tool_input":{"file_path":"/work/acme/src/app.ts","old_string":"a","new_string":"b"}}
 {"expect":"deny","gate":"delegate","note":"orchestrator runs tests","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"npm test"}}
 {"expect":"deny","gate":"delegate","note":"orchestrator chains coordination with work","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca worktree list && docker compose up -d"}}
-{"expect":"deny","gate":"delegate","note":"orchestrator reads another server's resource","agent_type":"sangsoe:orchestrator","tool_name":"ReadMcpResourceTool","tool_input":{"server":"plugin:other:docs","uri":"docs://handbook"}}
+{"expect":"pass","note":"305: orchestrator reads another server's resource","agent_type":"sangsoe:orchestrator","tool_name":"ReadMcpResourceTool","tool_input":{"server":"plugin:other:docs","uri":"docs://handbook"}}
+{"expect":"deny","gate":"delegate","note":"305: orchestrator calls another server's tool","agent_type":"sangsoe:orchestrator","tool_name":"mcp__other__write_doc","tool_input":{}}
 {"expect":"deny","gate":"delegate","note":"286: orchestrator writes a brief with a shell heredoc","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"mkdir -p /tmp/s && cat > /tmp/s/brief.md <<'EOF'\nBrief for the worker\nEOF"}}
 {"expect":"deny","gate":"delegate","note":"286: cat with no file argument","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"cat > /tmp/s/brief.md <<'EOF'\nBrief for the worker\nEOF"}}
 {"expect":"deny","gate":"delegate","note":"286: --help under an Orca team shim is passed on, not printed","agent_type":"sangsoe:orchestrator","tool_name":"Bash","tool_input":{"command":"orca claude-teams run --help"}}
