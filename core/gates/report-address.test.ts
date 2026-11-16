@@ -23,8 +23,17 @@ test("301: a send to a term_ handle is refused and the refusal names the address
   assert.match(reason, /orca orchestration reply --id <message_id>/);
   assert.match(reason, /run-list --json --full/);
   assert.match(reason, /coordinator_handle/);
+  assert.match(reason, /sender that holds no Dispatch itself \(the orchestrator\)[^.]*Run it coordinates/);
   assert.match(reason, /--to run:<that id>/);
   assert.match(reason, /holds no Run and sent no message has no address; tell the owner/);
+});
+
+test("301: a brief that reports to a term_ handle is refused without the no-Dispatch addresses", () => {
+  const spec = `Report with orca orchestration send --to ${TERM} --type status`;
+  const m = evaluate({ tool: "mcp__plugin_sangsoe_sangsoe__start_unit", input: { spec }, cwd: "/work/acme", subagent: false }, orchestrator);
+  const reason = m.verdicts.find((v) => v.gate === "report-address")?.reason ?? "";
+  assert.match(reason, /The brief reports to a term_ handle/);
+  assert.doesNotMatch(reason, /no Dispatch/);
 });
 
 test("301: each way the refusal names passes every gate for the orchestrator", () => {

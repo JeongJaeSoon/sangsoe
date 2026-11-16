@@ -83,8 +83,8 @@ function allowed(call: ToolCall): boolean {
   return false;
 }
 
-// Decision 300: a refusal names the way on for the shape it refused. The close line is one constant so
-// the unit that closes a lead with no Dispatch can reword it in one place.
+// Decision 300: a refusal names the way on for the shape it refused. Decision 301 added the close of a
+// terminal with no Dispatch, which unit_close cannot check.
 export const CLOSE_ROUTE =
   "To close a finished unit use `orca orchestration worker-release`, then the MCP tool unit_close {dispatch} if the terminal stays retained; " +
   "`worker-stop` is for a worker that must be stopped while it runs. A terminal with no Dispatch (a session started outside start_unit) " +
