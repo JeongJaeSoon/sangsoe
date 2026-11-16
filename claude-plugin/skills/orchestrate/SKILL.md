@@ -26,6 +26,13 @@ description: "Use when this session is the sangsoe orchestrator or a lead handli
 
 깨우는 것은 Orca 메시지 하나다. 하나를 처리하고 턴을 끝낸다. 다음 깨움은 Orca 가 가져온다.
 
+대기 명령은 하나다(백그라운드로): `orca orchestration check --run <네 Run> --wait --types worker_done,merge_ready,escalation,question,decision_gate --timeout-ms 3600000 --json`. 리드는 턴을 끝내기 전에 늘 걸고, 오케스트레이터는 대기를 걸 때 이것을 건다. 네 앞 대기가 아직 돌고 있으면 새로 걸지 않는다: 같은 도착에 깬 대기들은 같은 묶음을 받아 너를 그 수만큼 깨운다. `--types` 는 깨우는 조건일 뿐이라 status·dispatch·handoff·heartbeat 는 깨우지 않고, 깨면 그때 쌓인 묶음 전체(status 포함)가 돌아온다(결정 302).
+
+- 대기가 `"timedOut":true`(`--json` 없이는 `Wait timed out; no messages were consumed.`)로 끝나면 메일이 아니다. 아무것도 처리·보고하지 않고 같은 명령을 다시 건다. `--timeout-ms` 를 빼면 약 2분마다 이렇게 exit 0 으로 끝나 빈 깨움이 된다.
+- 묶음은 그 대기의 출력에 있다: 마지막 JSON 줄이고, 15초마다 찍히는 `_keepalive` 줄은 메일이 아니다(`jq` 로 거른다). 대기가 묶음을 읽음으로 표시했으므로 이어 부른 `check` 는 그 묶음을 다시 주지 않는다. 지난 메일은 `orca orchestration inbox --terminal run:<네 Run> --limit <n> --full` 로 본다. `--terminal` 없는 `inbox` 는 모든 우편함을 보여 네가 Dispatch 에 보낸 메시지가 맨 위에 온다. 그것은 너를 깨운 메시지가 아니다.
+- Orca 가 만드는 escalation 은 `--types` 로 가르지 못한다. 제목으로 읽는다(`stopReason` 은 `--full` 에만 있다). `Worker stopped without reporting`(`finished`)인데 그 Dispatch 가 바로 앞에 escalation·question 을 보냈으면 새 일이 아니다: 그 앞 메시지에 아직 답하지 않았으면 답하고, 답했으면 아무것도 하지 않는다(워커가 `send` 로 보내고 턴을 끝내면 Orca 가 이것을 붙이고, `ask` 뒤에는 붙이지 않는다). 앞 메시지 없이 온 `finished` 는 worker_done 없이 멈춘 것이라 `send` 로 이어 가게 한다. `Worker lost without reporting`(`lost`)은 worker_done 없이 터미널이 닫혔다는 뜻이고, 누가 일부러 닫았어도 같은 글이 온다: 그 Task 를 다시 시작할지 위에 알릴지 정한다. `Worker is waiting for permission`(`needs-input`)은 권한 프롬프트에 멈춘 것이다.
+- 끝나지 않은 Dispatch 의 터미널은 닫지 않는다. 그것이 `lost` 를 만든다. 닫는 길은 끝난 Dispatch 의 `worker-release`, 그 뒤 `retained` 면 `unit_close` 다. 서브에이전트에게 정리를 맡기는 지시문에도 `orca terminal close` 를 쓰지 말라고 적는다.
+
 | 받은 것 | 판단 | 쓰는 tool |
 |---|---|---|
 | 워커의 worker_done(PR 없는 일) | 브리프의 완료 조건마다 실제 출력이 있나. 있으면 Task 를 닫고, 없으면 무엇이 빠졌는지 워커(살아 있으면)나 새 워커에게. 다 읽었으면 그 Dispatch 를 푼다: `start_unit` 이 연 세션은 `--keep-open` 이라 Orca 가 저절로 닫지 않는다(결정 197·207). 풀어도 터미널이 `retained` 면 `unit_close`(결정 263), 거부는 보고하고 다른 길로 닫지 않는다 | Orca `task-update --id <task_id> --status completed`, Orca `worker-release --dispatch <dispatch_id>` |
